@@ -2,6 +2,9 @@
 
 **Win95 Dark Golden Vintage theme for the whole web.** A Tampermonkey userscript that restyles every site into a dark golden-brown Windows 95 application: pixel-sharp 3D bevels, zero rounded corners, zero animations, no hover flashbangs, Verdana everywhere.
 
+<img width="1434" height="857" alt="2026-07-09_131744" src="https://github.com/user-attachments/assets/5d4542a9-f493-4574-a47b-a99e82aa837c" />
+
+
 ## Install
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
@@ -63,6 +66,16 @@ Edit `wintage.user.js`, then run:
 ```
 
 It bumps the `@version` patch number, commits, and pushes — Tampermonkey clients pick the update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases.
+
+<img width="1434" height="857" alt="2026-07-09_124933" src="https://github.com/user-attachments/assets/d4bc5f55-e1f8-44bc-8325-4ba2948205c1" />
+<img width="1434" height="857" alt="2026-07-09_124939" src="https://github.com/user-attachments/assets/84df57c6-27c4-4be3-82c9-6aa396f3ecaa" />
+<img width="954" height="1077" alt="2026-07-09_125022" src="https://github.com/user-attachments/assets/fa5accfb-1f35-4b91-9632-4310c7ae8836" />
+<img width="954" height="1077" alt="2026-07-09_125031" src="https://github.com/user-attachments/assets/20a95536-66f8-4ff6-a5b5-7a18fad233d5" />
+<img width="954" height="1077" alt="2026-07-09_125036" src="https://github.com/user-attachments/assets/b388f94e-a86e-40c4-9492-f3a0d97eeb37" />
+<img width="1434" height="857" alt="2026-07-09_125102" src="https://github.com/user-attachments/assets/af374b02-f122-43a2-a68e-895ab44a5824" />
+<img width="1434" height="857" alt="2026-07-09_125110" src="https://github.com/user-attachments/assets/95eb3642-2844-463a-a8f1-1e3ed72e7828" />
+<img width="1438" height="634" alt="2026-07-09_125119" src="https://github.com/user-attachments/assets/7aa9fe81-c8ca-45f0-a054-df6dc1fcc119" />
+
 
 ## License
 
