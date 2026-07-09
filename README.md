@@ -44,6 +44,10 @@
 | Muted | `#7A6838` | placeholders, disabled |
 | Accent | `#9DD9F9` | links, focus |
 
+## Bonus: matching browser theme
+
+The [`browser-theme/`](browser-theme/) folder contains a Chromium theme (Cent Browser / Chrome / Edge / Brave) built from the same palette, so the browser chrome matches the pages. Install: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the `browser-theme` folder.
+
 ## Known behaviors
 
 - Sites that build hover effects in JavaScript (class toggling) rather than CSS `:hover` may still show their own highlight.

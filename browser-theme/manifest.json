@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "version": "1.1.0",
+  "name": "Vintage Win 95 Dark Golden",
+  "description": "Brutalist dark golden aesthetic for Cent Browser. Companion to the Wintage userscript: https://github.com/vacterro/Wintage",
+  "theme": {
+    "colors": {
+      "frame": [26, 15, 5],
+      "frame_inactive": [42, 28, 10],
+      "frame_incognito": [15, 10, 4],
+      "frame_incognito_inactive": [15, 10, 4],
+      "toolbar": [42, 28, 10],
+      "tab_text": [212, 184, 122],
+      "tab_background_text": [176, 149, 88],
+      "bookmark_text": [212, 184, 122],
+      "toolbar_button_icon": [212, 184, 122],
+      "omnibox_background": [15, 10, 4],
+      "omnibox_text": [212, 184, 122],
+      "button_background": [54, 40, 18],
+      "ntp_background": [26, 15, 5],
+      "ntp_text": [212, 184, 122],
+      "ntp_link": [157, 217, 249],
+      "ntp_header": [192, 160, 96],
+      "ntp_section": [42, 28, 10],
+      "ntp_section_text": [176, 149, 88],
+      "ntp_section_link": [157, 217, 249]
+    },
+    "tints": {
+      "buttons": [0.115, 0.55, 0.65]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}
