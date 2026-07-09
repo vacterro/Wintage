@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Wintage вЂ” Win95 Dark Golden Vintage Theme
+// @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.1
+// @version      1.0.2
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -17,16 +17,16 @@
 (function () {
   'use strict';
 
-  // в”Ђв”Ђв”Ђ AUTH GUARD в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─── AUTH GUARD ──────────────────────────────────────────────────────────────
   const AUTH = [/oauth/i, /captcha/i, /accounts\.google/i, /login\.microsoft/i, /paypal/i, /stripe/i, /bank/i];
   if (AUTH.some(r => r.test(location.href))) return;
 
-  // в”Ђв”Ђв”Ђ IMMEDIATE DARK GOLDEN BACKGROUND в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─── IMMEDIATE DARK GOLDEN BACKGROUND ────────────────────────────────────────
   document.documentElement.style.setProperty('background-color', '#1A0F05', 'important');
   document.documentElement.style.setProperty('color', '#D4B87A', 'important');
   document.documentElement.setAttribute('data-w95-dark', '1');
 
-  // в”Ђв”Ђв”Ђ VINTAGE TOKENS (from /vintage SKILL.md) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─── VINTAGE TOKENS (from /vintage SKILL.md) ────────────────────────────────
   // background #1A0F05 | backgroundSoft #1E1408 | surface #2A1C0A | surfaceRaised #362812
   // surfaceAlt #3A2A15 | borderDark #0E0803 | borderHighlight #C0A060 | borderMuted #4A3820
   // textPrimary #D4B87A | textSecondary #B09558 | textMuted #7A6838 | compareBack #0F0A04
@@ -34,14 +34,14 @@
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
 
-  // в”Ђв”Ђв”Ђ STRUCTURAL BEVEL CONSTANTS (PHYSICAL BORDERS + 1 INSET) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─── STRUCTURAL BEVEL CONSTANTS (PHYSICAL BORDERS + 1 INSET) ───────────────
   const B_OUTER = 'border-top: 1px solid #C0A060 !important; border-left: 1px solid #C0A060 !important; border-bottom: 1px solid #0E0803 !important; border-right: 1px solid #0E0803 !important; box-shadow: inset 1px 1px 0 #7A6838, inset -1px -1px 0 #1E1408 !important;';
   const B_INNER = 'border-top: 1px solid #0E0803 !important; border-left: 1px solid #0E0803 !important; border-bottom: 1px solid #C0A060 !important; border-right: 1px solid #C0A060 !important; box-shadow: inset 1px 1px 0 #1E1408, inset -1px -1px 0 #7A6838 !important;';
   const B_SUNK = 'border-top: 1px solid #4A3820 !important; border-left: 1px solid #4A3820 !important; border-bottom: 1px solid #C0A060 !important; border-right: 1px solid #C0A060 !important; box-shadow: inset 1px 1px 0 #0E0803 !important;';
 
-  // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-  // GLOBAL CSS вЂ” v29.0
-  // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // GLOBAL CSS — v29.0
+  // ═══════════════════════════════════════════════════════════════════════════════
   const GLOBAL_CSS = `
 :root {
   color-scheme: dark !important;
@@ -60,10 +60,10 @@
   --yt-border-radius: 0px; --ytd-searchbox-border-radius: 0px;
 }
 
-/* рџљЁ STRICT RADIUS KILLER, NO GLOBAL BOX-SIZING TO PREVENT FLEX BREAKS рџљЁ */
+/* 🚨 STRICT RADIUS KILLER, NO GLOBAL BOX-SIZING TO PREVENT FLEX BREAKS 🚨 */
 * { border-radius: 0 !important; }
 
-/* рџљЁ MOTION IS FORBIDDEN (SKILL.md): instant state changes, zero easing рџљЁ
+/* 🚨 MOTION IS FORBIDDEN (SKILL.md): instant state changes, zero easing 🚨
    animation-duration:0s instead of animation:none so animationstart/end events
    still fire (some sites use them for lazy-load detection). */
 *, *::before, *::after {
@@ -73,10 +73,10 @@
 }
 html { scroll-behavior: auto !important; }
 
-/* рџљЁ HOVER-HIGHLIGHT KILLER вЂ” CSS FREEZE LAYER (v29.1) рџљЁ
+/* 🚨 HOVER-HIGHLIGHT KILLER — CSS FREEZE LAYER (v29.1) 🚨
    Sites' own :hover paints (white flashbang rows, gray tint blocks) are killed
    two ways: (1) JS surgery strips paint props from every readable :hover rule;
-   (2) this rule covers unreadable cross-origin sheets вЂ” while an element is
+   (2) this rule covers unreadable cross-origin sheets — while an element is
    hovered, any paint-property change rides a 99999s step-end transition, so it
    visually never happens; on unhover the global transition:none snaps it back
    instantly. Functional hover behavior (display/visibility/opacity/transform
@@ -95,7 +95,7 @@ html { scroll-behavior: auto !important; }
 html { background-color: #1A0F05 !important; color: #D4B87A !important; }
 body { background-color: #1E1408 !important; color: #D4B87A !important; margin: 0 !important; padding: 0 !important; }
 
-/* рџљЁ VERDANA 100% FORCED EVERYWHERE вЂ” inputs/textareas included рџљЁ
+/* 🚨 VERDANA 100% FORCED EVERYWHERE — inputs/textareas included 🚨
    Only true icon-font carriers are excluded (glyphs would turn into letters). */
 *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]) {
   font-family: ${FONT} !important;
@@ -122,7 +122,7 @@ header, nav, [role="navigation"], [role="banner"],
   background-color: #2A1C0A !important; background-image: none !important; color: #D4B87A !important;
 }
 
-/* рџљЁ 3D BEVELED BUTTONS (Removed role=button to prevent nested wrapper glitches) рџљЁ */
+/* 🚨 3D BEVELED BUTTONS (Removed role=button to prevent nested wrapper glitches) 🚨 */
 button, input[type="button"], input[type="submit"], input[type="reset"], .btn {
   background-color: #362812 !important; background-image: none !important; color: #D4B87A !important;
   ${B_OUTER}
@@ -173,7 +173,7 @@ td, th, .row1, .row2, .bg1, .bg2 { background-image: none !important; background
 th { background-color: #2A1C0A !important; color: #D4B87A !important; font-weight: 700 !important; }
 hr { border-color: #4A3820 !important; background-color: #4A3820 !important; color: #4A3820 !important; }
 
-/* рџљЁ HOVER STATES: ZEROED OUT v3 рџљЁ
+/* 🚨 HOVER STATES: ZEROED OUT v3 🚨
    Generic hover recoloring stays dead (christmas-tree problem: :hover matches the
    whole ancestor chain). Only real clickable controls keep a tactile response. */
 :root body button:hover, :root body input[type="button"]:hover, :root body input[type="submit"]:hover, :root body input[type="reset"]:hover, :root body .btn:hover {
@@ -191,10 +191,10 @@ ytd-masthead, #masthead, #masthead-container, #container.ytd-masthead, #backgrou
 tp-yt-app-header-layout, tp-yt-app-header, ytd-c4-tabbed-header-renderer, ytd-page-header-renderer, #channel-header, #page-header, #header.ytd-browse { background-color: #2A1C0A !important; background-image: none !important; }
 tp-yt-app-header { border-bottom: 2px solid #362812 !important; box-shadow: none !important; }
 
-/* рџљЁ POPUPS AND MENUS вЂ” v29 FIX рџљЁ
+/* 🚨 POPUPS AND MENUS — v29 FIX 🚨
    v28 forced "opacity: 1 !important; z-index: 9999" onto EVERYTHING whose class
    contained menu/dropdown/popup/tooltip. Sites keep those elements rendered but
-   hidden at opacity:0 вЂ” so the theme was force-REVEALING them: phantom hovercards
+   hidden at opacity:0 — so the theme was force-REVEALING them: phantom hovercards
    overlapping Reddit posts, permanently-open dropdown panels on forums, and footer
    nav columns turned into floating 4px-shadow "windows". v29 never touches
    opacity/z-index/visibility; it only recolors. If the site hides it, it stays hidden. */
@@ -217,7 +217,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 ::-webkit-scrollbar-button { background: #362812 !important; ${B_OUTER} height: 16px !important; width: 16px !important; }
 `;
 
-  // в”Ђв”Ђв”Ђ SHADOW DOM MINIMAL CSS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
   const SHADOW_CSS = `
     * { border-radius: 0 !important; transition: none !important; animation-duration: 0s !important; animation-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
@@ -237,7 +237,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
     /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
        hovercards/tooltips/menus inside shadow roots render see-through and their
-       text overlaps the page underneath (the Reddit hovercard bug). Recolor only вЂ”
+       text overlaps the page underneath (the Reddit hovercard bug). Recolor only —
        never force opacity/z-index/visibility. */
     dialog, [popover], [role="menu"], [role="listbox"], [role="tooltip"], [role="dialog"], [role="alertdialog"],
     [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
@@ -257,13 +257,13 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]) { background-color: #0F0A04 !important; color: #D4B87A !important; ${B_SUNK} box-sizing: border-box !important; }
 
-    /* Hover recolor stays zeroed out here too вЂ” only real clickable controls respond. */
+    /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
     button:hover, shreddit-button:hover, .btn:hover { background-color: #3A2A15 !important; ${B_OUTER} }
     a { color: #9DD9F9 !important; text-decoration: none !important; }
     a:hover { text-decoration: underline !important; background-color: transparent !important; }
   `;
 
-  // в”Ђв”Ђв”Ђ attachShadow INTERCEPTION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─── attachShadow INTERCEPTION ───────────────────────────────────────────────
   (function interceptAttachShadow() {
     const orig = Element.prototype.attachShadow;
     Element.prototype.attachShadow = function (init) {
@@ -332,7 +332,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   }
 
 
-  // в”Ђв”Ђв”Ђ :hover RULE SURGERY (v29.1) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─── :hover RULE SURGERY (v29.1) ────────────────────────────────────────────
   // Strips paint properties out of every readable :hover rule so sites cannot
   // flashbang-highlight on hover. Functional props (display, visibility,
   // opacity, transform) are left untouched so hover-opened menus keep working.
@@ -383,7 +383,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   }
 
   function process(el) {
-    // v29 FIX: the old `el.closest(':hover')` guard was fatal вЂ” html/body match
+    // v29 FIX: the old `el.closest(':hover')` guard was fatal — html/body match
     // :hover whenever the cursor is anywhere over the viewport, so closest()
     // returned truthy for EVERY element and the sweeper silently processed
     // nothing while the mouse was on the page (= dark-on-dark text never got
@@ -424,7 +424,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
           // transparent (they were the "gray rectangle blocks"), solids go dark.
           repaint = bg.a <= 0.35 ? 'transparent' : '#1E1408';
         } else if (grayish && L >= 0.015) {
-          // Unthemed dark-mode grays (chips, tabs, cards) в†’ vintage brown scale.
+          // Unthemed dark-mode grays (chips, tabs, cards) → vintage brown scale.
           // Near-black (< 0.015, e.g. video players, scrims) is left alone.
           repaint = L >= 0.13 ? '#3A2A15' : L >= 0.05 ? '#362812' : '#2A1C0A';
         }
@@ -447,7 +447,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       }
     }
 
-    // Light/white border lines (table rules, row separators, panel edges) в†’
+    // Light/white border lines (table rules, row separators, panel edges) →
     // vintage brown, per side. Fields keep their golden bevels (buttons are
     // already excluded by shouldSkip). Saturated colored borders (e.g. red
     // error outlines) are left alone via the grayish check.

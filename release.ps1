@@ -8,7 +8,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $script = Join-Path $PSScriptRoot 'wintage.user.js'
-$content = Get-Content $script -Raw
+# Read/write explicitly as UTF-8 (no BOM). PS 5.1's Get-Content defaults to the
+# ANSI codepage and mojibakes every non-ASCII character in the file.
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+$content = [System.IO.File]::ReadAllText($script, $utf8)
 
 if ($content -notmatch '// @version\s+(\d+)\.(\d+)\.(\d+)') {
     throw "Could not find a semver @version line in wintage.user.js"
@@ -21,7 +24,7 @@ switch ($Bump) {
 }
 $new = "$maj.$min.$pat"
 $content = $content -replace '(// @version\s+)\d+\.\d+\.\d+', "`${1}$new"
-[System.IO.File]::WriteAllText($script, $content)
+[System.IO.File]::WriteAllText($script, $content, $utf8)
 
 node --check $script
 if ($LASTEXITCODE -ne 0) { throw "Syntax check failed - release aborted, version line already bumped, fix and rerun" }
