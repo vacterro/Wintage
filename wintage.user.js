@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.2
+// @version      1.0.3
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -65,9 +65,15 @@
 
 /* 🚨 MOTION IS FORBIDDEN (SKILL.md): instant state changes, zero easing 🚨
    animation-duration:0s instead of animation:none so animationstart/end events
-   still fire (some sites use them for lazy-load detection). */
+   still fire (some sites use them for lazy-load detection).
+   transition-duration is 0.001s, NOT "transition: none" — a none/zero transition
+   never fires transitionend, and spoiler/accordion/modal JS commonly waits for
+   that event to set height:auto and release scroll locks. transition:none left
+   forum spoilers stuck mid-open with broken page scroll (aechat.ru report).
+   1ms still reads as instant but the event pipeline keeps working. */
 *, *::before, *::after {
-  transition: none !important;
+  transition-duration: 0.001s !important;
+  transition-delay: 0s !important;
   animation-duration: 0s !important;
   animation-delay: 0s !important;
 }
@@ -78,7 +84,7 @@ html { scroll-behavior: auto !important; }
    two ways: (1) JS surgery strips paint props from every readable :hover rule;
    (2) this rule covers unreadable cross-origin sheets — while an element is
    hovered, any paint-property change rides a 99999s step-end transition, so it
-   visually never happens; on unhover the global transition:none snaps it back
+   visually never happens; on unhover the global 0.001s duration snaps it back
    instantly. Functional hover behavior (display/visibility/opacity/transform
    for dropdown menus) is deliberately NOT in the property list, so hover-opened
    menus keep working. Our own themed controls are excluded so buttons/links
@@ -219,7 +225,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
   const SHADOW_CSS = `
-    * { border-radius: 0 !important; transition: none !important; animation-duration: 0s !important; animation-delay: 0s !important; }
+    /* 0.001s not none: transitionend must keep firing (see GLOBAL_CSS motion note) */
+    * { border-radius: 0 !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
