@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.5
+// @version      1.0.6
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -183,10 +183,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 }
 
 table { border-collapse: collapse !important; background-color: #1E1408 !important; border-spacing: 0 !important; }
-/* No forced background on td/th: it would flatten semantic cell colors (GitHub
-   diff green/red, heatmaps, status rows). The JS repainter darkens light cells
-   with their hue preserved instead. Legacy phpBB row classes keep the solid. */
+/* Solid floor on plain cells: beats forum row-highlight CSS instantly (white
+   flashbang rows on JS-hover sites like RuTracker, where the highlight comes
+   from a class swap that :hover surgery cannot see). Diff/code cells are
+   excluded so the JS repainter can keep their semantic tint (GitHub diff
+   green/red), darkened with hue preserved. */
 td, th { background-image: none !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
+td:not([class*="blob-" i]):not([class*="diff-" i]):not([class*="hunk" i]):not([class*="addition" i]):not([class*="deletion" i]), th { background-color: #1E1408 !important; }
 .row1, .row2, .bg1, .bg2 { background-image: none !important; background-color: #1E1408 !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
 th { background-color: #2A1C0A !important; color: #D4B87A !important; font-weight: 700 !important; }
 option { background-color: #0F0A04 !important; color: #D4B87A !important; }
@@ -522,11 +525,20 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     return false;
   }
 
+  // Mutations accumulate in a queue with a fixed 60ms flush. The previous
+  // clearTimeout+reset pattern silently DROPPED every batch except the last
+  // one (each reset discarded the prior closure's mutations) and could starve
+  // forever on continuously-mutating pages.
   let debounceTimer = null;
+  let pendingMuts = [];
   function onMutations(mutations) {
-    clearTimeout(debounceTimer);
+    for (let i = 0; i < mutations.length; i++) pendingMuts.push(mutations[i]);
+    if (debounceTimer) return;
     debounceTimer = setTimeout(() => {
-      for (const m of mutations) {
+      debounceTimer = null;
+      const batch = pendingMuts;
+      pendingMuts = [];
+      for (const m of batch) {
         // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
         // CSS-in-JS) — re-process them or they keep stale baked-in colors.
         // Hover-chain elements are skipped inside process() and retried later,
