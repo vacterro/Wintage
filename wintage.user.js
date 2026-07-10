@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.4
+// @version      1.0.5
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -103,7 +103,7 @@ body { background-color: #1E1408 !important; color: #D4B87A !important; margin: 
 
 /* 🚨 VERDANA 100% FORCED EVERYWHERE — inputs/textareas included 🚨
    Only true icon-font carriers are excluded (glyphs would turn into letters). */
-*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]) {
+*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
   font-family: ${FONT} !important;
   -webkit-font-smoothing: none !important;
   font-smooth: never !important;
@@ -114,7 +114,7 @@ input, textarea, select, option, button, code, pre, kbd, samp, tt,
 a, a:visited { color: #9DD9F9 !important; text-decoration: none !important; background-color: transparent !important; }
 foreignObject { mask: none !important; -webkit-mask: none !important; }
 rect { rx: 0 !important; ry: 0 !important; }
-svg { background: transparent !important; display: block !important; }
+svg { background: transparent !important; }
 [class*="avatar" i]:not(svg):not(path), img { clip-path: none !important; }
 img, video, canvas, iframe, picture { max-width: 100% !important; }
 main, section, article, aside, footer, .container, .wrapper, .main, #main, #wrapper { background-color: transparent !important; }
@@ -183,8 +183,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 }
 
 table { border-collapse: collapse !important; background-color: #1E1408 !important; border-spacing: 0 !important; }
-td, th, .row1, .row2, .bg1, .bg2 { background-image: none !important; background-color: #1E1408 !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
+/* No forced background on td/th: it would flatten semantic cell colors (GitHub
+   diff green/red, heatmaps, status rows). The JS repainter darkens light cells
+   with their hue preserved instead. Legacy phpBB row classes keep the solid. */
+td, th { background-image: none !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
+.row1, .row2, .bg1, .bg2 { background-image: none !important; background-color: #1E1408 !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
 th { background-color: #2A1C0A !important; color: #D4B87A !important; font-weight: 700 !important; }
+option { background-color: #0F0A04 !important; color: #D4B87A !important; }
 hr { border-color: #4A3820 !important; background-color: #4A3820 !important; color: #4A3820 !important; }
 
 /* 🚨 HOVER STATES: ZEROED OUT v3 🚨
@@ -243,7 +248,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       transition-delay: 0s !important;
       transition-timing-function: step-end !important;
     }
-    *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]) {
+    *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
       font-family: ${FONT} !important; -webkit-font-smoothing: none !important; font-smooth: never !important;
     }
     input, textarea, select, option, button, code, pre, kbd, samp, tt, [class*="code" i], [class*="mono" i] { font-family: ${FONT} !important; }
@@ -301,8 +306,13 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     const s = document.createElement('style');
     s.setAttribute('data-w95', id);
     s.textContent = content;
-    const target = root.head || root;
-    target.insertBefore(s, target.firstChild);
+    // At document-start <head> may not exist yet; inserting into the Document
+    // node itself throws HierarchyRequestError and would kill the whole script.
+    // Fall back to documentElement and never let injection abort the userscript.
+    const target = root.head || root.documentElement || root;
+    try { target.insertBefore(s, target.firstChild); } catch (e) {
+      try { (document.head || document.documentElement).appendChild(s); } catch (e2) { }
+    }
   }
 
   injectStyle(document, 'global', GLOBAL_CSS);
@@ -445,9 +455,14 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const grayish = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b) <= 24;
         let repaint = null;
         if (L > 0.45) {
-          // Light flashbang surface: low-alpha white tint overlays go fully
-          // transparent (they were the "gray rectangle blocks"), solids go dark.
-          repaint = bg.a <= 0.35 ? 'transparent' : '#1E1408';
+          // Light flashbang surface: low-alpha white tints go fully transparent
+          // (the "gray rectangle blocks"), neutral solids go dark brown, and
+          // SATURATED light tints (GitHub diff green/red, warning yellows,
+          // highlight rows) are darkened with their hue preserved so semantic
+          // colors survive the dark theme instead of being flattened.
+          if (bg.a <= 0.35) repaint = 'transparent';
+          else if (grayish) repaint = '#1E1408';
+          else repaint = 'rgb(' + Math.round(bg.r * 0.18) + ', ' + Math.round(bg.g * 0.18) + ', ' + Math.round(bg.b * 0.18) + ')';
         } else if (grayish && L >= 0.015) {
           // Unthemed dark-mode grays (chips, tabs, cards) → vintage brown scale.
           // Near-black (< 0.015, e.g. video players, scrims) is left alone.
@@ -547,6 +562,13 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     });
   }
 
+  // Force passes are budgeted: on huge pages (endless feeds) each pass
+  // re-verifies a rotating 6000-element window instead of the whole DOM, so a
+  // single pass never janks the main thread; full coverage arrives over a few
+  // rotations.
+  const FORCE_BUDGET = 6000;
+  let forceCursor = 0;
+
   function runSweeper(force) {
     stripHoverSheets(document);
     piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
@@ -554,7 +576,13 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     searchRoots.forEach(root => {
       try {
         const all = root.querySelectorAll(force ? '*' : '*:not([data-w95-done])');
-        for (let i = 0; i < all.length; i++) { process(all[i], force); }
+        if (force && all.length > FORCE_BUDGET) {
+          const start = forceCursor % all.length;
+          for (let n = 0; n < FORCE_BUDGET; n++) { process(all[(start + n) % all.length], true); }
+          forceCursor += FORCE_BUDGET;
+        } else {
+          for (let i = 0; i < all.length; i++) { process(all[i], force); }
+        }
       } catch (e) { }
     });
   }
