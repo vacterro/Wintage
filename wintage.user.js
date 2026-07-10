@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.3
+// @version      1.0.4
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -169,6 +169,14 @@ textarea, select {
   ${B_SUNK}
   box-sizing: border-box !important;
 }
+/* Native checkboxes/radios restored: sites style them with appearance:none +
+   sprite backgrounds, which the theme flattens into identical dark squares with
+   no visible checked state. appearance:auto brings back the native control
+   (checkmark included), accent-color keeps it golden. */
+input[type="checkbox"], input[type="radio"] {
+  appearance: auto !important; -webkit-appearance: auto !important;
+  accent-color: #C0A060 !important; background-image: none !important;
+}
 input::placeholder, textarea::placeholder { color: #7A6838 !important; }
 input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
   outline: 1px dotted #D4B87A !important; outline-offset: -2px !important;
@@ -262,7 +270,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     button::before, button::after, .btn::before, .btn::after { display: none !important; content: none !important; opacity: 0 !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
-    input:not([type="button"]):not([type="submit"]):not([type="reset"]) { background-color: #0F0A04 !important; color: #D4B87A !important; ${B_SUNK} box-sizing: border-box !important; }
+    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #0F0A04 !important; color: #D4B87A !important; ${B_SUNK} box-sizing: border-box !important; }
+    input[type="checkbox"], input[type="radio"] { appearance: auto !important; -webkit-appearance: auto !important; accent-color: #C0A060 !important; background-image: none !important; }
 
     /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
     button:hover, shreddit-button:hover, .btn:hover { background-color: #3A2A15 !important; ${B_OUTER} }
@@ -316,6 +325,14 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
     return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
   }
+  // Write-if-changed: re-verify passes revisit every element, so identical
+  // rewrites must not invalidate styles or churn the style attribute.
+  function setImp(el, prop, val) {
+    const st = el.style;
+    if (st.getPropertyValue(prop) !== val || st.getPropertyPriority(prop) !== 'important') {
+      st.setProperty(prop, val, 'important');
+    }
+  }
 
   const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape';
   const SHADOW_SKIP_TAGS = new Set(['YTD-LOGO', 'YT-ICON', 'YT-ICON-SHAPE', 'YT-IMG-SHADOW', 'YTD-AVATAR-SHAPE', 'YT-AVATAR-SHAPE', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
@@ -333,7 +350,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       shadowObserver.observe(host.shadowRoot, {
         childList: true,
         subtree: true,
-        attributes: false
+        attributes: true,
+        attributeFilter: ['class', 'bgcolor', 'background']
       });
     } catch (e) { }
   }
@@ -389,7 +407,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     }
   }
 
-  function process(el) {
+  function process(el, force) {
     // v29 FIX: the old `el.closest(':hover')` guard was fatal — html/body match
     // :hover whenever the cursor is anywhere over the viewport, so closest()
     // returned truthy for EVERY element and the sweeper silently processed
@@ -401,7 +419,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     } catch (e) { }
 
     if (!el || el.nodeType !== 1) return;
-    if (el.hasAttribute('data-w95-done')) return;
+    if (!force && el.hasAttribute('data-w95-done')) return;
     el.setAttribute('data-w95-done', '1');
 
     if (el.shadowRoot) pierceShadow(el);
@@ -414,8 +432,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     const bgImg = cs.backgroundImage;
     if (bgImg && bgImg !== 'none') {
       if (/linear-gradient.*(white|#fff|255,\s*255,\s*255)/i.test(bgImg)) {
-        el.style.setProperty('background-image', 'none', 'important');
-        el.style.setProperty('background', 'transparent', 'important');
+        setImp(el, 'background', 'transparent');
+        setImp(el, 'background-image', 'none');
       }
     }
 
@@ -436,9 +454,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
           repaint = L >= 0.13 ? '#3A2A15' : L >= 0.05 ? '#362812' : '#2A1C0A';
         }
         if (repaint) {
-          el.style.setProperty('background', repaint, 'important');
-          el.style.setProperty('background-color', repaint, 'important');
-          el.style.setProperty('background-image', 'none', 'important');
+          setImp(el, 'background', repaint);
+          setImp(el, 'background-color', repaint);
+          setImp(el, 'background-image', 'none');
         }
       }
     }
@@ -450,7 +468,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const fgLum = lum(fg);
         const darkBg = 0.008; // luminance of #1E1408 backdrop
         const contrast = (Math.max(fgLum, darkBg) + 0.05) / (Math.min(fgLum, darkBg) + 0.05);
-        if (contrast < 4.5) { el.style.setProperty('color', '#D4B87A', 'important'); }
+        // Links get the accent so they stay distinguishable even when a site's
+        // high-specificity !important link color beats our stylesheet.
+        if (contrast < 4.5) { setImp(el, 'color', (el.closest && el.closest('a')) ? '#9DD9F9' : '#D4B87A'); }
       }
     }
 
@@ -468,7 +488,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         if (!bc || bc.a <= 0.1) continue;
         const grayish = Math.max(bc.r, bc.g, bc.b) - Math.min(bc.r, bc.g, bc.b) <= 60;
         if (grayish && lum(bc) > 0.18) {
-          el.style.setProperty('border-' + s.toLowerCase() + '-color', '#362812', 'important');
+          setImp(el, 'border-' + s.toLowerCase() + '-color', '#362812');
         }
       }
     }
@@ -477,6 +497,11 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   function shouldSkip(el) {
     const tag = (el.tagName || '').toUpperCase();
     if (TAG_SKIP.test(tag)) return true;
+    if (tag === 'INPUT') {
+      const t = (el.type || '').toLowerCase();
+      // Natively-rendered controls: repainting them hides the checked state.
+      if (t === 'checkbox' || t === 'radio' || t === 'range' || t === 'color' || t === 'file') return true;
+    }
     if (el.closest && el.closest('button')) return true;
     try { if (el.closest && el.closest(JS_SKIP_SELECTOR)) return true; } catch (e) { }
     return false;
@@ -487,6 +512,15 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       for (const m of mutations) {
+        // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
+        // CSS-in-JS) — re-process them or they keep stale baked-in colors.
+        // Hover-chain elements are skipped inside process() and retried later,
+        // so hover class-toggles don't bake in highlight colors.
+        if (m.type === 'attributes') {
+          const t = m.target;
+          if (t && t.nodeType === 1) { t.removeAttribute('data-w95-done'); process(t); }
+          continue;
+        }
         for (const node of m.addedNodes) {
           if (node.nodeType !== 1) continue;
           node.removeAttribute && node.removeAttribute('data-w95-done');
@@ -497,7 +531,6 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
             process(kids[i]);
           }
         }
-        // Attribute repaint disabled to avoid hover/focus recoloring.
       }
     }, 60);
   }
@@ -509,26 +542,41 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     mainObserver.observe(document.documentElement, {
       childList: true,
       subtree: true,
-      attributes: false
+      attributes: true,
+      attributeFilter: ['class', 'bgcolor', 'background']
     });
   }
 
-  function runSweeper() {
+  function runSweeper(force) {
     stripHoverSheets(document);
     piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
     const searchRoots = [document, ...piercedRoots];
     searchRoots.forEach(root => {
       try {
-        const all = root.querySelectorAll('*:not([data-w95-done])');
-        for (let i = 0; i < all.length; i++) { process(all[i]); }
+        const all = root.querySelectorAll(force ? '*' : '*:not([data-w95-done])');
+        for (let i = 0; i < all.length; i++) { process(all[i], force); }
       } catch (e) { }
     });
   }
 
+  // Elements processed before the site's CSS finished loading bake in unstyled
+  // values and would otherwise stay wrong forever (white surfaces that "heal"
+  // only when the SPA happens to re-render them). Full re-verify passes
+  // (force=true) re-check EVERY element: right after DOMContentLoaded, again 1s
+  // later once late CSS settled, then every 3rd tick (~4.5s). The
+  // write-if-changed guard in setImp keeps repeat passes cheap.
+  let sweepCount = 0;
+  function startSweeping() {
+    injectLate();
+    runSweeper(true);
+    setTimeout(() => runSweeper(true), 1000);
+    setInterval(() => { sweepCount++; runSweeper(sweepCount % 3 === 0); }, 1500);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { injectLate(); runSweeper(); setInterval(runSweeper, 1500); }, { once: true });
+    document.addEventListener('DOMContentLoaded', startSweeping, { once: true });
   } else {
-    injectLate(); runSweeper(); setInterval(runSweeper, 1500);
+    startSweeping();
   }
 
 })();
