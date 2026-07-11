@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.6
+// @version      1.0.7
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -70,8 +70,14 @@
    never fires transitionend, and spoiler/accordion/modal JS commonly waits for
    that event to set height:auto and release scroll locks. transition:none left
    forum spoilers stuck mid-open with broken page scroll (aechat.ru report).
-   1ms still reads as instant but the event pipeline keeps working. */
+   1ms still reads as instant but the event pipeline keeps working.
+   The transition-property list is LAYOUT-ONLY (what collapse/spoiler code
+   actually awaits). Without it, elements default to transition-property:all and
+   the forced 1ms duration makes EVERY style change on EVERY element spin up
+   transitions and fire transitionend — measurable jank on busy pages. Paint
+   props get no transitions at all. */
 *, *::before, *::after {
+  transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important;
   transition-duration: 0.001s !important;
   transition-delay: 0s !important;
   animation-duration: 0s !important;
@@ -241,8 +247,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
   const SHADOW_CSS = `
-    /* 0.001s not none: transitionend must keep firing (see GLOBAL_CSS motion note) */
-    * { border-radius: 0 !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }
+    /* Layout-only 1ms transitions: transitionend keeps firing for collapse
+       code without paint-transition churn (see GLOBAL_CSS motion note) */
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
@@ -413,9 +420,23 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         if (node && node.getAttribute && node.getAttribute('data-w95')) continue; // our own hover bevels stay
         let count;
         try { count = sheet.cssRules ? sheet.cssRules.length : 0; } catch (e) { continue; }
-        if (sheetSeen.get(sheet) === count) continue; // unchanged since last pass
+        const seen = sheetSeen.get(sheet);
+        if (seen === count) continue; // unchanged since last pass
         sheetSeen.set(sheet, count);
-        walkRules(sheet);
+        if (seen === undefined || count < seen) {
+          walkRules(sheet); // first sight or rules removed: full walk
+        } else {
+          // CSS-in-JS engines insertRule constantly; re-walking the whole sheet
+          // every tick was a jank source. Walk the appended rules only.
+          try {
+            const rules = sheet.cssRules;
+            for (let r = seen; r < count; r++) {
+              const rule = rules[r];
+              if (rule.selectorText && rule.selectorText.indexOf(':hover') !== -1) stripHoverRule(rule);
+              if (rule.cssRules && rule.cssRules.length) walkRules(rule);
+            }
+          } catch (e) { }
+        }
       }
     }
   }
@@ -531,6 +552,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   // forever on continuously-mutating pages.
   let debounceTimer = null;
   let pendingMuts = [];
+  const attrCooldown = new WeakMap(); // element -> last attribute-triggered process time
   function onMutations(mutations) {
     for (let i = 0; i < mutations.length; i++) pendingMuts.push(mutations[i]);
     if (debounceTimer) return;
@@ -545,7 +567,20 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         // so hover class-toggles don't bake in highlight colors.
         if (m.type === 'attributes') {
           const t = m.target;
-          if (t && t.nodeType === 1) { t.removeAttribute('data-w95-done'); process(t); }
+          if (t && t.nodeType === 1) {
+            // Cooldown: carousels/virtual scrollers toggle classes many times a
+            // second; re-processing each toggle (computed-style read + writes)
+            // is a jank source. During the cooldown just mark the element dirty
+            // — the next light sweep (≤1.5s) picks up its settled state.
+            const now = Date.now();
+            if ((attrCooldown.get(t) || 0) + 500 > now) {
+              t.removeAttribute('data-w95-done');
+            } else {
+              attrCooldown.set(t, now);
+              t.removeAttribute('data-w95-done');
+              process(t);
+            }
+          }
           continue;
         }
         for (const node of m.addedNodes) {
@@ -578,7 +613,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   // re-verifies a rotating 6000-element window instead of the whole DOM, so a
   // single pass never janks the main thread; full coverage arrives over a few
   // rotations.
-  const FORCE_BUDGET = 6000;
+  const FORCE_BUDGET = 2500;
   let forceCursor = 0;
 
   function runSweeper(force) {
@@ -610,7 +645,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     injectLate();
     runSweeper(true);
     setTimeout(() => runSweeper(true), 1000);
-    setInterval(() => { sweepCount++; runSweeper(sweepCount % 3 === 0); }, 1500);
+    // No sweeping in background tabs — nothing is visible, no reason to burn CPU.
+    setInterval(() => { if (document.hidden) return; sweepCount++; runSweeper(sweepCount % 3 === 0); }, 1500);
   }
 
   if (document.readyState === 'loading') {
