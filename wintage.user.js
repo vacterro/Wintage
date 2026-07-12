@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.7
+// @version      1.0.8
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -10,6 +10,7 @@
 // @updateURL    https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js
 // @downloadURL  https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js
 // @match        *://*/*
+// @include      about:blank
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
@@ -96,7 +97,7 @@ html { scroll-behavior: auto !important; }
    menus keep working. Our own themed controls are excluded so buttons/links
    keep their instant bevel feedback, and :active/:focus are excluded so click
    feedback on focusable elements is never frozen. */
-:root body *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([role="button"]):not(:active):not(:focus),
+:root body *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not([role="button"]):not(:active):not(:focus),
 :root body *:hover::before, :root body *:hover::after {
   transition-property: background-color, background-image, background-position, box-shadow, filter, backdrop-filter, color, border-color, outline-color, text-decoration-color, text-shadow !important;
   transition-duration: 99999s !important;
@@ -134,14 +135,20 @@ header, nav, [role="navigation"], [role="banner"],
   background-color: #2A1C0A !important; background-image: none !important; color: #D4B87A !important;
 }
 
-/* 🚨 3D BEVELED BUTTONS (Removed role=button to prevent nested wrapper glitches) 🚨 */
-button, input[type="button"], input[type="submit"], input[type="reset"], .btn {
+/* 🚨 3D BEVELED BUTTONS 🚨
+   Coverage beyond real <button>: word-matched button/btn classes ([class~=]
+   avoids wrappers like "button-group"), link/span role=button (div[role=button]
+   stays excluded — those are the nested-wrapper glitch containers), and
+   <summary> disclosure controls. */
+button, input[type="button"], input[type="submit"], input[type="reset"], .btn,
+[class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
   background-color: #362812 !important; background-image: none !important; color: #D4B87A !important;
   ${B_OUTER}
   cursor: pointer !important; font-family: ${FONT} !important; font-size: 12px !important;
   box-sizing: border-box !important;
 }
-button:active, input[type="button"]:active, input[type="submit"]:active, input[type="reset"]:active, .btn:active {
+button:active, input[type="button"]:active, input[type="submit"]:active, input[type="reset"]:active, .btn:active,
+[class~="button" i]:active, [class~="btn" i]:active, a[role="button"]:active, span[role="button"]:active, summary:active {
   background-color: #2A1C0A !important;
   ${B_INNER}
   transform: translate(1px, 1px) !important;
@@ -151,12 +158,17 @@ button:disabled, input[type="button"]:disabled, input[type="submit"]:disabled, i
   border: 1px solid #4A3820 !important; box-shadow: none !important;
 }
 
-/* Murder pseudo-elements on buttons to prevent underlying black squares/circles from bleeding out */
-button::before, button::after, .btn::before, .btn::after {
-  display: none !important; content: none !important; opacity: 0 !important; visibility: hidden !important; background: transparent !important; box-shadow: none !important;
+/* Neutralize PAINT on button pseudo-elements (underlying squares/circles)
+   WITHOUT display:none — hiding them also deleted ::before icon-font glyphs,
+   leaving icon-only buttons as empty bevel boxes. Content stays, paint goes.
+   Ripple effects are already killed by the dedicated ripple rule below. */
+button::before, button::after, .btn::before, .btn::after,
+[class~="button" i]::before, [class~="button" i]::after, [class~="btn" i]::before, [class~="btn" i]::after {
+  background: transparent !important; box-shadow: none !important; filter: none !important; transform: none !important;
 }
 
-button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input[type="reset"] * {
+button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
+.btn *, [class~="button" i] *, [class~="btn" i] *, a[role="button"] *, span[role="button"] * {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
   border: none !important; transform: none !important; text-shadow: none !important; color: inherit !important;
 }
@@ -204,7 +216,8 @@ hr { border-color: #4A3820 !important; background-color: #4A3820 !important; col
 /* 🚨 HOVER STATES: ZEROED OUT v3 🚨
    Generic hover recoloring stays dead (christmas-tree problem: :hover matches the
    whole ancestor chain). Only real clickable controls keep a tactile response. */
-:root body button:hover, :root body input[type="button"]:hover, :root body input[type="submit"]:hover, :root body input[type="reset"]:hover, :root body .btn:hover {
+:root body button:hover, :root body input[type="button"]:hover, :root body input[type="submit"]:hover, :root body input[type="reset"]:hover, :root body .btn:hover,
+:root body [class~="button" i]:hover, :root body [class~="btn" i]:hover, :root body a[role="button"]:hover, :root body span[role="button"]:hover, :root body summary:hover {
   background-color: #3A2A15 !important; color: #D4B87A !important; filter: none !important;
   ${B_OUTER}
 }
@@ -251,7 +264,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
        code without paint-transition churn (see GLOBAL_CSS motion note) */
     * { border-radius: 0 !important; transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
-    *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
+    *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
       transition-property: background-color, background-image, background-position, box-shadow, filter, backdrop-filter, color, border-color, outline-color, text-decoration-color, text-shadow !important;
       transition-duration: 99999s !important;
@@ -276,13 +289,15 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       background-color: #362812 !important; background-image: none !important; color: #D4B87A !important;
     }
 
-    button, input[type="button"], input[type="submit"], input[type="reset"], shreddit-button, .btn {
+    button, input[type="button"], input[type="submit"], input[type="reset"], shreddit-button, .btn,
+    [class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
       background-color: #362812 !important; color: #D4B87A !important; ${B_OUTER}
       cursor: pointer !important; font-family: ${FONT} !important; box-sizing: border-box !important;
     }
-    button:active, shreddit-button:active, .btn:active { background-color: #2A1C0A !important; ${B_INNER} transform: translate(1px, 1px) !important; }
+    button:active, shreddit-button:active, .btn:active, [class~="button" i]:active, [class~="btn" i]:active, summary:active { background-color: #2A1C0A !important; ${B_INNER} transform: translate(1px, 1px) !important; }
 
-    button::before, button::after, .btn::before, .btn::after { display: none !important; content: none !important; opacity: 0 !important; }
+    /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
+    button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; transform: none !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #0F0A04 !important; color: #D4B87A !important; ${B_SUNK} box-sizing: border-box !important; }
@@ -465,7 +480,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     const cs = window.getComputedStyle(el);
     const bgImg = cs.backgroundImage;
     if (bgImg && bgImg !== 'none') {
-      if (/linear-gradient.*(white|#fff|255,\s*255,\s*255)/i.test(bgImg)) {
+      // Computed gradients serialize colors as rgb(); any gradient stop with all
+      // channels >= 200 is a light surface. radial/conic covered too.
+      if (/(linear|radial|conic)-gradient.*(white|#fff|2\d\d,\s*2\d\d,\s*2\d\d)/i.test(bgImg)) {
         setImp(el, 'background', 'transparent');
         setImp(el, 'background-image', 'none');
       }
@@ -617,6 +634,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   let forceCursor = 0;
 
   function runSweeper(force) {
+    // Prune shadow roots whose hosts left the DOM (SPA navigations) — keeping
+    // them leaks memory and bloats every sweep on long sessions.
+    piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) piercedRoots.delete(root); } catch (e) { } });
     stripHoverSheets(document);
     piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
     const searchRoots = [document, ...piercedRoots];
@@ -647,6 +667,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     setTimeout(() => runSweeper(true), 1000);
     // No sweeping in background tabs — nothing is visible, no reason to burn CPU.
     setInterval(() => { if (document.hidden) return; sweepCount++; runSweeper(sweepCount % 3 === 0); }, 1500);
+    // Pages that finished loading while the tab was hidden got no sweeps; on
+    // return, re-verify immediately so the user never sees stale white.
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) runSweeper(true); });
   }
 
   if (document.readyState === 'loading') {
