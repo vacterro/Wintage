@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.8
+// @version      1.0.9
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -78,10 +78,10 @@
    transitions and fire transitionend — measurable jank on busy pages. Paint
    props get no transitions at all. */
 *, *::before, *::after {
-  transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important;
+  transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, visibility, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important;
   transition-duration: 0.001s !important;
   transition-delay: 0s !important;
-  animation-duration: 0s !important;
+  animation-duration: 0.001s !important;
   animation-delay: 0s !important;
 }
 html { scroll-behavior: auto !important; }
@@ -164,13 +164,13 @@ button:disabled, input[type="button"]:disabled, input[type="submit"]:disabled, i
    Ripple effects are already killed by the dedicated ripple rule below. */
 button::before, button::after, .btn::before, .btn::after,
 [class~="button" i]::before, [class~="button" i]::after, [class~="btn" i]::before, [class~="btn" i]::after {
-  background: transparent !important; box-shadow: none !important; filter: none !important; transform: none !important;
+  background: transparent !important; box-shadow: none !important; filter: none !important; border: none !important;
 }
 
 button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
 .btn *, [class~="button" i] *, [class~="btn" i] *, a[role="button"] *, span[role="button"] * {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
-  border: none !important; transform: none !important; text-shadow: none !important; color: inherit !important;
+  border: none !important; text-shadow: none !important; color: inherit !important;
 }
 
 yt-icon-button, yt-button-shape, [class*="yt-spec-button-shape"] { background: transparent !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
@@ -262,7 +262,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   const SHADOW_CSS = `
     /* Layout-only 1ms transitions: transitionend keeps firing for collapse
        code without paint-transition churn (see GLOBAL_CSS motion note) */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, visibility, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
@@ -297,7 +297,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     button:active, shreddit-button:active, .btn:active, [class~="button" i]:active, [class~="btn" i]:active, summary:active { background-color: #2A1C0A !important; ${B_INNER} transform: translate(1px, 1px) !important; }
 
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
-    button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; transform: none !important; }
+    button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #0F0A04 !important; color: #D4B87A !important; ${B_SUNK} box-sizing: border-box !important; }
