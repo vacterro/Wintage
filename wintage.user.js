@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.1.0
+// @version      1.1.1
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -64,29 +64,37 @@
 /* 🚨 STRICT RADIUS KILLER, NO GLOBAL BOX-SIZING TO PREVENT FLEX BREAKS 🚨 */
 * { border-radius: 0 !important; }
 
-/* 🚨 MOTION IS MOSTLY FORBIDDEN (SKILL.md), WITH A CARVE-OUT 🚨
+/* 🚨 MOTION IS MOSTLY FORBIDDEN (SKILL.md), WITH A NARROW CARVE-OUT 🚨
    transition-duration is 0.001s, NOT "transition: none" — a none/zero transition
    never fires transitionend, and spoiler/accordion/modal JS commonly waits for
    that event to set height:auto and release scroll locks. transition:none left
    forum spoilers stuck mid-open with broken page scroll (aechat.ru report).
    1ms still reads as instant but the event pipeline keeps working.
-   The transition-property list is LAYOUT-ONLY (what collapse/spoiler code
-   actually awaits). Without it, elements default to transition-property:all and
-   the forced 1ms duration makes EVERY style change on EVERY element spin up
-   transitions and fire transitionend — measurable jank on busy pages. Paint
-   props get no transitions at all. "visibility" was tried here in v1.0.9 and
-   reverted: no confirmed bug needed it.
-   animation-duration is DELIBERATELY NOT forced (tried in v1.0.9, reverted).
-   Component libraries built on CSS-keyframe animation state machines (Ant
-   Design's rc-motion: classes like ant-slide-up-appear/-appear-prepare/-active,
-   which JS drives by listening for animationend) can get stuck mid-transition
-   or miss the event entirely when the animation is forced to ~0ms — the popup
-   renders but never finishes becoming interactive, and the whole trigger stops
-   responding to clicks (chat.qwen.ai "+" and thinking-mode dropdowns report).
-   Losing near-zero animations is an acceptable tradeoff for keeping the site
-   functional; transitions (this rule) are unaffected and still instant. */
+   transition-property is ONLY height/max-height/min-height — the exact
+   properties collapse/spoiler code actually toggles (max-height:0->N is the
+   standard accordion trick, since height:auto itself doesn't transition).
+   v1.0.7–v1.1.0 forced a much longer list here (opacity, transform, width,
+   margin, padding, top/left/right/bottom, flex-basis, grid-template-*, and at
+   one point animation-duration/visibility too) on the theory that other
+   component libraries might need it too. Confirmed via live reproduction on
+   chat.qwen.ai (v1.1.1): Ant Design's rc-trigger positions dropdown panels via
+   transitioned top/left/width, and forcing those to ~0ms made the panel's
+   final position/size unreliable — document.elementFromPoint at the menu item
+   never resolved to the item itself, so the "+" and thinking-mode dropdowns
+   opened visually but were NOT clickable. Isolated with a live binary search
+   (each candidate property list re-tested against a real dispatched click +
+   elementFromPoint hit-test, not just visual inspection) down to this minimal
+   set, which fixes Qwen and covers every confirmed height-based spoiler case.
+   Do not widen this list again without a live repro proving the wider set is
+   both necessary AND doesn't break a real interactive component — "might help
+   some other site" is not sufficient justification — this exact reasoning broke
+   two unrelated real sites already (see button-descendant transform note above
+   HOVER-HIGHLIGHT KILLER, and this one). animation-duration is deliberately
+   NOT forced — CSS-keyframe-animation state machines (rc-motion's
+   ant-slide-up-appear/-active classes, driven by animationend) are just as
+   fragile against near-zero durations as the transition-based case was. */
 *, *::before, *::after {
-  transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important;
+  transition-property: height, max-height, min-height !important;
   transition-duration: 0.001s !important;
   transition-delay: 0s !important;
 }
@@ -266,10 +274,11 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
   const SHADOW_CSS = `
-    /* Layout-only 1ms transitions, animation-duration left alone: transitionend
-       keeps firing for collapse code without breaking animationend-driven
-       state machines (see GLOBAL_CSS motion note) */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important; transition-duration: 0.001s !important; transition-delay: 0s !important; }
+    /* Minimal height-only 1ms transition, animation-duration left alone: keeps
+       transitionend firing for collapse code without touching top/left/width/
+       transform (see GLOBAL_CSS motion note for the live-reproduced Qwen bug
+       this scope was narrowed for) */
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
