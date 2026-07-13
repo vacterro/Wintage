@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.1.3
+// @version      1.1.4
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -138,6 +138,24 @@ rect { rx: 0 !important; ry: 0 !important; }
 svg { background: transparent !important; }
 [class*="avatar" i]:not(svg):not(path), img { clip-path: none !important; }
 img, video, canvas, iframe, picture { max-width: 100% !important; }
+/* Ad-network iframes (Reddit/most sites' "Advertisement" slots) flash white
+   in the letterbox before their creative paints. Cross-origin iframe
+   CONTENTS are fundamentally outside any userscript's reach — browser
+   security sandbox, not fixable — but the iframe ELEMENT's own background,
+   painted by the parent page, is ours, and covers that load-flash moment.
+   Scoped to known ad-serving hosts ONLY: forcing this on every iframe would
+   also hit deliberately-transparent overlay iframes (chat widgets, cookie
+   banners, payment forms like Stripe/Intercom/Crisp commonly cover large or
+   full-page areas with a transparent iframe so the page shows through except
+   their own widget) — an opaque background on those paints a solid dark
+   rectangle over otherwise normal pages, a worse bug than the one it fixes. */
+iframe[src*="doubleclick.net" i], iframe[src*="googlesyndication.com" i],
+iframe[src*="google.com/ads" i], iframe[id*="google_ads_iframe" i],
+iframe[id*="gpt_unit" i], iframe[src*="adservice.google" i],
+iframe[src*="amazon-adsystem.com" i], iframe[src*="taboola.com" i],
+iframe[src*="outbrain.com" i] {
+  background-color: #1E1408 !important;
+}
 main, section, article, aside, footer, .container, .wrapper, .main, #main, #wrapper { background-color: transparent !important; }
 
 ::selection { background-color: #4A3820 !important; color: #D4B87A !important; }
@@ -294,6 +312,14 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     }
     input, textarea, select, option, button, code, pre, kbd, samp, tt, [class*="code" i], [class*="mono" i] { font-family: ${FONT} !important; }
     :host { --radius: 0px; --shreddit-border-radius: 0px; --md-sys-shape-corner-full: 0px; background-color: transparent !important; background-image: none !important; color: #D4B87A !important; }
+    /* Ad-iframe load-flash fix, scoped to known ad hosts only — see GLOBAL_CSS note (unconditional would break transparent widget overlays) */
+    iframe[src*="doubleclick.net" i], iframe[src*="googlesyndication.com" i],
+    iframe[src*="google.com/ads" i], iframe[id*="google_ads_iframe" i],
+    iframe[id*="gpt_unit" i], iframe[src*="adservice.google" i],
+    iframe[src*="amazon-adsystem.com" i], iframe[src*="taboola.com" i],
+    iframe[src*="outbrain.com" i] {
+      background-color: #1E1408 !important;
+    }
     div, span, section, article, aside, nav, header, footer, main, [class], [id], [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
 
     /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
