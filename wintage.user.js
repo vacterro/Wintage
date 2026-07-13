@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.1.2
+// @version      1.1.3
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -506,9 +506,16 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (tagUC === 'INPUT') {
       const inputType = (el.type || '').toLowerCase();
       if (inputType === 'checkbox' || inputType === 'radio') {
-        const rect = el.getBoundingClientRect();
-        const hiddenProxy = parseFloat(cs.opacity) < 0.05 || (rect.width <= 2 && rect.height <= 2) ||
-          cs.clipPath === 'inset(50%)' || /^rect\(/.test(cs.clip || '');
+        // opacity is the ONLY reliable signal — every accessible custom-switch
+        // technique uses it (keyboard/screen-reader focus requires the real
+        // input stay hit-testable, ruling out display:none). Size is NOT a
+        // reliable signal: a checkbox with appearance:none and no explicit
+        // width/height collapses to 0x0 in Chromium regardless of whether the
+        // site intentionally hid it — a live test confirmed a genuinely
+        // BROKEN, unstyled real checkbox (the original government-form bug
+        // shape) also measures 0x0, so a size check produces false positives
+        // that silently reintroduce that exact bug.
+        const hiddenProxy = parseFloat(cs.opacity) < 0.05;
         if (!hiddenProxy) {
           setImp(el, 'appearance', 'auto');
           setImp(el, '-webkit-appearance', 'auto');
