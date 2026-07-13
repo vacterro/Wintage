@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.0.9
+// @version      1.1.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -64,9 +64,7 @@
 /* 🚨 STRICT RADIUS KILLER, NO GLOBAL BOX-SIZING TO PREVENT FLEX BREAKS 🚨 */
 * { border-radius: 0 !important; }
 
-/* 🚨 MOTION IS FORBIDDEN (SKILL.md): instant state changes, zero easing 🚨
-   animation-duration:0s instead of animation:none so animationstart/end events
-   still fire (some sites use them for lazy-load detection).
+/* 🚨 MOTION IS MOSTLY FORBIDDEN (SKILL.md), WITH A CARVE-OUT 🚨
    transition-duration is 0.001s, NOT "transition: none" — a none/zero transition
    never fires transitionend, and spoiler/accordion/modal JS commonly waits for
    that event to set height:auto and release scroll locks. transition:none left
@@ -76,13 +74,21 @@
    actually awaits). Without it, elements default to transition-property:all and
    the forced 1ms duration makes EVERY style change on EVERY element spin up
    transitions and fire transitionend — measurable jank on busy pages. Paint
-   props get no transitions at all. */
+   props get no transitions at all. "visibility" was tried here in v1.0.9 and
+   reverted: no confirmed bug needed it.
+   animation-duration is DELIBERATELY NOT forced (tried in v1.0.9, reverted).
+   Component libraries built on CSS-keyframe animation state machines (Ant
+   Design's rc-motion: classes like ant-slide-up-appear/-appear-prepare/-active,
+   which JS drives by listening for animationend) can get stuck mid-transition
+   or miss the event entirely when the animation is forced to ~0ms — the popup
+   renders but never finishes becoming interactive, and the whole trigger stops
+   responding to clicks (chat.qwen.ai "+" and thinking-mode dropdowns report).
+   Losing near-zero animations is an acceptable tradeoff for keeping the site
+   functional; transitions (this rule) are unaffected and still instant. */
 *, *::before, *::after {
-  transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, visibility, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important;
+  transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important;
   transition-duration: 0.001s !important;
   transition-delay: 0s !important;
-  animation-duration: 0.001s !important;
-  animation-delay: 0s !important;
 }
 html { scroll-behavior: auto !important; }
 
@@ -260,9 +266,10 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
   const SHADOW_CSS = `
-    /* Layout-only 1ms transitions: transitionend keeps firing for collapse
-       code without paint-transition churn (see GLOBAL_CSS motion note) */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, visibility, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; }
+    /* Layout-only 1ms transitions, animation-duration left alone: transitionend
+       keeps firing for collapse code without breaking animationend-driven
+       state machines (see GLOBAL_CSS motion note) */
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height, width, max-width, min-width, opacity, transform, margin, padding, top, left, right, bottom, flex-basis, grid-template-rows, grid-template-columns !important; transition-duration: 0.001s !important; transition-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
