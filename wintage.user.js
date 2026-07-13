@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.1.1
+// @version      1.1.2
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -201,12 +201,14 @@ textarea, select {
   ${B_SUNK}
   box-sizing: border-box !important;
 }
-/* Native checkboxes/radios restored: sites style them with appearance:none +
-   sprite backgrounds, which the theme flattens into identical dark squares with
-   no visible checked state. appearance:auto brings back the native control
-   (checkmark included), accent-color keeps it golden. */
+/* accent-color is harmless even on a visually-hidden checkbox (no-op if the
+   box itself never paints). appearance:auto is NOT forced here — see the JS
+   process() hiddenProxy check: forcing it unconditionally would un-hide the
+   real <input> underneath every accessible custom-switch component (Tailwind,
+   Radix, Bootstrap .custom-switch, react-toggle — all hide the native
+   checkbox via opacity:0/1px sizing and paint a sibling graphic instead),
+   doubling up a native box next to the custom switch. */
 input[type="checkbox"], input[type="radio"] {
-  appearance: auto !important; -webkit-appearance: auto !important;
   accent-color: #C0A060 !important; background-image: none !important;
 }
 input::placeholder, textarea::placeholder { color: #7A6838 !important; }
@@ -220,7 +222,7 @@ table { border-collapse: collapse !important; background-color: #1E1408 !importa
    from a class swap that :hover surgery cannot see). Diff/code cells are
    excluded so the JS repainter can keep their semantic tint (GitHub diff
    green/red), darkened with hue preserved. */
-td, th { background-image: none !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
+td, th { background-image: none !important; border: 1px solid #362812 !important; color: #D4B87A !important; box-sizing: border-box !important; }
 td:not([class*="blob-" i]):not([class*="diff-" i]):not([class*="hunk" i]):not([class*="addition" i]):not([class*="deletion" i]), th { background-color: #1E1408 !important; }
 .row1, .row2, .bg1, .bg2 { background-image: none !important; background-color: #1E1408 !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
 th { background-color: #2A1C0A !important; color: #D4B87A !important; font-weight: 700 !important; }
@@ -317,7 +319,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #0F0A04 !important; color: #D4B87A !important; ${B_SUNK} box-sizing: border-box !important; }
-    input[type="checkbox"], input[type="radio"] { appearance: auto !important; -webkit-appearance: auto !important; accent-color: #C0A060 !important; background-image: none !important; }
+    /* appearance:auto not forced here either — see GLOBAL_CSS checkbox note */
+    input[type="checkbox"], input[type="radio"] { accent-color: #C0A060 !important; background-image: none !important; }
 
     /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
     button:hover, shreddit-button:hover, .btn:hover { background-color: #3A2A15 !important; ${B_OUTER} }
@@ -494,6 +497,26 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     el.removeAttribute('bgcolor');
 
     const cs = window.getComputedStyle(el);
+
+    // Checkbox/radio: only force native appearance on a REAL, visible control
+    // (the confirmed invisible-checked-state bug). Skip entirely for the
+    // hidden-proxy pattern (opacity:0 / near-zero size / clipped) that custom
+    // switch components rely on — see the CSS comment above for why.
+    const tagUC = (el.tagName || '').toUpperCase();
+    if (tagUC === 'INPUT') {
+      const inputType = (el.type || '').toLowerCase();
+      if (inputType === 'checkbox' || inputType === 'radio') {
+        const rect = el.getBoundingClientRect();
+        const hiddenProxy = parseFloat(cs.opacity) < 0.05 || (rect.width <= 2 && rect.height <= 2) ||
+          cs.clipPath === 'inset(50%)' || /^rect\(/.test(cs.clip || '');
+        if (!hiddenProxy) {
+          setImp(el, 'appearance', 'auto');
+          setImp(el, '-webkit-appearance', 'auto');
+        }
+        return;
+      }
+    }
+
     const bgImg = cs.backgroundImage;
     if (bgImg && bgImg !== 'none') {
       // Computed gradients serialize colors as rgb(); any gradient stop with all
@@ -572,7 +595,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (tag === 'INPUT') {
       const t = (el.type || '').toLowerCase();
       // Natively-rendered controls: repainting them hides the checked state.
-      if (t === 'checkbox' || t === 'radio' || t === 'range' || t === 'color' || t === 'file') return true;
+      // checkbox/radio are handled specially in process() (need computed
+      // style to tell a real control from a hidden custom-switch proxy).
+      if (t === 'range' || t === 'color' || t === 'file') return true;
     }
     if (el.closest && el.closest('button')) return true;
     try { if (el.closest && el.closest(JS_SKIP_SELECTOR)) return true; } catch (e) { }
