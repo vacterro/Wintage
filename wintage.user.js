@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.1.4
+// @version      1.2.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -85,18 +85,33 @@
    (each candidate property list re-tested against a real dispatched click +
    elementFromPoint hit-test, not just visual inspection) down to this minimal
    set, which fixes Qwen and covers every confirmed height-based spoiler case.
-   Do not widen this list again without a live repro proving the wider set is
-   both necessary AND doesn't break a real interactive component — "might help
-   some other site" is not sufficient justification — this exact reasoning broke
-   two unrelated real sites already (see button-descendant transform note above
-   HOVER-HIGHLIGHT KILLER, and this one). animation-duration is deliberately
-   NOT forced — CSS-keyframe-animation state machines (rc-motion's
-   ant-slide-up-appear/-active classes, driven by animationend) are just as
-   fragile against near-zero durations as the transition-based case was. */
+   Do not widen the transition-property list again without a live repro proving
+   the wider set is both necessary AND doesn't break a real interactive
+   component — "might help some other site" is not sufficient justification —
+   that reasoning broke two real sites already (button-descendant transform
+   note above HOVER-HIGHLIGHT KILLER, and the top/left/width case here).
+
+   animation-duration/-delay ARE forced to near-zero (v1.2.0). This was reverted
+   in v1.0.9 on the HYPOTHESIS that it broke rc-motion (Ant Design) dropdowns —
+   that hypothesis was never verified and turned out FALSE: the real culprit was
+   always the transition-property list above. Re-verified live (chat.qwen.ai,
+   wintage + blanket animation-duration:0.001s): the rc-motion "+" dropdown
+   opens, its menu item is hit-test clickable, page stays responsive. 0.001s
+   (not 0s) is used because a genuine-but-instant animation lifecycle reliably
+   fires animationstart/animationend, so animationend-driven state machines
+   still advance; 0s has engine edge cases where events may not fire. Finite
+   entrance/reveal animations become instant (the vintage no-motion goal).
+   Infinite animations (spinners): Chromium coalesces animationiteration to at
+   most one per frame, so no event flood. Snapback (base opacity:0 + reveal
+   animation with no fill-mode reverting to invisible after end) only affects
+   already-broken sites — a correct reveal uses fill-mode:forwards or a final
+   base state — so it is not a regression this rule introduces. */
 *, *::before, *::after {
   transition-property: height, max-height, min-height !important;
   transition-duration: 0.001s !important;
   transition-delay: 0s !important;
+  animation-duration: 0.001s !important;
+  animation-delay: 0s !important;
 }
 html { scroll-behavior: auto !important; }
 
@@ -294,11 +309,10 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
   const SHADOW_CSS = `
-    /* Minimal height-only 1ms transition, animation-duration left alone: keeps
-       transitionend firing for collapse code without touching top/left/width/
-       transform (see GLOBAL_CSS motion note for the live-reproduced Qwen bug
-       this scope was narrowed for) */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; }
+    /* Height-only 1ms transition + near-zero animation (see GLOBAL_CSS motion
+       note): transitionend/animationend keep firing for collapse + rc-motion
+       state machines, without touching top/left/width/transform. */
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
