@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.2.0
+// @version      1.2.1
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -18,9 +18,14 @@
 (function () {
   'use strict';
 
-  // ─── AUTH GUARD ──────────────────────────────────────────────────────────────
-  const AUTH = [/oauth/i, /captcha/i, /accounts\.google/i, /login\.microsoft/i, /paypal/i, /stripe/i, /bank/i];
-  if (AUTH.some(r => r.test(location.href))) return;
+  // ─── EARLY RETURN GUARD ──────────────────────────────────────────────────────
+  const EXCLUDE = [
+    // Auth & Payments (don't break secure forms)
+    /oauth/i, /captcha/i, /accounts\.google/i, /login\.microsoft/i, /paypal/i, /stripe/i, /bank/i,
+    // Heavy Web Apps (lag too much or UI gets destroyed)
+    /translate\.google/i, /maps\.google/i, /figma\.com/i, /canva\.com/i, /webflow\.com/i, /photopea\.com/i
+  ];
+  if (EXCLUDE.some(r => r.test(location.href))) return;
 
   // ─── IMMEDIATE DARK GOLDEN BACKGROUND ────────────────────────────────────────
   document.documentElement.style.setProperty('background-color', '#1A0F05', 'important');
@@ -73,14 +78,6 @@
    transition-property is ONLY height/max-height/min-height — the exact
    properties collapse/spoiler code actually toggles (max-height:0->N is the
    standard accordion trick, since height:auto itself doesn't transition).
-   v1.0.7–v1.1.0 forced a much longer list here (opacity, transform, width,
-   margin, padding, top/left/right/bottom, flex-basis, grid-template-*, and at
-   one point animation-duration/visibility too) on the theory that other
-   component libraries might need it too. Confirmed via live reproduction on
-   chat.qwen.ai (v1.1.1): Ant Design's rc-trigger positions dropdown panels via
-   transitioned top/left/width, and forcing those to ~0ms made the panel's
-   final position/size unreliable — document.elementFromPoint at the menu item
-   never resolved to the item itself, so the "+" and thinking-mode dropdowns
    opened visually but were NOT clickable. Isolated with a live binary search
    (each candidate property list re-tested against a real dispatched click +
    elementFromPoint hit-test, not just visual inspection) down to this minimal
@@ -610,9 +607,18 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const fgLum = lum(fg);
         const darkBg = 0.008; // luminance of #1E1408 backdrop
         const contrast = (Math.max(fgLum, darkBg) + 0.05) / (Math.min(fgLum, darkBg) + 0.05);
-        // Links get the accent so they stay distinguishable even when a site's
-        // high-specificity !important link color beats our stylesheet.
-        if (contrast < 4.5) { setImp(el, 'color', (el.closest && el.closest('a')) ? '#9DD9F9' : '#D4B87A'); }
+        const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
+        
+        if (el.closest && el.closest('a')) {
+          if (contrast < 4.5 || (fgLum > 0.4 && grayish)) setImp(el, 'color', '#9DD9F9');
+        } else {
+          if (contrast < 4.5) {
+            setImp(el, 'color', '#D4B87A');
+          } else if (grayish) {
+            if (fgLum > 0.4) setImp(el, 'color', '#D4B87A');
+            else if (fgLum > 0.15) setImp(el, 'color', '#B09558');
+          }
+        }
       }
     }
 
