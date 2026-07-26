@@ -1,13 +1,13 @@
 ---
-phase: SHIP
-task: T-012
-next_action: "merge perf-verify into main as v1.4.0, push origin/main"
+phase: DONE
+task: none
+next_action: "none — T-006..T-012 shipped + verified as v1.4.0 (origin/main 4bcec5a). Next saipen run: HUNT."
 blocker: none
 agent: claude-opus-5
 mode: full
 saipen_version: 7
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
-updated: 2026-07-26T11:43:38Z
+updated: 2026-07-26T11:52:00Z
 ---
 
 # Wintage — UI.md conformance wave (saipen)
