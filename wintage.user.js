@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.4.1
+// @version      1.4.2
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -687,13 +687,64 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   // ('data-w95-done') is not referenced by any selector in this theme, so it
   // invalidates nothing (measured: 6.7 ms for all 16921 elements), and
   // removeAttribute('bgcolor'/'background') is a no-op when absent.
-  let selfStyleMuteUntil = 0;
+  // 🚨 SELF-WRITE SUPPRESSION IS BY IDENTITY, NEVER BY A TIME WINDOW (v1.4.2) 🚨
+  // 'style' IS in the observer's attributeFilter, which ADR-002 said never to do.
+  // It is worth doing — a site mutating an existing element's inline style is
+  // otherwise invisible, and catching it with an event is what let the 30s
+  // polling heartbeat be deleted entirely. But setImp writes inline styles, so
+  // the observer WILL be handed its own output and the suppression has to be
+  // airtight.
+  //
+  // The first attempt muted all 'style' records for 100ms after each flush.
+  // Measured on a static article (16595 elements), 12-second window:
+  //     site alone, no theme .......    0 style mutations
+  //     with the theme ............. 9466 style mutations
+  // i.e. every single one was ours. The mute discarded them at flush time, so
+  // there was no runaway — but 9466 records were still allocated, delivered
+  // through a microtask, and pushed into pendingMuts to be walked by the next
+  // debounce. And it was only ever timing-safe by luck: the filter runs at the
+  // END of the 60ms debounce, so any flush that lands >100ms before its debounce
+  // fires (i.e. exactly when the main thread is busy, which is exactly during a
+  // heavy sweep) lets our own writes through, and each one that gets processed
+  // clears data-w95-done and re-processes the element, generating more writes.
+  // A blanket window also drops the SITE's real style changes for 100ms.
+  //
+  // So: record precisely which elements we wrote, then drain the observer queue
+  // ourselves with takeRecords() before the callback ever runs, keeping every
+  // record that was not ours. Timing-independent and scoped to the exact
+  // elements involved.
+  const selfWritten = new Set();
 
   function flushWrites(w) {
-    selfStyleMuteUntil = Date.now() + 100;
-    for (let i = 0; i < w.length; i += 3) setImp(w[i], w[i + 1], w[i + 2]);
+    if (!w.length) return;
+    for (let i = 0; i < w.length; i += 3) {
+      setImp(w[i], w[i + 1], w[i + 2]);
+      selfWritten.add(w[i]);
+    }
     w.length = 0;
+    // takeRecords() returns AND clears the pending queue, so this runs before
+    // the observer callback is ever invoked for these mutations.
+    let kept = 0;
+    for (const obs of [mainObserver, shadowObserver]) {
+      let recs;
+      try { recs = obs.takeRecords(); } catch (e) { continue; }
+      for (let i = 0; i < recs.length; i++) {
+        const m = recs[i];
+        if (m.type === 'attributes' && m.attributeName === 'style' && selfWritten.has(m.target)) continue;
+        pendingMuts.push(m);
+        kept++;
+      }
+    }
+    selfWritten.clear();
+    // Anything genuinely foreign that was queued alongside our writes still has
+    // to be handled; the debounce is not running at this point (flushWrites is
+    // called at the END of it, and from runSweeper), so it needs re-arming.
+    // Known and accepted gap: a site style-change on an element WE also wrote to
+    // in the same batch is dropped. It is self-healing — the next sweep re-reads
+    // that element's computed style from scratch.
+    if (kept && !debounceTimer) onMutations(EMPTY_MUTATIONS);
   }
+  const EMPTY_MUTATIONS = [];
 
   // 🚨 SATURATED COLOUR -> ONE OF THREE SEMANTIC TOKENS (UI.md law 5) 🚨
   // The pre-1.4.0 rule multiplied a light saturated background by 0.18, which
@@ -1061,9 +1112,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         if (m.type === 'attributes') {
           const t = m.target;
           if (t && t.nodeType === 1) {
-            if (m.attributeName === 'style' && Date.now() < selfStyleMuteUntil) {
-              continue;
-            }
+            // No time-window mute here any more — our own style writes are
+            // filtered out by identity in flushWrites before this ever runs.
             // Cooldown: carousels/virtual scrollers toggle classes many times a
             // second; re-processing each toggle (computed-style read + writes)
             // is a jank source. During the cooldown just mark the element dirty
