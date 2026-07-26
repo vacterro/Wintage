@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.4.1
+// @version      1.4.2
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -687,10 +687,64 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   // ('data-w95-done') is not referenced by any selector in this theme, so it
   // invalidates nothing (measured: 6.7 ms for all 16921 elements), and
   // removeAttribute('bgcolor'/'background') is a no-op when absent.
+  // 🚨 SELF-WRITE SUPPRESSION IS BY IDENTITY, NEVER BY A TIME WINDOW (v1.4.2) 🚨
+  // 'style' IS in the observer's attributeFilter, which ADR-002 said never to do.
+  // It is worth doing — a site mutating an existing element's inline style is
+  // otherwise invisible, and catching it with an event is what let the 30s
+  // polling heartbeat be deleted entirely. But setImp writes inline styles, so
+  // the observer WILL be handed its own output and the suppression has to be
+  // airtight.
+  //
+  // The first attempt muted all 'style' records for 100ms after each flush.
+  // Measured on a static article (16595 elements), 12-second window:
+  //     site alone, no theme .......    0 style mutations
+  //     with the theme ............. 9466 style mutations
+  // i.e. every single one was ours. The mute discarded them at flush time, so
+  // there was no runaway — but 9466 records were still allocated, delivered
+  // through a microtask, and pushed into pendingMuts to be walked by the next
+  // debounce. And it was only ever timing-safe by luck: the filter runs at the
+  // END of the 60ms debounce, so any flush that lands >100ms before its debounce
+  // fires (i.e. exactly when the main thread is busy, which is exactly during a
+  // heavy sweep) lets our own writes through, and each one that gets processed
+  // clears data-w95-done and re-processes the element, generating more writes.
+  // A blanket window also drops the SITE's real style changes for 100ms.
+  //
+  // So: record precisely which elements we wrote, then drain the observer queue
+  // ourselves with takeRecords() before the callback ever runs, keeping every
+  // record that was not ours. Timing-independent and scoped to the exact
+  // elements involved.
+  const selfWritten = new Set();
+
   function flushWrites(w) {
-    for (let i = 0; i < w.length; i += 3) setImp(w[i], w[i + 1], w[i + 2]);
+    if (!w.length) return;
+    for (let i = 0; i < w.length; i += 3) {
+      setImp(w[i], w[i + 1], w[i + 2]);
+      selfWritten.add(w[i]);
+    }
     w.length = 0;
+    // takeRecords() returns AND clears the pending queue, so this runs before
+    // the observer callback is ever invoked for these mutations.
+    let kept = 0;
+    for (const obs of [mainObserver, shadowObserver]) {
+      let recs;
+      try { recs = obs.takeRecords(); } catch (e) { continue; }
+      for (let i = 0; i < recs.length; i++) {
+        const m = recs[i];
+        if (m.type === 'attributes' && m.attributeName === 'style' && selfWritten.has(m.target)) continue;
+        pendingMuts.push(m);
+        kept++;
+      }
+    }
+    selfWritten.clear();
+    // Anything genuinely foreign that was queued alongside our writes still has
+    // to be handled; the debounce is not running at this point (flushWrites is
+    // called at the END of it, and from runSweeper), so it needs re-arming.
+    // Known and accepted gap: a site style-change on an element WE also wrote to
+    // in the same batch is dropped. It is self-healing — the next sweep re-reads
+    // that element's computed style from scratch.
+    if (kept && !debounceTimer) onMutations(EMPTY_MUTATIONS);
   }
+  const EMPTY_MUTATIONS = [];
 
   // 🚨 SATURATED COLOUR -> ONE OF THREE SEMANTIC TOKENS (UI.md law 5) 🚨
   // The pre-1.4.0 rule multiplied a light saturated background by 0.18, which
@@ -740,7 +794,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['class', 'bgcolor', 'background']
+        attributeFilter: ['class', 'bgcolor', 'background', 'style']
       });
     } catch (e) { }
   }
@@ -972,7 +1026,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const darkBg = 0.008; // luminance of #1E1408 backdrop
         const contrast = (Math.max(fgLum, darkBg) + 0.05) / (Math.min(fgLum, darkBg) + 0.05);
         const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
-        
+
         if (el.closest && el.closest('a')) {
           if (contrast < 4.5 || (fgLum > 0.4 && grayish)) w.push(el, 'color', T.borderHighlight);
         } else {
@@ -1058,10 +1112,12 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         if (m.type === 'attributes') {
           const t = m.target;
           if (t && t.nodeType === 1) {
+            // No time-window mute here any more — our own style writes are
+            // filtered out by identity in flushWrites before this ever runs.
             // Cooldown: carousels/virtual scrollers toggle classes many times a
             // second; re-processing each toggle (computed-style read + writes)
             // is a jank source. During the cooldown just mark the element dirty
-            // — the next light sweep (≤1.5s) picks up its settled state.
+            // — the next light sweep picks up its settled state.
             const now = Date.now();
             if ((attrCooldown.get(t) || 0) + 500 > now) {
               t.removeAttribute('data-w95-done');
@@ -1122,29 +1178,51 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'bgcolor', 'background']
+      attributeFilter: ['class', 'bgcolor', 'background', 'style']
     });
   }
 
   // Force passes are budgeted: on huge pages (endless feeds) each pass
   // re-verifies a rotating 2500-element window instead of the whole DOM, so a
   // single pass never janks the main thread; full coverage arrives over a few
-  // rotations.
+  // rotations. The scheduler is now adaptive: when nothing changes, it backs
+  // off instead of ticking forever in the background like a stubborn appliance.
   const FORCE_BUDGET = 2500;
   let forceCursor = 0;
 
-  // 🚨 FORCE SWEEPS ARE NOW DEMAND-DRIVEN, NOT UNCONDITIONAL (v1.3.0) 🚨
-  // They used to fire every 3rd tick (~4.5s) forever, whether or not the page
-  // had changed since the last one — so a fully settled, idle page kept paying
-  // for a 2500-element re-verify until the tab closed. That is the permanent
-  // idle CPU the user actually feels. Light sweeps are genuinely cheap and stay
-  // unconditional (measured: 0.7ms on a settled 16921-element page, because
-  // '*:not([data-w95-done])' matches nothing), so nothing is lost by gating the
-  // expensive pass on real activity: new DOM nodes, a changed stylesheet, or a
-  // return to a hidden tab. Each request buys enough budgeted rotations to cover
-  // the document ONCE — otherwise the rotating cursor would never finish a lap
-  // on a big page and elements past the first 2500 would never be re-verified.
   let forcePassesOwed = 0;
+  let sweepCount = 0;
+  let sweepDelay = 1500;
+  let sweepTimer = null;
+
+  function scheduleNextSweep(immediate = false) {
+    if (sweepTimer) {
+      clearTimeout(sweepTimer);
+      sweepTimer = null;
+    }
+    if (document.hidden) return;
+
+    const delay = immediate ? 0 : sweepDelay;
+    sweepTimer = setTimeout(() => {
+      sweepTimer = null;
+      if (document.hidden) return;
+
+      sweepCount++;
+      const force = forcePassesOwed > 0 && sweepCount % 3 === 0;
+      if (force) forcePassesOwed--;
+
+      runSweeper(force);
+
+      // Real activity resets the cadence to the fast lane. When the page is
+      // genuinely idle, the interval ramps all the way down to one pass per
+      // minute instead of hammering the DOM forever.
+      sweepDelay = forcePassesOwed > 0 ? 1500 : Math.min(sweepDelay * 2, 60000);
+      scheduleNextSweep(false);
+    }, delay);
+  }
+
+  // A request means "there is fresh work, please revisit soon". It does not
+  // mean "keep a permanent interval alive".
   function requestForceSweep() {
     let n = 1;
     try { n = Math.ceil((document.getElementsByTagName('*').length || 1) / FORCE_BUDGET); } catch (e) { }
@@ -1152,6 +1230,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     // back if mutations keep arriving before the lap finishes.
     if (n > 8) n = 8;
     if (n > forcePassesOwed) forcePassesOwed = n;
+    sweepDelay = 1500;
+    scheduleNextSweep(true);
   }
 
   function runSweeper(force) {
@@ -1186,7 +1266,6 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   // (force=true) re-check EVERY element: at DOMContentLoaded, again 1s later
   // once late CSS settled, then on demand whenever requestForceSweep() fires.
   // The write-if-changed guard in setImp keeps repeat passes cheap.
-  let sweepCount = 0;
   function startSweeping() {
     injectLate();
     // The boot pass measured ONE 716ms long task on a 16921-element page, right
@@ -1201,40 +1280,36 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (!IS_TOP) {
       // Sub-frame: bounded settling passes, then nothing. The MutationObserver
       // stays live, so a late-loading embed still gets themed — that path is
-      // event-driven and costs zero while idle. What a frame must NOT own is a
-      // forever-ticking interval; multiplied by an ad-heavy page's frame count
-      // that was pure background burn on content the user often never sees.
+      // event-driven and costs zero while idle.
       setTimeout(() => { requestForceSweep(); runSweeper(true); }, 3000);
       return;
     }
 
-    // Top frame: cheap light sweep every 1.5s (0.7ms on a settled page — it only
-    // touches elements missing data-w95-done), and the expensive force pass only
-    // when requestForceSweep() has been called since the last one.
-    setInterval(() => {
-      if (document.hidden) return; // background tab: nothing visible, nothing to fix
-      sweepCount++;
-      const force = forcePassesOwed > 0 && sweepCount % 3 === 0;
-      if (force) forcePassesOwed--;
-      runSweeper(force);
-    }, 1500);
-
-    // Slow self-healing heartbeat. The demand-driven gate above covers new DOM,
-    // attribute churn and new stylesheets — but NOT a site mutating an existing
-    // element's own `style` attribute (custom properties, inline recolors).
-    // `style` cannot be added to the observer's attributeFilter: setImp writes
-    // inline styles, so the observer would fire on its own output and spin. The
-    // old blind 4.5s force pass healed that case by accident, and dropping it
-    // outright would be a real regression — so it is kept, just 20x rarer. One
-    // lap costs ~7 budgeted passes at ~30ms on a 17k-element page, i.e. well
-    // under 1% averaged, against the 16.9% the 4.5s version measured.
-    setInterval(() => { if (!document.hidden) requestForceSweep(); }, 30000);
+    // Top frame: event-driven sweeps with a sparse adaptive fallback instead of
+    // a permanent 1.5s interval plus an extra 30s heartbeat.
+    scheduleNextSweep(false);
 
     // Pages that finished loading while the tab was hidden got no sweeps; on
     // return, re-verify immediately so the user never sees stale white.
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) { requestForceSweep(); runSweeper(true); }
+      if (!document.hidden) {
+        requestForceSweep();
+        runSweeper(true);
+      } else if (sweepTimer) {
+        clearTimeout(sweepTimer);
+        sweepTimer = null;
+      }
     });
+
+    // Late external stylesheet loads can alter computed styles without DOM
+    // churn. Catch them once and reschedule a real pass instead of polling.
+    document.addEventListener('load', (evt) => {
+      const t = evt.target;
+      if (!t || t.nodeType !== 1) return;
+      if ((t.tagName || '').toUpperCase() !== 'LINK') return;
+      const rel = (t.rel || '').toLowerCase();
+      if (rel.includes('stylesheet')) requestForceSweep();
+    }, true);
   }
 
   if (document.readyState === 'loading') {
