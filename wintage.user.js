@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.4.0
+// @version      1.4.1
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -835,12 +835,52 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     el.setAttribute('data-w95-done', '1');
 
     if (el.shadowRoot) pierceShadow(el);
+
+    const cs = window.getComputedStyle(el);
+
+    // 🚨 INFINITE ANIMATIONS GET PAUSED, NOT SPED UP (v1.4.1) 🚨
+    // The global 'animation-duration: 0.001s' makes FINITE animations instant,
+    // which is the goal. On an INFINITE animation it does the opposite of
+    // stopping it. Measured exactly, via the Web Animations API on a real
+    // spinner (duration 1ms, iterations Infinity):
+    //     iterations in 1 second .............. 1000   (site intended: 1)
+    //     iterations per 60fps frame ..........   16.7 (site intended: 0)
+    //     angle rendered on 6 consecutive frames:
+    //       240deg, 120deg, 0deg, 240deg, 120deg, 0deg
+    // 16.667ms per frame divided by a 1ms duration leaves a repeating 2/3
+    // remainder, so a spinner does not freeze — it strobes between exactly three
+    // rotations forever. That is worse than the smooth spin it replaced, and it
+    // makes this theme's "zero animations" claim false. ADR-001 checked that
+    // Chromium does not FLOOD animationiteration events here and stopped there;
+    // it never checked what was actually on screen. See ADR-004.
+    //
+    // Pausing is safe precisely where the 0.001s compromise is pointless: an
+    // infinite animation's 'animationend' NEVER fires, so no animationend-driven
+    // state machine can be waiting on one — and keeping animationend alive is the
+    // entire reason 0.001s was chosen over 0s/none in the first place (ADR-001).
+    // 'paused' rather than 'animation: none' because a paused animation keeps
+    // applying its current computed value: cancelling instead would snap the
+    // element back to its base state, which for a pulse/skeleton loop is often
+    // opacity 0 — i.e. it would make content vanish.
+    //
+    // Known residual risk: code that drives state from 'animationiteration'
+    // (some marquee and carousel loops) will stall. Rare, and the alternative is
+    // a permanent three-position strobe on every spinner on the web.
+    //
+    // This runs BEFORE shouldSkip on purpose. The two commonest spinner shapes
+    // are both in the skip set: Tailwind's 'svg.animate-spin' (SVG is in
+    // TAG_SKIP) and a spinner inside a loading <button> (shouldSkip matches
+    // closest('button')). Checking after the skip would miss exactly the cases
+    // that matter.
+    const iterCount = cs.animationIterationCount;
+    if (iterCount && iterCount.indexOf('infinite') !== -1) {
+      w.push(el, 'animation-play-state', 'paused');
+    }
+
     if (shouldSkip(el)) return;
 
     el.removeAttribute('background');
     el.removeAttribute('bgcolor');
-
-    const cs = window.getComputedStyle(el);
 
     // Checkbox/radio: only force native appearance on a REAL, visible control
     // (the confirmed invisible-checked-state bug). Skip entirely for the
