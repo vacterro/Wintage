@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.2.1
+// @version      1.3.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -26,6 +26,17 @@
     /translate\.google/i, /maps\.google/i, /figma\.com/i, /canva\.com/i, /webflow\.com/i, /photopea\.com/i
   ];
   if (EXCLUDE.some(r => r.test(location.href))) return;
+
+  // ─── FRAME ROLE ──────────────────────────────────────────────────────────────
+  // @match *://*/* + @run-at document-start means this script runs in EVERY
+  // frame, ads and tracking pixels included. The CSS and the event-driven
+  // observers are cheap per frame and genuinely needed (an unthemed embed is a
+  // white rectangle), but the periodic sweeper is not: on an ad-heavy page it
+  // multiplied a permanent 1.5s wake-up by the frame count. Sub-frames get a few
+  // bounded settling sweeps at load instead of an interval that never ends.
+  // NOT solved with @noframes — that would leave every embed unthemed.
+  let IS_TOP = true;
+  try { IS_TOP = window.top === window.self; } catch (e) { IS_TOP = false; }
 
   // ─── IMMEDIATE DARK GOLDEN BACKGROUND ────────────────────────────────────────
   document.documentElement.style.setProperty('background-color', '#1A0F05', 'important');
@@ -425,6 +436,42 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     }
   }
 
+  // 🚨 READ/WRITE SPLIT — this was THE idle-CPU bug (v1.3.0) 🚨
+  // process() used to read getComputedStyle and write inline styles in the same
+  // loop. Every inline write invalidates style, so the NEXT element's read had
+  // to force a whole-document style recalc — and this theme's own selectors make
+  // that the most expensive recalc shape there is (`*`, `*, *::before, *::after`,
+  // the 8-`:not([class*="…" i])` icon-font selector, the 12-negation hover-freeze
+  // selector). One write per element therefore bought one full recalc per
+  // element. Measured live on en.wikipedia.org/wiki/World_War_II, 16921 elements,
+  // published v1.2.1 eval'd in-page:
+  //     2500 elements, reads only ................  70.6 ms
+  //     2500 elements, interleaved read+write ....  1069–1994 ms   ← old code
+  //     2500 elements, batched read-then-write ...  230.9 ms  (~190 ms of which
+  //                                                 is ONE whole-doc recalc)
+  // One real instrumented sweeper tick measured 253 ms per 1.5 s interval =
+  // 16.9 % of a core, permanently, on a page that was doing nothing.
+  //
+  // So process() now ONLY READS. Instead of writing, it appends [el, prop, val]
+  // triples to a queue that the caller flushes once at the end: N recalcs -> 1.
+  // A flat array (not objects) keeps the queue allocation-free per element.
+  //
+  // Correctness note on batching: `color` is inherited, so a child no longer
+  // sees its parent's just-corrected color while being read — it fails the
+  // contrast check against the ORIGINAL inherited value and gets its own
+  // explicit inline color. Identical final pixels, one extra declaration; it
+  // can never resolve to a DIFFERENT color, only to the same one stated twice.
+  // Non-inherited properties (background, border-*) are unaffected either way.
+  //
+  // Attribute writes stay inline and are deliberately NOT queued: setAttribute
+  // ('data-w95-done') is not referenced by any selector in this theme, so it
+  // invalidates nothing (measured: 6.7 ms for all 16921 elements), and
+  // removeAttribute('bgcolor'/'background') is a no-op when absent.
+  function flushWrites(w) {
+    for (let i = 0; i < w.length; i += 3) setImp(w[i], w[i + 1], w[i + 2]);
+    w.length = 0;
+  }
+
   const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape';
   const SHADOW_SKIP_TAGS = new Set(['YTD-LOGO', 'YT-ICON', 'YT-ICON-SHAPE', 'YT-IMG-SHADOW', 'YTD-AVATAR-SHAPE', 'YT-AVATAR-SHAPE', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
   const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR)$/i;
@@ -480,7 +527,12 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     }
   }
 
+  // Returns true when at least one sheet had changed since the last pass — the
+  // caller treats that as "late CSS is still landing" and requests a force
+  // re-verify (v1.3.0). On a settled page it returns false every time, which is
+  // what lets the expensive pass go quiet.
   function stripHoverSheets(root) {
+    let changed = false;
     const lists = [root.styleSheets, root.adoptedStyleSheets];
     for (let l = 0; l < lists.length; l++) {
       const list = lists[l];
@@ -494,6 +546,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const seen = sheetSeen.get(sheet);
         if (seen === count) continue; // unchanged since last pass
         sheetSeen.set(sheet, count);
+        changed = true;
         if (seen === undefined || count < seen) {
           walkRules(sheet); // first sight or rules removed: full walk
         } else {
@@ -510,9 +563,12 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         }
       }
     }
+    return changed;
   }
 
-  function process(el, force) {
+  // `w` is the caller's write queue (see flushWrites). Reads only — every style
+  // change is appended, never applied here.
+  function process(el, force, w) {
     // v29 FIX: the old `el.closest(':hover')` guard was fatal — html/body match
     // :hover whenever the cursor is anywhere over the viewport, so closest()
     // returned truthy for EVERY element and the sweeper silently processed
@@ -554,8 +610,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         // that silently reintroduce that exact bug.
         const hiddenProxy = parseFloat(cs.opacity) < 0.05;
         if (!hiddenProxy) {
-          setImp(el, 'appearance', 'auto');
-          setImp(el, '-webkit-appearance', 'auto');
+          w.push(el, 'appearance', 'auto', el, '-webkit-appearance', 'auto');
         }
         return;
       }
@@ -566,8 +621,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       // Computed gradients serialize colors as rgb(); any gradient stop with all
       // channels >= 200 is a light surface. radial/conic covered too.
       if (/(linear|radial|conic)-gradient.*(white|#fff|2\d\d,\s*2\d\d,\s*2\d\d)/i.test(bgImg)) {
-        setImp(el, 'background', 'transparent');
-        setImp(el, 'background-image', 'none');
+        w.push(el, 'background', 'transparent', el, 'background-image', 'none');
       }
     }
 
@@ -593,9 +647,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
           repaint = L >= 0.13 ? '#3A2A15' : L >= 0.05 ? '#362812' : '#2A1C0A';
         }
         if (repaint) {
-          setImp(el, 'background', repaint);
-          setImp(el, 'background-color', repaint);
-          setImp(el, 'background-image', 'none');
+          w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
         }
       }
     }
@@ -610,13 +662,13 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
         
         if (el.closest && el.closest('a')) {
-          if (contrast < 4.5 || (fgLum > 0.4 && grayish)) setImp(el, 'color', '#9DD9F9');
+          if (contrast < 4.5 || (fgLum > 0.4 && grayish)) w.push(el, 'color', '#9DD9F9');
         } else {
           if (contrast < 4.5) {
-            setImp(el, 'color', '#D4B87A');
+            w.push(el, 'color', '#D4B87A');
           } else if (grayish) {
-            if (fgLum > 0.4) setImp(el, 'color', '#D4B87A');
-            else if (fgLum > 0.15) setImp(el, 'color', '#B09558');
+            if (fgLum > 0.4) w.push(el, 'color', '#D4B87A');
+            else if (fgLum > 0.15) w.push(el, 'color', '#B09558');
           }
         }
       }
@@ -636,7 +688,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         if (!bc || bc.a <= 0.1) continue;
         const grayish = Math.max(bc.r, bc.g, bc.b) - Math.min(bc.r, bc.g, bc.b) <= 60;
         if (grayish && lum(bc) > 0.18) {
-          setImp(el, 'border-' + s.toLowerCase() + '-color', '#362812');
+          w.push(el, 'border-' + s.toLowerCase() + '-color', '#362812');
         }
       }
     }
@@ -671,6 +723,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       debounceTimer = null;
       const batch = pendingMuts;
       pendingMuts = [];
+      const w = [];
+      const added = [];
       for (const m of batch) {
         // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
         // CSS-in-JS) — re-process them or they keep stale baked-in colors.
@@ -689,22 +743,49 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
             } else {
               attrCooldown.set(t, now);
               t.removeAttribute('data-w95-done');
-              process(t);
+              process(t, false, w);
             }
           }
           continue;
         }
         for (const node of m.addedNodes) {
           if (node.nodeType !== 1) continue;
+          added.push(node);
+        }
+      }
+
+      // De-dup the batch before touching anything (v1.3.0). The parser and SPA
+      // hydration routinely report a container AND its descendants as separate
+      // addedNodes records in the SAME batch, and the old loop walked every
+      // record's whole subtree — so a node covered by an ancestor's walk was
+      // re-read, and the code even cleared its data-w95-done first to guarantee
+      // the redundant pass happened. Keep only records with no added ancestor in
+      // this batch; walking up parentNode is O(depth), never O(batch²).
+      if (added.length) {
+        const inBatch = new Set(added);
+        for (const node of added) {
+          let covered = false;
+          for (let p = node.parentNode; p; p = p.parentNode) {
+            if (inBatch.has(p)) { covered = true; break; }
+          }
+          // Added then removed again inside the same 60ms window: a detached
+          // element has no computed style worth reading and no pixels to fix.
+          if (covered || !node.isConnected) continue;
           node.removeAttribute && node.removeAttribute('data-w95-done');
-          process(node);
+          process(node, false, w);
           const kids = node.getElementsByTagName('*');
           for (let i = 0; i < kids.length; i++) {
             kids[i].removeAttribute && kids[i].removeAttribute('data-w95-done');
-            process(kids[i]);
+            process(kids[i], false, w);
           }
         }
+        // New DOM arrived, so late CSS may still be settling on it: this is the
+        // one signal that earns a force re-verify. Attribute churn deliberately
+        // does NOT request one — an animating spinner toggling classes must not
+        // keep the expensive pass alive forever (that was half the idle burn).
+        requestForceSweep();
       }
+      flushWrites(w);
     }, 60);
   }
 
@@ -721,49 +802,103 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   }
 
   // Force passes are budgeted: on huge pages (endless feeds) each pass
-  // re-verifies a rotating 6000-element window instead of the whole DOM, so a
+  // re-verifies a rotating 2500-element window instead of the whole DOM, so a
   // single pass never janks the main thread; full coverage arrives over a few
   // rotations.
   const FORCE_BUDGET = 2500;
   let forceCursor = 0;
 
+  // 🚨 FORCE SWEEPS ARE NOW DEMAND-DRIVEN, NOT UNCONDITIONAL (v1.3.0) 🚨
+  // They used to fire every 3rd tick (~4.5s) forever, whether or not the page
+  // had changed since the last one — so a fully settled, idle page kept paying
+  // for a 2500-element re-verify until the tab closed. That is the permanent
+  // idle CPU the user actually feels. Light sweeps are genuinely cheap and stay
+  // unconditional (measured: 0.7ms on a settled 16921-element page, because
+  // '*:not([data-w95-done])' matches nothing), so nothing is lost by gating the
+  // expensive pass on real activity: new DOM nodes, a changed stylesheet, or a
+  // return to a hidden tab. Each request buys enough budgeted rotations to cover
+  // the document ONCE — otherwise the rotating cursor would never finish a lap
+  // on a big page and elements past the first 2500 would never be re-verified.
+  let forcePassesOwed = 0;
+  function requestForceSweep() {
+    let n = 1;
+    try { n = Math.ceil((document.getElementsByTagName('*').length || 1) / FORCE_BUDGET); } catch (e) { }
+    // Cap the debt: a 60k-element page must not queue 24 heavy passes back to
+    // back if mutations keep arriving before the lap finishes.
+    if (n > 8) n = 8;
+    if (n > forcePassesOwed) forcePassesOwed = n;
+  }
+
   function runSweeper(force) {
     // Prune shadow roots whose hosts left the DOM (SPA navigations) — keeping
     // them leaks memory and bloats every sweep on long sessions.
     piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) piercedRoots.delete(root); } catch (e) { } });
-    stripHoverSheets(document);
-    piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
+    if (stripHoverSheets(document)) requestForceSweep();
+    piercedRoots.forEach(root => { try { if (stripHoverSheets(root)) requestForceSweep(); } catch (e) { } });
     const searchRoots = [document, ...piercedRoots];
+    // ONE write queue for the whole sweep across every root: the flush at the
+    // end is what collapses thousands of style invalidations into a single
+    // recalc. Never flush inside the loop (see the flushWrites comment).
+    const w = [];
     searchRoots.forEach(root => {
       try {
         const all = root.querySelectorAll(force ? '*' : '*:not([data-w95-done])');
         if (force && all.length > FORCE_BUDGET) {
           const start = forceCursor % all.length;
-          for (let n = 0; n < FORCE_BUDGET; n++) { process(all[(start + n) % all.length], true); }
+          for (let n = 0; n < FORCE_BUDGET; n++) { process(all[(start + n) % all.length], true, w); }
           forceCursor += FORCE_BUDGET;
         } else {
-          for (let i = 0; i < all.length; i++) { process(all[i], force); }
+          for (let i = 0; i < all.length; i++) { process(all[i], force, w); }
         }
       } catch (e) { }
     });
+    flushWrites(w);
   }
 
   // Elements processed before the site's CSS finished loading bake in unstyled
   // values and would otherwise stay wrong forever (white surfaces that "heal"
   // only when the SPA happens to re-render them). Full re-verify passes
-  // (force=true) re-check EVERY element: right after DOMContentLoaded, again 1s
-  // later once late CSS settled, then every 3rd tick (~4.5s). The
-  // write-if-changed guard in setImp keeps repeat passes cheap.
+  // (force=true) re-check EVERY element: at DOMContentLoaded, again 1s later
+  // once late CSS settled, then on demand whenever requestForceSweep() fires.
+  // The write-if-changed guard in setImp keeps repeat passes cheap.
   let sweepCount = 0;
   function startSweeping() {
     injectLate();
+    // The boot pass measured ONE 716ms long task on a 16921-element page, right
+    // when the site's own init scripts are competing for the main thread — the
+    // "have to reload a couple of times before it comes up" symptom. The
+    // read/write split above is what actually shrinks it; deferring the second
+    // pass past load keeps it out of the critical window as well.
+    requestForceSweep();
     runSweeper(true);
-    setTimeout(() => runSweeper(true), 1000);
-    // No sweeping in background tabs — nothing is visible, no reason to burn CPU.
-    setInterval(() => { if (document.hidden) return; sweepCount++; runSweeper(sweepCount % 3 === 0); }, 1500);
+    setTimeout(() => { requestForceSweep(); runSweeper(true); }, 1000);
+
+    if (!IS_TOP) {
+      // Sub-frame: bounded settling passes, then nothing. The MutationObserver
+      // stays live, so a late-loading embed still gets themed — that path is
+      // event-driven and costs zero while idle. What a frame must NOT own is a
+      // forever-ticking interval; multiplied by an ad-heavy page's frame count
+      // that was pure background burn on content the user often never sees.
+      setTimeout(() => { requestForceSweep(); runSweeper(true); }, 3000);
+      return;
+    }
+
+    // Top frame: cheap light sweep every 1.5s (0.7ms on a settled page — it only
+    // touches elements missing data-w95-done), and the expensive force pass only
+    // when requestForceSweep() has been called since the last one.
+    setInterval(() => {
+      if (document.hidden) return; // background tab: nothing visible, nothing to fix
+      sweepCount++;
+      const force = forcePassesOwed > 0 && sweepCount % 3 === 0;
+      if (force) forcePassesOwed--;
+      runSweeper(force);
+    }, 1500);
+
     // Pages that finished loading while the tab was hidden got no sweeps; on
     // return, re-verify immediately so the user never sees stale white.
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) runSweeper(true); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { requestForceSweep(); runSweeper(true); }
+    });
   }
 
   if (document.readyState === 'loading') {
