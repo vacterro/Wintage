@@ -1,7 +1,7 @@
 ---
 phase: SHIP
 task: T-002
-next_action: "merge perf-verify into main as v1.3.0, push, delete scratch branch"
+next_action: "WAIT: push v1.3.0 (local main 6cceff3) to origin/main? @updateURL points at main, so the push is what auto-updates every installed client. Scratch branch perf-verify still on origin, delete only on request."
 blocker: none
 agent: claude-opus-5
 mode: full

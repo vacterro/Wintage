@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.3.0
+// @version      1.4.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -39,22 +39,40 @@
   try { IS_TOP = window.top === window.self; } catch (e) { IS_TOP = false; }
 
   // ─── IMMEDIATE DARK GOLDEN BACKGROUND ────────────────────────────────────────
+  // Literal hex here, not T.* — this runs before the token table is declared, and
+  // it must stay the very first thing that happens so nothing white ever paints.
   document.documentElement.style.setProperty('background-color', '#1A0F05', 'important');
   document.documentElement.style.setProperty('color', '#D4B87A', 'important');
   document.documentElement.setAttribute('data-w95-dark', '1');
 
-  // ─── VINTAGE TOKENS (from /vintage SKILL.md) ────────────────────────────────
-  // background #1A0F05 | backgroundSoft #1E1408 | surface #2A1C0A | surfaceRaised #362812
-  // surfaceAlt #3A2A15 | borderDark #0E0803 | borderHighlight #C0A060 | borderMuted #4A3820
-  // textPrimary #D4B87A | textSecondary #B09558 | textMuted #7A6838 | compareBack #0F0A04
+  // ─── UI.md TOKENS — THE COMPLETE PALETTE, NOTHING OUTSIDE IT ────────────────
+  // UI.md iron law 5: "Every visible color must trace back to the palette."
+  // These are the only colours this file is allowed to emit. If a value below
+  // does not appear in UI.md's token block, it is a bug.
+  const T = {
+    background: '#1A0F05', backgroundSoft: '#1E1408',
+    surface: '#2A1C0A', surfaceRaised: '#362812', surfaceAlt: '#3A2A15',
+    borderDark: '#0E0803', borderHighlight: '#C0A060', borderMuted: '#4A3820',
+    textPrimary: '#D4B87A', textSecondary: '#B09558', textMuted: '#7A6838',
+    accentTeal: '#008080', accentTealDeep: '#004C4C',
+    success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+    selection: '#362812', compareBack: '#0F0A04'
+  };
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
 
-  // ─── STRUCTURAL BEVEL CONSTANTS (PHYSICAL BORDERS + 1 INSET) ───────────────
-  const B_OUTER = 'border-top: 1px solid #C0A060 !important; border-left: 1px solid #C0A060 !important; border-bottom: 1px solid #0E0803 !important; border-right: 1px solid #0E0803 !important; box-shadow: inset 1px 1px 0 #7A6838, inset -1px -1px 0 #1E1408 !important;';
-  const B_INNER = 'border-top: 1px solid #0E0803 !important; border-left: 1px solid #0E0803 !important; border-bottom: 1px solid #C0A060 !important; border-right: 1px solid #C0A060 !important; box-shadow: inset 1px 1px 0 #1E1408, inset -1px -1px 0 #7A6838 !important;';
-  const B_SUNK = 'border-top: 1px solid #4A3820 !important; border-left: 1px solid #4A3820 !important; border-bottom: 1px solid #C0A060 !important; border-right: 1px solid #C0A060 !important; box-shadow: inset 1px 1px 0 #0E0803 !important;';
+  // ─── STRUCTURAL BEVEL CONSTANTS — 2px, BORDERS ONLY, NO SHADOW ─────────────
+  // UI.md law 3: "Depth is 2px bevel only." UI.md law 2: "zero shadow."
+  // The pre-1.4.0 bevel was 1px borders PLUS an inset box-shadow to fake the
+  // second bevel row — which broke both laws at once and, more practically, made
+  // every site's depth read slightly differently depending on whether its own CSS
+  // also set a box-shadow we happened to lose the specificity fight over. UI.md
+  // spells the correct form out literally, as a 4-value border-color shorthand
+  // (top right bottom left), so that is what is used verbatim here.
+  const B_OUTER = `border: 2px solid !important; border-color: ${T.borderHighlight} ${T.borderDark} ${T.borderDark} ${T.borderHighlight} !important; box-shadow: none !important;`;
+  const B_INNER = `border: 2px solid !important; border-color: ${T.borderDark} ${T.borderHighlight} ${T.borderHighlight} ${T.borderDark} !important; box-shadow: none !important;`;
+  const B_SUNK = B_INNER;
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // GLOBAL CSS — v29.0
@@ -62,11 +80,14 @@
   const GLOBAL_CSS = `
 :root {
   color-scheme: dark !important;
-  --w95-canvas:  #1A0F05; --w95-soft:    #1E1408; --w95-surface: #2A1C0A;
-  --w95-raised:  #362812; --w95-alt:     #3A2A15;
-  --w95-hi:      #C0A060; --w95-dk:      #0E0803; --w95-muted:   #4A3820;
-  --w95-text:    #D4B87A; --w95-text2:   #B09558; --w95-dim:     #7A6838;
-  --w95-accent:  #9DD9F9;
+  /* UI.md token block, verbatim names — the single source of colour truth. */
+  --background: ${T.background}; --backgroundSoft: ${T.backgroundSoft};
+  --surface: ${T.surface}; --surfaceRaised: ${T.surfaceRaised}; --surfaceAlt: ${T.surfaceAlt};
+  --borderDark: ${T.borderDark}; --borderHighlight: ${T.borderHighlight}; --borderMuted: ${T.borderMuted};
+  --textPrimary: ${T.textPrimary}; --textSecondary: ${T.textSecondary}; --textMuted: ${T.textMuted};
+  --accentTeal: ${T.accentTeal}; --accentTealDeep: ${T.accentTealDeep};
+  --success: ${T.success}; --warning: ${T.warning}; --danger: ${T.danger};
+  --selection: ${T.selection}; --compareBack: ${T.compareBack};
   --radius: 0px; --radius-none: 0px; --radius-2xs: 0px; --radius-xs: 0px; --radius-sm: 0px;
   --radius-md: 0px; --radius-lg: 0px;  --radius-xl: 0px; --radius-2xl: 0px;
   --radius-full: 0px; --radius-round: 0px; --radius-pill: 0px; --radius-circle: 0px;
@@ -77,8 +98,40 @@
   --yt-border-radius: 0px; --ytd-searchbox-border-radius: 0px;
 }
 
-/* 🚨 STRICT RADIUS KILLER, NO GLOBAL BOX-SIZING TO PREVENT FLEX BREAKS 🚨 */
+/* 🚨 STRICT RADIUS KILLER, NO GLOBAL BOX-SIZING TO PREVENT FLEX BREAKS 🚨
+   No global 'margin: 0' and no global 'box-sizing: border-box' either, both of
+   which UI.md's base CSS does specify — see the deviations note in
+   .saipen/KNOWLEDGE/ADR-003.md. That block is written for BUILDING a saipen
+   screen from scratch, where the author controls every margin. Retrofitted onto
+   arbitrary sites, 'margin: 0' collapses every paragraph, list and heading gap
+   into one unreadable wall of text, which fails UI.md's own "text must never
+   feel jammed" and "screenshot legibility" requirements. Global box-sizing was
+   already tried and reverted here for breaking flex layouts. */
 * { border-radius: 0 !important; }
+
+/* 🚨 ZERO SHADOW, ZERO BLUR (UI.md law 2) 🚨
+   This is the rule that does the most work for "every site should look the
+   same": modern sites carry their entire visual identity in elevation shadows,
+   glows, focus rings and backdrop blur. Flattening all of it leaves nothing but
+   the 2px bevel language to express depth, which is the point.
+   - box-shadow/text-shadow: killed outright. Our own bevels are pure borders
+     now (see B_OUTER/B_INNER) so nothing of ours is lost. Sites that draw a
+     BORDER via 'box-shadow: 0 0 0 1px' do lose that line — acceptable, since
+     surfaces are separated by token background steps instead, and a focus ring
+     is re-provided as an outline below.
+   - backdrop-filter: pure decoration (frosted glass), always safe to remove.
+   - filter: killed on layout elements only. NOT on img/svg/video/canvas — sites
+     legitimately use filter to recolour icons and correct media, and a blanket
+     kill leaves white-on-white icons invisible. */
+*, *::before, *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+*:not(img):not(svg):not(video):not(canvas):not(picture):not(image), *::before, *::after {
+  filter: none !important;
+}
 
 /* 🚨 MOTION IS MOSTLY FORBIDDEN (SKILL.md), WITH A NARROW CARVE-OUT 🚨
    transition-duration is 0.001s, NOT "transition: none" — a none/zero transition
@@ -142,20 +195,61 @@ html { scroll-behavior: auto !important; }
   transition-timing-function: step-end !important;
 }
 
-html { background-color: #1A0F05 !important; color: #D4B87A !important; }
-body { background-color: #1E1408 !important; color: #D4B87A !important; margin: 0 !important; padding: 0 !important; }
+html { background-color: ${T.background} !important; color: ${T.textPrimary} !important; }
+body { background-color: ${T.backgroundSoft} !important; color: ${T.textPrimary} !important; margin: 0 !important; padding: 0 !important; }
 
 /* 🚨 VERDANA 100% FORCED EVERYWHERE — inputs/textareas included 🚨
    Only true icon-font carriers are excluded (glyphs would turn into letters). */
 *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
   font-family: ${FONT} !important;
   -webkit-font-smoothing: none !important;
+  -moz-osx-font-smoothing: unset !important;
   font-smooth: never !important;
+  text-rendering: optimizeSpeed !important;
 }
 input, textarea, select, option, button, code, pre, kbd, samp, tt,
 [class*="code" i], [class*="mono" i] { font-family: ${FONT} !important; }
 
-a, a:visited { color: #9DD9F9 !important; text-decoration: none !important; background-color: transparent !important; }
+/* 🚨 TYPE LADDER — UI.md allows 10/11/12/14/16px AND NOTHING ELSE 🚨
+   Second-biggest "all sites look identical" lever after the bevels: a site's
+   typographic voice is mostly its size scale, so replacing every site's scale
+   with the same five-step one is most of the uniformity.
+   Mapped by UI.md's own stated roles, not by blind quantisation: 12px body,
+   14px section headers, 16px reserved for the main page title, 10px for
+   secondary metadata. h2..h6 all collapse to 14 because UI.md recognises exactly
+   one "section header" size — six distinct heading sizes is a hierarchy UI.md
+   does not have.
+   Icon-font carriers are excluded: their font-size IS their glyph size, and
+   forcing 12px there shrinks or inflates every icon on the page.
+   line-height 1.2 comes from UI.md's base CSS and is what keeps the smaller
+   text from reading as jammed. */
+*:not(svg):not(path):not(i):not(html):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+}
+h1 { font-size: 16px !important; }
+h2, h3, h4, h5, h6 { font-size: 14px !important; }
+small, sub, sup, figcaption, [class*="caption" i], [class*="meta" i], [class*="timestamp" i], [class*="byline" i] {
+  font-size: 10px !important;
+}
+/* Weight sparingly (UI.md typography): sites reach for 200/300 hairlines and
+   800/900 blacks, both of which read as noise at 12px non-antialiased. Two
+   weights only — normal, and bold where the site meant emphasis. */
+*:not(svg):not(path) { font-weight: 400 !important; font-style: normal !important; }
+b, strong, th, h1, h2, h3, h4, h5, h6, summary, legend, label,
+button, [role="button"], .btn, [class~="button" i], [class~="btn" i] { font-weight: 700 !important; }
+i, em, cite, var, address, dfn, q, blockquote { font-style: italic !important; }
+
+/* UI.md law 5 + the accessibility floor, together. The old link colour #9DD9F9
+   traced to no token at all — an iron-law-5 violation on the single most common
+   coloured element on the web. --accentTeal is the palette's accent, but #008080
+   on #1A0F05 measures 3.7:1, under the WCAG AA 4.5:1 that UI.md also requires,
+   so it is NOT usable as link TEXT. --borderHighlight #C0A060 measures 7.8:1, is
+   a real token, and stays clearly distinct from --textPrimary body text. Visited
+   uses --textSecondary (6.2:1); --textMuted was rejected at 3.3:1 for the same
+   AA reason. */
+a, a:link { color: ${T.borderHighlight} !important; text-decoration: none !important; background-color: transparent !important; }
+a:visited { color: ${T.textSecondary} !important; }
 foreignObject { mask: none !important; -webkit-mask: none !important; }
 rect { rx: 0 !important; ry: 0 !important; }
 svg { background: transparent !important; }
@@ -177,17 +271,23 @@ iframe[src*="google.com/ads" i], iframe[id*="google_ads_iframe" i],
 iframe[id*="gpt_unit" i], iframe[src*="adservice.google" i],
 iframe[src*="amazon-adsystem.com" i], iframe[src*="taboola.com" i],
 iframe[src*="outbrain.com" i] {
-  background-color: #1E1408 !important;
+  background-color: ${T.backgroundSoft} !important;
 }
 main, section, article, aside, footer, .container, .wrapper, .main, #main, #wrapper { background-color: transparent !important; }
 
-::selection { background-color: #4A3820 !important; color: #D4B87A !important; }
+::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
 
+/* Site chrome reads as a Win95 title-bar strip: --surface, 20px per UI.md's
+   window rules. Height is a MIN, not a fixed height — a real site header carries
+   a search field and a row of controls, and clamping it to 20px would overlap
+   them. UI.md's 20px is the floor that keeps the strip from being thinner than
+   the controls inside it. */
 header, nav, [role="navigation"], [role="banner"],
 [class*="header" i]:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not([class*="heading" i]),
 [class*="navbar" i], [class*="nav-bar" i], [class*="topbar" i], [class*="top-bar" i],
 [class*="toolbar" i]:not([class*="ytp" i]), [id*="header" i]:not(h1):not(h2):not(h3), [id*="navbar" i], [id*="topbar" i] {
-  background-color: #2A1C0A !important; background-image: none !important; color: #D4B87A !important;
+  background-color: ${T.surface} !important; background-image: none !important; color: ${T.textPrimary} !important;
+  min-height: 20px !important;
 }
 
 /* 🚨 3D BEVELED BUTTONS 🚨
@@ -197,20 +297,33 @@ header, nav, [role="navigation"], [role="banner"],
    <summary> disclosure controls. */
 button, input[type="button"], input[type="submit"], input[type="reset"], .btn,
 [class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
-  background-color: #362812 !important; background-image: none !important; color: #D4B87A !important;
+  background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important;
   ${B_OUTER}
   cursor: pointer !important; font-family: ${FONT} !important; font-size: 12px !important;
   box-sizing: border-box !important;
+  /* UI.md button metrics + accessibility floor (primary targets >= 24px). Both
+     are minimums, never fixed sizes: a site's own wider button keeps its width,
+     it just can never be smaller than a reachable target. */
+  padding: 2px 6px !important; min-width: 24px !important; min-height: 20px !important;
 }
 button:active, input[type="button"]:active, input[type="submit"]:active, input[type="reset"]:active, .btn:active,
 [class~="button" i]:active, [class~="btn" i]:active, a[role="button"]:active, span[role="button"]:active, summary:active {
-  background-color: #2A1C0A !important;
+  background-color: ${T.surface} !important;
   ${B_INNER}
+  /* The ONE sanctioned movement in the entire theme (UI.md predictability §9):
+     instant 1px physical feedback for a press the user themselves caused. */
   transform: translate(1px, 1px) !important;
 }
-button:disabled, input[type="button"]:disabled, input[type="submit"]:disabled, input[type="reset"]:disabled {
-  color: #7A6838 !important; background-color: #2A1C0A !important; cursor: not-allowed !important; opacity: 1 !important;
-  border: 1px solid #4A3820 !important; box-shadow: none !important;
+/* Disabled: quieter LABEL only. UI.md forbids 'opacity' here twice over — iron
+   law 2 bans transparency, and a faded control fails the accessibility floor and
+   disappears in screenshots. So the raised bevel and the surface both stay
+   exactly as they are; only the text drops to --textMuted, which is the single
+   visual difference between enabled and disabled. */
+button:disabled, input[type="button"]:disabled, input[type="submit"]:disabled, input[type="reset"]:disabled,
+button[aria-disabled="true"], [role="button"][aria-disabled="true"] {
+  color: ${T.textMuted} !important; background-color: ${T.surfaceRaised} !important;
+  cursor: not-allowed !important; opacity: 1 !important;
+  ${B_OUTER}
 }
 
 /* Neutralize PAINT on button pseudo-elements (underlying squares/circles)
@@ -235,13 +348,26 @@ yt-icon-button button, yt-button-shape button, .ytp-button, [class*="yt-spec-but
 }
 .ytp-button { border: none !important; box-shadow: none !important; background: transparent !important; }
 
-/* Inputs & Textareas (No forced padding, let JS breathe) */
+/* 🚨 INPUTS — ALWAYS SUNKEN, --compareBack, 20px (UI.md component rules) 🚨
+   Height/padding ARE forced on single-line fields: a site's 48px pill search bar
+   is the most recognisable piece of its identity, so leaving those alone would
+   defeat the whole point. 'height' (not min-height) is deliberate here, unlike
+   buttons — UI.md states one input height and inputs are the control most likely
+   to be inflated by a site. Cost: absolutely-positioned adornment icons inside a
+   site's own search widget can end up vertically off-centre. That is cosmetic
+   misalignment inside one widget, traded for every field on the web being the
+   same field. Textareas are exempt (they get UI.md's own min-height instead). */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+select {
+  height: 20px !important; padding: 1px 3px !important;
+}
 input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
 textarea, select {
-  background-color: #0F0A04 !important; background-image: none !important; color: #D4B87A !important;
+  background-color: ${T.compareBack} !important; background-image: none !important; color: ${T.textPrimary} !important;
   ${B_SUNK}
   box-sizing: border-box !important;
 }
+textarea { min-height: 64px !important; resize: none !important; padding: 1px 3px !important; }
 /* accent-color is harmless even on a visually-hidden checkbox (no-op if the
    box itself never paints). appearance:auto is NOT forced here — see the JS
    process() hiddenProxy check: forcing it unconditionally would un-hide the
@@ -250,44 +376,75 @@ textarea, select {
    checkbox via opacity:0/1px sizing and paint a sibling graphic instead),
    doubling up a native box next to the custom switch. */
 input[type="checkbox"], input[type="radio"] {
-  accent-color: #C0A060 !important; background-image: none !important;
+  accent-color: ${T.borderHighlight} !important; background-image: none !important;
 }
-input::placeholder, textarea::placeholder { color: #7A6838 !important; }
-input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
-  outline: 1px dotted #D4B87A !important; outline-offset: -2px !important;
+input::placeholder, textarea::placeholder { color: ${T.textMuted} !important; }
+/* Focus must be visible on EVERY control (accessibility floor) and instant. The
+   global box-shadow kill above removes the ring modern sites draw with
+   box-shadow, so this outline is now the only focus affordance there is — the
+   old input/textarea/select/button/a list was too narrow once that ring was gone. */
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible,
+summary:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
+  outline: 1px dotted ${T.textPrimary} !important; outline-offset: -4px !important;
 }
 
-table { border-collapse: collapse !important; background-color: #1E1408 !important; border-spacing: 0 !important; }
+table { border-collapse: collapse !important; background-color: ${T.backgroundSoft} !important; border-spacing: 0 !important; }
 /* Solid floor on plain cells: beats forum row-highlight CSS instantly (white
    flashbang rows on JS-hover sites like RuTracker, where the highlight comes
    from a class swap that :hover surgery cannot see). Diff/code cells are
    excluded so the JS repainter can keep their semantic tint (GitHub diff
    green/red), darkened with hue preserved. */
-td, th { background-image: none !important; border: 1px solid #362812 !important; color: #D4B87A !important; box-sizing: border-box !important; }
-td:not([class*="blob-" i]):not([class*="diff-" i]):not([class*="hunk" i]):not([class*="addition" i]):not([class*="deletion" i]), th { background-color: #1E1408 !important; }
-.row1, .row2, .bg1, .bg2 { background-image: none !important; background-color: #1E1408 !important; border: 1px solid #362812 !important; color: #D4B87A !important; }
-th { background-color: #2A1C0A !important; color: #D4B87A !important; font-weight: 700 !important; }
-option { background-color: #0F0A04 !important; color: #D4B87A !important; }
-hr { border-color: #4A3820 !important; background-color: #4A3820 !important; color: #4A3820 !important; }
+td, th { background-image: none !important; border: 1px solid ${T.surfaceRaised} !important; color: ${T.textPrimary} !important; box-sizing: border-box !important; }
+td:not([class*="blob-" i]):not([class*="diff-" i]):not([class*="hunk" i]):not([class*="addition" i]):not([class*="deletion" i]), th { background-color: ${T.backgroundSoft} !important; }
+.row1, .row2, .bg1, .bg2 { background-image: none !important; background-color: ${T.backgroundSoft} !important; border: 1px solid ${T.surfaceRaised} !important; color: ${T.textPrimary} !important; }
+/* Table headers are RAISED (UI.md tables/lists) — same 2px bevel language as
+   buttons, so a header cell reads as a pressable column control the way it did
+   in Win95's list views. */
+th { background-color: ${T.surface} !important; color: ${T.textPrimary} !important; font-weight: 700 !important; ${B_OUTER} }
+/* Selected row: --selection with a sunken feel (UI.md). Kept distinct from the
+   focus outline above, which the accessibility floor requires. */
+tr[aria-selected="true"] > td, tr[aria-selected="true"] > th, tr.selected > td,
+li[aria-selected="true"], [role="option"][aria-selected="true"],
+[role="row"][aria-selected="true"], [role="treeitem"][aria-selected="true"] {
+  background-color: ${T.selection} !important; color: ${T.textPrimary} !important; ${B_INNER}
+}
+option { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; }
+hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important; background-color: transparent !important; color: ${T.borderMuted} !important; height: 0 !important; }
+
+/* Status colours (--success/--warning/--danger) are deliberately NOT applied by
+   class-name substring here. '[class*="error" i]' matches 'error-boundary',
+   '[class*="valid" i]' matches 'validation-container' — both are large wrappers,
+   and painting one solid red or green is exactly the "might help some other site"
+   over-reach that already broke two real sites in this file's history (see the
+   transition-property note above). Semantic snapping happens in the JS repainter
+   instead, gated on the site having ALREADY painted a saturated green/amber/red
+   background — i.e. on evidence, not on a name. */
 
 /* 🚨 HOVER STATES: ZEROED OUT v3 🚨
    Generic hover recoloring stays dead (christmas-tree problem: :hover matches the
    whole ancestor chain). Only real clickable controls keep a tactile response. */
 :root body button:hover, :root body input[type="button"]:hover, :root body input[type="submit"]:hover, :root body input[type="reset"]:hover, :root body .btn:hover,
 :root body [class~="button" i]:hover, :root body [class~="btn" i]:hover, :root body a[role="button"]:hover, :root body span[role="button"]:hover, :root body summary:hover {
-  background-color: #3A2A15 !important; color: #D4B87A !important; filter: none !important;
+  background-color: ${T.surfaceAlt} !important; color: ${T.textPrimary} !important; filter: none !important;
   ${B_OUTER}
 }
-:root body a:hover { color: #9DD9F9 !important; text-decoration: underline !important; background-color: transparent !important; }
+/* Underline on hover, not on every link: UI.md bans decoration without function,
+   and underlining every nav item, card title and icon link on a modern page is
+   noise, not clarity. Colour (--borderHighlight vs --textPrimary body text)
+   carries the "this is a link" signal on its own, so no control depends on hover
+   alone — the hover underline is confirmation, not the only affordance. */
+:root body a:hover { color: ${T.borderHighlight} !important; text-decoration: underline !important; background-color: transparent !important; }
 
 yt-interaction, paper-ripple, .mdc-ripple-surface, .mdc-ripple-upgraded::before, .mdc-ripple-upgraded::after, [class*="ripple" i] {
   display: none !important; opacity: 0 !important; visibility: hidden !important; content: none !important;
 }
 
-ytd-app, ytd-page-manager, #content.ytd-app, #page-manager.ytd-app { background-color: #1E1408 !important; }
-ytd-masthead, #masthead, #masthead-container, #container.ytd-masthead, #background.ytd-masthead { background-color: #2A1C0A !important; background-image: none !important; box-shadow: 0 1px 0 #0E0803 !important; }
-tp-yt-app-header-layout, tp-yt-app-header, ytd-c4-tabbed-header-renderer, ytd-page-header-renderer, #channel-header, #page-header, #header.ytd-browse { background-color: #2A1C0A !important; background-image: none !important; }
-tp-yt-app-header { border-bottom: 2px solid #362812 !important; box-shadow: none !important; }
+ytd-app, ytd-page-manager, #content.ytd-app, #page-manager.ytd-app { background-color: ${T.backgroundSoft} !important; }
+/* The masthead separator was a box-shadow, which the global zero-shadow rule now
+   removes — re-expressed as a real border so the strip keeps its bottom edge. */
+ytd-masthead, #masthead, #masthead-container, #container.ytd-masthead, #background.ytd-masthead { background-color: ${T.surface} !important; background-image: none !important; border-bottom: 2px solid ${T.borderDark} !important; }
+tp-yt-app-header-layout, tp-yt-app-header, ytd-c4-tabbed-header-renderer, ytd-page-header-renderer, #channel-header, #page-header, #header.ytd-browse { background-color: ${T.surface} !important; background-image: none !important; }
+tp-yt-app-header { border-bottom: 2px solid ${T.surfaceRaised} !important; }
 
 /* 🚨 POPUPS AND MENUS — v29 FIX 🚨
    v28 forced "opacity: 1 !important; z-index: 9999" onto EVERYTHING whose class
@@ -299,20 +456,27 @@ tp-yt-app-header { border-bottom: 2px solid #362812 !important; box-shadow: none
 dialog, [popover],
 tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-navigation-drawer,
 [role="menu"], [role="listbox"], [role="tooltip"], [role="dialog"], [role="alertdialog"] {
-  background-color: #362812 !important; background-image: none !important; border: 1px solid #0E0803 !important; box-shadow: none !important;
+  /* Dialog bodies use --surfaceRaised and a RAISED bevel (UI.md windows and
+     dialogs) — a floating panel is the most window-like thing on a web page, so
+     it gets the full Win95 window edge instead of the old flat 1px outline. */
+  background-color: ${T.surfaceRaised} !important; background-image: none !important;
+  ${B_OUTER}
 }
 [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
 [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
 [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard {
-  background-color: #362812 !important; background-image: none !important;
+  background-color: ${T.surfaceRaised} !important; background-image: none !important;
 }
 
+/* Scrollbars: the track's sunken look came from inset box-shadows, which the
+   global zero-shadow rule removes — rebuilt out of 2px bevel borders so the
+   depth language is identical to every other control. */
 ::-webkit-scrollbar { width: 16px !important; height: 16px !important; }
-::-webkit-scrollbar-track { background: #1E1408 !important; box-shadow: inset 1px 1px 0 #0E0803, inset -1px -1px 0 #4A3820 !important; }
-::-webkit-scrollbar-thumb { background: #362812 !important; ${B_OUTER} }
-::-webkit-scrollbar-thumb:active { background: #2A1C0A !important; ${B_INNER} }
-::-webkit-scrollbar-corner { background: #1E1408 !important; }
-::-webkit-scrollbar-button { background: #362812 !important; ${B_OUTER} height: 16px !important; width: 16px !important; }
+::-webkit-scrollbar-track { background: ${T.backgroundSoft} !important; ${B_INNER} }
+::-webkit-scrollbar-thumb { background: ${T.surfaceRaised} !important; ${B_OUTER} }
+::-webkit-scrollbar-thumb:active { background: ${T.surface} !important; ${B_INNER} }
+::-webkit-scrollbar-corner { background: ${T.backgroundSoft} !important; }
+::-webkit-scrollbar-button { background: ${T.surfaceRaised} !important; ${B_OUTER} height: 16px !important; width: 16px !important; }
 `;
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
@@ -321,6 +485,23 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
        note): transitionend/animationend keep firing for collapse + rc-motion
        state machines, without touching top/left/width/transform. */
     * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; }
+    /* Zero shadow / zero blur, same as the global layer (UI.md law 2). Shadow
+       roots are where modern component libraries keep their elevation, so
+       skipping this here would leave every web-component card floating while the
+       rest of the page is flat. */
+    *, *::before, *::after { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+    *:not(img):not(svg):not(video):not(canvas):not(picture):not(image), *::before, *::after { filter: none !important; }
+    /* Type ladder, same five steps as the global layer. */
+    *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+      font-size: 12px !important; line-height: 1.2 !important;
+    }
+    h1 { font-size: 16px !important; }
+    h2, h3, h4, h5, h6 { font-size: 14px !important; }
+    small, sub, sup, figcaption, [class*="caption" i], [class*="meta" i], [class*="timestamp" i], [class*="byline" i] { font-size: 10px !important; }
+    *:not(svg):not(path) { font-weight: 400 !important; font-style: normal !important; }
+    b, strong, th, h1, h2, h3, h4, h5, h6, summary, legend, label,
+    button, shreddit-button, [role="button"], .btn, [class~="button" i], [class~="btn" i] { font-weight: 700 !important; }
+    i, em, cite, var, dfn, q, blockquote { font-style: italic !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
@@ -330,17 +511,17 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       transition-timing-function: step-end !important;
     }
     *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
-      font-family: ${FONT} !important; -webkit-font-smoothing: none !important; font-smooth: never !important;
+      font-family: ${FONT} !important; -webkit-font-smoothing: none !important; -moz-osx-font-smoothing: unset !important; font-smooth: never !important; text-rendering: optimizeSpeed !important;
     }
     input, textarea, select, option, button, code, pre, kbd, samp, tt, [class*="code" i], [class*="mono" i] { font-family: ${FONT} !important; }
-    :host { --radius: 0px; --shreddit-border-radius: 0px; --md-sys-shape-corner-full: 0px; background-color: transparent !important; background-image: none !important; color: #D4B87A !important; }
+    :host { --radius: 0px; --shreddit-border-radius: 0px; --md-sys-shape-corner-full: 0px; background-color: transparent !important; background-image: none !important; color: ${T.textPrimary} !important; }
     /* Ad-iframe load-flash fix, scoped to known ad hosts only — see GLOBAL_CSS note (unconditional would break transparent widget overlays) */
     iframe[src*="doubleclick.net" i], iframe[src*="googlesyndication.com" i],
     iframe[src*="google.com/ads" i], iframe[id*="google_ads_iframe" i],
     iframe[id*="gpt_unit" i], iframe[src*="adservice.google" i],
     iframe[src*="amazon-adsystem.com" i], iframe[src*="taboola.com" i],
     iframe[src*="outbrain.com" i] {
-      background-color: #1E1408 !important;
+      background-color: ${T.backgroundSoft} !important;
     }
     div, span, section, article, aside, nav, header, footer, main, [class], [id], [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
 
@@ -352,27 +533,42 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
     [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
     [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard {
-      background-color: #362812 !important; background-image: none !important; color: #D4B87A !important;
+      background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important; ${B_OUTER}
     }
 
     button, input[type="button"], input[type="submit"], input[type="reset"], shreddit-button, .btn,
     [class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
-      background-color: #362812 !important; color: #D4B87A !important; ${B_OUTER}
+      background-color: ${T.surfaceRaised} !important; color: ${T.textPrimary} !important; ${B_OUTER}
       cursor: pointer !important; font-family: ${FONT} !important; box-sizing: border-box !important;
+      padding: 2px 6px !important; min-width: 24px !important; min-height: 20px !important;
     }
-    button:active, shreddit-button:active, .btn:active, [class~="button" i]:active, [class~="btn" i]:active, summary:active { background-color: #2A1C0A !important; ${B_INNER} transform: translate(1px, 1px) !important; }
+    button:active, shreddit-button:active, .btn:active, [class~="button" i]:active, [class~="btn" i]:active, summary:active { background-color: ${T.surface} !important; ${B_INNER} transform: translate(1px, 1px) !important; }
+    /* Disabled: label colour only, bevel and surface stay (UI.md bans opacity here) */
+    button:disabled, shreddit-button:disabled, button[aria-disabled="true"], [role="button"][aria-disabled="true"] {
+      color: ${T.textMuted} !important; background-color: ${T.surfaceRaised} !important; opacity: 1 !important; cursor: not-allowed !important; ${B_OUTER}
+    }
 
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
     button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
-    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #0F0A04 !important; color: #D4B87A !important; ${B_SUNK} box-sizing: border-box !important; }
+    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK} box-sizing: border-box !important; }
+    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
+    textarea { min-height: 64px !important; resize: none !important; padding: 1px 3px !important; }
     /* appearance:auto not forced here either — see GLOBAL_CSS checkbox note */
-    input[type="checkbox"], input[type="radio"] { accent-color: #C0A060 !important; background-image: none !important; }
+    input[type="checkbox"], input[type="radio"] { accent-color: ${T.borderHighlight} !important; background-image: none !important; }
+    input::placeholder, textarea::placeholder { color: ${T.textMuted} !important; }
+    input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible,
+    summary:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
+      outline: 1px dotted ${T.textPrimary} !important; outline-offset: -4px !important;
+    }
+    th { background-color: ${T.surface} !important; color: ${T.textPrimary} !important; ${B_OUTER} }
+    ::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
 
     /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
-    button:hover, shreddit-button:hover, .btn:hover { background-color: #3A2A15 !important; ${B_OUTER} }
-    a { color: #9DD9F9 !important; text-decoration: none !important; }
+    button:hover, shreddit-button:hover, .btn:hover { background-color: ${T.surfaceAlt} !important; ${B_OUTER} }
+    a, a:link { color: ${T.borderHighlight} !important; text-decoration: none !important; }
+    a:visited { color: ${T.textSecondary} !important; }
     a:hover { text-decoration: underline !important; background-color: transparent !important; }
   `;
 
@@ -470,6 +666,37 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   function flushWrites(w) {
     for (let i = 0; i < w.length; i += 3) setImp(w[i], w[i + 1], w[i + 2]);
     w.length = 0;
+  }
+
+  // 🚨 SATURATED COLOUR -> ONE OF THREE SEMANTIC TOKENS (UI.md law 5) 🚨
+  // The pre-1.4.0 rule multiplied a light saturated background by 0.18, which
+  // "preserved the hue" — and in doing so emitted an unbounded set of arbitrary
+  // colours that trace to no token at all. GitHub's diff green became one
+  // brown-green, GitLab's a different one, a warning banner a third: iron law 5
+  // broken every time, and every site kept its own colour signature.
+  //
+  // UI.md ships exactly three semantic colours, so the site's own hue only has to
+  // answer one question: which of the three did it mean? Hue sectors, wide and
+  // deliberately coarse, because the answer only needs to be right to within
+  // "green / amber / red":
+  //   red-ish    (>=345 or <35 deg) -> --danger
+  //   yellow-ish (35..75 deg)       -> --warning
+  //   green-ish  (75..170 deg)      -> --success
+  // Everything else — blues, purples, teals, magentas — carries no shared meaning
+  // across sites, so it becomes plain --surfaceRaised rather than being forced
+  // into a status colour it never claimed.
+  function semanticToken(c) {
+    const max = Math.max(c.r, c.g, c.b), min = Math.min(c.r, c.g, c.b), d = max - min;
+    if (d === 0) return T.surfaceRaised;
+    let h;
+    if (max === c.r) h = 60 * (((c.g - c.b) / d) % 6);
+    else if (max === c.g) h = 60 * ((c.b - c.r) / d + 2);
+    else h = 60 * ((c.r - c.g) / d + 4);
+    if (h < 0) h += 360;
+    if (h >= 345 || h < 35) return T.danger;
+    if (h < 75) return T.warning;
+    if (h < 170) return T.success;
+    return T.surfaceRaised;
   }
 
   const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape';
@@ -616,12 +843,26 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       }
     }
 
+    // UI.md law 2: zero gradients. Pre-1.4.0 this only killed LIGHT gradients,
+    // which left every dark-themed site's own coloured gradients intact — and a
+    // gradient is the most identity-carrying surface treatment there is, so
+    // leaving them meant sites still looked like themselves. Now ALL gradient
+    // functions go, whatever their hue.
+    //
+    // Only gradient FUNCTIONS, never url(): a huge number of sites still draw
+    // their icons as background-image sprites, and killing url() backgrounds
+    // deletes those icons outright. This is why the kill lives in JS at all — CSS
+    // cannot say "background-image: none, but only if it is a gradient".
+    //
+    // progress/meter/slider are exempt: their fill IS a gradient on many sites,
+    // and flattening it leaves a progress bar that cannot show progress — which
+    // UI.md itself wants preserved ("long work reports progress in text").
     const bgImg = cs.backgroundImage;
-    if (bgImg && bgImg !== 'none') {
-      // Computed gradients serialize colors as rgb(); any gradient stop with all
-      // channels >= 200 is a light surface. radial/conic covered too.
-      if (/(linear|radial|conic)-gradient.*(white|#fff|2\d\d,\s*2\d\d,\s*2\d\d)/i.test(bgImg)) {
-        w.push(el, 'background', 'transparent', el, 'background-image', 'none');
+    if (bgImg && bgImg !== 'none' && /(^|\s|,)(linear|radial|conic|repeating-linear|repeating-radial|repeating-conic)-gradient\(/i.test(bgImg)) {
+      const tagG = (el.tagName || '').toUpperCase();
+      const roleG = el.getAttribute ? el.getAttribute('role') : null;
+      if (tagG !== 'PROGRESS' && tagG !== 'METER' && roleG !== 'progressbar' && roleG !== 'slider') {
+        w.push(el, 'background-image', 'none');
       }
     }
 
@@ -630,21 +871,28 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       const bg = parseRGB(bgColor);
       if (bg && bg.a > 0.08) {
         const L = lum(bg);
-        const grayish = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b) <= 24;
+        const spread = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b);
+        const grayish = spread <= 24;
         let repaint = null;
         if (L > 0.45) {
           // Light flashbang surface: low-alpha white tints go fully transparent
           // (the "gray rectangle blocks"), neutral solids go dark brown, and
-          // SATURATED light tints (GitHub diff green/red, warning yellows,
-          // highlight rows) are darkened with their hue preserved so semantic
-          // colors survive the dark theme instead of being flattened.
+          // saturated light tints (GitHub diff green/red, warning yellows,
+          // highlight rows) snap to the semantic token they meant.
           if (bg.a <= 0.35) repaint = 'transparent';
-          else if (grayish) repaint = '#1E1408';
-          else repaint = 'rgb(' + Math.round(bg.r * 0.18) + ', ' + Math.round(bg.g * 0.18) + ', ' + Math.round(bg.b * 0.18) + ')';
+          else if (grayish) repaint = T.backgroundSoft;
+          else repaint = semanticToken(bg);
         } else if (grayish && L >= 0.015) {
           // Unthemed dark-mode grays (chips, tabs, cards) → vintage brown scale.
           // Near-black (< 0.015, e.g. video players, scrims) is left alone.
-          repaint = L >= 0.13 ? '#3A2A15' : L >= 0.05 ? '#362812' : '#2A1C0A';
+          repaint = L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface;
+        } else if (spread > 60 && L >= 0.015) {
+          // A SATURATED DARK surface — a site's own coloured brand panel, badge or
+          // dark-theme diff tint. Pre-1.4.0 these were left completely alone,
+          // which is the main reason two dark-themed sites still looked nothing
+          // alike: their accent surfaces survived untouched. Now they snap to a
+          // token too, semantic ones by hue and the rest to --surfaceRaised.
+          repaint = semanticToken(bg);
         }
         if (repaint) {
           w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
@@ -662,13 +910,26 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
         
         if (el.closest && el.closest('a')) {
-          if (contrast < 4.5 || (fgLum > 0.4 && grayish)) w.push(el, 'color', '#9DD9F9');
+          if (contrast < 4.5 || (fgLum > 0.4 && grayish)) w.push(el, 'color', T.borderHighlight);
         } else {
           if (contrast < 4.5) {
-            w.push(el, 'color', '#D4B87A');
+            w.push(el, 'color', T.textPrimary);
           } else if (grayish) {
-            if (fgLum > 0.4) w.push(el, 'color', '#D4B87A');
-            else if (fgLum > 0.15) w.push(el, 'color', '#B09558');
+            if (fgLum > 0.4) w.push(el, 'color', T.textPrimary);
+            else if (fgLum > 0.15) w.push(el, 'color', T.textSecondary);
+          } else {
+            // Legible but SATURATED text — a site's own coloured heading, tag or
+            // status label. Left alone pre-1.4.0, which is another way sites kept
+            // their own voice, so it gets normalised too: to --textPrimary.
+            //
+            // Deliberately NOT to semanticToken() like the background path does.
+            // --success/--warning/--danger are BACKGROUND tokens; as text on
+            // --backgroundSoft they measure 2.6:1 / 3.4:1 / 1.8:1, all far under
+            // the WCAG AA 4.5:1 UI.md also demands. Snapping coloured text onto
+            // them would trade one iron law for a worse violation of the
+            // accessibility floor — and UI.md settles that tie itself: "error
+            // text must be readable without color alone."
+            w.push(el, 'color', T.textPrimary);
           }
         }
       }
@@ -688,7 +949,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         if (!bc || bc.a <= 0.1) continue;
         const grayish = Math.max(bc.r, bc.g, bc.b) - Math.min(bc.r, bc.g, bc.b) <= 60;
         if (grayish && lum(bc) > 0.18) {
-          w.push(el, 'border-' + s.toLowerCase() + '-color', '#362812');
+          w.push(el, 'border-' + s.toLowerCase() + '-color', T.surfaceRaised);
         }
       }
     }
