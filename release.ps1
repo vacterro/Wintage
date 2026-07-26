@@ -29,6 +29,14 @@ $content = $content -replace '(// @version\s+)\d+\.\d+\.\d+', "`${1}$new"
 node --check $script
 if ($LASTEXITCODE -ne 0) { throw "Syntax check failed - release aborted, version line already bumped, fix and rerun" }
 
+# node --check cannot see inside the CSS template literals - to JavaScript they
+# are just strings. A stray '*/', an unbalanced brace or an off-palette colour in
+# there passes --check, loads fine, and then the browser's CSS parser silently
+# discards rules while recovering. That exact failure shipped once and was only
+# caught by measuring computed styles on a live page, so it gates releases now.
+node (Join-Path $PSScriptRoot 'tools/check-css.js')
+if ($LASTEXITCODE -ne 0) { throw "CSS check failed - release aborted, version line already bumped, fix and rerun" }
+
 git -C $PSScriptRoot add -A
 git -C $PSScriptRoot commit -m "v${new}: $Message"
 git -C $PSScriptRoot push origin main

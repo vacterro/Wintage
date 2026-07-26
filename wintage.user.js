@@ -222,7 +222,8 @@ input, textarea, select, option, button, code, pre, kbd, samp, tt,
    Icon-font carriers are excluded: their font-size IS their glyph size, and
    forcing 12px there shrinks or inflates every icon on the page.
    line-height 1.2 comes from UI.md's base CSS and is what keeps the smaller
-   text from reading as jammed. */
+   text from reading as jammed.
+
    The exception tags are carved OUT of the base selector rather than layered on
    top of it, because the base selector's six ':not([class*="…" i])' attribute
    matches give it specificity (0,6,4) — a plain 'h1 { font-size: 16px }' is
