@@ -1,41 +1,49 @@
 ---
 phase: SHIP
-task: T-002
-next_action: "merge perf-verify into main as v1.3.0, push, delete scratch branch"
+task: T-012
+next_action: "merge perf-verify into main as v1.4.0, push origin/main"
 blocker: none
 agent: claude-opus-5
 mode: full
 saipen_version: 7
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
-updated: 2026-07-26T11:20:00Z
+updated: 2026-07-26T11:43:38Z
 ---
 
-# Wintage — idle-CPU + slow-load fix (saipen)
+# Wintage — UI.md conformance wave (saipen)
 
-T-002..T-005 BUILT + VERIFIED as v1.3.0. Full reasoning + numbers in
-KNOWLEDGE/ADR-002.md; this is the short version.
+T-006..T-012 BUILT + VERIFIED as v1.4.0. Reasoning + deviations in
+KNOWLEDGE/ADR-003.md; perf history in ADR-002.md; animation history in ADR-001.md.
 
-Root cause was NOT the sweep frequency — it was `process()` reading
-`getComputedStyle` and writing inline styles in the same loop. Each write
-invalidates style, so the next read forced a whole-document recalc against this
-theme's own pathological selectors (`*`, the 8-`:not([class*=… i])` Verdana
-selector, the 12-negation hover freeze). One write bought one full recalc, 2500
-times per force pass.
+Measured live, en.wikipedia.org WWII, 16921 elements:
 
-Measured, en.wikipedia.org WWII page, 16921 elements, both versions eval'd live:
+| check | result |
+|---|---|
+| font sizes present | 10/12/14/16px, nothing else |
+| font weights present | 400 and 700, nothing else |
+| off-palette backgrounds | 0 |
+| off-palette text colours | 0 |
+| box-shadows / rounded corners / gradients | 0 / 0 / 0 |
+| idle CPU settled | 0.14 % (v1.3.0 0.09 %, pre-fix 16.9 %) |
 
-| | v1.2.1 | v1.3.0 |
-|---|---|---|
-| boot long task | 716 ms | **327 ms** |
-| force tick | 253 ms | **19–42 ms** |
-| light tick | — | **0.8–1.3 ms** |
-| avg CPU, settling | **16.9 %** | **1.28 %** |
-| avg CPU, settled | 16.9 % | **0.09 %** |
-| 996-element pixel diff | — | **0 differences** |
+Two bugs were caught only by live measurement, both now guarded:
 
-Traps recorded in ADR-002: never put `style` in the observer's attributeFilter
-(setImp would feed the observer its own output); the 30 s heartbeat is load-bearing,
-not decoration; `requestForceSweep()` owes a whole lap, not one pass; improved
-numbers are NOT headroom for more universal selectors.
+1. **Specificity.** The base type selector's six `:not([class*="…" i])` matches
+   score (0,6,4), so `h1 { font-size: 16px !important }` at (0,0,1) LOST — every
+   heading silently flattened to 12px. Exceptions are now carved out of the base
+   selector (disjoint, no specificity race); the `font-weight` pair had the same
+   bug, fixed with a `:root`/`:host` prefix.
+2. **`node --check` cannot see inside a CSS template literal.** Prose pasted after
+   a comment's closing `*/` left a stray `*/` in `GLOBAL_CSS`; `--check` passed and
+   the browser's CSS parser silently discarded rules while recovering. Now
+   `tools/check-css.js` fails on stray/unclosed/nested comments, brace imbalance
+   and off-palette hex, and `release.ps1` gates on it. Guard validated by
+   injecting all three fault classes.
 
-T-001 DONE + SHIPPED as v1.2.0 (animation taming). See KNOWLEDGE/ADR-001.md.
+Deliberate deviations from UI.md (full reasoning in ADR-003): transition/animation
+stay at 0.001s (ADR-001 live evidence beats the literal law); no global `margin:0`
+or `box-sizing`; no `body{overflow-x:hidden}`; no class-name-based status colours;
+semantic tokens never used as text colour (1.8:1 fails AA).
+
+Also open: local branch `perf-verify` still exists (squash-merged, so git calls it
+unmerged — `-D` is destructive and needs the user's word).
