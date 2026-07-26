@@ -894,6 +894,17 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       runSweeper(force);
     }, 1500);
 
+    // Slow self-healing heartbeat. The demand-driven gate above covers new DOM,
+    // attribute churn and new stylesheets — but NOT a site mutating an existing
+    // element's own `style` attribute (custom properties, inline recolors).
+    // `style` cannot be added to the observer's attributeFilter: setImp writes
+    // inline styles, so the observer would fire on its own output and spin. The
+    // old blind 4.5s force pass healed that case by accident, and dropping it
+    // outright would be a real regression — so it is kept, just 20x rarer. One
+    // lap costs ~7 budgeted passes at ~30ms on a 17k-element page, i.e. well
+    // under 1% averaged, against the 16.9% the 4.5s version measured.
+    setInterval(() => { if (!document.hidden) requestForceSweep(); }, 30000);
+
     // Pages that finished loading while the tab was hidden got no sweeps; on
     // return, re-verify immediately so the user never sees stale white.
     document.addEventListener('visibilitychange', () => {
