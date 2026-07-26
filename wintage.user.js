@@ -223,22 +223,39 @@ input, textarea, select, option, button, code, pre, kbd, samp, tt,
    forcing 12px there shrinks or inflates every icon on the page.
    line-height 1.2 comes from UI.md's base CSS and is what keeps the smaller
    text from reading as jammed. */
-*:not(svg):not(path):not(i):not(html):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+   The exception tags are carved OUT of the base selector rather than layered on
+   top of it, because the base selector's six ':not([class*="…" i])' attribute
+   matches give it specificity (0,6,4) — a plain 'h1 { font-size: 16px }' is
+   (0,0,1) and loses outright even with !important on both, which is exactly how
+   the first cut of this rule silently flattened every heading to 12px. Disjoint
+   selectors sidestep the specificity race entirely instead of trying to win it.
+
+   10px is keyed to REAL TAGS only (small/sub/sup/figcaption), never to class
+   names. Guessing "this is metadata" from a substring is the same over-reach
+   rejected for the status colours above: '[class*="meta" i]' also matches a
+   '.pagemeta' wrapper full of body copy, and shrinking that to 10px is worse
+   than leaving it at 12px. */
+*:not(svg):not(path):not(i):not(html):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
   font-size: 12px !important;
   line-height: 1.2 !important;
 }
-h1 { font-size: 16px !important; }
-h2, h3, h4, h5, h6 { font-size: 14px !important; }
-small, sub, sup, figcaption, [class*="caption" i], [class*="meta" i], [class*="timestamp" i], [class*="byline" i] {
-  font-size: 10px !important;
-}
+h1 { font-size: 16px !important; line-height: 1.2 !important; }
+h2, h3, h4, h5, h6 { font-size: 14px !important; line-height: 1.2 !important; }
+small, sub, sup, figcaption { font-size: 10px !important; line-height: 1.2 !important; }
+
 /* Weight sparingly (UI.md typography): sites reach for 200/300 hairlines and
    800/900 blacks, both of which read as noise at 12px non-antialiased. Two
-   weights only — normal, and bold where the site meant emphasis. */
+   weights only — normal, and bold where the site meant emphasis.
+   The exceptions carry a ':root' prefix for the same specificity reason as
+   above: '*:not(svg):not(path)' is (0,0,2) and a bare 'b' is (0,0,1), so without
+   the prefix the base rule wins and NOTHING on the page is ever bold. ':root b'
+   is (0,1,1) and wins cleanly — no attribute matches involved here, so the cheap
+   fix works where font-size needed disjointness. */
 *:not(svg):not(path) { font-weight: 400 !important; font-style: normal !important; }
-b, strong, th, h1, h2, h3, h4, h5, h6, summary, legend, label,
-button, [role="button"], .btn, [class~="button" i], [class~="btn" i] { font-weight: 700 !important; }
-i, em, cite, var, address, dfn, q, blockquote { font-style: italic !important; }
+:root b, :root strong, :root th, :root h1, :root h2, :root h3, :root h4, :root h5, :root h6,
+:root summary, :root legend, :root label, :root button, :root [role="button"], :root .btn,
+:root [class~="button" i], :root [class~="btn" i] { font-weight: 700 !important; }
+:root i, :root em, :root cite, :root var, :root address, :root dfn, :root q, :root blockquote { font-style: italic !important; }
 
 /* UI.md law 5 + the accessibility floor, together. The old link colour #9DD9F9
    traced to no token at all — an iron-law-5 violation on the single most common
@@ -491,17 +508,23 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
        rest of the page is flat. */
     *, *::before, *::after { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
     *:not(img):not(svg):not(video):not(canvas):not(picture):not(image), *::before, *::after { filter: none !important; }
-    /* Type ladder, same five steps as the global layer. */
-    *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+    /* Type ladder, same five steps and the same disjoint-selector trick as the
+       global layer (see the specificity note there — layering the exceptions on
+       top instead silently flattens every heading to 12px). */
+    *:not(svg):not(path):not(i):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
       font-size: 12px !important; line-height: 1.2 !important;
     }
-    h1 { font-size: 16px !important; }
-    h2, h3, h4, h5, h6 { font-size: 14px !important; }
-    small, sub, sup, figcaption, [class*="caption" i], [class*="meta" i], [class*="timestamp" i], [class*="byline" i] { font-size: 10px !important; }
+    h1 { font-size: 16px !important; line-height: 1.2 !important; }
+    h2, h3, h4, h5, h6 { font-size: 14px !important; line-height: 1.2 !important; }
+    small, sub, sup, figcaption { font-size: 10px !important; line-height: 1.2 !important; }
     *:not(svg):not(path) { font-weight: 400 !important; font-style: normal !important; }
-    b, strong, th, h1, h2, h3, h4, h5, h6, summary, legend, label,
-    button, shreddit-button, [role="button"], .btn, [class~="button" i], [class~="btn" i] { font-weight: 700 !important; }
-    i, em, cite, var, dfn, q, blockquote { font-style: italic !important; }
+    /* ':host X' matches X inside this shadow tree and scores (0,1,1), beating the
+       (0,0,2) base rule above — the same specificity fix the global layer makes
+       with ':root'. A bare 'b' here would lose and nothing would be bold. */
+    :host b, :host strong, :host th, :host h1, :host h2, :host h3, :host h4, :host h5, :host h6,
+    :host summary, :host legend, :host label, :host button, :host shreddit-button, :host [role="button"],
+    :host .btn, :host [class~="button" i], :host [class~="btn" i] { font-weight: 700 !important; }
+    :host i, :host em, :host cite, :host var, :host dfn, :host q, :host blockquote { font-style: italic !important; }
     /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
     *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
     *:hover::before, *:hover::after {
