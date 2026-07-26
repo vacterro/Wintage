@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-014
-next_action: "merge idle-verify into main as v1.4.2, push origin/main"
+phase: DONE
+task: none
+next_action: "none — T-013/T-014 shipped + verified as v1.4.2 (origin/main a2676a1). Next saipen run: HUNT."
 blocker: none
 agent: claude-opus-5
 mode: full
