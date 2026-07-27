@@ -1084,17 +1084,25 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
           if (bg.a <= 0.35) repaint = 'transparent';
           else if (grayish) repaint = T.backgroundSoft;
           else repaint = semanticToken(bg);
-        } else if (grayish && L >= 0.015) {
-          // Unthemed dark-mode grays (chips, tabs, cards) → vintage brown scale.
-          // Near-black (< 0.015, e.g. video players, scrims) is left alone.
-          repaint = L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface;
-        } else if (spread > 60 && L >= 0.015) {
-          // A SATURATED DARK surface — a site's own coloured brand panel, badge or
-          // dark-theme diff tint. Pre-1.4.0 these were left completely alone,
-          // which is the main reason two dark-themed sites still looked nothing
-          // alike: their accent surfaces survived untouched. Now they snap to a
-          // token too, semantic ones by hue and the rest to --surfaceRaised.
-          repaint = semanticToken(bg);
+        } else if (L >= 0.004) {
+          // DARK SURFACES. Two gaps used to let a site keep its own dark palette
+          // here, both measured on amazon.com:
+          //   #nav-belt  #131921  spread 14, lum 0.0094 — grayish, but the old
+          //     "near-black is left alone" floor was 0.015, so it survived.
+          //   #nav-main  #232f3e  spread 27, lum 0.0274 — over the old grayish
+          //     cutoff of 24 but under the saturated cutoff of 60, so it fell
+          //     through BOTH branches and was never touched at all.
+          // A dark navy chrome bar is a surface, not an accent, so the neutral
+          // band is widened to spread <= 60 and the two branches are merged:
+          // anything genuinely saturated (> 60) still goes to a semantic token,
+          // everything else joins the vintage brown scale.
+          //
+          // The floor drops from 0.015 to 0.004, which still leaves true black
+          // alone — video players and modal scrims sit at or near lum 0 — while
+          // catching real chrome like #131921.
+          repaint = spread > 60
+            ? semanticToken(bg)
+            : (L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface);
         }
         if (repaint) {
           w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
@@ -1112,7 +1120,15 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
 
         if (el.closest && el.closest('a')) {
-          if (contrast < 4.5 || (fgLum > 0.4 && grayish)) w.push(el, 'color', T.borderHighlight);
+          // Anything inside a link takes the link colour when it is unreadable,
+          // washed out, OR simply not one of ours — the last clause is iron law 5
+          // and it was missing. Measured on amazon.com: span#nav-cart-count kept
+          // #f08804 and span.navFooterDescText kept #999999, because both are
+          // legible enough (7.1:1 and 6.3:1) that the first two tests passed them
+          // through. Legible is not the same as on-palette.
+          if (contrast < 4.5 || (fgLum > 0.4 && grayish) || !PALETTE_RGB.has(fgColor)) {
+            w.push(el, 'color', T.borderHighlight);
+          }
         } else {
           if (contrast < 4.5) {
             w.push(el, 'color', T.textPrimary);
