@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.4.2
+// @version      1.4.3
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -1195,14 +1195,47 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   let sweepDelay = 1500;
   let sweepTimer = null;
 
-  function scheduleNextSweep(immediate = false) {
-    if (sweepTimer) {
-      clearTimeout(sweepTimer);
-      sweepTimer = null;
-    }
-    if (document.hidden) return;
+  // 🚨 THE SWEEP RATE IS FLOOR-LIMITED. NOTHING MAY SCHEDULE A SWEEP AT 0ms 🚨
+  // Measured on a real chatgpt.com conversation (3392 elements, 15s, primitives
+  // counted by wrapping them on the prototypes):
+  //     querySelectorAll ....    151 calls  -> ~10 sweeps per SECOND
+  //     getComputedStyle ....  42563 calls
+  //     Element.closest .....  80114 calls
+  //     setAttribute ........  43080 calls
+  //     long tasks .......... 14158 ms out of 15000 (~94% of wall time)
+  // With the script disabled the same page spent 2517ms. So the engine was
+  // running roughly 150 full sweeps in 15 seconds instead of ten.
+  //
+  // Cause: requestForceSweep() ended in scheduleNextSweep(true), i.e. a 0ms
+  // timer, and it is called from the mutation handler on every batch that
+  // contains added nodes. On a React app that inserts nodes continuously, every
+  // insertion queued an immediate full sweep, whose own writes and stylesheet
+  // check queued the next one. Back-to-back sweeps with no floor.
+  //
+  // Two rules now make that impossible:
+  //   1. MIN_SWEEP_GAP — a hard minimum between the END of one sweep and the
+  //      START of the next. However much churn arrives, sweeps cannot exceed
+  //      one per second. This is the actual safety property; the adaptive
+  //      backoff below is only an idle optimisation on top of it.
+  //   2. A pending timer that already fires SOONER is never replaced by a later
+  //      one, and never cancelled and re-armed. The old code cleared and re-armed
+  //      the timer on every call, so a stream of requests could keep pushing the
+  //      timer around instead of letting it fire.
+  const MIN_SWEEP_GAP = 1000;
+  let lastSweepEnd = 0;
+  let sweepPlannedAt = 0;
 
-    const delay = immediate ? 0 : sweepDelay;
+  function scheduleSweep(delay) {
+    if (document.hidden) return;
+    const now = Date.now();
+    // Never sooner than MIN_SWEEP_GAP after the last sweep finished.
+    const earliest = lastSweepEnd + MIN_SWEEP_GAP - now;
+    const d = Math.max(delay, earliest, 0);
+    const fireAt = now + d;
+    // An already-pending sweep that lands sooner wins; do not churn the timer.
+    if (sweepTimer && sweepPlannedAt <= fireAt) return;
+    if (sweepTimer) clearTimeout(sweepTimer);
+    sweepPlannedAt = fireAt;
     sweepTimer = setTimeout(() => {
       sweepTimer = null;
       if (document.hidden) return;
@@ -1212,17 +1245,19 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       if (force) forcePassesOwed--;
 
       runSweeper(force);
+      lastSweepEnd = Date.now();
 
-      // Real activity resets the cadence to the fast lane. When the page is
-      // genuinely idle, the interval ramps all the way down to one pass per
-      // minute instead of hammering the DOM forever.
+      // Real activity keeps the cadence in the fast lane. When the page is
+      // genuinely idle, the interval ramps down to one pass per minute.
       sweepDelay = forcePassesOwed > 0 ? 1500 : Math.min(sweepDelay * 2, 60000);
-      scheduleNextSweep(false);
-    }, delay);
+      scheduleSweep(sweepDelay);
+    }, d);
   }
 
-  // A request means "there is fresh work, please revisit soon". It does not
-  // mean "keep a permanent interval alive".
+  // A request means "there is fresh work, revisit soon" — soon being the fast
+  // lane, NEVER immediately. runSweeper itself calls this (via stripHoverSheets
+  // spotting a changed sheet), so an immediate schedule here is a direct
+  // sweep-calls-sweep loop.
   function requestForceSweep() {
     let n = 1;
     try { n = Math.ceil((document.getElementsByTagName('*').length || 1) / FORCE_BUDGET); } catch (e) { }
@@ -1231,7 +1266,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (n > 8) n = 8;
     if (n > forcePassesOwed) forcePassesOwed = n;
     sweepDelay = 1500;
-    scheduleNextSweep(true);
+    scheduleSweep(1500);
   }
 
   function runSweeper(force) {
@@ -1287,14 +1322,18 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
     // Top frame: event-driven sweeps with a sparse adaptive fallback instead of
     // a permanent 1.5s interval plus an extra 30s heartbeat.
-    scheduleNextSweep(false);
+    scheduleSweep(sweepDelay);
 
     // Pages that finished loading while the tab was hidden got no sweeps; on
-    // return, re-verify immediately so the user never sees stale white.
+    // return, re-verify immediately so the user never sees stale white. This is
+    // the ONE place a sweep still runs synchronously without waiting for the
+    // floor — it is user-initiated (they just looked at the tab) and happens at
+    // most once per tab switch, so it cannot form a loop.
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        requestForceSweep();
         runSweeper(true);
+        lastSweepEnd = Date.now();
+        requestForceSweep();
       } else if (sweepTimer) {
         clearTimeout(sweepTimer);
         sweepTimer = null;
