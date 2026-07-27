@@ -1,13 +1,13 @@
 ---
-phase: SHIP
-task: T-016
-next_action: "squash the v1.4.3 wip commits into one release commit on main and push origin/main"
+phase: DONE
+task: none
+next_action: "none — T-015/T-016 shipped + verified as v1.4.3 (origin/main 6390403). Next saipen run: HUNT."
 blocker: none
 agent: claude-opus-5
 mode: full
 saipen_version: 7
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
-updated: 2026-07-27T04:39:02Z
+updated: 2026-07-27T04:45:00Z
 ---
 
 # Wintage — UI.md conformance wave (saipen)
