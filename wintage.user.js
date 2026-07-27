@@ -777,6 +777,21 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     return T.surfaceRaised;
   }
 
+  // UI.md's five permitted sizes, and the role mapping GLOBAL_CSS uses. Kept as
+  // lookups so the JS enforcement below can never drift from the CSS layer.
+  const SIZE_ALLOWED = new Set(['10px', '11px', '12px', '14px', '16px']);
+  const LADDER = {
+    H1: '16px', H2: '14px', H3: '14px', H4: '14px', H5: '14px', H6: '14px',
+    SMALL: '10px', SUB: '10px', SUP: '10px', FIGCAPTION: '10px'
+  };
+  const ICONISH = /icon|fa-|symbols|glyph|mdi|bi-/i;
+  function isIconish(el) {
+    // className is an SVGAnimatedString on SVG elements, not a string — read the
+    // attribute instead of trusting the property.
+    const c = el.getAttribute && el.getAttribute('class');
+    return c ? ICONISH.test(c) : false;
+  }
+
   const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape';
   const SHADOW_SKIP_TAGS = new Set(['YTD-LOGO', 'YT-ICON', 'YT-ICON-SHAPE', 'YT-IMG-SHADOW', 'YTD-AVATAR-SHAPE', 'YT-AVATAR-SHAPE', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
   const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR)$/i;
@@ -929,6 +944,40 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     const iterCount = cs.animationIterationCount;
     if (iterCount && iterCount.indexOf('infinite') !== -1) {
       w.push(el, 'animation-play-state', 'paused');
+    }
+
+    // 🚨 UI.md HARD INVARIANTS, ENFORCED FROM JS BECAUSE CSS CANNOT WIN (v1.4.3) 🚨
+    // Our universal rules are '* { border-radius: 0 !important }' etc, which score
+    // specificity (0,0,0). A site's own '!important' beats them the moment it has
+    // any specificity at all, and an ID rule beats them absolutely — no number of
+    // ':root' prefixes can outrank (1,0,0). Measured on stackoverflow.com:
+    //     a.bar-sm ....................... border-radius 4px   (site .class wins)
+    //     h1.fs-headline1 ................ font-size 27px      (site .class wins)
+    //     h2.fs-body2 .................... font-size 15px
+    //     #onetrust-banner-sdk ........... box-shadow present  (site #id wins)
+    // Inline '!important' is the one declaration that outranks every author rule
+    // regardless of selector, and that is exactly what setImp writes. So these
+    // three invariants are re-asserted here whenever the computed value actually
+    // disagrees. The check is nearly free — 'cs' is already resolved, this is three
+    // more property reads — and the write is skipped entirely when the CSS layer
+    // already won, which is the overwhelming majority of elements (14 of 3362 on
+    // the page above).
+    //
+    // Runs BEFORE shouldSkip because these are universal invariants: a rounded
+    // corner or a drop shadow is just as wrong on a <button> or an <img> as
+    // anywhere else, and buttons are skipped by shouldSkip via closest('button').
+    if (cs.borderTopLeftRadius !== '0px' || cs.borderTopRightRadius !== '0px' ||
+        cs.borderBottomLeftRadius !== '0px' || cs.borderBottomRightRadius !== '0px') {
+      w.push(el, 'border-radius', '0');
+    }
+    if (cs.boxShadow && cs.boxShadow !== 'none') {
+      w.push(el, 'box-shadow', 'none');
+    }
+    // Type ladder, same role mapping as GLOBAL_CSS. Icon-font carriers are
+    // exempt for the same reason as in CSS: their font-size IS their glyph size.
+    const fs = cs.fontSize;
+    if (fs && !SIZE_ALLOWED.has(fs) && !isIconish(el)) {
+      w.push(el, 'font-size', LADDER[(el.tagName || '').toUpperCase()] || '12px');
     }
 
     if (shouldSkip(el)) return;
