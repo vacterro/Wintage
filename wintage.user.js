@@ -1068,8 +1068,17 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       }
     }
 
+    // 🚨 NEVER RE-GRADE A COLOUR THAT IS ALREADY OURS 🚨
+    // The repainter classifies by luminance, and our own tokens have luminances
+    // that land in its buckets: --backgroundSoft #1E1408 (lum 0.0088) and
+    // --surfaceRaised #362812 (lum 0.0234) both fall in the "< 0.05" bucket and
+    // were being re-graded to --surface on every pass. Caught live on wikipedia
+    // the moment the dark band was widened: body went from #1E1408 to #2A1C0A,
+    // and dialogs / th / hovercards would have drifted the same way, so the whole
+    // surface hierarchy would slowly collapse onto one shade. A palette value is
+    // by definition already correct — leave it alone.
     const bgColor = cs.backgroundColor;
-    if (bgColor && bgColor !== 'transparent') {
+    if (bgColor && bgColor !== 'transparent' && !PALETTE_RGB.has(bgColor)) {
       const bg = parseRGB(bgColor);
       if (bg && bg.a > 0.08) {
         const L = lum(bg);
@@ -1110,8 +1119,11 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       }
     }
 
+    // Same guard for text: --textSecondary #B09558 has a channel spread of 88, so
+    // the "not grayish" branch would have flattened every secondary label to
+    // --textPrimary on the next pass. Palette in, palette out, untouched.
     const fgColor = cs.color;
-    if (fgColor) {
+    if (fgColor && !PALETTE_RGB.has(fgColor)) {
       const fg = parseRGB(fgColor);
       if (fg && fg.a > 0.1) {
         const fgLum = lum(fg);
