@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.4.3
+// @version      1.4.4
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -58,6 +58,15 @@
     success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
     selection: '#362812', compareBack: '#0F0A04'
   };
+
+  // Stamped as data-w95-ver on every injected <style>, so a console diagnostic can
+  // report which build is actually live. Without it, "is this 1.4.2 or 1.4.3?"
+  // costs a round trip to the Tampermonkey dashboard — and a stale install
+  // silently invalidates whatever measurement is being taken, which already
+  // wasted one full diagnostic round on a page where the script wasn't running.
+  // Declared up here, not next to injectStyle: the attachShadow interception
+  // reads it too and is installed earlier in the file.
+  const W95_VERSION = '1.4.4';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -604,7 +613,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       try {
         if (!shadow.querySelector('style[data-w95="shadow"]')) {
           const s = document.createElement('style');
-          s.setAttribute('data-w95', 'shadow');
+          s.setAttribute('data-w95', 'shadow'); s.setAttribute('data-w95-ver', W95_VERSION);
           s.textContent = SHADOW_CSS;
           shadow.insertBefore(s, shadow.firstChild);
         }
@@ -617,6 +626,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (root.querySelector && root.querySelector(`style[data-w95="${id}"]`)) return;
     const s = document.createElement('style');
     s.setAttribute('data-w95', id);
+    s.setAttribute('data-w95-ver', W95_VERSION);
     s.textContent = content;
     // At document-start <head> may not exist yet; inserting into the Document
     // node itself throws HierarchyRequestError and would kill the whole script.
@@ -632,7 +642,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   function injectLate() {
     if (document.querySelector('style[data-w95="global-late"]')) return;
     const s = document.createElement('style');
-    s.setAttribute('data-w95', 'global-late');
+    s.setAttribute('data-w95', 'global-late'); s.setAttribute('data-w95-ver', W95_VERSION);
     s.textContent = GLOBAL_CSS;
     (document.head || document.documentElement).appendChild(s);
   }
