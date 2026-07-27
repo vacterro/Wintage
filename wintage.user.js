@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.4.2
+// @version      1.4.3
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -777,6 +777,28 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     return T.surfaceRaised;
   }
 
+  // UI.md's five permitted sizes, and the role mapping GLOBAL_CSS uses. Kept as
+  // lookups so the JS enforcement below can never drift from the CSS layer.
+  const SIZE_ALLOWED = new Set(['10px', '11px', '12px', '14px', '16px']);
+  const LADDER = {
+    H1: '16px', H2: '14px', H3: '14px', H4: '14px', H5: '14px', H6: '14px',
+    SMALL: '10px', SUB: '10px', SUP: '10px', FIGCAPTION: '10px'
+  };
+  // The palette as the browser serialises it, for cheap "is this already one of
+  // ours?" tests against a computed value.
+  const PALETTE_RGB = new Set(Object.keys(T).map(k => {
+    const h = T[k];
+    return 'rgb(' + parseInt(h.slice(1, 3), 16) + ', ' + parseInt(h.slice(3, 5), 16) + ', ' + parseInt(h.slice(5, 7), 16) + ')';
+  }));
+
+  const ICONISH = /icon|fa-|symbols|glyph|mdi|bi-/i;
+  function isIconish(el) {
+    // className is an SVGAnimatedString on SVG elements, not a string — read the
+    // attribute instead of trusting the property.
+    const c = el.getAttribute && el.getAttribute('class');
+    return c ? ICONISH.test(c) : false;
+  }
+
   const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape';
   const SHADOW_SKIP_TAGS = new Set(['YTD-LOGO', 'YT-ICON', 'YT-ICON-SHAPE', 'YT-IMG-SHADOW', 'YTD-AVATAR-SHAPE', 'YT-AVATAR-SHAPE', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
   const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR)$/i;
@@ -931,7 +953,69 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       w.push(el, 'animation-play-state', 'paused');
     }
 
-    if (shouldSkip(el)) return;
+    // 🚨 UI.md HARD INVARIANTS, ENFORCED FROM JS BECAUSE CSS CANNOT WIN (v1.4.3) 🚨
+    // Our universal rules are '* { border-radius: 0 !important }' etc, which score
+    // specificity (0,0,0). A site's own '!important' beats them the moment it has
+    // any specificity at all, and an ID rule beats them absolutely — no number of
+    // ':root' prefixes can outrank (1,0,0). Measured on stackoverflow.com:
+    //     a.bar-sm ....................... border-radius 4px   (site .class wins)
+    //     h1.fs-headline1 ................ font-size 27px      (site .class wins)
+    //     h2.fs-body2 .................... font-size 15px
+    //     #onetrust-banner-sdk ........... box-shadow present  (site #id wins)
+    // Inline '!important' is the one declaration that outranks every author rule
+    // regardless of selector, and that is exactly what setImp writes. So these
+    // three invariants are re-asserted here whenever the computed value actually
+    // disagrees. The check is nearly free — 'cs' is already resolved, this is three
+    // more property reads — and the write is skipped entirely when the CSS layer
+    // already won, which is the overwhelming majority of elements (14 of 3362 on
+    // the page above).
+    //
+    // Runs BEFORE shouldSkip because these are universal invariants: a rounded
+    // corner or a drop shadow is just as wrong on a <button> or an <img> as
+    // anywhere else, and buttons are skipped by shouldSkip via closest('button').
+    if (cs.borderTopLeftRadius !== '0px' || cs.borderTopRightRadius !== '0px' ||
+        cs.borderBottomLeftRadius !== '0px' || cs.borderBottomRightRadius !== '0px') {
+      w.push(el, 'border-radius', '0');
+    }
+    if (cs.boxShadow && cs.boxShadow !== 'none') {
+      w.push(el, 'box-shadow', 'none');
+    }
+    // Type ladder, same role mapping as GLOBAL_CSS. Icon-font carriers are
+    // exempt for the same reason as in CSS: their font-size IS their glyph size.
+    const fs = cs.fontSize;
+    if (fs && !SIZE_ALLOWED.has(fs) && !isIconish(el)) {
+      w.push(el, 'font-size', LADDER[(el.tagName || '').toUpperCase()] || '12px');
+    }
+
+    if (shouldSkip(el)) {
+      // Controls and their contents are deliberately kept out of the generic
+      // repainter so our bevels and labels survive (that is what the
+      // closest('button') skip is for). But CSS alone cannot defend them: a site
+      // rule with ID specificity and !important beats our button rule outright.
+      // Measured on stackoverflow.com's cookie banner —
+      //     #onetrust-consent-sdk #onetrust-accept-btn-handler
+      //         { background: var(--black-600) !important; color: #fff !important }
+      // scores (2,0,0) against our 'button { … !important }' at (0,0,1), and
+      //     #onetrust-banner-sdk * { color: var(--black-600) !important }
+      // at (1,0,0) beats every universal colour rule we have. The result was
+      // near-black text on near-black surfaces inside the banner, on elements the
+      // repainter had explicitly excluded.
+      //
+      // So: clamp, but only what is PROVABLY off-palette. A correctly themed
+      // control already computes to a palette value and is skipped here, so this
+      // cannot flatten our own bevel colours or relabel button internals — which
+      // is exactly the regression the skip exists to prevent.
+      if (el.closest && el.closest('button')) {
+        if (cs.color && !PALETTE_RGB.has(cs.color)) {
+          w.push(el, 'color', T.textPrimary);
+        }
+        const cbg = parseRGB(cs.backgroundColor);
+        if (cbg && cbg.a > 0.3 && !PALETTE_RGB.has(cs.backgroundColor)) {
+          w.push(el, 'background-color', T.surfaceRaised);
+        }
+      }
+      return;
+    }
 
     el.removeAttribute('background');
     el.removeAttribute('bgcolor');
@@ -984,8 +1068,17 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       }
     }
 
+    // 🚨 NEVER RE-GRADE A COLOUR THAT IS ALREADY OURS 🚨
+    // The repainter classifies by luminance, and our own tokens have luminances
+    // that land in its buckets: --backgroundSoft #1E1408 (lum 0.0088) and
+    // --surfaceRaised #362812 (lum 0.0234) both fall in the "< 0.05" bucket and
+    // were being re-graded to --surface on every pass. Caught live on wikipedia
+    // the moment the dark band was widened: body went from #1E1408 to #2A1C0A,
+    // and dialogs / th / hovercards would have drifted the same way, so the whole
+    // surface hierarchy would slowly collapse onto one shade. A palette value is
+    // by definition already correct — leave it alone.
     const bgColor = cs.backgroundColor;
-    if (bgColor && bgColor !== 'transparent') {
+    if (bgColor && bgColor !== 'transparent' && !PALETTE_RGB.has(bgColor)) {
       const bg = parseRGB(bgColor);
       if (bg && bg.a > 0.08) {
         const L = lum(bg);
@@ -1000,17 +1093,25 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
           if (bg.a <= 0.35) repaint = 'transparent';
           else if (grayish) repaint = T.backgroundSoft;
           else repaint = semanticToken(bg);
-        } else if (grayish && L >= 0.015) {
-          // Unthemed dark-mode grays (chips, tabs, cards) → vintage brown scale.
-          // Near-black (< 0.015, e.g. video players, scrims) is left alone.
-          repaint = L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface;
-        } else if (spread > 60 && L >= 0.015) {
-          // A SATURATED DARK surface — a site's own coloured brand panel, badge or
-          // dark-theme diff tint. Pre-1.4.0 these were left completely alone,
-          // which is the main reason two dark-themed sites still looked nothing
-          // alike: their accent surfaces survived untouched. Now they snap to a
-          // token too, semantic ones by hue and the rest to --surfaceRaised.
-          repaint = semanticToken(bg);
+        } else if (L >= 0.004) {
+          // DARK SURFACES. Two gaps used to let a site keep its own dark palette
+          // here, both measured on amazon.com:
+          //   #nav-belt  #131921  spread 14, lum 0.0094 — grayish, but the old
+          //     "near-black is left alone" floor was 0.015, so it survived.
+          //   #nav-main  #232f3e  spread 27, lum 0.0274 — over the old grayish
+          //     cutoff of 24 but under the saturated cutoff of 60, so it fell
+          //     through BOTH branches and was never touched at all.
+          // A dark navy chrome bar is a surface, not an accent, so the neutral
+          // band is widened to spread <= 60 and the two branches are merged:
+          // anything genuinely saturated (> 60) still goes to a semantic token,
+          // everything else joins the vintage brown scale.
+          //
+          // The floor drops from 0.015 to 0.004, which still leaves true black
+          // alone — video players and modal scrims sit at or near lum 0 — while
+          // catching real chrome like #131921.
+          repaint = spread > 60
+            ? semanticToken(bg)
+            : (L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface);
         }
         if (repaint) {
           w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
@@ -1018,8 +1119,11 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       }
     }
 
+    // Same guard for text: --textSecondary #B09558 has a channel spread of 88, so
+    // the "not grayish" branch would have flattened every secondary label to
+    // --textPrimary on the next pass. Palette in, palette out, untouched.
     const fgColor = cs.color;
-    if (fgColor) {
+    if (fgColor && !PALETTE_RGB.has(fgColor)) {
       const fg = parseRGB(fgColor);
       if (fg && fg.a > 0.1) {
         const fgLum = lum(fg);
@@ -1028,7 +1132,15 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
 
         if (el.closest && el.closest('a')) {
-          if (contrast < 4.5 || (fgLum > 0.4 && grayish)) w.push(el, 'color', T.borderHighlight);
+          // Anything inside a link takes the link colour when it is unreadable,
+          // washed out, OR simply not one of ours — the last clause is iron law 5
+          // and it was missing. Measured on amazon.com: span#nav-cart-count kept
+          // #f08804 and span.navFooterDescText kept #999999, because both are
+          // legible enough (7.1:1 and 6.3:1) that the first two tests passed them
+          // through. Legible is not the same as on-palette.
+          if (contrast < 4.5 || (fgLum > 0.4 && grayish) || !PALETTE_RGB.has(fgColor)) {
+            w.push(el, 'color', T.borderHighlight);
+          }
         } else {
           if (contrast < 4.5) {
             w.push(el, 'color', T.textPrimary);
@@ -1195,14 +1307,47 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   let sweepDelay = 1500;
   let sweepTimer = null;
 
-  function scheduleNextSweep(immediate = false) {
-    if (sweepTimer) {
-      clearTimeout(sweepTimer);
-      sweepTimer = null;
-    }
-    if (document.hidden) return;
+  // 🚨 THE SWEEP RATE IS FLOOR-LIMITED. NOTHING MAY SCHEDULE A SWEEP AT 0ms 🚨
+  // Measured on a real chatgpt.com conversation (3392 elements, 15s, primitives
+  // counted by wrapping them on the prototypes):
+  //     querySelectorAll ....    151 calls  -> ~10 sweeps per SECOND
+  //     getComputedStyle ....  42563 calls
+  //     Element.closest .....  80114 calls
+  //     setAttribute ........  43080 calls
+  //     long tasks .......... 14158 ms out of 15000 (~94% of wall time)
+  // With the script disabled the same page spent 2517ms. So the engine was
+  // running roughly 150 full sweeps in 15 seconds instead of ten.
+  //
+  // Cause: requestForceSweep() ended in scheduleNextSweep(true), i.e. a 0ms
+  // timer, and it is called from the mutation handler on every batch that
+  // contains added nodes. On a React app that inserts nodes continuously, every
+  // insertion queued an immediate full sweep, whose own writes and stylesheet
+  // check queued the next one. Back-to-back sweeps with no floor.
+  //
+  // Two rules now make that impossible:
+  //   1. MIN_SWEEP_GAP — a hard minimum between the END of one sweep and the
+  //      START of the next. However much churn arrives, sweeps cannot exceed
+  //      one per second. This is the actual safety property; the adaptive
+  //      backoff below is only an idle optimisation on top of it.
+  //   2. A pending timer that already fires SOONER is never replaced by a later
+  //      one, and never cancelled and re-armed. The old code cleared and re-armed
+  //      the timer on every call, so a stream of requests could keep pushing the
+  //      timer around instead of letting it fire.
+  const MIN_SWEEP_GAP = 1000;
+  let lastSweepEnd = 0;
+  let sweepPlannedAt = 0;
 
-    const delay = immediate ? 0 : sweepDelay;
+  function scheduleSweep(delay) {
+    if (document.hidden) return;
+    const now = Date.now();
+    // Never sooner than MIN_SWEEP_GAP after the last sweep finished.
+    const earliest = lastSweepEnd + MIN_SWEEP_GAP - now;
+    const d = Math.max(delay, earliest, 0);
+    const fireAt = now + d;
+    // An already-pending sweep that lands sooner wins; do not churn the timer.
+    if (sweepTimer && sweepPlannedAt <= fireAt) return;
+    if (sweepTimer) clearTimeout(sweepTimer);
+    sweepPlannedAt = fireAt;
     sweepTimer = setTimeout(() => {
       sweepTimer = null;
       if (document.hidden) return;
@@ -1212,17 +1357,19 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       if (force) forcePassesOwed--;
 
       runSweeper(force);
+      lastSweepEnd = Date.now();
 
-      // Real activity resets the cadence to the fast lane. When the page is
-      // genuinely idle, the interval ramps all the way down to one pass per
-      // minute instead of hammering the DOM forever.
+      // Real activity keeps the cadence in the fast lane. When the page is
+      // genuinely idle, the interval ramps down to one pass per minute.
       sweepDelay = forcePassesOwed > 0 ? 1500 : Math.min(sweepDelay * 2, 60000);
-      scheduleNextSweep(false);
-    }, delay);
+      scheduleSweep(sweepDelay);
+    }, d);
   }
 
-  // A request means "there is fresh work, please revisit soon". It does not
-  // mean "keep a permanent interval alive".
+  // A request means "there is fresh work, revisit soon" — soon being the fast
+  // lane, NEVER immediately. runSweeper itself calls this (via stripHoverSheets
+  // spotting a changed sheet), so an immediate schedule here is a direct
+  // sweep-calls-sweep loop.
   function requestForceSweep() {
     let n = 1;
     try { n = Math.ceil((document.getElementsByTagName('*').length || 1) / FORCE_BUDGET); } catch (e) { }
@@ -1231,7 +1378,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (n > 8) n = 8;
     if (n > forcePassesOwed) forcePassesOwed = n;
     sweepDelay = 1500;
-    scheduleNextSweep(true);
+    scheduleSweep(1500);
   }
 
   function runSweeper(force) {
@@ -1287,14 +1434,18 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
     // Top frame: event-driven sweeps with a sparse adaptive fallback instead of
     // a permanent 1.5s interval plus an extra 30s heartbeat.
-    scheduleNextSweep(false);
+    scheduleSweep(sweepDelay);
 
     // Pages that finished loading while the tab was hidden got no sweeps; on
-    // return, re-verify immediately so the user never sees stale white.
+    // return, re-verify immediately so the user never sees stale white. This is
+    // the ONE place a sweep still runs synchronously without waiting for the
+    // floor — it is user-initiated (they just looked at the tab) and happens at
+    // most once per tab switch, so it cannot form a loop.
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        requestForceSweep();
         runSweeper(true);
+        lastSweepEnd = Date.now();
+        requestForceSweep();
       } else if (sweepTimer) {
         clearTimeout(sweepTimer);
         sweepTimer = null;

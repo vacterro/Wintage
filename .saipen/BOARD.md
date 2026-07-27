@@ -20,5 +20,7 @@
 
 - [x] T-013 Pause infinite animations instead of driving them to 1000 iterations/sec | verify: infinite div/svg/in-button all animation-play-state:paused, finite still running
 - [x] T-014 Idle-CPU review of the reworked scheduler: identity-based self-write suppression replacing the 100ms time window | verify: self-inflicted style records 9466 -> 0, backoff ladder reaches 60000, foreign inline write still repainted
+- [x] T-015 Fix the sweep-rate hot loop: MIN_SWEEP_GAP floor, no 0ms scheduling, never replace a sooner timer | verify: 148 -> 11 sweeps per 15s under identical churn
+- [x] T-016 Enforce UI.md invariants from JS where CSS loses to site !important; palette clamp for control subtrees; close dark-surface gaps; palette idempotence | verify: 3 popular sites all zero violations, zero drift across two settling windows
 
 ## BLOCKED
