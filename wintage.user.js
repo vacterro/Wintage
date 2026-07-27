@@ -784,6 +784,13 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     H1: '16px', H2: '14px', H3: '14px', H4: '14px', H5: '14px', H6: '14px',
     SMALL: '10px', SUB: '10px', SUP: '10px', FIGCAPTION: '10px'
   };
+  // The palette as the browser serialises it, for cheap "is this already one of
+  // ours?" tests against a computed value.
+  const PALETTE_RGB = new Set(Object.keys(T).map(k => {
+    const h = T[k];
+    return 'rgb(' + parseInt(h.slice(1, 3), 16) + ', ' + parseInt(h.slice(3, 5), 16) + ', ' + parseInt(h.slice(5, 7), 16) + ')';
+  }));
+
   const ICONISH = /icon|fa-|symbols|glyph|mdi|bi-/i;
   function isIconish(el) {
     // className is an SVGAnimatedString on SVG elements, not a string — read the
@@ -980,7 +987,35 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       w.push(el, 'font-size', LADDER[(el.tagName || '').toUpperCase()] || '12px');
     }
 
-    if (shouldSkip(el)) return;
+    if (shouldSkip(el)) {
+      // Controls and their contents are deliberately kept out of the generic
+      // repainter so our bevels and labels survive (that is what the
+      // closest('button') skip is for). But CSS alone cannot defend them: a site
+      // rule with ID specificity and !important beats our button rule outright.
+      // Measured on stackoverflow.com's cookie banner —
+      //     #onetrust-consent-sdk #onetrust-accept-btn-handler
+      //         { background: var(--black-600) !important; color: #fff !important }
+      // scores (2,0,0) against our 'button { … !important }' at (0,0,1), and
+      //     #onetrust-banner-sdk * { color: var(--black-600) !important }
+      // at (1,0,0) beats every universal colour rule we have. The result was
+      // near-black text on near-black surfaces inside the banner, on elements the
+      // repainter had explicitly excluded.
+      //
+      // So: clamp, but only what is PROVABLY off-palette. A correctly themed
+      // control already computes to a palette value and is skipped here, so this
+      // cannot flatten our own bevel colours or relabel button internals — which
+      // is exactly the regression the skip exists to prevent.
+      if (el.closest && el.closest('button')) {
+        if (cs.color && !PALETTE_RGB.has(cs.color)) {
+          w.push(el, 'color', T.textPrimary);
+        }
+        const cbg = parseRGB(cs.backgroundColor);
+        if (cbg && cbg.a > 0.3 && !PALETTE_RGB.has(cs.backgroundColor)) {
+          w.push(el, 'background-color', T.surfaceRaised);
+        }
+      }
+      return;
+    }
 
     el.removeAttribute('background');
     el.removeAttribute('bgcolor');
