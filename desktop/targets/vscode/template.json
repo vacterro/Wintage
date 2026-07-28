@@ -1,0 +1,220 @@
+{
+  "name": "${label}",
+  "type": "dark",
+  "colors": {
+    "focusBorder": "${textPrimary}",
+    "foreground": "${textPrimary}",
+    "widget.shadow": "#00000000",
+    "selection.background": "${selection}",
+    "descriptionForeground": "${textSecondary}",
+    "errorForeground": "${danger}",
+    "textBlockQuote.background": "${surface}",
+    "textBlockQuote.border": "${borderDark}",
+    "textCodeBlock.background": "${background}",
+    "textLink.activeForeground": "${borderHighlight}",
+    "textLink.foreground": "${textPrimary}",
+    "textPreformat.foreground": "${textPrimary}",
+    "textSeparator.foreground": "${borderDark}",
+    "button.background": "${selection}",
+    "button.foreground": "${textPrimary}",
+    "button.hoverBackground": "${surfaceAlt}",
+    "button.secondaryBackground": "${surface}",
+    "button.secondaryForeground": "${textSecondary}",
+    "button.secondaryHoverBackground": "${selection}",
+    "button.border": "${borderHighlight}",
+    "dropdown.background": "${backgroundSoft}",
+    "dropdown.listBackground": "${surface}",
+    "dropdown.border": "${borderDark}",
+    "dropdown.foreground": "${textPrimary}",
+    "input.background": "${backgroundSoft}",
+    "input.border": "${borderDark}",
+    "input.foreground": "${textPrimary}",
+    "input.placeholderForeground": "${textMuted}",
+    "scrollbar.shadow": "#00000000",
+    "scrollbarSlider.activeBackground": "${surface}",
+    "scrollbarSlider.background": "${selection}",
+    "scrollbarSlider.hoverBackground": "${surfaceAlt}",
+    "badge.background": "${accentTeal}",
+    "badge.foreground": "${background}",
+    "list.activeSelectionBackground": "${selection}",
+    "list.activeSelectionForeground": "${textPrimary}",
+    "list.dropBackground": "${selection}",
+    "list.focusBackground": "${selection}",
+    "list.focusForeground": "${textPrimary}",
+    "list.highlightForeground": "${borderHighlight}",
+    "list.hoverBackground": "${surfaceAlt}",
+    "list.hoverForeground": "${textPrimary}",
+    "list.inactiveSelectionBackground": "${surfaceAlt}",
+    "list.inactiveSelectionForeground": "${textPrimary}",
+    "activityBar.background": "${surfaceAlt}",
+    "activityBar.dropBorder": "${textPrimary}",
+    "activityBar.foreground": "${textPrimary}",
+    "activityBar.inactiveForeground": "${textMuted}",
+    "activityBar.border": "${borderDark}",
+    "activityBarBadge.background": "${accentTeal}",
+    "activityBarBadge.foreground": "${background}",
+    "sideBar.background": "${surface}",
+    "sideBar.foreground": "${textSecondary}",
+    "sideBar.border": "${borderDark}",
+    "sideBar.dropBackground": "${selection}",
+    "sideBarTitle.foreground": "${textPrimary}",
+    "sideBarSectionHeader.background": "${selection}",
+    "sideBarSectionHeader.foreground": "${textPrimary}",
+    "sideBarSectionHeader.border": "${borderHighlight}",
+    "editorGroup.border": "${borderDark}",
+    "editorGroup.dropBackground": "${selection}88",
+    "editorGroupHeader.noTabsBackground": "${surface}",
+    "editorGroupHeader.tabsBackground": "${surface}",
+    "editorGroupHeader.tabsBorder": "${borderDark}",
+    "tab.activeBackground": "${surface}",
+    "tab.activeForeground": "${textPrimary}",
+    "tab.border": "${borderDark}",
+    "tab.activeBorder": "${borderHighlight}",
+    "tab.activeBorderTop": "${borderHighlight}",
+    "tab.inactiveBackground": "${selection}",
+    "tab.inactiveForeground": "${textSecondary}",
+    "tab.hoverBackground": "${surfaceAlt}",
+    "editor.background": "${background}",
+    "editor.foreground": "${textPrimary}",
+    "editorLineNumber.foreground": "${textMuted}",
+    "editorLineNumber.activeForeground": "${textSecondary}",
+    "editorCursor.foreground": "${textPrimary}",
+    "editor.selectionBackground": "${selection}",
+    "editor.inactiveSelectionBackground": "${surfaceAlt}",
+    "editorWhitespace.foreground": "${borderMuted}",
+    "editorIndentGuide.background": "${borderMuted}",
+    "editorIndentGuide.activeBackground": "${textMuted}",
+    "panel.background": "${surface}",
+    "panel.border": "${borderHighlight}",
+    "panelTitle.activeBorder": "${borderHighlight}",
+    "panelTitle.activeForeground": "${textPrimary}",
+    "panelTitle.inactiveForeground": "${textSecondary}",
+    "statusBar.background": "${selection}",
+    "statusBar.foreground": "${textPrimary}",
+    "statusBar.border": "${borderHighlight}",
+    "statusBar.debuggingBackground": "${accentTealDeep}",
+    "statusBar.debuggingForeground": "${textPrimary}",
+    "statusBar.noFolderBackground": "${selection}",
+    "statusBar.noFolderForeground": "${textPrimary}",
+    "titleBar.activeBackground": "${surface}",
+    "titleBar.activeForeground": "${textPrimary}",
+    "titleBar.inactiveBackground": "${backgroundSoft}",
+    "titleBar.inactiveForeground": "${textMuted}",
+    "titleBar.border": "${borderHighlight}"
+  },
+  "tokenColors": [
+    {
+      "scope": [
+        "comment",
+        "punctuation.definition.comment"
+      ],
+      "settings": {
+        "foreground": "${textMuted}",
+        "fontStyle": ""
+      }
+    },
+    {
+      "scope": [
+        "string",
+        "punctuation.definition.string"
+      ],
+      "settings": {
+        "foreground": "${success}"
+      }
+    },
+    {
+      "scope": [
+        "constant",
+        "entity.name.constant",
+        "variable.other.constant",
+        "variable.language"
+      ],
+      "settings": {
+        "foreground": "${accentTeal}"
+      }
+    },
+    {
+      "scope": [
+        "entity",
+        "entity.name"
+      ],
+      "settings": {
+        "foreground": "${textPrimary}",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "scope": "variable.parameter.function",
+      "settings": {
+        "foreground": "${textSecondary}"
+      }
+    },
+    {
+      "scope": "entity.name.tag",
+      "settings": {
+        "foreground": "${warning}"
+      }
+    },
+    {
+      "scope": "keyword",
+      "settings": {
+        "foreground": "${borderHighlight}"
+      }
+    },
+    {
+      "scope": [
+        "storage",
+        "storage.type"
+      ],
+      "settings": {
+        "foreground": "${borderHighlight}"
+      }
+    },
+    {
+      "scope": [
+        "storage.modifier.package",
+        "storage.modifier.import",
+        "storage.type.java"
+      ],
+      "settings": {
+        "foreground": "${textPrimary}"
+      }
+    },
+    {
+      "scope": [
+        "string.regexp",
+        "string.regexp keyword.other"
+      ],
+      "settings": {
+        "foreground": "${success}"
+      }
+    },
+    {
+      "scope": "meta.object-literal.key",
+      "settings": {
+        "foreground": "${textSecondary}"
+      }
+    },
+    {
+      "scope": "support",
+      "settings": {
+        "foreground": "${accentTeal}"
+      }
+    },
+    {
+      "scope": "variable",
+      "settings": {
+        "foreground": "${textPrimary}"
+      }
+    },
+    {
+      "scope": [
+        "invalid",
+        "invalid.illegal"
+      ],
+      "settings": {
+        "foreground": "${danger}"
+      }
+    }
+  ]
+}

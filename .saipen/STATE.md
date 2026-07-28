@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-024
-next_action: "PHASE SHIP T-024 [wave 1: 14 tickets, 9 done]"
+task: T-032
+next_action: "PHASE SHIP T-032 [wave 2: 2 of 7 desktop tickets done]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -9,11 +9,11 @@ saipen_version: 7
 schema_version: 1
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
-goal_waves: 1
-goal_tickets: 9
+goal_waves: 2
+goal_tickets: 11
 transition_from: REVIEW
-last_event: 77
-updated: 2026-07-28T09:33:00Z
+last_event: 85
+updated: 2026-07-28T10:22:00Z
 ---
 
 # Wintage — five extra themes (goal wave 1)

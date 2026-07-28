@@ -58,6 +58,14 @@ if ($LASTEXITCODE -ne 0) { throw "Repainter polarity test failed - release abort
 # Palettes are DERIVED from golden (UI.md's structure rotated to another hue), so
 # a hand-edited pack would silently break the structural guarantee. --check reports;
 # regenerating stays a deliberate act.
+# The desktop themes are generated from the same packs, and the extension's version
+# is read from the header line this script just bumped -- so a --check here would
+# fail on EVERY release by construction, which is what happened the first time.
+# Build instead of checking: the version bump is the reason it is stale, and the
+# fix for that is deterministic, not something the author needs to review.
+node (Join-Path $PSScriptRoot 'tools/build-desktop.js')
+if ($LASTEXITCODE -ne 0) { throw "Building the desktop themes failed - release aborted, version line already bumped, fix and rerun" }
+
 node (Join-Path $PSScriptRoot 'tools/derive-palette.js') --check
 if ($LASTEXITCODE -ne 0) { throw "A derived palette is out of date - run 'node tools/derive-palette.js', review the diff, then rerun" }
 
