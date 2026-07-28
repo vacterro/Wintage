@@ -3,7 +3,6 @@
 ## DOING
 
 ## TODO
-- [ ] T-018 Theme switching: @grant GM_getValue/GM_setValue/GM_registerMenuCommand, one menu entry per theme, silent fallback to the default palette when the GM API is absent | needs: T-017 | verify: pick a theme in the Tampermonkey menu, reload, palette persists and holds across a different origin
 - [ ] T-019 Palette-independent repainter: dark-floor 0.004, neutral spread<=60, darkBg 0.008 and the palette-token early return all derived from the active theme instead of the golden constants; AA contrast floor asserted per palette | needs: T-017 | verify: golden unchanged on wikipedia; a deliberately light test palette yields 0 low-contrast text
 - [ ] T-027 Theme packs + installer: each palette becomes themes/<slug>.json (the single source), tools/apply-themes.js regenerates the THEMES block between markers in ANY wintage.user.js, install-themes.ps1 re-applies the packs onto a freshly upgraded script, release.ps1 runs the generator before its gates | needs: T-017 | verify: run the installer against an unmodified upstream wintage.user.js -> themes present, node --check + check-css PASS; run it twice -> byte-identical file (idempotent)
 - [ ] T-020 Claude Code palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
@@ -14,7 +13,11 @@
 - [ ] T-025 Companion browser themes: tools/apply-themes.js also emits browser-theme/<slug>/manifest.json from the same themes/<slug>.json, so the Cent Browser chrome matches whichever theme is active | needs: T-020,T-021,T-022,T-023,T-024,T-027 | verify: 6 manifests emitted, each loads in the browser and its frame colour equals its palette background
 - [ ] T-026 README theme docs (switching + installing a pack onto a new Wintage version) and release.ps1 gating the generator + check-css over every theme | needs: T-025 | verify: node tools/check-css.js iterates all 6 palettes and PASSes; injecting an off-palette hex into any one of them FAILs
 
+- [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
+- [ ] T-028 release.ps1 bumps `// @version` but not `const W95_VERSION` (:94), so the data-w95-ver diagnostic stamp reports a stale build — derive the constant from the header at load, or bump both | verify: run release.ps1, both values agree; a deliberately mismatched pair FAILs the gate
+
 ## DONE
+- [x] T-018 Theme switching: GM-backed selection (per-user, not per-origin), one menu entry per theme in the top frame only, reload on switch, total fallback chain; @sandbox raw keeps page context so the attachShadow interception survives the grants | verify: tools/test-theme-switch.js 22/22 PASS, gated into release.ps1 -- E-055
 - [x] T-017 Theme registry: THEMES map keyed by slug, T = THEMES[active].tokens, first paint no longer hardcodes golden; check-css.js swapped its frozen palette set for "zero literal hex in a CSS body" plus a per-theme table check | verify: GLOBAL_CSS + SHADOW_CSS byte-identical to HEAD, 18/18 tokens identical, 4 injected fault classes all rejected -- E-047, E-048, E-049
 - [x] T-001 Tame animations: animation-duration/-delay 0.001s, global+shadow, verified safe, shipped v1.2.0
 - [x] T-002 Kill style-recalc thrash: process() reads only, writes batched into one flush per sweep | verify: force tick 250ms -> 19-42ms, 996-element pixel diff vs v1.2.1 = 0

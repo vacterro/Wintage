@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.5.0
+// @version      1.6.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -12,8 +12,21 @@
 // @match        *://*/*
 // @include      about:blank
 // @run-at       document-start
-// @grant        none
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
+// @sandbox      raw
 // ==/UserScript==
+
+// @sandbox raw is load-bearing, not a preference. A plain @grant moves the script
+// into Tampermonkey's isolated world, where Element.prototype is a DIFFERENT object
+// than the page's — and the attachShadow interception below (the only way shadow
+// DOM ever gets themed) would then patch a prototype no site ever calls. It would
+// fail silently: every other feature keeps working, shadow roots just quietly stop
+// being themed. `raw` keeps the script in page context while still injecting the GM
+// API, which is the one combination that supports both. Every GM_* call is
+// typeof-guarded anyway, so a manager that provides neither degrades to the default
+// palette rather than throwing at document-start.
 
 (function () {
   'use strict';
@@ -70,10 +83,23 @@
     }
   };
 
-  // Which theme is live. T-018 replaces this constant with a persisted, menu-driven
-  // selection; until then it is the historical default and the render is unchanged.
+  // Which theme is live. Resolved from GM storage, which is per-USER and not
+  // per-origin — the distinction that rules out localStorage/cookies for this:
+  // either would make the theme reset on every new domain, which for a script
+  // matching *://*/* is every other page load.
+  //
+  // Resolution is deliberately total: an unknown slug (a theme pack removed after
+  // it was selected, a hand-edited value) falls back to the default rather than
+  // throwing, because this runs at document-start and an exception here means the
+  // page paints unthemed white.
   const DEFAULT_THEME = 'golden';
-  const THEME_ID = THEMES[DEFAULT_THEME] ? DEFAULT_THEME : Object.keys(THEMES)[0];
+  const THEME_KEY = 'w95-theme';
+  let requested = DEFAULT_THEME;
+  try {
+    if (typeof GM_getValue === 'function') requested = GM_getValue(THEME_KEY, DEFAULT_THEME);
+  } catch (e) { }
+  const THEME_ID = THEMES[requested] ? requested
+    : (THEMES[DEFAULT_THEME] ? DEFAULT_THEME : Object.keys(THEMES)[0]);
   const T = THEMES[THEME_ID].tokens;
 
   // ─── IMMEDIATE BACKGROUND ────────────────────────────────────────────────────
@@ -83,6 +109,27 @@
   document.documentElement.style.setProperty('color', T.textPrimary, 'important');
   document.documentElement.setAttribute('data-w95-dark', '1');
   document.documentElement.setAttribute('data-w95-theme', THEME_ID);
+
+  // ─── THEME MENU ──────────────────────────────────────────────────────────────
+  // Top frame only. The script runs in every frame (see FRAME ROLE above), so
+  // registering per frame would stack one duplicate menu entry per ad iframe on
+  // the page — the menu is a per-tab UI, not a per-document one.
+  //
+  // A userscript cannot restyle a live page from one palette to another: the CSS
+  // is one injected <style> but the repainter has already written thousands of
+  // inline !important values keyed to the old tokens, and there is no cheap,
+  // correct way to unwind them. Reload is the honest answer, and it is what the
+  // user expects from a theme switch anyway.
+  if (IS_TOP && typeof GM_registerMenuCommand === 'function') {
+    for (const id of Object.keys(THEMES)) {
+      const active = id === THEME_ID;
+      GM_registerMenuCommand((active ? '● ' : '○ ') + THEMES[id].label, function () {
+        if (active) return;
+        try { GM_setValue(THEME_KEY, id); } catch (e) { return; }
+        location.reload();
+      });
+    }
+  }
 
   // Stamped as data-w95-ver on every injected <style>, so a console diagnostic can
   // report which build is actually live. Without it, "is this 1.4.2 or 1.4.3?"

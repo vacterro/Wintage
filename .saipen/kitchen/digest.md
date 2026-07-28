@@ -1,0 +1,3 @@
+done: v1.5.0 shipped — THEMES registry (palette table keyed by slug), first paint no longer hardcodes golden, check-css.js rewritten to be palette-agnostic + validate every theme's token block. Golden render proven byte-identical to v1.4.7.
+remaining: T-018 theme switch (GM menu + persistence), T-019 palette-independent repainter, T-027 theme packs + installer, then the five palettes, browser manifests, docs. T-028 W95_VERSION drifts from @version on every release.
+awaiting: FreeBuff and NomadCode have no palette I can trace — a screenshot or source file for those two beats guessing. Not blocking: everything up to T-022 runs without it.

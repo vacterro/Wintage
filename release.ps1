@@ -37,6 +37,13 @@ if ($LASTEXITCODE -ne 0) { throw "Syntax check failed - release aborted, version
 node (Join-Path $PSScriptRoot 'tools/check-css.js')
 if ($LASTEXITCODE -ne 0) { throw "CSS check failed - release aborted, version line already bumped, fix and rerun" }
 
+# The theme switch is resolved at document-start from GM storage, with fallbacks
+# that only matter when something is wrong (no GM API, a slug whose pack was
+# removed, a failed write). None of those paths is exercised by opening a page in
+# a healthy browser, so they get a real test instead of an assumption.
+node (Join-Path $PSScriptRoot 'tools/test-theme-switch.js')
+if ($LASTEXITCODE -ne 0) { throw "Theme switch test failed - release aborted, version line already bumped, fix and rerun" }
+
 git -C $PSScriptRoot add -A
 git -C $PSScriptRoot commit -m "v${new}: $Message"
 git -C $PSScriptRoot push origin main
