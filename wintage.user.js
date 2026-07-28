@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.9.0
+// @version      1.10.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -85,25 +85,61 @@
     claudecode: {
       label: 'Claude Code',
       tokens: {
-        background: '#1F1E1D', backgroundSoft: '#262624',
-        surface: '#302E2B', surfaceRaised: '#3A3733', surfaceAlt: '#454039',
-        borderDark: '#141413', borderHighlight: '#D97757', borderMuted: '#4F4A43',
-        textPrimary: '#FAF9F5', textSecondary: '#C2C0B6', textMuted: '#8A877D',
-        accentTeal: '#5A7D9A', accentTealDeep: '#34495E',
-        success: '#5A8250', warning: '#B08A3E', danger: '#BF4D3B',
-        selection: '#3A3733', compareBack: '#171716'
+        background: '#13110C', backgroundSoft: '#17150F',
+        surface: '#201D14', surfaceRaised: '#2A281E', surfaceAlt: '#2E2B21',
+        borderDark: '#0A0907', borderHighlight: '#BE8B62', borderMuted: '#3C392E',
+        textPrimary: '#D2A57C', textSecondary: '#AE825A', textMuted: '#785A3A',
+        accentTeal: '#008080', accentTealDeep: '#004C4C',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        selection: '#2A281E', compareBack: '#0B0A08'
       }
     },
     antigravity: {
       label: 'Antigravity',
       tokens: {
-        background: '#131314', backgroundSoft: '#1B1B1F',
-        surface: '#202124', surfaceRaised: '#2A2B2F', surfaceAlt: '#35363A',
-        borderDark: '#0B0B0C', borderHighlight: '#8AB4F8', borderMuted: '#444649',
-        textPrimary: '#E3E3E3', textSecondary: '#BDC1C6', textMuted: '#9AA0A6',
-        accentTeal: '#78D9EC', accentTealDeep: '#00639B',
-        success: '#81C995', warning: '#FDD663', danger: '#F28B82',
-        selection: '#2A2B2F', compareBack: '#0E0E10'
+        background: '#0A0D15', backgroundSoft: '#0D0F19',
+        surface: '#121422', surfaceRaised: '#1B1D2D', surfaceAlt: '#1E2131',
+        borderDark: '#06070B', borderHighlight: '#60BDC0', borderMuted: '#2B2D40',
+        textPrimary: '#7ACFD4', textSecondary: '#58ABB0', textMuted: '#38747A',
+        accentTeal: '#008080', accentTealDeep: '#004C4C',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        selection: '#1B1D2D', compareBack: '#07080C'
+      }
+    },
+    klite: {
+      label: 'K-Lite (MPC-HC)',
+      tokens: {
+        background: '#0E1011', backgroundSoft: '#121314',
+        surface: '#181A1C', surfaceRaised: '#222426', surfaceAlt: '#25272A',
+        borderDark: '#080909', borderHighlight: '#8B8E95', borderMuted: '#323538',
+        textPrimary: '#A3A5AC', textSecondary: '#808288', textMuted: '#56575C',
+        accentTeal: '#008080', accentTealDeep: '#004C4C',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        selection: '#222426', compareBack: '#09090A'
+      }
+    },
+    freebuff: {
+      label: 'FreeBuff',
+      tokens: {
+        background: '#0B0F14', backgroundSoft: '#0E1218',
+        surface: '#131821', surfaceRaised: '#1C212C', surfaceAlt: '#1F2530',
+        borderDark: '#06080B', borderHighlight: '#70C060', borderMuted: '#2C323E',
+        textPrimary: '#87D47A', textSecondary: '#64B058', textMuted: '#3F7A38',
+        accentTeal: '#008080', accentTealDeep: '#004C4C',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        selection: '#1C212C', compareBack: '#07090C'
+      }
+    },
+    nomadcode: {
+      label: 'NomadCode',
+      tokens: {
+        background: '#0B0F14', backgroundSoft: '#0F1217',
+        surface: '#141920', surfaceRaised: '#1D222B', surfaceAlt: '#20262F',
+        borderDark: '#06090B', borderHighlight: '#8C73C1', borderMuted: '#2D333D',
+        textPrimary: '#9A7FD0', textSecondary: '#8B74B8', textMuted: '#523B77',
+        accentTeal: '#008080', accentTealDeep: '#004C4C',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        selection: '#1D222B', compareBack: '#07090C'
       }
     }
   };

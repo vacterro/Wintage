@@ -55,6 +55,12 @@ if ($LASTEXITCODE -ne 0) { throw "Repainter polarity test failed - release abort
 # release must never ship a script whose block drifted from the packs. --check
 # only reports; regenerating is a deliberate act, not something a release does
 # behind the author's back.
+# Palettes are DERIVED from golden (UI.md's structure rotated to another hue), so
+# a hand-edited pack would silently break the structural guarantee. --check reports;
+# regenerating stays a deliberate act.
+node (Join-Path $PSScriptRoot 'tools/derive-palette.js') --check
+if ($LASTEXITCODE -ne 0) { throw "A derived palette is out of date - run 'node tools/derive-palette.js', review the diff, then rerun" }
+
 node (Join-Path $PSScriptRoot 'tools/apply-themes.js') --check
 if ($LASTEXITCODE -ne 0) { throw "Theme block is out of date with themes/*.json - run 'node tools/apply-themes.js', review the diff, then rerun" }
 

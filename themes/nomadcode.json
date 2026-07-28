@@ -1,0 +1,26 @@
+{
+  "slug": "nomadcode",
+  "label": "NomadCode",
+  "order": 6,
+  "source": "AppData/@neuralnomads/codenomad-electron-app cache: #0E1116 ground, #24292E/#2F363D surfaces, indigo #624AFF / #615CED accent, #E1E4E8 text",
+  "tokens": {
+    "background": "#0B0F14",
+    "backgroundSoft": "#0F1217",
+    "surface": "#141920",
+    "surfaceRaised": "#1D222B",
+    "surfaceAlt": "#20262F",
+    "borderDark": "#06090B",
+    "borderHighlight": "#8C73C1",
+    "borderMuted": "#2D333D",
+    "textPrimary": "#9A7FD0",
+    "textSecondary": "#8B74B8",
+    "textMuted": "#523B77",
+    "accentTeal": "#008080",
+    "accentTealDeep": "#004C4C",
+    "success": "#4A7A20",
+    "warning": "#7A7A20",
+    "danger": "#7A2020",
+    "selection": "#1D222B",
+    "compareBack": "#07090C"
+  }
+}

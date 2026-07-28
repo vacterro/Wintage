@@ -1,0 +1,26 @@
+{
+  "slug": "klite",
+  "label": "K-Lite (MPC-HC)",
+  "order": 4,
+  "source": "HKCU\\Software\\MPC-HC\\MPC-HC\\Settings MPCTheme=1 (dark UI active); MPC-HC dark chrome is deliberately neutral, so this is graphite with a silver highlight rather than a hue",
+  "tokens": {
+    "background": "#0E1011",
+    "backgroundSoft": "#121314",
+    "surface": "#181A1C",
+    "surfaceRaised": "#222426",
+    "surfaceAlt": "#25272A",
+    "borderDark": "#080909",
+    "borderHighlight": "#8B8E95",
+    "borderMuted": "#323538",
+    "textPrimary": "#A3A5AC",
+    "textSecondary": "#808288",
+    "textMuted": "#56575C",
+    "accentTeal": "#008080",
+    "accentTealDeep": "#004C4C",
+    "success": "#4A7A20",
+    "warning": "#7A7A20",
+    "danger": "#7A2020",
+    "selection": "#222426",
+    "compareBack": "#09090A"
+  }
+}
