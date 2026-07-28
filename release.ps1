@@ -51,6 +51,16 @@ if ($LASTEXITCODE -ne 0) { throw "Theme switch test failed - release aborted, ve
 node (Join-Path $PSScriptRoot 'tools/test-repainter-polarity.js')
 if ($LASTEXITCODE -ne 0) { throw "Repainter polarity test failed - release aborted, version line already bumped, fix and rerun" }
 
+# The palettes live in themes/*.json and are generated INTO the script, so a
+# release must never ship a script whose block drifted from the packs. --check
+# only reports; regenerating is a deliberate act, not something a release does
+# behind the author's back.
+node (Join-Path $PSScriptRoot 'tools/apply-themes.js') --check
+if ($LASTEXITCODE -ne 0) { throw "Theme block is out of date with themes/*.json - run 'node tools/apply-themes.js', review the diff, then rerun" }
+
+node (Join-Path $PSScriptRoot 'tools/test-theme-packs.js')
+if ($LASTEXITCODE -ne 0) { throw "Theme pack test failed - release aborted, version line already bumped, fix and rerun" }
+
 git -C $PSScriptRoot add -A
 git -C $PSScriptRoot commit -m "v${new}: $Message"
 git -C $PSScriptRoot push origin main
