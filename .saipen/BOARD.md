@@ -3,7 +3,6 @@
 ## DOING
 
 ## TODO
-- [ ] T-019 Palette-independent repainter: dark-floor 0.004, neutral spread<=60, darkBg 0.008 and the palette-token early return all derived from the active theme instead of the golden constants; AA contrast floor asserted per palette | needs: T-017 | verify: golden unchanged on wikipedia; a deliberately light test palette yields 0 low-contrast text
 - [ ] T-027 Theme packs + installer: each palette becomes themes/<slug>.json (the single source), tools/apply-themes.js regenerates the THEMES block between markers in ANY wintage.user.js, install-themes.ps1 re-applies the packs onto a freshly upgraded script, release.ps1 runs the generator before its gates | needs: T-017 | verify: run the installer against an unmodified upstream wintage.user.js -> themes present, node --check + check-css PASS; run it twice -> byte-identical file (idempotent)
 - [ ] T-020 Claude Code palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
 - [ ] T-021 Antigravity palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
@@ -17,6 +16,7 @@
 - [ ] T-028 release.ps1 bumps `// @version` but not `const W95_VERSION` (:94), so the data-w95-ver diagnostic stamp reports a stale build — derive the constant from the header at load, or bump both | verify: run release.ps1, both values agree; a deliberately mismatched pair FAILs the gate
 
 ## DONE
+- [x] T-019 Palette-independent repainter: elev() normalises incoming luminance into the active theme's polarity (identity on a dark theme, so golden is provably untouched), text contrast measured against the theme's own backdrop, color-scheme + data-w95-dark follow the theme, per-theme WCAG AA floor in check-css.js | verify: tools/test-repainter-polarity.js 21/21 PASS, AA gate rejects a forced 2.70:1 textPrimary -- E-062
 - [x] T-018 Theme switching: GM-backed selection (per-user, not per-origin), one menu entry per theme in the top frame only, reload on switch, total fallback chain; @sandbox raw keeps page context so the attachShadow interception survives the grants | verify: tools/test-theme-switch.js 22/22 PASS, gated into release.ps1 -- E-055
 - [x] T-017 Theme registry: THEMES map keyed by slug, T = THEMES[active].tokens, first paint no longer hardcodes golden; check-css.js swapped its frozen palette set for "zero literal hex in a CSS body" plus a per-theme table check | verify: GLOBAL_CSS + SHADOW_CSS byte-identical to HEAD, 18/18 tokens identical, 4 injected fault classes all rejected -- E-047, E-048, E-049
 - [x] T-001 Tame animations: animation-duration/-delay 0.001s, global+shadow, verified safe, shipped v1.2.0

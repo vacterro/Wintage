@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.6.0
+// @version      1.7.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -102,12 +102,38 @@
     : (THEMES[DEFAULT_THEME] ? DEFAULT_THEME : Object.keys(THEMES)[0]);
   const T = THEMES[THEME_ID].tokens;
 
+  function lum({ r, g, b }) {
+    const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  }
+  function hexLum(hex) {
+    return lum({ r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) });
+  }
+  function contrast(a, b) { return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
+
+  // ─── THEME POLARITY ──────────────────────────────────────────────────────────
+  // Every luminance threshold in the repainter was written against the golden
+  // palette and silently assumes "our theme is dark, so BRIGHT means the site is
+  // shouting". On a light palette every one of those tests inverts: there, a dark
+  // site surface is the flashbang and a bright one is already close to home.
+  // Rather than duplicate the whole decision tree per polarity, the incoming
+  // luminance is normalised once — `elev(L)` answers "how far is this colour from
+  // MY background, in the direction that reads as raised on MY theme" — and the
+  // existing numbers keep their meaning against that.
+  //
+  // For the golden palette DARK is true and elev() is the identity function, so
+  // this is provably a no-op there: same numbers, same comparisons, same result.
+  const BG_LUM = hexLum(T.background);
+  const BG_SOFT_LUM = hexLum(T.backgroundSoft);
+  const DARK = BG_LUM < 0.18;
+  const elev = L => (DARK ? L : 1 - L);
+
   // ─── IMMEDIATE BACKGROUND ────────────────────────────────────────────────────
   // Must stay the first thing that touches the document so nothing white ever
   // paints, and it now paints the ACTIVE theme rather than a hardcoded golden.
   document.documentElement.style.setProperty('background-color', T.background, 'important');
   document.documentElement.style.setProperty('color', T.textPrimary, 'important');
-  document.documentElement.setAttribute('data-w95-dark', '1');
+  document.documentElement.setAttribute('data-w95-dark', DARK ? '1' : '0');
   document.documentElement.setAttribute('data-w95-theme', THEME_ID);
 
   // ─── THEME MENU ──────────────────────────────────────────────────────────────
@@ -160,7 +186,7 @@
   // ═══════════════════════════════════════════════════════════════════════════════
   const GLOBAL_CSS = `
 :root {
-  color-scheme: dark !important;
+  color-scheme: ${DARK ? 'dark' : 'light'} !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: ${T.background}; --backgroundSoft: ${T.backgroundSoft};
   --surface: ${T.surface}; --surfaceRaised: ${T.surfaceRaised}; --surfaceAlt: ${T.surfaceAlt};
@@ -725,10 +751,6 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (!m) return null;
     return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? parseFloat(m[4]) : 1 };
   }
-  function lum({ r, g, b }) {
-    const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
-    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  }
   // Write-if-changed: re-verify passes revisit every element, so identical
   // rewrites must not invalidate styles or churn the style attribute.
   function setImp(el, prop, val) {
@@ -1164,12 +1186,14 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (bgColor && bgColor !== 'transparent' && !PALETTE_RGB.has(bgColor)) {
       const bg = parseRGB(bgColor);
       if (bg && bg.a > 0.08) {
-        const L = lum(bg);
+        const L = elev(lum(bg));
         const spread = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b);
         const grayish = spread <= 24;
         let repaint = null;
         if (L > 0.45) {
-          // Light flashbang surface: low-alpha white tints go fully transparent
+          // Flashbang surface — the far end of our own polarity, so on the golden
+          // palette this is literally the old "light surface" branch and on a light
+          // palette it is the site's dark chrome. Low-alpha tints go fully transparent
           // (the "gray rectangle blocks"), neutral solids go dark brown, and
           // saturated light tints (GitHub diff green/red, warning yellows,
           // highlight rows) snap to the semantic token they meant.
@@ -1209,9 +1233,15 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     if (fgColor && !PALETTE_RGB.has(fgColor)) {
       const fg = parseRGB(fgColor);
       if (fg && fg.a > 0.1) {
-        const fgLum = lum(fg);
-        const darkBg = 0.008; // luminance of #1E1408 backdrop
-        const contrast = (Math.max(fgLum, darkBg) + 0.05) / (Math.min(fgLum, darkBg) + 0.05);
+        // Contrast is measured against the ACTUAL backdrop this theme paints, not
+        // against a constant. It used to read `const darkBg = 0.008` with the
+        // comment "luminance of #1E1408" — correct, and correct only for golden:
+        // on a light palette that constant claims every dark text colour is
+        // perfectly readable, so the whole 4.5:1 branch below stops firing exactly
+        // where it is needed most.
+        const rawFgLum = lum(fg);
+        const fgLum = elev(rawFgLum);
+        const cr = contrast(rawFgLum, BG_SOFT_LUM);
         const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
 
         if (el.closest && el.closest('a')) {
@@ -1221,11 +1251,11 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
           // #f08804 and span.navFooterDescText kept #999999, because both are
           // legible enough (7.1:1 and 6.3:1) that the first two tests passed them
           // through. Legible is not the same as on-palette.
-          if (contrast < 4.5 || (fgLum > 0.4 && grayish) || !PALETTE_RGB.has(fgColor)) {
+          if (cr < 4.5 || (fgLum > 0.4 && grayish) || !PALETTE_RGB.has(fgColor)) {
             w.push(el, 'color', T.borderHighlight);
           }
         } else {
-          if (contrast < 4.5) {
+          if (cr < 4.5) {
             w.push(el, 'color', T.textPrimary);
           } else if (grayish) {
             if (fgLum > 0.4) w.push(el, 'color', T.textPrimary);
@@ -1261,7 +1291,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const bc = parseRGB(cs['border' + s + 'Color']);
         if (!bc || bc.a <= 0.1) continue;
         const grayish = Math.max(bc.r, bc.g, bc.b) - Math.min(bc.r, bc.g, bc.b) <= 60;
-        if (grayish && lum(bc) > 0.18) {
+        if (grayish && elev(lum(bc)) > 0.18) {
           w.push(el, 'border-' + s.toLowerCase() + '-color', T.surfaceRaised);
         }
       }

@@ -44,6 +44,13 @@ if ($LASTEXITCODE -ne 0) { throw "CSS check failed - release aborted, version li
 node (Join-Path $PSScriptRoot 'tools/test-theme-switch.js')
 if ($LASTEXITCODE -ne 0) { throw "Theme switch test failed - release aborted, version line already bumped, fix and rerun" }
 
+# Every luminance threshold in the repainter was written against one dark palette.
+# This pins that the polarity layer is a no-op on golden and actually inverts on a
+# light one -- a "generalisation" that silently re-grades the shipped theme is a
+# regression wearing a feature's clothes.
+node (Join-Path $PSScriptRoot 'tools/test-repainter-polarity.js')
+if ($LASTEXITCODE -ne 0) { throw "Repainter polarity test failed - release aborted, version line already bumped, fix and rerun" }
+
 git -C $PSScriptRoot add -A
 git -C $PSScriptRoot commit -m "v${new}: $Message"
 git -C $PSScriptRoot push origin main

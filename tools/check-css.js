@@ -144,6 +144,31 @@ function checkThemes() {
     const stray = [...body.matchAll(/(\w+)\s*:\s*'([^']*)'/g)]
       .filter(m => !REQUIRED_TOKENS.includes(m[1]));
     for (const m of stray) fail('theme ' + slug + ': unknown token ' + m[1]);
+
+    // WCAG AA on the three tokens that actually carry text, measured against the
+    // backdrop this theme paints. A new palette is the easiest place in this
+    // project to ship something unreadable: it looks fine in a swatch, and the
+    // failure only shows up as squinting on a real page. Golden measures 9.44 /
+    // 6.29 / 7.28, so the floor costs it nothing.
+    //
+    // textMuted (3.34 on golden) and accentTeal (3.80) are deliberately NOT gated:
+    // both are non-text roles — placeholder/disabled and an accent surface — and
+    // the file already documents why accentTeal must never be used as link text.
+    const tok = {};
+    for (const m of body.matchAll(/(\w+)\s*:\s*'(#[0-9A-Fa-f]{6})'/g)) tok[m[1]] = m[2];
+    const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+    const L = h => 0.2126 * lin(parseInt(h.slice(1, 3), 16)) + 0.7152 * lin(parseInt(h.slice(3, 5), 16)) + 0.0722 * lin(parseInt(h.slice(5, 7), 16));
+    if (tok.backgroundSoft) {
+      for (const role of ['textPrimary', 'textSecondary', 'borderHighlight']) {
+        if (!tok[role]) continue;
+        const a = L(tok[role]), b = L(tok.backgroundSoft);
+        const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        if (ratio < 4.5) {
+          fail('theme ' + slug + ': ' + role + ' ' + tok[role] + ' on backgroundSoft ' +
+            tok.backgroundSoft + ' measures ' + ratio.toFixed(2) + ':1, under the WCAG AA 4.5:1 floor');
+        }
+      }
+    }
     if (!failures) console.log('theme ' + slug + ': PASS (' + REQUIRED_TOKENS.length + ' tokens)');
   }
 }
