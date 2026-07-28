@@ -1,16 +1,34 @@
 ---
-phase: DONE
-task: none
-next_action: "none — T-015/T-016 shipped + verified as v1.4.3 (origin/main 6390403). Next saipen run: HUNT."
+phase: SHIP
+task: T-017
+next_action: "PHASE SHIP T-017 [wave 1: 11 tickets, 1 done]"
 blocker: none
 agent: claude-opus-5
 mode: full
 saipen_version: 7
+schema_version: 1
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
-updated: 2026-07-27T04:45:00Z
+goal_mode: true
+goal_waves: 1
+goal_tickets: 1
+transition_from: REVIEW
+last_event: 50
+updated: 2026-07-28T07:06:00Z
 ---
 
-# Wintage — UI.md conformance wave (saipen)
+# Wintage — five extra themes (goal wave 1)
+
+Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, NomadCode —
+five palettes alongside the existing Dark Golden, switchable at runtime.
+
+T-017..T-026 on BOARD. Infrastructure first (registry, switch, palette-independent
+repainter), then one ticket per palette, then companion browser themes and docs.
+
+Open question, not blocking T-017/T-018/T-019: FreeBuff and NomadCode have no
+public palette I can trace. Golden, Claude Code, Antigravity and K-Lite/MPC-HC do.
+If the user has a screenshot or a source file for those two, it beats guessing.
+
+## Previous wave — UI.md conformance (v1.4.0 .. v1.4.7)
 
 T-006..T-012 BUILT + VERIFIED as v1.4.0. Reasoning + deviations in
 KNOWLEDGE/ADR-003.md; perf history in ADR-002.md; animation history in ADR-001.md.

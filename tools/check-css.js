@@ -46,17 +46,26 @@ for (const name of ['GLOBAL_CSS', 'SHADOW_CSS']) {
   if (depth) fail(name + ': ' + depth + ' unclosed `/*`');
   if (nested) fail(name + ': ' + nested + ' nested `/*` (CSS comments do not nest)');
 
-  // Every hex colour must trace to the UI.md palette (iron law 5). `#name` ID
-  // selectors are excluded by requiring a full 3- or 6-digit hex not followed by
-  // an identifier character.
-  const PALETTE = new Set(['#1a0f05', '#1e1408', '#2a1c0a', '#362812', '#3a2a15',
-    '#0e0803', '#c0a060', '#4a3820', '#d4b87a', '#b09558', '#7a6838',
-    '#008080', '#004c4c', '#4a7a20', '#7a7a20', '#7a2020', '#0f0a04']);
-  // Strip comments first: they legitimately mention retired colours by name.
+  // Every hex colour must trace to the active theme's palette (UI.md iron law 5).
+  // Before 1.5.0 that was checked as membership in one frozen 18-colour set, which
+  // stops working the moment a second palette exists: the same literal is on-palette
+  // for one theme and off-palette for another, and the set has no way to know which
+  // theme is live at that point in the file.
+  //
+  // The stronger rule, and the one that actually scales: this script reads the file
+  // as TEXT, so a `${T.background}` interpolation is not a hex to it. Any hex that
+  // DOES appear inside a CSS body is therefore hardcoded by definition — pinned to
+  // one palette and immune to a theme switch. Zero of them is the correct count, and
+  // that check needs no palette table at all. Palette validity itself moved to
+  // checkThemes() below, which is per-theme and cannot be outgrown.
+  //
+  // `#name` ID selectors are excluded by requiring a full 3- or 6-digit hex not
+  // followed by an identifier character. Comments are stripped first: they
+  // legitimately quote retired colours and measured values by name.
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const hexes = bare.match(/#[0-9A-Fa-f]{6}\b|#[0-9A-Fa-f]{3}\b(?![0-9A-Za-z_-])/g) || [];
   for (const h of new Set(hexes)) {
-    if (!PALETTE.has(h.toLowerCase())) fail(name + ': off-palette colour ' + h);
+    fail(name + ': hardcoded colour ' + h + ' — use a ${T.token} interpolation, a literal cannot follow the theme');
   }
 
   // Braces must balance, or a dropped rule silently swallows the next ones.
@@ -65,6 +74,81 @@ for (const name of ['GLOBAL_CSS', 'SHADOW_CSS']) {
 
   if (!failures) console.log(name + ': PASS (' + css.split('\n').length + ' lines)');
 }
+
+// ─── THEME TABLE ────────────────────────────────────────────────────────────
+// Each theme must carry the complete token set with well-formed hex values.
+// A missing token is not a cosmetic gap: PALETTE_RGB, semanticToken() and the
+// repainter all index the table by key, so `undefined` lands inside a CSS
+// declaration and the browser drops the whole line without a word — the same
+// silent-discard failure class this file was written to catch.
+const REQUIRED_TOKENS = [
+  'background', 'backgroundSoft',
+  'surface', 'surfaceRaised', 'surfaceAlt',
+  'borderDark', 'borderHighlight', 'borderMuted',
+  'textPrimary', 'textSecondary', 'textMuted',
+  'accentTeal', 'accentTealDeep',
+  'success', 'warning', 'danger',
+  'selection', 'compareBack'
+];
+
+function checkThemes() {
+  const i = src.indexOf('const THEMES = {');
+  if (i < 0) { fail('THEMES table not found'); return; }
+  // Walk braces to find the table's own closing brace, so trailing code is not
+  // swallowed and a truncated table is reported instead of silently half-read.
+  let depth = 0, end = -1;
+  for (let k = src.indexOf('{', i); k < src.length; k++) {
+    if (src[k] === '{') depth++;
+    else if (src[k] === '}') { depth--; if (depth === 0) { end = k; break; } }
+  }
+  if (end < 0) { fail('THEMES table has no closing brace'); return; }
+  const table = src.slice(i, end + 1);
+
+  // Top-level entries, found by brace depth rather than by matching the shape a
+  // correct theme happens to have. A pattern like /(\w+):\s*\{\s*\n\s*label:/ reads
+  // fine and is quietly the wrong tool: a theme that forgets `label` simply does not
+  // match, so it is not listed, so none of the token checks below ever run on it —
+  // the gate would report PASS on precisely the malformed entry it exists to catch.
+  // A validator must never decide what to validate by looking for well-formedness.
+  const entries = [];
+  {
+    let d = 0, k = table.indexOf('{'), slug = null;
+    for (k++; k < table.length - 1; k++) {
+      const ch = table[k];
+      if (ch === '{') { if (d === 0 && slug) { entries.push([slug, k]); slug = null; } d++; continue; }
+      if (ch === '}') { d--; continue; }
+      if (d === 0) {
+        const m = /^(\w+)\s*:/.exec(table.slice(k));
+        if (m) { slug = m[1]; k += m[0].length - 1; }
+      }
+    }
+  }
+  if (!entries.length) { fail('THEMES table declares no themes'); return; }
+
+  for (const [slug, open] of entries) {
+    let d = 0, close = -1;
+    for (let k = open; k < table.length; k++) {
+      if (table[k] === '{') d++;
+      else if (table[k] === '}') { d--; if (d === 0) { close = k; break; } }
+    }
+    const entry = table.slice(open, close < 0 ? table.length : close);
+    if (!/\blabel\s*:\s*'[^']+'/.test(entry)) fail('theme ' + slug + ': missing label');
+    const tokAt = entry.indexOf('tokens: {');
+    if (tokAt < 0) { fail('theme ' + slug + ': no tokens block'); continue; }
+    const tokEnd = entry.indexOf('}', tokAt);
+    const body = entry.slice(tokAt, tokEnd);
+    for (const tok of REQUIRED_TOKENS) {
+      const m = new RegExp('\\b' + tok + '\\s*:\\s*\'(#[0-9A-Fa-f]{6})\'').exec(body);
+      if (!m) fail('theme ' + slug + ': missing or malformed token ' + tok);
+    }
+    const stray = [...body.matchAll(/(\w+)\s*:\s*'([^']*)'/g)]
+      .filter(m => !REQUIRED_TOKENS.includes(m[1]));
+    for (const m of stray) fail('theme ' + slug + ': unknown token ' + m[1]);
+    if (!failures) console.log('theme ' + slug + ': PASS (' + REQUIRED_TOKENS.length + ' tokens)');
+  }
+}
+
+checkThemes();
 
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('CSS check PASS');

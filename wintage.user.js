@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.4.4
+// @version      1.5.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -38,26 +38,51 @@
   let IS_TOP = true;
   try { IS_TOP = window.top === window.self; } catch (e) { IS_TOP = false; }
 
-  // ─── IMMEDIATE DARK GOLDEN BACKGROUND ────────────────────────────────────────
-  // Literal hex here, not T.* — this runs before the token table is declared, and
-  // it must stay the very first thing that happens so nothing white ever paints.
-  document.documentElement.style.setProperty('background-color', '#1A0F05', 'important');
-  document.documentElement.style.setProperty('color', '#D4B87A', 'important');
-  document.documentElement.setAttribute('data-w95-dark', '1');
-
   // ─── UI.md TOKENS — THE COMPLETE PALETTE, NOTHING OUTSIDE IT ────────────────
   // UI.md iron law 5: "Every visible color must trace back to the palette."
   // These are the only colours this file is allowed to emit. If a value below
-  // does not appear in UI.md's token block, it is a bug.
-  const T = {
-    background: '#1A0F05', backgroundSoft: '#1E1408',
-    surface: '#2A1C0A', surfaceRaised: '#362812', surfaceAlt: '#3A2A15',
-    borderDark: '#0E0803', borderHighlight: '#C0A060', borderMuted: '#4A3820',
-    textPrimary: '#D4B87A', textSecondary: '#B09558', textMuted: '#7A6838',
-    accentTeal: '#008080', accentTealDeep: '#004C4C',
-    success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-    selection: '#362812', compareBack: '#0F0A04'
+  // does not appear in a theme's token block, it is a bug.
+  //
+  // Every theme MUST carry all 18 token names. That is not stylistic tidiness:
+  // PALETTE_RGB, semanticToken() and the repainter all read the table by key, so
+  // a missing token surfaces as `undefined` inside a CSS declaration, which the
+  // browser drops silently — the same class of invisible failure that made
+  // tools/check-css.js necessary in the first place. check-css.js enforces the
+  // full set per theme.
+  //
+  // Declared ABOVE the first paint, not below it. The pre-1.5.0 file painted a
+  // literal '#1A0F05' here because the token table came later in the file; with
+  // more than one palette that literal would be a second, silently diverging
+  // source of truth — the very first thing the user sees would keep painting
+  // golden no matter which theme was selected.
+  const THEMES = {
+    golden: {
+      label: 'Dark Golden (Win95)',
+      tokens: {
+        background: '#1A0F05', backgroundSoft: '#1E1408',
+        surface: '#2A1C0A', surfaceRaised: '#362812', surfaceAlt: '#3A2A15',
+        borderDark: '#0E0803', borderHighlight: '#C0A060', borderMuted: '#4A3820',
+        textPrimary: '#D4B87A', textSecondary: '#B09558', textMuted: '#7A6838',
+        accentTeal: '#008080', accentTealDeep: '#004C4C',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        selection: '#362812', compareBack: '#0F0A04'
+      }
+    }
   };
+
+  // Which theme is live. T-018 replaces this constant with a persisted, menu-driven
+  // selection; until then it is the historical default and the render is unchanged.
+  const DEFAULT_THEME = 'golden';
+  const THEME_ID = THEMES[DEFAULT_THEME] ? DEFAULT_THEME : Object.keys(THEMES)[0];
+  const T = THEMES[THEME_ID].tokens;
+
+  // ─── IMMEDIATE BACKGROUND ────────────────────────────────────────────────────
+  // Must stay the first thing that touches the document so nothing white ever
+  // paints, and it now paints the ACTIVE theme rather than a hardcoded golden.
+  document.documentElement.style.setProperty('background-color', T.background, 'important');
+  document.documentElement.style.setProperty('color', T.textPrimary, 'important');
+  document.documentElement.setAttribute('data-w95-dark', '1');
+  document.documentElement.setAttribute('data-w95-theme', THEME_ID);
 
   // Stamped as data-w95-ver on every injected <style>, so a console diagnostic can
   // report which build is actually live. Without it, "is this 1.4.2 or 1.4.3?"
@@ -66,7 +91,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.4.4';
+  const W95_VERSION = '1.4.7';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -828,6 +853,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         attributes: true,
         attributeFilter: ['class', 'bgcolor', 'background', 'style']
       });
+      stylesDirty = true;
     } catch (e) { }
   }
 
@@ -984,7 +1010,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     // corner or a drop shadow is just as wrong on a <button> or an <img> as
     // anywhere else, and buttons are skipped by shouldSkip via closest('button').
     if (cs.borderTopLeftRadius !== '0px' || cs.borderTopRightRadius !== '0px' ||
-        cs.borderBottomLeftRadius !== '0px' || cs.borderBottomRightRadius !== '0px') {
+      cs.borderBottomLeftRadius !== '0px' || cs.borderBottomRightRadius !== '0px') {
       w.push(el, 'border-radius', '0');
     }
     if (cs.boxShadow && cs.boxShadow !== 'none') {
@@ -1217,6 +1243,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   let debounceTimer = null;
   let pendingMuts = [];
   const attrCooldown = new WeakMap(); // element -> last attribute-triggered process time
+
   function onMutations(mutations) {
     for (let i = 0; i < mutations.length; i++) pendingMuts.push(mutations[i]);
     if (debounceTimer) return;
@@ -1226,6 +1253,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       pendingMuts = [];
       const w = [];
       const added = [];
+      let styleishAdded = false;
       for (const m of batch) {
         // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
         // CSS-in-JS) — re-process them or they keep stale baked-in colors.
@@ -1248,12 +1276,33 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
               t.removeAttribute('data-w95-done');
               process(t, false, w);
             }
+            const tag = (t.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (t.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            }
           }
           continue;
+        }
+        if (m.type === 'childList') {
+          const target = m.target;
+          if (target && target.nodeType === 1) {
+            const tag = (target.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (target.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            }
+          }
         }
         for (const node of m.addedNodes) {
           if (node.nodeType !== 1) continue;
           added.push(node);
+          if (!styleishAdded) {
+            const tag = (node.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
+              styleishAdded = true;
+            }
+          }
         }
       }
 
@@ -1282,16 +1331,17 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
             process(kids[i], false, w);
           }
         }
-        // New DOM arrived, so late CSS may still be settling on it: this is the
-        // one signal that earns a force re-verify. Attribute churn deliberately
-        // does NOT request one — an animating spinner toggling classes must not
-        // keep the expensive pass alive forever (that was half the idle burn).
-        requestForceSweep();
+        // Only stylesheet-bearing additions need a force re-verify. Plain DOM
+        // churn is already processed inline above and does not justify another
+        // full sweep.
+        if (styleishAdded) {
+          stylesDirty = true;
+          requestForceSweep();
+        }
       }
       flushWrites(w);
     }, 60);
   }
-
   const mainObserver = new MutationObserver(onMutations);
   const shadowObserver = new MutationObserver(onMutations);
 
@@ -1313,9 +1363,8 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   let forceCursor = 0;
 
   let forcePassesOwed = 0;
-  let sweepCount = 0;
-  let sweepDelay = 1500;
   let sweepTimer = null;
+  let stylesDirty = true;
 
   // 🚨 THE SWEEP RATE IS FLOOR-LIMITED. NOTHING MAY SCHEDULE A SWEEP AT 0ms 🚨
   // Measured on a real chatgpt.com conversation (3392 elements, 15s, primitives
@@ -1360,19 +1409,17 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     sweepPlannedAt = fireAt;
     sweepTimer = setTimeout(() => {
       sweepTimer = null;
+      sweepPlannedAt = 0;
       if (document.hidden) return;
 
-      sweepCount++;
-      const force = forcePassesOwed > 0 && sweepCount % 3 === 0;
+      const force = forcePassesOwed > 0;
       if (force) forcePassesOwed--;
 
       runSweeper(force);
       lastSweepEnd = Date.now();
 
-      // Real activity keeps the cadence in the fast lane. When the page is
-      // genuinely idle, the interval ramps down to one pass per minute.
-      sweepDelay = forcePassesOwed > 0 ? 1500 : Math.min(sweepDelay * 2, 60000);
-      scheduleSweep(sweepDelay);
+      // No automatic reschedule here. Fresh work comes from mutations,
+      // stylesheet loads, visibility changes, or the explicit load-time passes.
     }, d);
   }
 
@@ -1381,13 +1428,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
   // spotting a changed sheet), so an immediate schedule here is a direct
   // sweep-calls-sweep loop.
   function requestForceSweep() {
-    let n = 1;
-    try { n = Math.ceil((document.getElementsByTagName('*').length || 1) / FORCE_BUDGET); } catch (e) { }
-    // Cap the debt: a 60k-element page must not queue 24 heavy passes back to
-    // back if mutations keep arriving before the lap finishes.
-    if (n > 8) n = 8;
-    if (n > forcePassesOwed) forcePassesOwed = n;
-    sweepDelay = 1500;
+    if (forcePassesOwed < 8) forcePassesOwed++;
     scheduleSweep(1500);
   }
 
@@ -1395,8 +1436,15 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     // Prune shadow roots whose hosts left the DOM (SPA navigations) — keeping
     // them leaks memory and bloats every sweep on long sessions.
     piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) piercedRoots.delete(root); } catch (e) { } });
-    if (stripHoverSheets(document)) requestForceSweep();
-    piercedRoots.forEach(root => { try { if (stripHoverSheets(root)) requestForceSweep(); } catch (e) { } });
+    // Hover-rule scanning is the expensive part. Only do it when we have a
+    // concrete stylesheet signal, or when the caller explicitly asked for a
+    // full re-verify.
+    const scanStyles = force || stylesDirty;
+    if (scanStyles) {
+      stylesDirty = false;
+      stripHoverSheets(document);
+      piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
+    }
     const searchRoots = [document, ...piercedRoots];
     // ONE write queue for the whole sweep across every root: the flush at the
     // end is what collapses thousands of style invalidations into a single
@@ -1430,21 +1478,19 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     // "have to reload a couple of times before it comes up" symptom. The
     // read/write split above is what actually shrinks it; deferring the second
     // pass past load keeps it out of the critical window as well.
-    requestForceSweep();
     runSweeper(true);
-    setTimeout(() => { requestForceSweep(); runSweeper(true); }, 1000);
+    setTimeout(() => { stylesDirty = true; runSweeper(true); }, 1000);
 
     if (!IS_TOP) {
       // Sub-frame: bounded settling passes, then nothing. The MutationObserver
       // stays live, so a late-loading embed still gets themed — that path is
       // event-driven and costs zero while idle.
-      setTimeout(() => { requestForceSweep(); runSweeper(true); }, 3000);
+      setTimeout(() => { stylesDirty = true; runSweeper(true); }, 3000);
       return;
     }
 
-    // Top frame: event-driven sweeps with a sparse adaptive fallback instead of
-    // a permanent 1.5s interval plus an extra 30s heartbeat.
-    scheduleSweep(sweepDelay);
+    // Top frame: event-driven sweeps only. Idle means idle; fresh work
+    // re-arms the scheduler through mutations, stylesheet loads, or focus/visibility changes.
 
     // Pages that finished loading while the tab was hidden got no sweeps; on
     // return, re-verify immediately so the user never sees stale white. This is
@@ -1455,7 +1501,6 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       if (!document.hidden) {
         runSweeper(true);
         lastSweepEnd = Date.now();
-        requestForceSweep();
       } else if (sweepTimer) {
         clearTimeout(sweepTimer);
         sweepTimer = null;
@@ -1469,7 +1514,10 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       if (!t || t.nodeType !== 1) return;
       if ((t.tagName || '').toUpperCase() !== 'LINK') return;
       const rel = (t.rel || '').toLowerCase();
-      if (rel.includes('stylesheet')) requestForceSweep();
+      if (rel.includes('stylesheet')) {
+        stylesDirty = true;
+        requestForceSweep();
+      }
     }, true);
   }
 
