@@ -75,9 +75,14 @@ check('data-w95-theme stamped', r.attrs['data-w95-theme'], 'testpal');
 
 // 4. menu: one entry per theme, top frame only, active one marked
 r = run({ gm: true, stored: 'golden', isTop: true });
-check('menu entry per theme', r.menu.length, 2);
+// Counted from the table the script actually declares, not hardcoded — a test that
+// has to be edited every time a theme pack is added stops being run.
+const themeCount = Object.keys(r.out.THEMES).length;
+check('menu entry per theme', r.menu.length, themeCount);
 check('active entry marked', r.menu[0][0], '● Dark Golden (Win95)');
-check('inactive entry marked', r.menu[1][0], '○ Test Palette');
+check('every inactive entry marked', r.menu.slice(1).every(m => m[0].startsWith('○ ')), true);
+const testEntry = r.menu.findIndex(m => m[0] === '○ Test Palette');
+check('injected test palette present in the menu', testEntry > 0, true);
 const sub = run({ gm: true, stored: 'golden', isTop: false });
 check('sub-frame registers nothing', sub.menu.length, 0);
 
@@ -85,7 +90,7 @@ check('sub-frame registers nothing', sub.menu.length, 0);
 r.menu[0][1]();
 check('clicking the active theme does not write', r.wrote, null);
 check('clicking the active theme does not reload', r.reloads, 0);
-r.menu[1][1]();
+r.menu[testEntry][1]();
 check('clicking another theme persists it', r.wrote, ['w95-theme', 'testpal']);
 check('clicking another theme reloads', r.reloads, 1);
 
@@ -104,7 +109,7 @@ check('clicking another theme reloads', r.reloads, 1);
   };
   vm.createContext(ctx);
   vm.runInContext('(function(){\n' + slice + '\n}).call(this)', ctx);
-  menu[1][1]();
+  menu.find(m => m[0] === '○ Test Palette')[1]();
   check('failed write does not reload', reloads, 0);
 }
 

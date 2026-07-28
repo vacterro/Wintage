@@ -3,11 +3,10 @@
 ## DOING
 
 ## TODO
-- [ ] T-020 Claude Code palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
-- [ ] T-021 Antigravity palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
-- [ ] T-022 K-Lite / MPC-HC palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
+- [ ] T-022 K-Lite / MPC-HC palette (the first LIGHT theme) | needs: T-017,T-019,T-030 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
 - [ ] T-023 FreeBuff palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
 - [ ] T-024 NomadCode palette | needs: T-017,T-019 | verify: 0 off-palette bg/text, 0 low-contrast text, live on 3 control sites
+- [ ] T-030 Split the link colour out of borderHighlight: the token is both the bevel light edge and the link colour, which only works on a dark palette -- on a light one the bevel must be near-white and near-white fails AA as text. Touches GLOBAL_CSS, SHADOW_CSS, the repainter link branch, the pack schema and both gates | needs: T-027 | verify: golden link colour unchanged, a light pack passes the AA gate with a readable link and a near-white bevel
 - [ ] T-025 Companion browser themes: tools/apply-themes.js also emits browser-theme/<slug>/manifest.json from the same themes/<slug>.json, so the Cent Browser chrome matches whichever theme is active | needs: T-020,T-021,T-022,T-023,T-024,T-027 | verify: 6 manifests emitted, each loads in the browser and its frame colour equals its palette background
 - [ ] T-026 README theme docs (switching + installing a pack onto a new Wintage version) and release.ps1 gating the generator + check-css over every theme | needs: T-025 | verify: node tools/check-css.js iterates all 6 palettes and PASSes; injecting an off-palette hex into any one of them FAILs
 
@@ -15,6 +14,8 @@
 - [ ] T-028 release.ps1 bumps `// @version` but not `const W95_VERSION` (:94), so the data-w95-ver diagnostic stamp reports a stale build — derive the constant from the header at load, or bump both | verify: run release.ps1, both values agree; a deliberately mismatched pair FAILs the gate
 
 ## DONE
+- [x] T-020 Claude Code palette -- #1F1E1D/#262624 surfaces, cream #FAF9F5 text, coral #D97757 link | verify: 14.39 / 8.31 / 4.86 : 1 on its own backdrop, AA gate PASS -- E-068
+- [x] T-021 Antigravity palette -- Material dark greys, #E3E3E3 text, blue-300 #8AB4F8 link, semantic trio from the same set | verify: 13.38 / 9.49 / 8.15 : 1, AA gate PASS -- E-069
 - [x] T-027 Theme packs + installer: themes/<slug>.json as the palette source, tools/apply-themes.js generating the block into ANY wintage.user.js (markers if present, brace-walk + add markers if not), install-themes.ps1 with -Latest/-Check for re-applying after an upgrade | verify: tools/test-theme-packs.js 18/18 PASS incl. patching the last released commit and byte-identical re-runs -- E-066
 - [x] T-019 Palette-independent repainter: elev() normalises incoming luminance into the active theme's polarity (identity on a dark theme, so golden is provably untouched), text contrast measured against the theme's own backdrop, color-scheme + data-w95-dark follow the theme, per-theme WCAG AA floor in check-css.js | verify: tools/test-repainter-polarity.js 21/21 PASS, AA gate rejects a forced 2.70:1 textPrimary -- E-062
 - [x] T-018 Theme switching: GM-backed selection (per-user, not per-origin), one menu entry per theme in the top frame only, reload on switch, total fallback chain; @sandbox raw keeps page context so the attachShadow interception survives the grants | verify: tools/test-theme-switch.js 22/22 PASS, gated into release.ps1 -- E-055

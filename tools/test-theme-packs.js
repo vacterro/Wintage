@@ -4,8 +4,8 @@
 // The one that matters most is "a version of the script this tool has never seen":
 // the whole reason the packs exist is that Tampermonkey re-downloads the userscript
 // on every upgrade, so the generator's real job is to patch a FUTURE file. That is
-// exercised here by running it against the last released commit, which predates the
-// generated markers entirely.
+// exercised here against a fixture with the markers stripped out — deliberately not
+// against an old commit, which stops being marker-less the moment one ships.
 const fs = require('fs'), os = require('os'), path = require('path'), cp = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
@@ -32,17 +32,17 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wintage-packs-'));
 //    generated block by hand, which is the failure mode the markers exist to catch.
 check('repo script is up to date with themes/', run('--check').code, 0);
 
-// 2. A file with no markers at all (the last released commit) must be upgradable.
+// 2. A file with no markers at all must be upgradable. The fixture is built by
+//    STRIPPING the markers from the current script rather than by reading an old
+//    commit: once a release ships with markers, a git-based fixture quietly starts
+//    testing the easy path instead of the one that matters, and the test keeps
+//    passing while covering nothing.
 const legacy = path.join(tmp, 'legacy.user.js');
-let released;
-try {
-  released = cp.execSync('git show HEAD:wintage.user.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 24 });
-} catch (e) { released = null; }
-if (!released) {
-  console.log('SKIP: no git history available for the marker-less upgrade test');
-} else {
+{
+  const released = fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8')
+    .split('\n').filter(l => !/THEME PACKS/.test(l)).join('\n');
   fs.writeFileSync(legacy, released);
-  check('released file starts without markers', /THEME PACKS/.test(released), false);
+  check('fixture starts without markers', /THEME PACKS/.test(released), false);
   const r1 = run('"' + legacy + '"');
   check('generator patches a marker-less file', r1.code, 0);
   const after1 = fs.readFileSync(legacy, 'utf8');

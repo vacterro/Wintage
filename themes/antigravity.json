@@ -1,0 +1,25 @@
+{
+  "slug": "antigravity",
+  "label": "Antigravity",
+  "order": 3,
+  "tokens": {
+    "background": "#131314",
+    "backgroundSoft": "#1B1B1F",
+    "surface": "#202124",
+    "surfaceRaised": "#2A2B2F",
+    "surfaceAlt": "#35363A",
+    "borderDark": "#0B0B0C",
+    "borderHighlight": "#8AB4F8",
+    "borderMuted": "#444649",
+    "textPrimary": "#E3E3E3",
+    "textSecondary": "#BDC1C6",
+    "textMuted": "#9AA0A6",
+    "accentTeal": "#78D9EC",
+    "accentTealDeep": "#00639B",
+    "success": "#81C995",
+    "warning": "#FDD663",
+    "danger": "#F28B82",
+    "selection": "#2A2B2F",
+    "compareBack": "#0E0E10"
+  }
+}

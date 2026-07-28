@@ -1,0 +1,25 @@
+{
+  "slug": "claudecode",
+  "label": "Claude Code",
+  "order": 2,
+  "tokens": {
+    "background": "#1F1E1D",
+    "backgroundSoft": "#262624",
+    "surface": "#302E2B",
+    "surfaceRaised": "#3A3733",
+    "surfaceAlt": "#454039",
+    "borderDark": "#141413",
+    "borderHighlight": "#D97757",
+    "borderMuted": "#4F4A43",
+    "textPrimary": "#FAF9F5",
+    "textSecondary": "#C2C0B6",
+    "textMuted": "#8A877D",
+    "accentTeal": "#5A7D9A",
+    "accentTealDeep": "#34495E",
+    "success": "#5A8250",
+    "warning": "#B08A3E",
+    "danger": "#BF4D3B",
+    "selection": "#3A3733",
+    "compareBack": "#171716"
+  }
+}

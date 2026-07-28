@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.8.0
+// @version      1.9.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -80,6 +80,30 @@
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
         selection: '#362812', compareBack: '#0F0A04'
+      }
+    },
+    claudecode: {
+      label: 'Claude Code',
+      tokens: {
+        background: '#1F1E1D', backgroundSoft: '#262624',
+        surface: '#302E2B', surfaceRaised: '#3A3733', surfaceAlt: '#454039',
+        borderDark: '#141413', borderHighlight: '#D97757', borderMuted: '#4F4A43',
+        textPrimary: '#FAF9F5', textSecondary: '#C2C0B6', textMuted: '#8A877D',
+        accentTeal: '#5A7D9A', accentTealDeep: '#34495E',
+        success: '#5A8250', warning: '#B08A3E', danger: '#BF4D3B',
+        selection: '#3A3733', compareBack: '#171716'
+      }
+    },
+    antigravity: {
+      label: 'Antigravity',
+      tokens: {
+        background: '#131314', backgroundSoft: '#1B1B1F',
+        surface: '#202124', surfaceRaised: '#2A2B2F', surfaceAlt: '#35363A',
+        borderDark: '#0B0B0C', borderHighlight: '#8AB4F8', borderMuted: '#444649',
+        textPrimary: '#E3E3E3', textSecondary: '#BDC1C6', textMuted: '#9AA0A6',
+        accentTeal: '#78D9EC', accentTealDeep: '#00639B',
+        success: '#81C995', warning: '#FDD663', danger: '#F28B82',
+        selection: '#2A2B2F', compareBack: '#0E0E10'
       }
     }
   };
