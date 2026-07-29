@@ -98,6 +98,33 @@ if (has('revert')) {
 const palette = arg('palette', 'golden');
 const built = path.join(ROOT, 'desktop', 'out', 'electron', palette);
 if (!fs.existsSync(built)) die('no build for palette "' + palette + '" - run `node tools/build-desktop.js`');
+
+// Already themed? Then the archive has ALREADY moved, and demanding app.asar at its
+// original location fails the most ordinary request there is: "same app, different
+// palette". Swap the payload in place instead -- no archive move, so it also works
+// while the application is running, which the first install cannot do.
+const alreadyOurs = fs.existsSync(path.join(appDir, 'package.json')) &&
+  JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')).wintage === MARKER &&
+  fs.existsSync(movedAsar);
+
+if (alreadyOurs) {
+  const pkgPath = path.join(appDir, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const from = pkg.wintagePalette;
+  if (dryRun) {
+    console.log('install-electron: would repaint ' + appDir + ' from "' + from + '" to "' + palette + '"');
+    process.exit(0);
+  }
+  pkg.wintagePalette = palette;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+  fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(appDir, 'shim.cjs'));
+  fs.copyFileSync(path.join(built, 'wintage.css'), path.join(appDir, 'wintage.css'));
+  try { fs.unlinkSync(path.join(appDir, 'wintage-status.txt')); } catch (e) { }
+  console.log('install-electron: repainted ' + (from === palette ? '' : '"' + from + '" -> ') + '"' + palette + '" in ' + appDir);
+  console.log('  restart the app to see it');
+  process.exit(0);
+}
+
 if (!fs.existsSync(asar)) die('no app.asar in ' + resources + ' - this does not look like a packed Electron app');
 
 // An `app/` folder that is not ours is the application's own unpacked source.
