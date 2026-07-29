@@ -88,7 +88,9 @@ if ($LASTEXITCODE -ne 0) { throw "Theme block is out of date with themes/*.json 
 node (Join-Path $PSScriptRoot 'tools/test-theme-packs.js')
 if ($LASTEXITCODE -ne 0) { throw "Theme pack test failed - release aborted, version line already bumped, fix and rerun" }
 
-git -c core.safecrlf=false -C $PSScriptRoot add -A 2>&1 | ForEach-Object { Write-Output $_.ToString() }
-git -c core.safecrlf=false -C $PSScriptRoot commit -m "v${new}: $Message" 2>&1 | ForEach-Object { Write-Output $_.ToString() }
-git -c core.safecrlf=false -C $PSScriptRoot push origin main 2>&1 | ForEach-Object { Write-Output $_.ToString() }
+$ErrorActionPreference = 'Continue'
+git -c core.safecrlf=false -C $PSScriptRoot add -A
+git -c core.safecrlf=false -C $PSScriptRoot commit -m "v${new}: $Message"
+git -c core.safecrlf=false -C $PSScriptRoot push origin main
+$ErrorActionPreference = 'Stop'
 Write-Host "Released Wintage v$new - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green
