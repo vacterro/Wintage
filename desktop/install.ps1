@@ -1,4 +1,4 @@
-﻿# Installs the Wintage look into desktop applications.
+# Installs the Wintage look into desktop applications.
 #
 # Design constraint that shapes everything here: applications update themselves, and
 # an update must not take the theme with it. So every target is installed into the
@@ -124,7 +124,9 @@ function Invoke-TotalCmd {
     }
 
     if ($PSCmdlet.ShouldProcess($ini, 'Apply Wintage theme')) {
-        $t = $script:packs[$PaletteSlug].tokens
+        $jsonPath = Join-Path (Split-Path $PSScriptRoot -Parent) "themes\$PaletteSlug.json"
+        if (-not (Test-Path $jsonPath)) { Say "$($appName): theme file not found ($PaletteSlug.json)" 'Red'; return }
+        $t = (Get-Content $jsonPath -Raw | ConvertFrom-Json).tokens
         
         function HexToBgr([string]$hex) {
             $hex = $hex.Replace('#', '')
@@ -137,9 +139,13 @@ function Invoke-TotalCmd {
 
         $bg = HexToBgr $t.background
         $fg = HexToBgr $t.textPrimary
-        $sel = HexToBgr $t.selection
-        $surf = HexToBgr $t.surface
-        $border = HexToBgr $t.borderDark
+        $cursorBg = HexToBgr $t.selection
+        $cursorFg = HexToBgr $t.borderHighlight
+        $markFg = HexToBgr $t.danger
+        $titleBg = HexToBgr $t.surface
+        $titleFg = HexToBgr $t.textPrimary
+        $titleInBg = HexToBgr $t.backgroundSoft
+        $titleInFg = HexToBgr $t.textMuted
 
         $lines = Get-Content $ini
         $newLines = @()
@@ -164,13 +170,13 @@ function Invoke-TotalCmd {
                 $finalLines += "BackColor=$bg"
                 $finalLines += "BackColor2=$bg"
                 $finalLines += "ForeColor=$fg"
-                $finalLines += "MarkColor=$sel"
-                $finalLines += "CursorColor=$surf"
-                $finalLines += "CursorText=$fg"
-                $finalLines += "ActiveTitle=$sel"
-                $finalLines += "ActiveTitleText=$fg"
-                $finalLines += "InactiveTitle=$border"
-                $finalLines += "InactiveTitleText=$fg"
+                $finalLines += "MarkColor=$markFg"
+                $finalLines += "CursorColor=$cursorBg"
+                $finalLines += "CursorText=$cursorFg"
+                $finalLines += "ActiveTitle=$titleBg"
+                $finalLines += "ActiveTitleText=$titleFg"
+                $finalLines += "InactiveTitle=$titleInBg"
+                $finalLines += "InactiveTitleText=$titleInFg"
             }
         }
         Set-Content $ini $finalLines -Encoding UTF8
