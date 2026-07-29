@@ -209,7 +209,7 @@ function Invoke-CodeNomad {
     }
 
     if ($PSCmdlet.ShouldProcess($cnCss, 'Install Wintage theme')) {
-        $css = Get-Content (Join-Path $out ('browser/wintage-' + $PaletteSlug + '.css')) -Raw
+        $css = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
         Set-Content $cnCss $css -Encoding UTF8
         Say "CodeNomad: installed theme -> $cnCss" 'Green'
     }
@@ -233,7 +233,7 @@ function Invoke-BetterDiscord {
     }
 
     if ($PSCmdlet.ShouldProcess($bdCss, 'Install Wintage theme')) {
-        $css = Get-Content (Join-Path $out ('browser/wintage-' + $PaletteSlug + '.css')) -Raw
+        $css = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
         $meta = "/**`n * @name Wintage ($PaletteSlug)`n * @author Wintage Installer`n * @version 1.0.0`n * @description Win95 Theme`n */`n`n"
         Set-Content $bdCss ($meta + $css) -Encoding UTF8
         Say "BetterDiscord: installed theme -> $bdCss" 'Green'
