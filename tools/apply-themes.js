@@ -130,7 +130,17 @@ if (!fs.existsSync(target)) die('target not found: ' + target);
 const themes = loadThemes();
 const src = fs.readFileSync(target, 'utf8');
 const [start, end] = locate(src);
-const next = src.slice(0, start) + render(themes) + src.slice(end);
+
+// Emit the block in the target's OWN line ending. The renderer joins with \n, and on
+// a CRLF working copy that made the file permanently "out of date": the generated
+// block never equalled the CRLF block already there, so `--check` failed on every
+// run and the release gate could never go green -- while `git diff` showed nothing,
+// because the only difference was the line terminator. Whichever ending dominates
+// the file wins, so this neither converts the file nor fights the user's editor.
+const crlf = (src.match(/\r\n/g) || []).length;
+const lf = (src.match(/(?<!\r)\n/g) || []).length;
+const block = crlf > lf ? render(themes).replace(/\n/g, '\r\n') : render(themes);
+const next = src.slice(0, start) + block + src.slice(end);
 
 if (next === src) {
   console.log('apply-themes: ' + path.basename(target) + ' already up to date (' + themes.length + ' theme(s): ' + themes.map(t => t.slug).join(', ') + ')');

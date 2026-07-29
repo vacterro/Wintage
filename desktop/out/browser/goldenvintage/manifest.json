@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.17.2",
+  "version": "1.18.0",
   "name": "Wintage Golden Vintage",
   "description": "Wintage Golden Vintage for the browser chrome. Companion to the Wintage userscript.",
   "theme": {

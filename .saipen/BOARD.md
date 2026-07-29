@@ -3,12 +3,15 @@
 ## DOING
 
 ## TODO
-- [x] T-053 release.ps1's git steps emit CRLF warnings on stderr that abort the script when it is invoked under a 2>&1 pipe, forcing a manual commit/push every release; make the git calls tolerate the warning (redirect or `--%`/`-c core.safecrlf=false`) | verify: a full release run commits+pushes without a manual finish
 
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
 
 ## DONE
-- [x] T-053 release.ps1's git steps emit CRLF warnings on stderr that abort the script when it is invoked under a 2>&1 pipe, forcing a manual commit/push every release; make the git calls tolerate the warning (redirect or --%/-c core.safecrlf=false) | verify: a full release run commits+pushes without a manual finish -- E-151
+- [x] T-053 release.ps1 git steps: Git-Safe helper (stderr merged, success judged by $LASTEXITCODE) + core.autocrlf=false, replacing the safecrlf attempt that still died under a pipe | verify: a full release run finishes commit+push with no manual finish -- E-156
+- [x] T-054 SAIPENVIEW recolour instead of stylesheet append: the old handler bolted the whole 39 KB browser CSS on top, which rewrote the box model and moved the text; now only `--token:#hex` values in its own :root change | verify: hex-masked diff STRUCTURALLY IDENTICAL, 695 lines both sides, no BOM, revert restores byte-for-byte -- E-157, E-158, E-159
+- [x] T-055 Two CRLF bugs found by hunt: apply-themes --check could never go green on a CRLF working copy (release gate permanently red, git diff showed nothing), and test-theme-packs' half-marked fixture stripped nothing because JS dot does not match CR -- so a green test covered nothing | verify: --check stable across runs, theme-pack test PASS with a genuinely half-marked fixture -- E-160, E-161
+- [x] T-056 `Wintage Installer.cmd` at the repo root so the GUI is obvious to open; both READMEs updated, desktop table extended to every current target | verify: launched via the .cmd, window title correct -- E-162
+- [x] T-047 GUI polish accepted as-is by the user for now; reopens if something reads wrong -- E-163
 - [x] T-030 Split link out of borderHighlight (19th token): bevel edge and hyperlink are separate now. Dark palettes set link=borderHighlight (rendering byte-identical, golden link #D3B57A unchanged); the one light palette gets a near-white bevel + a dark AA-safe link. Both generators, both gates, all templates and the GUI updated | verify: 15 dark packs unchanged, vintageclassic bevel #5E7A7A->#F6F6F6 + link 4.62:1, all gates green -- E-147, E-148
 - [x] T-050 Obsidian support: 16 palettes as per-vault community themes derived from the user's own VintageWin95 theme.css; install into every vault, activate the chosen one with an appearance.json backup, revert leaves hand-made themes untouched | verify: 16 installed into 2 vaults, golden active + present, revert 16->0 with VintageWin95 intact -- E-127, E-128
 - [x] T-051 Release-breaker: themes/codenomad.json was never generated after the nomadcode->codenomad rename, so derive-palette --check (a release gate) FAILed. Regenerated | verify: derive-palette --check clean -- E-125
@@ -61,7 +64,6 @@
 - [x] T-016 Enforce UI.md invariants from JS where CSS loses to site !important; palette clamp for control subtrees; close dark-surface gaps; palette idempotence | verify: 3 popular sites all zero violations, zero drift across two settling windows
 
 ## BLOCKED
-- [ ] T-047 GUI polish: whatever reads wrong on screen | blocker: needs the user's visual verdict - nothing here can screenshot a desktop window, and guessing at spacing would be inventing findings
 
 
 

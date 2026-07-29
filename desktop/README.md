@@ -10,6 +10,8 @@ is written to be re-run — and says so, rather than pretending it persisted.
 
 ## The GUI
 
+Double-click **`Wintage Installer.cmd`** in the repo root, or run this directly:
+
 ```powershell
 powershell -File desktop\WintageInstaller.ps1
 ```
@@ -50,6 +52,10 @@ while it is running; a first install does not, because the archive is in use.
 | `claude` | **not themeable**, see below | — |
 | `mpchc` | registry, dark theme + OSD typography only | no — MPC-HC rewrites its settings on exit |
 | `obsidian` | community theme per vault, all palettes installed at once | **yes** — it lives in your vault |
+| `saipenview` | rewrites its own `:root` token values in `style.css` | no — a source file; re-run after a pull |
+| `codenomad`, `discord` | CSS dropped into the app's own theme folder | yes for BetterDiscord, no for CodeNomad |
+| `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` keys | yes — it is your ini |
+| `smartvac`, `wildrift` | token table rewritten in the app's own source | no — a source file; re-run after a pull |
 
 ### Electron apps
 
@@ -100,6 +106,21 @@ token it equalled. `-Palette <slug>` sets which one is active on install;
 `appearance.json` is backed up first, and `-Revert` removes only the `Wintage *`
 themes and restores your previous choice — a hand-made theme in the same vault is
 never touched.
+
+### SAIPENVIEW
+
+Its frontend already declares the Wintage token names in its own `:root`, so this
+patch rewrites **only the token values** — never a selector, a font, a border width
+or a padding. Nothing that affects the box model changes, so the text cannot shift.
+That is deliberate: the earlier approach appended the whole browser stylesheet on
+top, and `wintage.css` is written for arbitrary web pages — universal selectors
+forcing the font, the size ladder, 2px borders and control heights. On an app that
+already has its own layout, that moves everything.
+
+Verified by masking every hex and diffing against the backup: structurally
+identical, only colour literals differ. `--link` is reported as not declared there
+(its markdown links read `--accentTeal`, which this does set) rather than injected —
+adding a variable the app never reads would be dead weight.
 
 ### MPC-HC (K-Lite)
 

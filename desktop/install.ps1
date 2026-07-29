@@ -320,16 +320,53 @@ function Invoke-Saipenview {
     
     if (-not (Test-Path $cssFile)) { Say "SAIPENVIEW: CSS file not found ($cssFile)" 'DarkYellow'; return }
     
-    if ($PSCmdlet.ShouldProcess($cssFile, 'Install Wintage theme')) {
+    if ($PSCmdlet.ShouldProcess($cssFile, "Recolour :root tokens to $PaletteSlug")) {
         if (-not (Test-Path $bakFile)) {
             Copy-Item $cssFile $bakFile -Force
         }
-        $winCss = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
-        $origCss = Get-Content $bakFile -Raw
-        Set-Content $cssFile ($origCss + "
-/* WINTAGE THEME */
-" + $winCss) -Encoding UTF8
-        Say "SAIPENVIEW: installed theme -> $cssFile" 'Green'
+
+        # Do NOT append the browser stylesheet here. That was the previous approach and
+        # it is why the text moved: wintage.css is written for arbitrary web pages, so it
+        # carries universal selectors that force font-family, the 10/12/14/16 size ladder,
+        # 2px border widths and control min-heights. Dropped on top of SAIPENVIEW's own
+        # CSS it rewrites the box model of every element, and the layout shifts.
+        #
+        # SAIPENVIEW already declares the Wintage token names in its own :root, so the
+        # correct patch is to rewrite the token VALUES and nothing else -- no selector,
+        # no font, no padding, no border width. Colours change, geometry cannot.
+        $jsonPath = Join-Path $root "themes\$PaletteSlug.json"
+        if (-not (Test-Path $jsonPath)) { Say "SAIPENVIEW: theme file not found ($PaletteSlug.json)" 'Red'; return }
+        $t = (Get-Content $jsonPath -Raw | ConvertFrom-Json).tokens
+
+        # Always recolour from the pristine backup, never from the current file: patching
+        # an already-patched file is fine here (the regex is idempotent) but starting from
+        # the original keeps a half-applied run from compounding.
+        # Read and write as UTF-8 WITHOUT a BOM, explicitly. PowerShell 5.1's
+        # Get-Content -Raw falls back to the ANSI codepage when a file has no BOM, so
+        # style.css's em-dashes came back as three cp1251 characters each and were
+        # written out as that mojibake -- and Set-Content -Encoding UTF8 adds a BOM on
+        # top, which then shows up as a stray glyph before `:root`. Caught by diffing
+        # the patched file against the backup: 30-odd comment lines had changed that
+        # this patch has no business touching.
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        $text = [System.IO.File]::ReadAllText($bakFile, $utf8)
+        $applied = @(); $missing = @()
+        foreach ($k in $t.PSObject.Properties.Name) {
+            $pattern = "(--$k\s*:\s*)#[0-9A-Fa-f]{6}"
+            if ($text -cmatch $pattern) {
+                $text = [regex]::Replace($text, $pattern, "`${1}$($t.$k)")
+                $applied += $k
+            } else { $missing += $k }
+        }
+        [System.IO.File]::WriteAllText($cssFile, $text, $utf8)
+
+        Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
+        if ($missing.Count) {
+            # Reported, not silently dropped: a token SAIPENVIEW does not declare is a
+            # gap in coverage the next person should know about.
+            Say "  not declared in SAIPENVIEW's :root, left alone: $($missing -join ', ')" 'DarkGray'
+        }
+        Say "  Reload the SAIPENVIEW window to see it." 'DarkGray'
     }
 }
 

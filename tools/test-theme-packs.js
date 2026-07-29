@@ -64,8 +64,12 @@ check('  ...with a reason naming what it looked for', /const THEMES/.test(r2.out
 check('junk file left untouched', fs.readFileSync(junk, 'utf8'), 'console.log("not a userscript");\n');
 
 // 5. A half-marked file (opening marker, no closing one) must refuse to guess.
+//    The optional CR in the pattern is load-bearing: in JS, dot does not match a
+//    carriage return, so on a CRLF working copy this replace silently matched
+//    nothing, the fixture kept both markers, and the test passed a file that was
+//    never half-marked at all.
 const half = path.join(tmp, 'half.user.js');
-fs.writeFileSync(half, fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8').replace(/  \/\/ ─── END THEME PACKS.*\n/, ''));
+fs.writeFileSync(half, fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8').replace(/  \/\/ ─── END THEME PACKS.*\r?\n/, ''));
 const r3 = run('"' + half + '"');
 check('half-marked file rejected', r3.code, 1);
 check('  ...without guessing where the block ends', /refusing to guess/.test(r3.out), true);

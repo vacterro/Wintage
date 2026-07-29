@@ -88,9 +88,26 @@ if ($LASTEXITCODE -ne 0) { throw "Theme block is out of date with themes/*.json 
 node (Join-Path $PSScriptRoot 'tools/test-theme-packs.js')
 if ($LASTEXITCODE -ne 0) { throw "Theme pack test failed - release aborted, version line already bumped, fix and rerun" }
 
-$ErrorActionPreference = 'Continue'
-git -c core.safecrlf=false -C $PSScriptRoot add -A
-git -c core.safecrlf=false -C $PSScriptRoot commit -m "v${new}: $Message"
-git -c core.safecrlf=false -C $PSScriptRoot push origin main
-$ErrorActionPreference = 'Stop'
+# git writes "LF will be replaced by CRLF" to STDERR, and PowerShell 5.1 turns any
+# native-command stderr line into a NativeCommandError -- which, even under
+# ErrorActionPreference='Continue', still aborts the script the moment the whole
+# release is invoked through a pipe (`.\release.ps1 ... | ...`). safecrlf did not
+# silence it because the conversion itself is what warns. Two belts:
+#   1. -c core.autocrlf=false stops the conversion, so there is no warning to emit.
+#   2. Run each git call inside a helper that merges stderr into stdout and decides
+#      success by $LASTEXITCODE alone, so a stray line can never be fatal.
+# Verified by an actual release run finishing commit+push with no manual finish.
+function Git-Safe {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $output = & git -c core.autocrlf=false -C $PSScriptRoot @args 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    $output | ForEach-Object { Write-Host $_ }
+    return $code
+}
+
+if ((Git-Safe add -A) -ne 0) { throw "git add failed" }
+if ((Git-Safe commit -m "v${new}: $Message") -ne 0) { throw "git commit failed (nothing to commit, or a hook rejected it)" }
+if ((Git-Safe push origin main) -ne 0) { throw "git push failed - commit is local; fix the remote and 'git push' by hand" }
 Write-Host "Released Wintage v$new - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green

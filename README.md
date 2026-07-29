@@ -47,9 +47,8 @@ The same palettes install into desktop applications -- VS Code and Antigravity a
 colour themes, Electron apps (Freebuff, the Antigravity agent app) through a shim
 that injects the very stylesheet this userscript uses. There is a small GUI for it:
 
-```powershell
-powershell -File desktop\WintageInstaller.ps1
-```
+Double-click **`Wintage Installer.cmd`** in the repo root. (It is a thin launcher for
+`desktop\WintageInstaller.ps1`, which you can still run directly.)
 
 What each target can and cannot reach -- including the two apps that are fused shut
 or have their colours compiled in -- is written down in
