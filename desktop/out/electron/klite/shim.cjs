@@ -25,6 +25,56 @@ try { css = fs.readFileSync(CSS_FILE, 'utf8'); } catch (e) {
   console.error('[wintage] stylesheet missing, loading the app unthemed:', e.message);
 }
 
+// ─── SCROLLBAR GUTTERS ───────────────────────────────────────────────────────
+// Styling ::-webkit-scrollbar turns Chromium's OVERLAY scrollbars into classic
+// ones. Overlay scrollbars are invisible until you scroll, so app authors write
+// `overflow: scroll` freely and it costs them nothing — until a theme makes those
+// scrollbars classic, and every one of those containers grows a permanent 16px
+// gutter with a full-length thumb, on panels that have room to spare. Reported on
+// Antigravity, visible on several panels at once.
+//
+// CSS cannot fix this: there is no selector for "this element's overflow is scroll",
+// and blanket-overriding overflow would break containers that need `hidden`. So the
+// one narrow change is made from script: computed `scroll` becomes `auto`, which is
+// identical when the content actually overflows and hides the gutter when it does
+// not. Nothing else is touched.
+//
+// Cost discipline is copied from the userscript, which already paid for this lesson:
+// getComputedStyle over a whole document is expensive, so this runs a few bounded
+// passes after load and then only on newly added subtrees, never on a timer.
+const SCROLL_FIX = `(() => {
+  if (window.__wintageScrollFix) return 'already running';
+  window.__wintageScrollFix = true;
+  const seen = new WeakSet();
+  const fix = root => {
+    const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    let n = 0;
+    for (const el of els) {
+      if (seen.has(el)) continue;
+      seen.add(el);
+      const cs = getComputedStyle(el);
+      if (cs.overflowY === 'scroll') { el.style.setProperty('overflow-y', 'auto', 'important'); n++; }
+      if (cs.overflowX === 'scroll') { el.style.setProperty('overflow-x', 'auto', 'important'); n++; }
+    }
+    return n;
+  };
+  fix(document);
+  // Three settling passes: SPA shells mount most of their tree after first paint.
+  let passes = 0;
+  const settle = () => { if (++passes < 3) { fix(document); setTimeout(settle, 600); } };
+  setTimeout(settle, 600);
+  let queued = false;
+  new MutationObserver(records => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      for (const r of records) for (const node of r.addedNodes) if (node.nodeType === 1) fix(node);
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  return 'scroll fix installed';
+})()`;
+
 // Registered BEFORE the real main runs, so no window can be created and finish
 // loading before the listener exists. Injection is attached to both dom-ready and
 // did-finish-load: a renderer that navigates (sign-in flows, in-app reloads) fires
@@ -38,10 +88,30 @@ if (css) {
       // stamped to a status file next to the stylesheet, so "is the theme actually
       // live in this app?" is answerable without a screenshot or a devtools port —
       // the same reason the userscript stamps data-w95-ver on every style tag.
+      // Appended and capped, not overwritten: the stylesheet and the scrollbar fix
+      // report separately and can fail independently, so one overwritten line would
+      // hide whichever of them finished first.
       const stamp = text => {
-        try { fs.writeFileSync(path.join(__dirname, 'wintage-status.txt'), new Date().toISOString() + ' ' + text + '\n'); } catch (e) { }
+        try {
+          const f = path.join(__dirname, 'wintage-status.txt');
+          let prev = '';
+          try { prev = fs.readFileSync(f, 'utf8'); } catch (e) { }
+          fs.writeFileSync(f, (prev + new Date().toISOString() + ' ' + text + '\n').split('\n').slice(-40).join('\n'));
+        } catch (e) { }
       };
+      // dom-ready, did-finish-load and did-frame-finish-load all fire for the same
+      // document, so an unguarded handler inserted the same 39 KB stylesheet three
+      // times into every renderer. The status file is what made that visible. Keyed
+      // on the URL, so a real navigation still re-injects (insertCSS does not
+      // survive one) while the three events for one document inject once.
+      let injectedFor = null;
       const inject = () => {
+        const url = win.webContents.getURL();
+        if (url === injectedFor) return;
+        injectedFor = url;
+        win.webContents.executeJavaScript(SCROLL_FIX, true)
+          .then(r => stamp('scrollfix: ' + r))
+          .catch(err => stamp('scrollfix FAILED: ' + (err && err.message)));
         win.webContents.insertCSS(css, { cssOrigin: 'author' })
           .then(() => stamp('injected ' + css.length + ' bytes into ' + win.webContents.getURL()))
           .catch(err => {

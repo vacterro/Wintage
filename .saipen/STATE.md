@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-040
-next_action: "PHASE SHIP T-040 [golden everywhere]"
+task: T-041
+next_action: "PHASE SHIP T-041 [scrollbar gutters]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -10,10 +10,10 @@ schema_version: 1
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 2
-goal_tickets: 14
+goal_tickets: 15
 transition_from: REVIEW
-last_event: 99
-updated: 2026-07-29T03:06:00Z
+last_event: 103
+updated: 2026-07-29T02:59:00Z
 ---
 
 # Wintage — five extra themes (goal wave 1)
