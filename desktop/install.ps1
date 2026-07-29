@@ -117,6 +117,23 @@ function Invoke-TotalCmd {
 
     if (-not $ini) { Say "$($appName): not installed (no wincmd.ini found)" 'DarkYellow'; return }
 
+    $lines = Get-Content $ini
+    $inColors = $false
+    foreach ($line in $lines) {
+        if ($line -match '^\[Colors\]$') { $inColors = $true; continue }
+        if ($line -match '^\[') { $inColors = $false }
+        if ($inColors -and $line -match '^RedirectSection=(.+)$') {
+            $redirect = $matches[1].Trim('"')
+            $tcDir = Split-Path $ini -Parent
+            $redirect = $redirect -replace '%COMMANDER_PATH%', $tcDir
+            $redirect = $redirect -replace '%COMMANDER_INI%', $ini
+            if (Test-Path $redirect) {
+                $ini = $redirect
+            }
+            break
+        }
+    }
+
     if ($DoRevert) {
         if ($PSCmdlet.ShouldProcess($ini, 'Revert Wintage theme')) {
             $lines = Get-Content $ini
