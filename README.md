@@ -1,8 +1,8 @@
 # Wintage
 
 **Win95 Dark Golden Vintage theme for the whole web.** A Tampermonkey userscript that restyles every site into a dark golden-brown Windows 95 application: pixel-sharp 3D bevels, zero rounded corners, zero animations, no hover flashbangs, Verdana everywhere.
+<img width="876" height="618" alt="2026-07-29_180316" src="https://github.com/user-attachments/assets/e0460446-2ebc-4b58-b64c-25c61f1940b8" />
 
-<img width="1434" height="857" alt="2026-07-09_131744" src="https://github.com/user-attachments/assets/5d4542a9-f493-4574-a47b-a99e82aa837c" />
 
 _The modern web optimizes for aesthetics at the expense of usability. Rounded corners replace visual hierarchy, animations replace feedback, shadows replace structure, and minimalism often removes the very cues our brains rely on to understand an interface._
 
