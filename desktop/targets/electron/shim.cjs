@@ -92,6 +92,32 @@ const SCROLL_FIX = `(() => {
 // loading before the listener exists. Injection is attached to both dom-ready and
 // did-finish-load: a renderer that navigates (sign-in flows, in-app reloads) fires
 // them again, and insertCSS does not survive a navigation.
+// ─── app.getAppPath() MUST STILL POINT AT THE ARCHIVE ───────────────────────
+// This is the one thing the relocation actually breaks, and it breaks loudly in a
+// misleading way. Electron sets getAppPath() to the directory it loaded the app
+// from -- now `resources/app`, the shim's own folder -- while every module INSIDE
+// the archive was written expecting it to be the archive itself. Claude's main
+// does exactly that:
+//
+//   mainWindow.loadFile(path.join(app.getAppPath(), '.vite/renderer/main_window/index.html'))
+//
+// With the shim in place that resolves to resources/app/.vite/... which does not
+// exist, the local load fails, and the app falls back to opening claude.ai --
+// so the desktop app silently becomes the web app. Reported as "after patching it
+// opens the web version"; nothing about the theme was wrong.
+//
+// Pointing getAppPath() back at the archive restores exactly what an unpatched
+// launch would report. The real value is kept for anything that wants the shim's
+// own directory.
+try {
+  const { app } = require('electron');
+  const realGetAppPath = app.getAppPath.bind(app);
+  app.getAppPath = () => ASAR;
+  app.getShimPath = () => realGetAppPath();
+} catch (e) {
+  console.error('[wintage] could not redirect getAppPath, the app may load its web build:', e.message);
+}
+
 if (css) {
   try {
     const { app } = require('electron');

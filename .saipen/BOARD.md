@@ -3,10 +3,12 @@
 ## DOING
 
 ## TODO
+- [ ] T-058 Claude hardcodes `path.join(process.resourcesPath, "app.asar", ...)` for its MCP runtime and shell-path worker, which the relocation breaks and getAppPath cannot fix. Real fix: leave the archive in place and patch `main` INSIDE it to `../wintage-shim.cjs`, space-padded to the identical byte length so no header rewrite is needed (legal now that the integrity fuse is off) | verify: with Claude closed, install, launch, confirm the desktop UI loads AND an MCP server starts; revert restores the original bytes
 
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
 
 ## DONE
+- [x] T-057 Claude opened the web version after patching: its main resolves the renderer through app.getAppPath(), which the relocation repointed at the shim folder, so the local load failed and it fell back to claude.ai. Shim now restores getAppPath() to the archive | verify: renderer present in archive (112589 bytes), fix installed in all 3 Electron targets -- E-167, E-168
 - [x] T-053 release.ps1 git steps: Git-Safe helper (stderr merged, success judged by $LASTEXITCODE) + core.autocrlf=false, replacing the safecrlf attempt that still died under a pipe | verify: a full release run finishes commit+push with no manual finish -- E-156
 - [x] T-054 SAIPENVIEW recolour instead of stylesheet append: the old handler bolted the whole 39 KB browser CSS on top, which rewrote the box model and moved the text; now only `--token:#hex` values in its own :root change | verify: hex-masked diff STRUCTURALLY IDENTICAL, 695 lines both sides, no BOM, revert restores byte-for-byte -- E-157, E-158, E-159
 - [x] T-055 Two CRLF bugs found by hunt: apply-themes --check could never go green on a CRLF working copy (release gate permanently red, git diff showed nothing), and test-theme-packs' half-marked fixture stripped nothing because JS dot does not match CR -- so a green test covered nothing | verify: --check stable across runs, theme-pack test PASS with a genuinely half-marked fixture -- E-160, E-161
