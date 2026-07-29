@@ -42,7 +42,7 @@ $TOKENS = @(
     'textPrimary', 'textSecondary', 'textMuted',
     'accentTeal', 'accentTealDeep',
     'success', 'warning', 'danger',
-    'selection', 'compareBack'
+    'selection', 'compareBack', 'link'
 )
 
 function Get-ActiveTokens {
@@ -235,7 +235,7 @@ $preview.Add_Paint({
         $g.DrawString('Primary text on backgroundSoft', $FONT, (New-Object Drawing.SolidBrush (C $t.textPrimary)), 18, 40)
         $g.DrawString('Secondary text', $FONT, (New-Object Drawing.SolidBrush (C $t.textSecondary)), 18, 58)
         $g.DrawString('Muted / disabled', $FONT, (New-Object Drawing.SolidBrush (C $t.textMuted)), 18, 76)
-        $g.DrawString('A hyperlink', $FONT, (New-Object Drawing.SolidBrush (C $t.borderHighlight)), 18, 94)
+        $g.DrawString('A hyperlink', $FONT, (New-Object Drawing.SolidBrush (C $t.link)), 18, 94)
 
         # Buttons: raised, pressed, disabled
         $b1 = New-Object Drawing.Rectangle 18, 118, 84, 24

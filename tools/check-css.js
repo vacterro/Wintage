@@ -88,7 +88,7 @@ const REQUIRED_TOKENS = [
   'textPrimary', 'textSecondary', 'textMuted',
   'accentTeal', 'accentTealDeep',
   'success', 'warning', 'danger',
-  'selection', 'compareBack'
+  'selection', 'compareBack', 'link'
 ];
 
 function checkThemes() {
@@ -159,7 +159,7 @@ function checkThemes() {
     const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
     const L = h => 0.2126 * lin(parseInt(h.slice(1, 3), 16)) + 0.7152 * lin(parseInt(h.slice(3, 5), 16)) + 0.0722 * lin(parseInt(h.slice(5, 7), 16));
     if (tok.backgroundSoft) {
-      for (const role of ['textPrimary', 'textSecondary', 'borderHighlight']) {
+      for (const role of ['textPrimary', 'textSecondary', 'link']) {
         if (!tok[role]) continue;
         const a = L(tok[role]), b = L(tok.backgroundSoft);
         const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);

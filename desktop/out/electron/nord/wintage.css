@@ -1,11 +1,11 @@
-/* Wintage Nord - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Nord - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #272C36; --backgroundSoft: #2E3440;
   --surface: #3B4252; --surfaceRaised: #3F4758; --surfaceAlt: #434B5D;
-  --borderDark: #232831; --borderHighlight: #88C0D0; --borderMuted: #4C566A;
+  --borderDark: #232831; --borderHighlight: #88C0D0; --borderMuted: #4C566A; --link: #88C0D0;
   --textPrimary: #D8DEE9; --textSecondary: #A3A9B3; --textMuted: #777C87;
   --accentTeal: #008080; --accentTealDeep: #004C4C;
   --success: #4A7A20; --warning: #7A7A20; --danger: #7A2020;

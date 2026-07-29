@@ -1,11 +1,11 @@
-/* Wintage Solarized Dark - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Solarized Dark - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #002B36; --backgroundSoft: #073642;
   --surface: #073642; --surfaceRaised: #1B444F; --surfaceAlt: #2B4F59;
-  --borderDark: #001F27; --borderHighlight: #51A2DB; --borderMuted: #586E75;
+  --borderDark: #001F27; --borderHighlight: #51A2DB; --borderMuted: #586E75; --link: #51A2DB;
   --textPrimary: #93A1A1; --textSecondary: #8D9EA1; --textMuted: #426066;
   --accentTeal: #008080; --accentTealDeep: #004C4C;
   --success: #4A7A20; --warning: #7A7A20; --danger: #7A2020;

@@ -1,11 +1,11 @@
-/* Wintage Custom - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Custom - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #1A1810; --backgroundSoft: #232018;
   --surface: #332E22; --surfaceRaised: #3D372A; --surfaceAlt: #453D30;
-  --borderDark: #100E08; --borderHighlight: #F0D060; --borderMuted: #5A5040;
+  --borderDark: #100E08; --borderHighlight: #F0D060; --borderMuted: #5A5040; --link: #F0D060;
   --textPrimary: #D4C89A; --textSecondary: #9C9371; --textMuted: #6E674E;
   --accentTeal: #008080; --accentTealDeep: #004C4C;
   --success: #4A7A20; --warning: #7A7A20; --danger: #7A2020;

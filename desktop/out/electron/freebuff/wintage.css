@@ -1,11 +1,11 @@
-/* Wintage FreeBuff - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage FreeBuff - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #1B232B; --backgroundSoft: #202830;
   --surface: #28303D; --surfaceRaised: #333B4B; --surfaceAlt: #3A4354;
-  --borderDark: #0E1116; --borderHighlight: #89D37A; --borderMuted: #414958;
+  --borderDark: #0E1116; --borderHighlight: #89D37A; --borderMuted: #414958; --link: #89D37A;
   --textPrimary: #A0E295; --textSecondary: #7AC56E; --textMuted: #55954C;
   --accentTeal: #008080; --accentTealDeep: #006060;
   --success: #5B9630; --warning: #969630; --danger: #963030;

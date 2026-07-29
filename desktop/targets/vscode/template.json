@@ -11,7 +11,7 @@
     "textBlockQuote.background": "${surface}",
     "textBlockQuote.border": "${borderDark}",
     "textCodeBlock.background": "${background}",
-    "textLink.activeForeground": "${borderHighlight}",
+    "textLink.activeForeground": "${link}",
     "textLink.foreground": "${textPrimary}",
     "textPreformat.foreground": "${textPrimary}",
     "textSeparator.foreground": "${borderDark}",
@@ -41,7 +41,7 @@
     "list.dropBackground": "${selection}",
     "list.focusBackground": "${selection}",
     "list.focusForeground": "${textPrimary}",
-    "list.highlightForeground": "${borderHighlight}",
+    "list.highlightForeground": "${link}",
     "list.hoverBackground": "${surfaceAlt}",
     "list.hoverForeground": "${textPrimary}",
     "list.inactiveSelectionBackground": "${surfaceAlt}",
@@ -158,7 +158,7 @@
     {
       "scope": "keyword",
       "settings": {
-        "foreground": "${borderHighlight}"
+        "foreground": "${link}"
       }
     },
     {
@@ -167,7 +167,7 @@
         "storage.type"
       ],
       "settings": {
-        "foreground": "${borderHighlight}"
+        "foreground": "${link}"
       }
     },
     {

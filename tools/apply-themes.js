@@ -38,7 +38,7 @@ const REQUIRED_TOKENS = [
   'textPrimary', 'textSecondary', 'textMuted',
   'accentTeal', 'accentTealDeep',
   'success', 'warning', 'danger',
-  'selection', 'compareBack'
+  'selection', 'compareBack', 'link'
 ];
 
 function die(msg) { console.error('apply-themes: ' + msg); process.exit(1); }
@@ -84,7 +84,8 @@ function render(themes) {
       ['textPrimary', 'textSecondary', 'textMuted'],
       ['accentTeal', 'accentTealDeep'],
       ['success', 'warning', 'danger'],
-      ['selection', 'compareBack']
+      ['selection', 'compareBack'],
+      ['link']
     ];
     lines.forEach((group, gi) => {
       const body = group.map(k => k + ": '" + t.tokens[k].toUpperCase() + "'").join(', ');

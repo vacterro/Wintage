@@ -1,11 +1,11 @@
-/* Wintage Dracula - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Dracula - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #21222C; --backgroundSoft: #282A36;
   --surface: #44475A; --surfaceRaised: #4C526D; --surfaceAlt: #525A7B;
-  --borderDark: #191A21; --borderHighlight: #BD93F9; --borderMuted: #6272A4;
+  --borderDark: #191A21; --borderHighlight: #BD93F9; --borderMuted: #6272A4; --link: #BD93F9;
   --textPrimary: #F8F8F2; --textSecondary: #B8B8B7; --textMuted: #828285;
   --accentTeal: #008080; --accentTealDeep: #004C4C;
   --success: #4A7A20; --warning: #7A7A20; --danger: #7A2020;

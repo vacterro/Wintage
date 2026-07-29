@@ -1,11 +1,11 @@
-/* Wintage Dark Golden (Win95) - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Dark Golden (Win95) - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #342012; --backgroundSoft: #3A2616;
   --surface: #4A341B; --surfaceRaised: #5A4324; --surfaceAlt: #634B2B;
-  --borderDark: #1C1208; --borderHighlight: #D3B57A; --borderMuted: #665033;
+  --borderDark: #1C1208; --borderHighlight: #D3B57A; --borderMuted: #665033; --link: #D3B57A;
   --textPrimary: #E2CA95; --textSecondary: #C5AB6E; --textMuted: #95804C;
   --accentTeal: #008080; --accentTealDeep: #006060;
   --success: #5B9630; --warning: #969630; --danger: #963030;

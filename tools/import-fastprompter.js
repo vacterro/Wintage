@@ -99,9 +99,19 @@ function toPack(name, raw) {
   tokens.compareBack = blend(darker, lum(darker) > 0.18 ? '#FFFFFF' : '#000000', 0.25);
 
   const backdrop = tokens.backgroundSoft;
-  for (const k of ['textPrimary', 'textSecondary', 'borderHighlight']) {
+  const light = lum(backdrop) > 0.18;
+
+  // borderHighlight is the bevel light edge; link is the hyperlink colour. On a dark
+  // palette one value serves both, so link = the AA-lifted accent and the bevel keeps
+  // it. On a LIGHT palette they pull apart: the bevel highlight must be near-white to
+  // read as raised, and near-white fails AA as link text -- so the accent, lifted
+  // DARK for readability, becomes link, and the bevel goes bright on its own.
+  tokens.link = liftToAA(tokens.borderHighlight, backdrop, 'link', slug);
+  for (const k of ['textPrimary', 'textSecondary']) {
     tokens[k] = liftToAA(tokens[k], backdrop, k, slug);
   }
+  tokens.borderHighlight = light ? blend(tokens.surface, '#FFFFFF', 0.85) : tokens.link;
+
   // Uppercase everywhere: check-css.js and apply-themes.js both compare hex as
   // written, and a mixed-case table looks like two different colours in a diff.
   for (const k of Object.keys(tokens)) tokens[k] = tokens[k].toUpperCase();

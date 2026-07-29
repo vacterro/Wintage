@@ -3,11 +3,11 @@
 ## DOING
 
 ## TODO
-- [ ] T-030 Split the link colour out of borderHighlight: the token is both the bevel light edge and the link colour, which only works on a dark palette -- on a light one the bevel must be near-white and near-white fails AA as text. Touches GLOBAL_CSS, SHADOW_CSS, the repainter link branch, the pack schema and both gates | needs: T-027 | verify: golden link colour unchanged, a light pack passes the AA gate with a readable link and a near-white bevel
 
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
 
 ## DONE
+- [x] T-030 Split link out of borderHighlight (19th token): bevel edge and hyperlink are separate now. Dark palettes set link=borderHighlight (rendering byte-identical, golden link #D3B57A unchanged); the one light palette gets a near-white bevel + a dark AA-safe link. Both generators, both gates, all templates and the GUI updated | verify: 15 dark packs unchanged, vintageclassic bevel #5E7A7A->#F6F6F6 + link 4.62:1, all gates green -- E-147, E-148
 - [x] T-050 Obsidian support: 16 palettes as per-vault community themes derived from the user's own VintageWin95 theme.css; install into every vault, activate the chosen one with an appearance.json backup, revert leaves hand-made themes untouched | verify: 16 installed into 2 vaults, golden active + present, revert 16->0 with VintageWin95 intact -- E-127, E-128
 - [x] T-051 Release-breaker: themes/codenomad.json was never generated after the nomadcode->codenomad rename, so derive-palette --check (a release gate) FAILed. Regenerated | verify: derive-palette --check clean -- E-125
 - [x] T-052 build-desktop never pruned output, so renamed/removed palettes left ghost out dirs (nomadcode) that would install. Added prune() | verify: both nomadcode dirs pruned, --check flags orphans -- E-126

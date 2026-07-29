@@ -1,11 +1,11 @@
-/* Wintage Dark 2 (OLED) - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Dark 2 (OLED) - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #000000; --backgroundSoft: #000000;
   --surface: #0A0A0A; --surfaceRaised: #141414; --surfaceAlt: #1C1C1C;
-  --borderDark: #1A1A1A; --borderHighlight: #FFFFFF; --borderMuted: #333333;
+  --borderDark: #1A1A1A; --borderHighlight: #FFFFFF; --borderMuted: #333333; --link: #FFFFFF;
   --textPrimary: #A0A0A0; --textSecondary: #777777; --textMuted: #484848;
   --accentTeal: #008080; --accentTealDeep: #004C4C;
   --success: #4A7A20; --warning: #7A7A20; --danger: #7A2020;

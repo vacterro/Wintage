@@ -15,11 +15,11 @@
     "button_background": "${surfaceRaised}",
     "ntp_background": "${background}",
     "ntp_text": "${textPrimary}",
-    "ntp_link": "${borderHighlight}",
-    "ntp_header": "${borderHighlight}",
+    "ntp_link": "${link}",
+    "ntp_header": "${link}",
     "ntp_section": "${surface}",
     "ntp_section_text": "${textSecondary}",
-    "ntp_section_link": "${borderHighlight}"
+    "ntp_section_link": "${link}"
   },
   "properties": { "ntp_background_alignment": "center" }
 }

@@ -10,7 +10,7 @@
     "surfaceRaised": "#D0D0D0",
     "surfaceAlt": "#DCDCDC",
     "borderDark": "#808080",
-    "borderHighlight": "#5E7A7A",
+    "borderHighlight": "#F6F6F6",
     "borderMuted": "#FFFFFF",
     "textPrimary": "#000000",
     "textSecondary": "#3A3A3A",
@@ -21,6 +21,7 @@
     "warning": "#7A7A20",
     "danger": "#7A2020",
     "selection": "#D0D0D0",
-    "compareBack": "#D0D0D0"
+    "compareBack": "#D0D0D0",
+    "link": "#5E7A7A"
   }
 }

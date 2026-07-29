@@ -1,11 +1,11 @@
-/* Wintage Claude Code - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Claude Code - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #29241D; --backgroundSoft: #2E2922;
   --surface: #3B362A; --surfaceRaised: #484436; --surfaceAlt: #514C3D;
-  --borderDark: #15130F; --borderHighlight: #D1A27C; --borderMuted: #555144;
+  --borderDark: #15130F; --borderHighlight: #D1A27C; --borderMuted: #555144; --link: #D1A27C;
   --textPrimary: #E0B997; --textSecondary: #C39870; --textMuted: #93704E;
   --accentTeal: #008080; --accentTealDeep: #006060;
   --success: #5B9630; --warning: #969630; --danger: #963030;

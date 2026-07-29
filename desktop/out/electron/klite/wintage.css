@@ -1,11 +1,11 @@
-/* Wintage K-Lite (MPC-HC) - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage K-Lite (MPC-HC) - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #212325; --backgroundSoft: #26282A;
   --surface: #303235; --surfaceRaised: #3C3F42; --surfaceAlt: #44474A;
-  --borderDark: #111213; --borderHighlight: #A2A5AB; --borderMuted: #494C50;
+  --borderDark: #111213; --borderHighlight: #A2A5AB; --borderMuted: #494C50; --link: #A2A5AB;
   --textPrimary: #B8BABF; --textSecondary: #95989E; --textMuted: #6D6F74;
   --accentTeal: #008080; --accentTealDeep: #006060;
   --success: #5B9630; --warning: #969630; --danger: #963030;

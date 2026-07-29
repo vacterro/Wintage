@@ -1,11 +1,11 @@
-/* Wintage Antigravity - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage Antigravity - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #1B1F2C; --backgroundSoft: #1F2431;
   --surface: #272B3E; --surfaceRaised: #31354D; --surfaceAlt: #393D55;
-  --borderDark: #0D0F17; --borderHighlight: #7AD0D3; --borderMuted: #404359;
+  --borderDark: #0D0F17; --borderHighlight: #7AD0D3; --borderMuted: #404359; --link: #7AD0D3;
   --textPrimary: #95DEE2; --textSecondary: #6EBFC5; --textMuted: #4C8F95;
   --accentTeal: #008080; --accentTealDeep: #006060;
   --success: #5B9630; --warning: #969630; --danger: #963030;

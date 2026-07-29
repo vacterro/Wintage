@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.16.0",
+  "version": "1.17.0",
   "name": "Wintage Claude Code",
   "description": "Wintage Claude Code for the browser chrome. Companion to the Wintage userscript.",
   "theme": {

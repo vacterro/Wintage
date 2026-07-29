@@ -161,6 +161,11 @@ function derive(slug, spec) {
       : hslToRgb(hh, ss, l);
     tokens[name] = rgbToHex(r, g, b);
   }
+  // Every derived palette is dark (they are golden's hue rotated), so the bevel
+  // highlight doubles as a readable link exactly as it does on golden -- link is
+  // just borderHighlight. The split only earns its keep on a light palette, which
+  // this generator never produces; the imported FastPrompter side handles those.
+  tokens.link = tokens.borderHighlight;
   return { slug, label: spec.label, order: spec.order, source: spec.source, tokens };
 }
 

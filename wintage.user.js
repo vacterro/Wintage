@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.16.0
+// @version      1.17.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -79,7 +79,8 @@
         textPrimary: '#E2CA95', textSecondary: '#C5AB6E', textMuted: '#95804C',
         accentTeal: '#008080', accentTealDeep: '#006060',
         success: '#5B9630', warning: '#969630', danger: '#963030',
-        selection: '#5A4324', compareBack: '#24170C'
+        selection: '#5A4324', compareBack: '#24170C',
+        link: '#D3B57A'
       }
     },
     claudecode: {
@@ -91,7 +92,8 @@
         textPrimary: '#E0B997', textSecondary: '#C39870', textMuted: '#93704E',
         accentTeal: '#008080', accentTealDeep: '#006060',
         success: '#5B9630', warning: '#969630', danger: '#963030',
-        selection: '#484436', compareBack: '#1C1914'
+        selection: '#484436', compareBack: '#1C1914',
+        link: '#D1A27C'
       }
     },
     antigravity: {
@@ -103,7 +105,8 @@
         textPrimary: '#95DEE2', textSecondary: '#6EBFC5', textMuted: '#4C8F95',
         accentTeal: '#008080', accentTealDeep: '#006060',
         success: '#5B9630', warning: '#969630', danger: '#963030',
-        selection: '#31354D', compareBack: '#12151E'
+        selection: '#31354D', compareBack: '#12151E',
+        link: '#7AD0D3'
       }
     },
     klite: {
@@ -115,7 +118,8 @@
         textPrimary: '#B8BABF', textSecondary: '#95989E', textMuted: '#6D6F74',
         accentTeal: '#008080', accentTealDeep: '#006060',
         success: '#5B9630', warning: '#969630', danger: '#963030',
-        selection: '#3C3F42', compareBack: '#171819'
+        selection: '#3C3F42', compareBack: '#171819',
+        link: '#A2A5AB'
       }
     },
     freebuff: {
@@ -127,7 +131,8 @@
         textPrimary: '#A0E295', textSecondary: '#7AC56E', textMuted: '#55954C',
         accentTeal: '#008080', accentTealDeep: '#006060',
         success: '#5B9630', warning: '#969630', danger: '#963030',
-        selection: '#333B4B', compareBack: '#13181D'
+        selection: '#333B4B', compareBack: '#13181D',
+        link: '#89D37A'
       }
     },
     codenomad: {
@@ -139,7 +144,8 @@
         textPrimary: '#B099DE', textSecondary: '#9C84C8', textMuted: '#675091',
         accentTeal: '#008080', accentTealDeep: '#006060',
         success: '#5B9630', warning: '#969630', danger: '#963030',
-        selection: '#343D4A', compareBack: '#13181D'
+        selection: '#343D4A', compareBack: '#13181D',
+        link: '#9D86D1'
       }
     },
     fpdefault: {
@@ -151,7 +157,8 @@
         textPrimary: '#C0C0C0', textSecondary: '#949494', textMuted: '#656565',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#343434', compareBack: '#141414'
+        selection: '#343434', compareBack: '#141414',
+        link: '#839BB0'
       }
     },
     goldenvintage: {
@@ -163,7 +170,8 @@
         textPrimary: '#C4BA9F', textSecondary: '#8E8774', textMuted: '#605C50',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#333333', compareBack: '#0B0B0B'
+        selection: '#333333', compareBack: '#0B0B0B',
+        link: '#D6BE76'
       }
     },
     goldendefault: {
@@ -175,7 +183,8 @@
         textPrimary: '#D4C89A', textSecondary: '#9C9371', textMuted: '#6E674E',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#3D372A', compareBack: '#14120C'
+        selection: '#3D372A', compareBack: '#14120C',
+        link: '#F0D060'
       }
     },
     vintagedark: {
@@ -187,7 +196,8 @@
         textPrimary: '#C0C0C0', textSecondary: '#8E8E8E', textMuted: '#646464',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#343434', compareBack: '#121212'
+        selection: '#343434', compareBack: '#121212',
+        link: '#738EA6'
       }
     },
     vintageclassic: {
@@ -195,11 +205,12 @@
       tokens: {
         background: '#C0C0C0', backgroundSoft: '#FFFFFF',
         surface: '#C0C0C0', surfaceRaised: '#D0D0D0', surfaceAlt: '#DCDCDC',
-        borderDark: '#808080', borderHighlight: '#5E7A7A', borderMuted: '#FFFFFF',
+        borderDark: '#808080', borderHighlight: '#F6F6F6', borderMuted: '#FFFFFF',
         textPrimary: '#000000', textSecondary: '#3A3A3A', textMuted: '#6A6A6A',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#D0D0D0', compareBack: '#D0D0D0'
+        selection: '#D0D0D0', compareBack: '#D0D0D0',
+        link: '#5E7A7A'
       }
     },
     oled: {
@@ -211,7 +222,8 @@
         textPrimary: '#A0A0A0', textSecondary: '#777777', textMuted: '#484848',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#141414', compareBack: '#000000'
+        selection: '#141414', compareBack: '#000000',
+        link: '#FFFFFF'
       }
     },
     dracula: {
@@ -223,7 +235,8 @@
         textPrimary: '#F8F8F2', textSecondary: '#B8B8B7', textMuted: '#828285',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#4C526D', compareBack: '#191A21'
+        selection: '#4C526D', compareBack: '#191A21',
+        link: '#BD93F9'
       }
     },
     nord: {
@@ -235,7 +248,8 @@
         textPrimary: '#D8DEE9', textSecondary: '#A3A9B3', textMuted: '#777C87',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#3F4758', compareBack: '#1D2129'
+        selection: '#3F4758', compareBack: '#1D2129',
+        link: '#88C0D0'
       }
     },
     solarized: {
@@ -247,7 +261,8 @@
         textPrimary: '#93A1A1', textSecondary: '#8D9EA1', textMuted: '#426066',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#1B444F', compareBack: '#002029'
+        selection: '#1B444F', compareBack: '#002029',
+        link: '#51A2DB'
       }
     },
     custom: {
@@ -259,7 +274,8 @@
         textPrimary: '#D4C89A', textSecondary: '#9C9371', textMuted: '#6E674E',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#3D372A', compareBack: '#14120C'
+        selection: '#3D372A', compareBack: '#14120C',
+        link: '#F0D060'
       }
     }
   };
@@ -346,7 +362,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.16.0';
+  const W95_VERSION = '1.17.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -372,7 +388,7 @@
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: ${T.background}; --backgroundSoft: ${T.backgroundSoft};
   --surface: ${T.surface}; --surfaceRaised: ${T.surfaceRaised}; --surfaceAlt: ${T.surfaceAlt};
-  --borderDark: ${T.borderDark}; --borderHighlight: ${T.borderHighlight}; --borderMuted: ${T.borderMuted};
+  --borderDark: ${T.borderDark}; --borderHighlight: ${T.borderHighlight}; --borderMuted: ${T.borderMuted}; --link: ${T.link};
   --textPrimary: ${T.textPrimary}; --textSecondary: ${T.textSecondary}; --textMuted: ${T.textMuted};
   --accentTeal: ${T.accentTeal}; --accentTealDeep: ${T.accentTealDeep};
   --success: ${T.success}; --warning: ${T.warning}; --danger: ${T.danger};
@@ -555,7 +571,7 @@ small, sub, sup, figcaption { font-size: 10px !important; line-height: 1.2 !impo
    a real token, and stays clearly distinct from --textPrimary body text. Visited
    uses --textSecondary (6.2:1); --textMuted was rejected at 3.3:1 for the same
    AA reason. */
-a, a:link { color: ${T.borderHighlight} !important; text-decoration: none !important; background-color: transparent !important; }
+a, a:link { color: ${T.link} !important; text-decoration: none !important; background-color: transparent !important; }
 a:visited { color: ${T.textSecondary} !important; }
 foreignObject { mask: none !important; -webkit-mask: none !important; }
 rect { rx: 0 !important; ry: 0 !important; }
@@ -740,7 +756,7 @@ hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important;
    noise, not clarity. Colour (--borderHighlight vs --textPrimary body text)
    carries the "this is a link" signal on its own, so no control depends on hover
    alone — the hover underline is confirmation, not the only affordance. */
-:root body a:hover { color: ${T.borderHighlight} !important; text-decoration: underline !important; background-color: transparent !important; }
+:root body a:hover { color: ${T.link} !important; text-decoration: underline !important; background-color: transparent !important; }
 
 yt-interaction, paper-ripple, .mdc-ripple-surface, .mdc-ripple-upgraded::before, .mdc-ripple-upgraded::after, [class*="ripple" i] {
   display: none !important; opacity: 0 !important; visibility: hidden !important; content: none !important;
@@ -880,7 +896,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
     /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
     button:hover, shreddit-button:hover, .btn:hover { background-color: ${T.surfaceAlt} !important; ${B_OUTER} }
-    a, a:link { color: ${T.borderHighlight} !important; text-decoration: none !important; }
+    a, a:link { color: ${T.link} !important; text-decoration: none !important; }
     a:visited { color: ${T.textSecondary} !important; }
     a:hover { text-decoration: underline !important; background-color: transparent !important; }
   `;
@@ -1434,7 +1450,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
           // legible enough (7.1:1 and 6.3:1) that the first two tests passed them
           // through. Legible is not the same as on-palette.
           if (cr < 4.5 || (fgLum > 0.4 && grayish) || !PALETTE_RGB.has(fgColor)) {
-            w.push(el, 'color', T.borderHighlight);
+            w.push(el, 'color', T.link);
           }
         } else {
           if (cr < 4.5) {

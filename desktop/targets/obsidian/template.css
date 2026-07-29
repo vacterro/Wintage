@@ -13,7 +13,7 @@
     --interactive-normal: ${surfaceRaised};
     --interactive-hover: ${surfaceAlt};
     --interactive-accent: ${surfaceRaised};
-    --text-accent: ${borderHighlight};
+    --text-accent: ${link};
     --text-accent-hover: ${textPrimary};
     --text-selection: ${surfaceAlt};
     --titlebar-background: ${surface};
@@ -30,7 +30,7 @@
     --color-base-100: ${textPrimary};
     --color-accent: ${accentTeal};
     --color-green: ${success};
-    --color-yellow: ${borderHighlight};
+    --color-yellow: ${link};
     --color-red: ${danger};
     --nav-item-background-hover: ${surfaceRaised};
     --nav-item-background-active: ${surfaceAlt};

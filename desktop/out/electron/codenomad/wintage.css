@@ -1,11 +1,11 @@
-/* Wintage CodeNomad - generated from wintage.user.js v1.16.0. Do not edit. */
+/* Wintage CodeNomad - generated from wintage.user.js v1.17.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #1C242A; --backgroundSoft: #21282F;
   --surface: #29313C; --surfaceRaised: #343D4A; --surfaceAlt: #3C4552;
-  --borderDark: #0E1216; --borderHighlight: #9D86D1; --borderMuted: #424A57;
+  --borderDark: #0E1216; --borderHighlight: #9D86D1; --borderMuted: #424A57; --link: #9D86D1;
   --textPrimary: #B099DE; --textSecondary: #9C84C8; --textMuted: #675091;
   --accentTeal: #008080; --accentTealDeep: #006060;
   --success: #5B9630; --warning: #969630; --danger: #963030;

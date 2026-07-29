@@ -21,6 +21,7 @@
     "warning": "#7A7A20",
     "danger": "#7A2020",
     "selection": "#1B444F",
-    "compareBack": "#002029"
+    "compareBack": "#002029",
+    "link": "#51A2DB"
   }
 }

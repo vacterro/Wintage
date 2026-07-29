@@ -4,7 +4,7 @@
     --background-primary-alt: #FFFFFF;
     --background-secondary: #C0C0C0;
     --background-secondary-alt: #D0D0D0;
-    --background-modifier-border: #5E7A7A;
+    --background-modifier-border: #F6F6F6;
     --background-modifier-border-hover: #000000;
     --background-modifier-border-focus: #000000;
     --text-normal: #000000;
@@ -52,6 +52,6 @@ body {
 /* Brutalist borders */
 .workspace-leaf, .workspace-tab-header, button, input {
     border: 1px solid #808080;
-    border-top-color: #5E7A7A;
-    border-left-color: #5E7A7A;
+    border-top-color: #F6F6F6;
+    border-left-color: #F6F6F6;
 }
