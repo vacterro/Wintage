@@ -1,4 +1,4 @@
-# BOARD
+﻿# BOARD
 
 ## DOING
 
@@ -8,6 +8,9 @@
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
 
 ## DONE
+- [x] T-050 Obsidian support: 16 palettes as per-vault community themes derived from the user's own VintageWin95 theme.css; install into every vault, activate the chosen one with an appearance.json backup, revert leaves hand-made themes untouched | verify: 16 installed into 2 vaults, golden active + present, revert 16->0 with VintageWin95 intact -- E-127, E-128
+- [x] T-051 Release-breaker: themes/codenomad.json was never generated after the nomadcode->codenomad rename, so derive-palette --check (a release gate) FAILed. Regenerated | verify: derive-palette --check clean -- E-125
+- [x] T-052 build-desktop never pruned output, so renamed/removed palettes left ghost out dirs (nomadcode) that would install. Added prune() | verify: both nomadcode dirs pruned, --check flags orphans -- E-126
 - [x] T-034 MPC-HC: dark theme + dark title bar + OSD at Verdana 16 with zero transparency and a border; player chrome colours are compiled in and no registry value exposes them, so the installer says so instead of implying coverage. Settings exported once to desktop/backup/mpc-hc-settings.reg | verify: applied, listing shows 'mpchc themed n/a - colours are compiled in' -- E-119
 - [x] T-028 release.ps1 bumps W95_VERSION with @version, check-css FAILs on a mismatch | verify: 'version: PASS (1.14.0 in both places)'; the drifted 1.4.7 stamp is gone -- E-120
 - [x] T-025 Companion browser themes: 15 Chromium manifests generated from a role-based template | verify: golden's frame equals its background token, 15 emitted -- E-121
@@ -57,3 +60,5 @@
 
 ## BLOCKED
 - [ ] T-047 GUI polish: whatever reads wrong on screen | blocker: needs the user's visual verdict - nothing here can screenshot a desktop window, and guessing at spacing would be inventing findings
+
+

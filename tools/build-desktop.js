@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds the desktop-application themes from the same themes/*.json packs the
-// userscript uses. One palette source, many targets — a colour that drifts between
+// userscript uses. One palette source, many targets вЂ” a colour that drifts between
 // the browser and the editor is the thing this prevents.
 //
 // Targets are declared in desktop/targets/<name>/. Each carries a template whose
@@ -26,14 +26,14 @@ let stale = 0, wrote = 0;
 
 function loadPacks() {
   return fs.readdirSync(THEME_DIR).filter(f => f.endsWith('.json'))
-    .map(f => JSON.parse(fs.readFileSync(path.join(THEME_DIR, f), 'utf8')))
+    .map(f => JSON.parse(fs.readFileSync(path.join(THEME_DIR, f), 'utf8').replace(/^\uFEFF/, '')))
     .sort((a, b) => (a.order || 99) - (b.order || 99) || a.slug.localeCompare(b.slug));
 }
 
 // Substitutes ${token} anywhere in a JSON structure. An unknown token is a hard
 // error, never a silently surviving literal: `${textPrimaryy}` left in a colour
 // value is accepted by VS Code's theme loader, which then renders that element
-// with no colour at all — an invisible failure, which is exactly the class of bug
+// with no colour at all вЂ” an invisible failure, which is exactly the class of bug
 // the CSS gate exists to stop on the browser side.
 function fill(node, tokens, ctx) {
   if (typeof node === 'string') {
@@ -61,20 +61,20 @@ function emit(file, content) {
   wrote++;
 }
 
-// ─── TARGET: vscode ──────────────────────────────────────────────────────────
-// Covers Antigravity and VS Code both — Antigravity is a VS Code fork and reads
+// в”Ђв”Ђв”Ђ TARGET: vscode в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// Covers Antigravity and VS Code both вЂ” Antigravity is a VS Code fork and reads
 // the identical extension format, so one build serves two applications.
 //
 // The template was derived from the hand-written Vintage Win 95 theme already
 // installed on this machine, by replacing each hex with the token whose value it
 // equalled: 96 of its 99 colour keys mapped exactly, and the three that did not are
 // fully transparent (#00000000, a deliberate "no shadow") and stay literal. That
-// derivation matters — it means the six generated themes are the author's own
+// derivation matters вЂ” it means the six generated themes are the author's own
 // mapping of VS Code's surfaces, re-tinted, not someone's fresh guess at which
 // editor element deserves which token.
 function buildVscode(packs) {
   const dir = path.join(DESKTOP, 'targets', 'vscode');
-  const template = JSON.parse(fs.readFileSync(path.join(dir, 'template.json'), 'utf8'));
+  const template = JSON.parse(fs.readFileSync(path.join(dir, 'template.json'), 'utf8').replace(/^\uFEFF/, ''));
   const outDir = path.join(OUT, 'vscode', 'wintage-themes');
 
   const contributes = [];
@@ -88,10 +88,10 @@ function buildVscode(packs) {
 
   emit(path.join(outDir, 'package.json'), JSON.stringify({
     name: 'wintage-themes',
-    displayName: 'Wintage — Win95 Vintage Themes',
+    displayName: 'Wintage вЂ” Win95 Vintage Themes',
     description: 'Dark Golden Windows 95 aesthetic, and five palettes derived from it. Generated from the Wintage theme packs.',
     // One version number for the whole project, taken from the userscript header
-    // rather than kept separately — two version fields drift, and the second one
+    // rather than kept separately вЂ” two version fields drift, and the second one
     // is always the one nobody remembers to bump.
     version: VERSION,
     publisher: 'vacterro',
@@ -101,10 +101,10 @@ function buildVscode(packs) {
   }, null, 2) + '\n');
 }
 
-// ─── TARGET: electron ────────────────────────────────────────────────────────
-// Claude Code's desktop app, FreeBuff and NomadCode are all Electron, which means
+// в”Ђв”Ђв”Ђ TARGET: electron в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// Claude Code's desktop app, FreeBuff and codenomad are all Electron, which means
 // their UI is a web page and the userscript's own stylesheet already knows how to
-// impose UI.md on one. So the CSS is not rewritten here — it is EXTRACTED from
+// impose UI.md on one. So the CSS is not rewritten here вЂ” it is EXTRACTED from
 // wintage.user.js and its ${T.x} interpolations resolved against the palette.
 // Duplicating it would mean every bevel fix, scrollbar rebuild and type-ladder
 // correction had to be made twice, and the second copy would rot.
@@ -159,13 +159,13 @@ function buildElectron(packs) {
   }
 }
 
-// ─── TARGET: browser ─────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ TARGET: browser в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // A Chromium theme so the browser's own chrome matches the pages the userscript is
 // repainting. Its colours are RGB triples, not hex, so the fill happens on the hex
 // and is converted after -- a `${token}` inside a JSON array would not survive
 // JSON.parse in the first place.
 function buildBrowser(packs) {
-  const template = JSON.parse(fs.readFileSync(path.join(DESKTOP, 'targets', 'browser', 'template.json'), 'utf8'));
+  const template = JSON.parse(fs.readFileSync(path.join(DESKTOP, 'targets', 'browser', 'template.json'), 'utf8').replace(/^\uFEFF/, ''));
   const toRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
   for (const pack of packs) {
@@ -185,11 +185,56 @@ function buildBrowser(packs) {
   }
 }
 
+// ─── TARGET: obsidian ────────────────────────────────────────────────────────
+// A community theme, one per palette, installed per-vault into
+// <vault>/.obsidian/themes/. Same shape as the VS Code target: it lives in the
+// user's own vault, so an Obsidian update cannot remove it, and Obsidian keeps
+// every installed theme so all palettes coexist and the user picks in Appearance.
+// The template was derived from the hand-written VintageWin95 theme already in the
+// vault, each hex replaced by the token whose value it equalled -- the same
+// author-mapping-re-tinted approach the VS Code target uses.
+function buildObsidian(packs) {
+  const template = fs.readFileSync(path.join(DESKTOP, 'targets', 'obsidian', 'template.css'), 'utf8');
+  for (const pack of packs) {
+    const name = 'Wintage ' + pack.label;
+    const css = fill(template, pack.tokens, { label: name, __file: 'obsidian/template.css' });
+    const left = /\$\{/.exec(css);
+    if (left) throw new Error('unresolved placeholder in obsidian ' + pack.slug + ' near: ' + css.slice(left.index, left.index + 60));
+    const dir = path.join(OUT, 'obsidian', pack.slug);
+    emit(path.join(dir, 'theme.css'), css);
+    emit(path.join(dir, 'manifest.json'), JSON.stringify({
+      name, version: VERSION, minAppVersion: '0.16.0', author: 'Wintage', authorUrl: 'https://github.com/vacterro/Wintage'
+    }, null, 2) + '\n');
+  }
+}
+
+// Renaming or removing a palette used to leave its output behind forever: the
+// emit() path only ever writes, so desktop/out/<target>/nomadcode survived the
+// rename to codenomad and would have been installed as a ghost theme. Prune any
+// per-slug output directory whose slug is not a current pack, so the tree always
+// reflects themes/ exactly.
+function prune(packs) {
+  const live = new Set(packs.map(p => p.slug));
+  for (const target of ['electron', 'browser', 'obsidian']) {
+    const dir = path.join(OUT, target);
+    if (!fs.existsSync(dir)) continue;
+    for (const slug of fs.readdirSync(dir)) {
+      if (live.has(slug)) continue;
+      if (checkOnly) { console.error('build-desktop: ORPHAN ' + path.relative(ROOT, path.join(dir, slug))); stale++; continue; }
+      fs.rmSync(path.join(dir, slug), { recursive: true, force: true });
+      console.log('build-desktop: pruned orphan ' + target + '/' + slug);
+      wrote++;
+    }
+  }
+}
+
 const packs = loadPacks();
 buildVscode(packs);
 buildElectron(packs);
 buildBrowser(packs);
+buildObsidian(packs);
+prune(packs);
 
-if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }
+if (stale) { console.error('\n' + stale + ' output(s) out of date вЂ” run `node tools/build-desktop.js`'); process.exit(1); }
 console.log('build-desktop: ' + (wrote ? wrote + ' file(s) written' : 'everything up to date') +
   ' (' + packs.length + ' palette(s): ' + packs.map(p => p.slug).join(', ') + ')');

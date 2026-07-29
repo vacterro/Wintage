@@ -1,7 +1,7 @@
 ---
-phase: DONE
-task: none
-next_action: "PHASE SCOUT T-030 [last open ticket: link/bevel token split]"
+phase: SHIP
+task: T-050
+next_action: "PHASE SHIP T-050 [Obsidian + 2 hunt bugfixes]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -9,11 +9,11 @@ saipen_version: 7
 schema_version: 1
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
-goal_waves: 1
-goal_tickets: 7
-transition_from: SHIP
-last_event: 123
-updated: 2026-07-29T08:00:00Z
+goal_waves: 2
+goal_tickets: 10
+transition_from: REVIEW
+last_event: 144
+updated: 2026-07-29T12:42:00Z
 ---
 
 # Wintage — five extra themes (goal wave 1)

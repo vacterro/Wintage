@@ -1,6 +1,6 @@
 {
-  "slug": "nomadcode",
-  "label": "NomadCode",
+  "slug": "codenomad",
+  "label": "CodeNomad",
   "order": 6,
   "source": "AppData/@neuralnomads/codenomad-electron-app cache: #0E1116 ground, #24292E/#2F363D surfaces, indigo #624AFF / #615CED accent, #E1E4E8 text",
   "tokens": {

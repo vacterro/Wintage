@@ -1,104 +1,104 @@
 {
   "manifest_version": 3,
-  "version": "1.15.0",
-  "name": "Wintage NomadCode",
-  "description": "Wintage NomadCode for the browser chrome. Companion to the Wintage userscript.",
+  "version": "1.16.0",
+  "name": "Wintage Custom",
+  "description": "Wintage Custom for the browser chrome. Companion to the Wintage userscript.",
   "theme": {
     "colors": {
       "frame": [
-        28,
-        36,
-        42
+        26,
+        24,
+        16
       ],
       "frame_inactive": [
-        41,
-        49,
-        60
+        51,
+        46,
+        34
       ],
       "frame_incognito": [
-        19,
-        24,
-        29
+        20,
+        18,
+        12
       ],
       "frame_incognito_inactive": [
-        19,
-        24,
-        29
+        20,
+        18,
+        12
       ],
       "toolbar": [
-        41,
-        49,
-        60
+        51,
+        46,
+        34
       ],
       "tab_text": [
-        176,
-        153,
-        222
+        212,
+        200,
+        154
       ],
       "tab_background_text": [
         156,
-        132,
-        200
+        147,
+        113
       ],
       "bookmark_text": [
-        176,
-        153,
-        222
+        212,
+        200,
+        154
       ],
       "toolbar_button_icon": [
-        176,
-        153,
-        222
+        212,
+        200,
+        154
       ],
       "omnibox_background": [
-        19,
-        24,
-        29
+        20,
+        18,
+        12
       ],
       "omnibox_text": [
-        176,
-        153,
-        222
+        212,
+        200,
+        154
       ],
       "button_background": [
-        52,
         61,
-        74
-      ],
-      "ntp_background": [
-        28,
-        36,
+        55,
         42
       ],
+      "ntp_background": [
+        26,
+        24,
+        16
+      ],
       "ntp_text": [
-        176,
-        153,
-        222
+        212,
+        200,
+        154
       ],
       "ntp_link": [
-        157,
-        134,
-        209
+        240,
+        208,
+        96
       ],
       "ntp_header": [
-        157,
-        134,
-        209
+        240,
+        208,
+        96
       ],
       "ntp_section": [
-        41,
-        49,
-        60
+        51,
+        46,
+        34
       ],
       "ntp_section_text": [
         156,
-        132,
-        200
+        147,
+        113
       ],
       "ntp_section_link": [
-        157,
-        134,
-        209
+        240,
+        208,
+        96
       ]
     },
     "properties": {

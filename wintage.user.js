@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.15.0
+// @version      1.16.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -130,8 +130,8 @@
         selection: '#333B4B', compareBack: '#13181D'
       }
     },
-    nomadcode: {
-      label: 'NomadCode',
+    codenomad: {
+      label: 'CodeNomad',
       tokens: {
         background: '#1C242A', backgroundSoft: '#21282F',
         surface: '#29313C', surfaceRaised: '#343D4A', surfaceAlt: '#3C4552',
@@ -249,6 +249,18 @@
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
         selection: '#1B444F', compareBack: '#002029'
       }
+    },
+    custom: {
+      label: 'Custom',
+      tokens: {
+        background: '#1A1810', backgroundSoft: '#232018',
+        surface: '#332E22', surfaceRaised: '#3D372A', surfaceAlt: '#453D30',
+        borderDark: '#100E08', borderHighlight: '#F0D060', borderMuted: '#5A5040',
+        textPrimary: '#D4C89A', textSecondary: '#9C9371', textMuted: '#6E674E',
+        accentTeal: '#008080', accentTealDeep: '#004C4C',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        selection: '#3D372A', compareBack: '#14120C'
+      }
     }
   };
   // ─── END THEME PACKS ─────────────────────────────────────────────────────────
@@ -334,7 +346,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.15.0';
+  const W95_VERSION = '1.16.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';

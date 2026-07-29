@@ -1,3 +1,11 @@
 desktop/backup/
 scratch*.py
 *_old.js
+
+# Chrome writes this next to an unpacked theme when loaded
+Cached Theme.pak
+*.pak
+
+# one-off fuse probes, superseded by tools/electron-fuses.js
+/check.js
+/patch.js

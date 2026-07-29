@@ -49,6 +49,7 @@ while it is running; a first install does not, because the archive is in use.
 | `freebuff`, `antigravity-app`, `nomadcode` | Electron shim, see below | no — re-run the installer |
 | `claude` | **not themeable**, see below | — |
 | `mpchc` | registry, dark theme + OSD typography only | no — MPC-HC rewrites its settings on exit |
+| `obsidian` | community theme per vault, all palettes installed at once | **yes** — it lives in your vault |
 
 ### Electron apps
 
@@ -88,6 +89,17 @@ a security check the vendor switched on on purpose, so the installer reads the f
 ```powershell
 node ..\tools\electron-fuses.js "<path to the app's exe>"
 ```
+
+### Obsidian
+
+A community theme is written into every vault's `.obsidian/themes/` — all sixteen
+palettes at once, exactly like the VS Code target, so you switch between them in
+**Settings → Appearance** without re-running anything. The template was derived from
+the hand-made `VintageWin95` theme already in the vault, each colour replaced by the
+token it equalled. `-Palette <slug>` sets which one is active on install;
+`appearance.json` is backed up first, and `-Revert` removes only the `Wintage *`
+themes and restores your previous choice — a hand-made theme in the same vault is
+never touched.
 
 ### MPC-HC (K-Lite)
 

@@ -77,7 +77,7 @@ fs.mkdirSync(path.join(packSandbox, 'themes'), { recursive: true });
 fs.mkdirSync(path.join(packSandbox, 'tools'), { recursive: true });
 fs.copyFileSync(GEN, path.join(packSandbox, 'tools', 'apply-themes.js'));
 fs.copyFileSync(path.join(ROOT, 'wintage.user.js'), path.join(packSandbox, 'wintage.user.js'));
-const goodPack = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'golden.json'), 'utf8'));
+const goodPack = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'golden.json'), 'utf8').replace(/^\uFEFF/, ''));
 
 const mutations = {
   'missing token': p => { delete p.tokens.selection; return p; },

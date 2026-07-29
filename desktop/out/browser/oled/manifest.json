@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.15.0",
+  "version": "1.16.0",
   "name": "Wintage Dark 2 (OLED)",
   "description": "Wintage Dark 2 (OLED) for the browser chrome. Companion to the Wintage userscript.",
   "theme": {

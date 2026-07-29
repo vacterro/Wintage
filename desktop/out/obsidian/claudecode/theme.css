@@ -1,0 +1,57 @@
+/* Wintage Claude Code - generated from wintage.user.js palettes. Do not edit. */
+.theme-dark, .theme-light {
+    --background-primary: #29241D;
+    --background-primary-alt: #2E2922;
+    --background-secondary: #3B362A;
+    --background-secondary-alt: #484436;
+    --background-modifier-border: #D1A27C;
+    --background-modifier-border-hover: #E0B997;
+    --background-modifier-border-focus: #E0B997;
+    --text-normal: #E0B997;
+    --text-muted: #C39870;
+    --text-faint: #93704E;
+    --interactive-normal: #484436;
+    --interactive-hover: #514C3D;
+    --interactive-accent: #484436;
+    --text-accent: #D1A27C;
+    --text-accent-hover: #E0B997;
+    --text-selection: #514C3D;
+    --titlebar-background: #3B362A;
+    --titlebar-background-focused: #484436;
+    --titlebar-text-color-focused: #E0B997;
+    --color-base-00: #29241D;
+    --color-base-10: #2E2922;
+    --color-base-20: #3B362A;
+    --color-base-30: #484436;
+    --color-base-40: #514C3D;
+    --color-base-50: #555144;
+    --color-base-60: #93704E;
+    --color-base-70: #C39870;
+    --color-base-100: #E0B997;
+    --color-accent: #008080;
+    --color-green: #5B9630;
+    --color-yellow: #D1A27C;
+    --color-red: #963030;
+    --nav-item-background-hover: #484436;
+    --nav-item-background-active: #514C3D;
+    --radius-s: 0px;
+    --radius-m: 0px;
+    --radius-l: 0px;
+    --radius-xl: 0px;
+    --divider-color: #15130F;
+    --border-color: #15130F;
+    --button-radius: 0px;
+    --input-radius: 0px;
+    --tab-radius: 0px;
+}
+
+body {
+    -webkit-font-smoothing: none;
+}
+
+/* Brutalist borders */
+.workspace-leaf, .workspace-tab-header, button, input {
+    border: 1px solid #15130F;
+    border-top-color: #D1A27C;
+    border-left-color: #D1A27C;
+}

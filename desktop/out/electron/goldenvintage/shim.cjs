@@ -1,4 +1,4 @@
-// Wintage shim for Electron applications.
+﻿// Wintage shim for Electron applications.
 //
 // The application's archive is moved to `app.asar` INSIDE this folder and this
 // file becomes the entry point. Nothing of the app is rewritten -- only relocated
@@ -25,10 +25,10 @@ try { css = fs.readFileSync(CSS_FILE, 'utf8'); } catch (e) {
   console.error('[wintage] stylesheet missing, loading the app unthemed:', e.message);
 }
 
-// ─── SCROLLBAR GUTTERS ───────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ SCROLLBAR GUTTERS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // Styling ::-webkit-scrollbar turns Chromium's OVERLAY scrollbars into classic
 // ones. Overlay scrollbars are invisible until you scroll, so app authors write
-// `overflow: scroll` freely and it costs them nothing — until a theme makes those
+// `overflow: scroll` freely and it costs them nothing вЂ” until a theme makes those
 // scrollbars classic, and every one of those containers grows a permanent 16px
 // gutter with a full-length thumb, on panels that have room to spare. Reported on
 // Antigravity, visible on several panels at once.
@@ -43,36 +43,49 @@ try { css = fs.readFileSync(CSS_FILE, 'utf8'); } catch (e) {
 // getComputedStyle over a whole document is expensive, so this runs a few bounded
 // passes after load and then only on newly added subtrees, never on a timer.
 const SCROLL_FIX = `(() => {
-  if (window.__wintageScrollFix) return 'already running';
+  if (window.__wintageScrollFix) return "already running";
   window.__wintageScrollFix = true;
-  const seen = new WeakSet();
-  const fix = root => {
-    const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
-    let n = 0;
-    for (const el of els) {
-      if (seen.has(el)) continue;
-      seen.add(el);
-      const cs = getComputedStyle(el);
-      if (cs.overflowY === 'scroll') { el.style.setProperty('overflow-y', 'auto', 'important'); n++; }
-      if (cs.overflowX === 'scroll') { el.style.setProperty('overflow-x', 'auto', 'important'); n++; }
-    }
-    return n;
+  
+  const fixOne = el => {
+    const cs = getComputedStyle(el);
+    let fixed = false;
+    if (cs.overflowY === "scroll") { el.style.setProperty("overflow-y", "auto", "important"); fixed = true; }
+    if (cs.overflowX === "scroll") { el.style.setProperty("overflow-x", "auto", "important"); fixed = true; }
+    return fixed;
   };
-  fix(document);
-  // Three settling passes: SPA shells mount most of their tree after first paint.
+  
+  const fixTree = root => {
+    const els = root.querySelectorAll ? root.querySelectorAll("*") : [];
+    for (const el of els) fixOne(el);
+  };
+  
+  fixTree(document);
   let passes = 0;
-  const settle = () => { if (++passes < 3) { fix(document); setTimeout(settle, 600); } };
+  const settle = () => { if (++passes < 3) { fixTree(document); setTimeout(settle, 600); } };
   setTimeout(settle, 600);
+  
   let queued = false;
+  const mutations = [];
   new MutationObserver(records => {
+    mutations.push(...records);
     if (queued) return;
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
-      for (const r of records) for (const node of r.addedNodes) if (node.nodeType === 1) fix(node);
+      const recs = mutations.splice(0, mutations.length);
+      for (const r of recs) {
+        if (r.type === "childList") {
+          for (const node of r.addedNodes) {
+            if (node.nodeType === 1) { fixOne(node); fixTree(node); }
+          }
+        } else if (r.type === "attributes") {
+          if (r.target.nodeType === 1) fixOne(r.target);
+        }
+      }
     });
-  }).observe(document.documentElement, { childList: true, subtree: true });
-  return 'scroll fix installed';
+  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+  
+  return "scroll fix installed";
 })()`;
 
 // Registered BEFORE the real main runs, so no window can be created and finish
@@ -86,7 +99,7 @@ if (css) {
       // Injection either happened or it did not, and a themed-looking window is not
       // proof (the app may simply have a dark theme of its own). Each result is
       // stamped to a status file next to the stylesheet, so "is the theme actually
-      // live in this app?" is answerable without a screenshot or a devtools port —
+      // live in this app?" is answerable without a screenshot or a devtools port вЂ”
       // the same reason the userscript stamps data-w95-ver on every style tag.
       // Appended and capped, not overwritten: the stylesheet and the scrollbar fix
       // report separately and can fail independently, so one overwritten line would
@@ -130,7 +143,7 @@ if (css) {
 }
 
 // Hand control to the real application. Anything thrown here is the app's own
-// problem, not the theme's — but if the shim itself is what broke, the message
+// problem, not the theme's вЂ” but if the shim itself is what broke, the message
 // says so plainly, because a user staring at an app that will not start needs to
 // know which of the two to blame.
 try {
@@ -140,3 +153,4 @@ try {
   console.error('[wintage] delete this folder (resources/app) to restore the app exactly as it was.');
   throw e;
 }
+

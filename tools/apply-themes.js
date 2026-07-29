@@ -50,7 +50,7 @@ function loadThemes() {
   const themes = [];
   for (const f of files) {
     let pack;
-    try { pack = JSON.parse(fs.readFileSync(path.join(THEME_DIR, f), 'utf8')); }
+    try { pack = JSON.parse(fs.readFileSync(path.join(THEME_DIR, f), 'utf8').replace(/^\uFEFF/, '')); }
     catch (e) { die(f + ': not valid JSON — ' + e.message); }
     const slug = pack.slug || path.basename(f, '.json');
     if (!/^[a-z][a-z0-9]*$/.test(slug)) die(f + ': slug "' + slug + '" must be lowercase alphanumeric (it becomes a JS identifier)');

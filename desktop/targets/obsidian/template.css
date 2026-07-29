@@ -1,0 +1,57 @@
+/* ${label} - generated from wintage.user.js palettes. Do not edit. */
+.theme-dark, .theme-light {
+    --background-primary: ${background};
+    --background-primary-alt: ${backgroundSoft};
+    --background-secondary: ${surface};
+    --background-secondary-alt: ${surfaceRaised};
+    --background-modifier-border: ${borderHighlight};
+    --background-modifier-border-hover: ${textPrimary};
+    --background-modifier-border-focus: ${textPrimary};
+    --text-normal: ${textPrimary};
+    --text-muted: ${textSecondary};
+    --text-faint: ${textMuted};
+    --interactive-normal: ${surfaceRaised};
+    --interactive-hover: ${surfaceAlt};
+    --interactive-accent: ${surfaceRaised};
+    --text-accent: ${borderHighlight};
+    --text-accent-hover: ${textPrimary};
+    --text-selection: ${surfaceAlt};
+    --titlebar-background: ${surface};
+    --titlebar-background-focused: ${surfaceRaised};
+    --titlebar-text-color-focused: ${textPrimary};
+    --color-base-00: ${background};
+    --color-base-10: ${backgroundSoft};
+    --color-base-20: ${surface};
+    --color-base-30: ${surfaceRaised};
+    --color-base-40: ${surfaceAlt};
+    --color-base-50: ${borderMuted};
+    --color-base-60: ${textMuted};
+    --color-base-70: ${textSecondary};
+    --color-base-100: ${textPrimary};
+    --color-accent: ${accentTeal};
+    --color-green: ${success};
+    --color-yellow: ${borderHighlight};
+    --color-red: ${danger};
+    --nav-item-background-hover: ${surfaceRaised};
+    --nav-item-background-active: ${surfaceAlt};
+    --radius-s: 0px;
+    --radius-m: 0px;
+    --radius-l: 0px;
+    --radius-xl: 0px;
+    --divider-color: ${borderDark};
+    --border-color: ${borderDark};
+    --button-radius: 0px;
+    --input-radius: 0px;
+    --tab-radius: 0px;
+}
+
+body {
+    -webkit-font-smoothing: none;
+}
+
+/* Brutalist borders */
+.workspace-leaf, .workspace-tab-header, button, input {
+    border: 1px solid ${borderDark};
+    border-top-color: ${borderHighlight};
+    border-left-color: ${borderHighlight};
+}

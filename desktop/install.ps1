@@ -17,7 +17,7 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'all')]
+    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'all')]
     [string]$Target,
     [string]$Palette = 'golden',
     [switch]$Revert,
@@ -258,6 +258,82 @@ function Invoke-BetterDiscord {
 }
 
 
+function Get-ObsidianVaults {
+    # Obsidian records every vault it has opened in %APPDATA%/obsidian/obsidian.json.
+    # Themes are per-vault, so there is no single install location -- every vault
+    # gets its own copy, which is also why an app update cannot remove them.
+    $cfg = Join-Path $env:APPDATA 'obsidian/obsidian.json'
+    if (-not (Test-Path $cfg)) { return @() }
+    $j = Get-Content $cfg -Raw | ConvertFrom-Json
+    $out = @()
+    foreach ($v in $j.vaults.PSObject.Properties) {
+        if (Test-Path $v.Value.path) { $out += $v.Value.path }
+    }
+    $out
+}
+
+function Invoke-Obsidian {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+
+    $vaults = Get-ObsidianVaults
+    if (-not $vaults) { Say 'Obsidian: no vaults found (no obsidian.json) - skipped.' 'DarkYellow'; return }
+
+    $builtRoot = Join-Path $out 'obsidian'
+    if (-not (Test-Path $builtRoot)) { throw "Built Obsidian output missing. Run 'node tools/build-desktop.js'." }
+    # The active theme's display name comes from the built manifest for that slug, so
+    # it always matches the folder name Obsidian will look for -- never guessed.
+    $activeManifest = Join-Path $builtRoot "$PaletteSlug/manifest.json"
+    if (-not (Test-Path $activeManifest)) { throw "No Obsidian build for palette '$PaletteSlug'." }
+    $activeName = (Get-Content $activeManifest -Raw | ConvertFrom-Json).name
+
+    foreach ($vault in $vaults) {
+        $themesDir = Join-Path $vault '.obsidian/themes'
+        $appearance = Join-Path $vault '.obsidian/appearance.json'
+
+        if ($DoRevert) {
+            # Only Wintage-* theme folders are removed; a hand-made theme in the same
+            # vault (the user's own VintageWin95) is never touched.
+            if (Test-Path $themesDir) {
+                Get-ChildItem $themesDir -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue | ForEach-Object {
+                    if ($PSCmdlet.ShouldProcess($_.FullName, 'Remove Wintage theme')) { Remove-Item $_.FullName -Recurse -Force }
+                }
+                # Restore the previous theme choice, so revert does not leave cssTheme
+                # pointing at a folder that no longer exists.
+                $safe = ($vault -replace '[^A-Za-z0-9]', '_')
+                $bak = Join-Path $here "backup/obsidian-appearance-$safe.json"
+                if ((Test-Path $bak) -and (Test-Path $appearance)) { Copy-Item $bak $appearance -Force }
+                Say "Obsidian: removed Wintage themes from $vault" 'Green'
+            }
+            continue
+        }
+
+        if ($PSCmdlet.ShouldProcess($vault, "Install all Wintage themes, activate $PaletteSlug")) {
+            New-Item -ItemType Directory -Force -Path $themesDir | Out-Null
+            foreach ($pack in (Get-ChildItem $builtRoot -Directory)) {
+                $manifest = Get-Content (Join-Path $pack.FullName 'manifest.json') -Raw | ConvertFrom-Json
+                $dest = Join-Path $themesDir $manifest.name
+                New-Item -ItemType Directory -Force -Path $dest | Out-Null
+                Copy-Item (Join-Path $pack.FullName '*') -Destination $dest -Recurse -Force
+            }
+            $count = (Get-ChildItem $builtRoot -Directory).Count
+            # Set the chosen palette active, backing appearance.json up first so the
+            # user's previous theme choice is recoverable.
+            if (Test-Path $appearance) {
+                $bakDir = Join-Path $here 'backup'
+                New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
+                $safe = ($vault -replace '[^A-Za-z0-9]', '_')
+                $bak = Join-Path $bakDir "obsidian-appearance-$safe.json"
+                if (-not (Test-Path $bak)) { Copy-Item $appearance $bak -Force }
+                $ap = Get-Content $appearance -Raw | ConvertFrom-Json
+                $ap | Add-Member -NotePropertyName cssTheme -NotePropertyValue $activeName -Force
+                ($ap | ConvertTo-Json -Depth 10) | Set-Content $appearance -Encoding UTF8
+            }
+            Say "Obsidian: installed $count themes into $vault, active '$activeName'" 'Green'
+            Say "  Reload the vault (Ctrl+R) or Settings > Appearance to see it." 'DarkGray'
+        }
+    }
+}
+
 function Invoke-MpcHc {
     param([switch]$DoRevert)
 
@@ -393,6 +469,14 @@ if (-not $Target) {
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'totalcmd2', 'Total Commander (Local)', $tc2, '-')
 
+    $obsVaults = Get-ObsidianVaults
+    $obs = if ($obsVaults) {
+        $anyThemed = $false
+        foreach ($v in $obsVaults) { if (Get-ChildItem (Join-Path $v '.obsidian/themes') -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue) { $anyThemed = $true } }
+        if ($anyThemed) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obsidian', ('Obsidian (' + $obsVaults.Count + ' vault(s))'), $obs, 'all (pick in Appearance)')
+
     Say "Palettes: $palettes" 'DarkGray'
     Say "  .\install.ps1 -Target freebuff -Palette klite     one app, one palette" 'Cyan'
     Say "  .\install.ps1 -Target all -Palette golden         everything, one palette" 'Cyan'
@@ -423,6 +507,7 @@ foreach ($name in $names) {
     if ($name -eq 'discord') { Invoke-BetterDiscord -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd') { Invoke-TotalCmd -Index 1 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd2') { Invoke-TotalCmd -Index 2 -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'obsidian') { Invoke-Obsidian -DoRevert:$Revert -PaletteSlug $Palette; continue }
 
     # РІвЂќР‚РІвЂќР‚РІвЂќР‚ Electron targets РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚
     if ($ELECTRON.ContainsKey($name)) {
