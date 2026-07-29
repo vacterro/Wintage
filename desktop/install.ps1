@@ -1,4 +1,4 @@
-# Installs the Wintage look into desktop applications.
+﻿# Installs the Wintage look into desktop applications.
 #
 # Design constraint that shapes everything here: applications update themselves, and
 # an update must not take the theme with it. So every target is installed into the
@@ -17,7 +17,7 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'nomadcode', 'mpchc', 'all')]
+    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'all')]
     [string]$Target,
     [string]$Palette = 'golden',
     [switch]$Revert,
@@ -92,14 +92,9 @@ $ELECTRON = @{
         Resources = Join-Path $env:LOCALAPPDATA 'Programs/Antigravity/resources'
         Note      = 'Electron. Separate program from the IDE, themed separately.'
     }
-    nomadcode       = @{
-        Name      = 'NomadCode'
-        Resources = Join-Path $env:LOCALAPPDATA 'Programs/codenomad-electron-app/resources'
-        Note      = 'Electron. Only AppData leftovers found on this machine - no installed program.'
-    }
 }
 
-# ─── MPC-HC (K-Lite) ─────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ MPC-HC (K-Lite) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # Native Win32, no stylesheet, no injection point. Its dark theme's colours are
 # COMPILED IN (CMPCTheme in the MPC-HC source) and no registry value exposes them,
 # so this target cannot carry a palette at all. What it can do is switch the dark
@@ -108,6 +103,130 @@ $ELECTRON = @{
 # not exist, which is why the report below names what is out of reach.
 $MPC_KEY = 'HKCU:\Software\MPC-HC\MPC-HC\Settings'
 $MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
+
+
+function Invoke-TotalCmd {
+    param([int]$Index, [switch]$DoRevert, [string]$PaletteSlug)
+    $tcDir = if ($Index -eq 1) { Join-Path $env:APPDATA 'GHISLER' } else { Join-Path $env:LOCALAPPDATA 'GHISLER' }
+    $ini = Join-Path $tcDir 'wincmd.ini'
+    $appName = if ($Index -eq 1) { 'Total Commander' } else { 'Total Commander (Local)' }
+
+    if (-not (Test-Path $ini)) { Say "$($appName): not installed (no wincmd.ini in $tcDir)" 'DarkYellow'; return }
+
+    if ($DoRevert) {
+        if ($PSCmdlet.ShouldProcess($ini, 'Revert Wintage theme')) {
+            $lines = Get-Content $ini
+            $newLines = $lines | Where-Object { $_.Trim() -notmatch '^(BackColor|BackColor2|ForeColor|MarkColor|CursorColor|CursorText|ActiveTitle|ActiveTitleText|InactiveTitle|InactiveTitleText)=' }
+            Set-Content $ini $newLines -Encoding UTF8
+            Say "$($appName): removed Wintage theme" 'Green'
+        }
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($ini, 'Apply Wintage theme')) {
+        $t = $script:packs[$PaletteSlug].tokens
+        
+        function HexToBgr([string]$hex) {
+            $hex = $hex.Replace('#', '')
+            if ($hex.Length -eq 8) { $hex = $hex.Substring(0, 6) }
+            $r = [Convert]::ToInt32($hex.Substring(0, 2), 16)
+            $g = [Convert]::ToInt32($hex.Substring(2, 2), 16)
+            $b = [Convert]::ToInt32($hex.Substring(4, 2), 16)
+            return ($b -shl 16) -bor ($g -shl 8) -bor $r
+        }
+
+        $bg = HexToBgr $t.background
+        $fg = HexToBgr $t.textPrimary
+        $sel = HexToBgr $t.selection
+        $surf = HexToBgr $t.surface
+        $border = HexToBgr $t.borderDark
+
+        $lines = Get-Content $ini
+        $newLines = @()
+        $inColors = $false
+        $colorsFound = $false
+
+        foreach ($line in $lines) {
+            if ($line -match '^\[Colors\]') { $inColors = $true; $colorsFound = $true; $newLines += $line; continue }
+            if ($line -match '^\[') { $inColors = $false }
+            if ($inColors -and $line -match '^(BackColor|BackColor2|ForeColor|MarkColor|CursorColor|CursorText|ActiveTitle|ActiveTitleText|InactiveTitle|InactiveTitleText)=') {
+                continue
+            }
+            $newLines += $line
+        }
+
+        if (-not $colorsFound) { $newLines += '[Colors]' }
+        
+        $finalLines = @()
+        foreach ($line in $newLines) {
+            $finalLines += $line
+            if ($line -match '^\[Colors\]') {
+                $finalLines += "BackColor=$bg"
+                $finalLines += "BackColor2=$bg"
+                $finalLines += "ForeColor=$fg"
+                $finalLines += "MarkColor=$sel"
+                $finalLines += "CursorColor=$surf"
+                $finalLines += "CursorText=$fg"
+                $finalLines += "ActiveTitle=$sel"
+                $finalLines += "ActiveTitleText=$fg"
+                $finalLines += "InactiveTitle=$border"
+                $finalLines += "InactiveTitleText=$fg"
+            }
+        }
+        Set-Content $ini $finalLines -Encoding UTF8
+        Say "$($appName): applied $PaletteSlug" 'Green'
+    }
+}
+
+function Invoke-CodeNomad {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+    $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
+    $cnCss = Join-Path $cnConfig 'custom.css'
+    
+    if (-not (Test-Path $cnConfig)) { Say "CodeNomad: not installed (no .config/codenomad)" 'DarkYellow'; return }
+
+    if ($DoRevert) {
+        if (Test-Path $cnCss) {
+            if ($PSCmdlet.ShouldProcess($cnCss, 'Remove Wintage theme')) {
+                Remove-Item $cnCss -Force
+                Say "CodeNomad: removed $cnCss" 'Green'
+            }
+        } else { Say "CodeNomad: nothing installed, nothing to revert." }
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($cnCss, 'Install Wintage theme')) {
+        $css = Get-Content (Join-Path $out ('browser/wintage-' + $PaletteSlug + '.css')) -Raw
+        Set-Content $cnCss $css -Encoding UTF8
+        Say "CodeNomad: installed theme -> $cnCss" 'Green'
+    }
+}
+
+function Invoke-BetterDiscord {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+    $bdDir = Join-Path $env:APPDATA 'BetterDiscord/themes'
+    $bdCss = Join-Path $bdDir 'wintage.theme.css'
+    
+    if (-not (Test-Path $bdDir)) { Say "BetterDiscord: not installed (no BetterDiscord/themes)" 'DarkYellow'; return }
+
+    if ($DoRevert) {
+        if (Test-Path $bdCss) {
+            if ($PSCmdlet.ShouldProcess($bdCss, 'Remove Wintage theme')) {
+                Remove-Item $bdCss -Force
+                Say "BetterDiscord: removed $bdCss" 'Green'
+            }
+        } else { Say "BetterDiscord: nothing installed, nothing to revert." }
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($bdCss, 'Install Wintage theme')) {
+        $css = Get-Content (Join-Path $out ('browser/wintage-' + $PaletteSlug + '.css')) -Raw
+        $meta = "/**`n * @name Wintage ($PaletteSlug)`n * @author Wintage Installer`n * @version 1.0.0`n * @description Win95 Theme`n */`n`n"
+        Set-Content $bdCss ($meta + $css) -Encoding UTF8
+        Say "BetterDiscord: installed theme -> $bdCss" 'Green'
+    }
+}
+
 
 function Invoke-MpcHc {
     param([switch]$DoRevert)
@@ -215,6 +334,35 @@ if (-not $Target) {
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'mpchc', 'MPC-HC (K-Lite)', $mpc, 'n/a - colours are compiled in')
 
     Say ""
+
+    $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
+    $cnCss = Join-Path $cnConfig 'custom.css'
+    $cn = if (Test-Path $cnConfig) {
+        if (Test-Path $cnCss) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'codenomad', 'CodeNomad', $cn, '-')
+
+    $bdDir = Join-Path $env:APPDATA 'BetterDiscord/themes'
+    $bdCss = Join-Path $bdDir 'wintage.theme.css'
+    $bd = if (Test-Path $bdDir) {
+        if (Test-Path $bdCss) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'discord', 'BetterDiscord', $bd, '-')
+
+    $tc1Dir = Join-Path $env:APPDATA 'GHISLER'
+    $tc1Ini = Join-Path $tc1Dir 'wincmd.ini'
+    $tc1 = if (Test-Path $tc1Ini) {
+        if ((Get-Content $tc1Ini | Select-String "ActiveTitleText=") -ne $null) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'totalcmd', 'Total Commander', $tc1, '-')
+
+    $tc2Dir = Join-Path $env:LOCALAPPDATA 'GHISLER'
+    $tc2Ini = Join-Path $tc2Dir 'wincmd.ini'
+    $tc2 = if (Test-Path $tc2Ini) {
+        if ((Get-Content $tc2Ini | Select-String "ActiveTitleText=") -ne $null) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'totalcmd2', 'Total Commander (Local)', $tc2, '-')
+
     Say "Palettes: $palettes" 'DarkGray'
     Say "  .\install.ps1 -Target freebuff -Palette klite     one app, one palette" 'Cyan'
     Say "  .\install.ps1 -Target all -Palette golden         everything, one palette" 'Cyan'
@@ -241,8 +389,12 @@ $names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) + @('mpch
 foreach ($name in $names) {
 
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
+    if ($name -eq 'codenomad') { Invoke-CodeNomad -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'discord') { Invoke-BetterDiscord -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'totalcmd') { Invoke-TotalCmd -Index 1 -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'totalcmd2') { Invoke-TotalCmd -Index 2 -DoRevert:$Revert -PaletteSlug $Palette; continue }
 
-    # ─── Electron targets ────────────────────────────────────────────────────
+    # в”Ђв”Ђв”Ђ Electron targets в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     if ($ELECTRON.ContainsKey($name)) {
         $e = $ELECTRON[$name]
         if (-not (Test-ElectronApp $e.Resources)) {
@@ -312,3 +464,4 @@ foreach ($name in $names) {
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
     }
 }
+
