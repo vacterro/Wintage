@@ -106,14 +106,11 @@ Edit `wintage.user.js`, then run:
 
 It bumps the `@version` patch number, commits, and pushes — Tampermonkey clients pick the update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases.
 
-<img width="1434" height="857" alt="2026-07-09_124933" src="https://github.com/user-attachments/assets/d4bc5f55-e1f8-44bc-8325-4ba2948205c1" />
-<img width="1434" height="857" alt="2026-07-09_124939" src="https://github.com/user-attachments/assets/84df57c6-27c4-4be3-82c9-6aa396f3ecaa" />
-<img width="954" height="1077" alt="2026-07-09_125022" src="https://github.com/user-attachments/assets/fa5accfb-1f35-4b91-9632-4310c7ae8836" />
-<img width="954" height="1077" alt="2026-07-09_125031" src="https://github.com/user-attachments/assets/20a95536-66f8-4ff6-a5b5-7a18fad233d5" />
-<img width="954" height="1077" alt="2026-07-09_125036" src="https://github.com/user-attachments/assets/b388f94e-a86e-40c4-9492-f3a0d97eeb37" />
-<img width="1434" height="857" alt="2026-07-09_125102" src="https://github.com/user-attachments/assets/af374b02-f122-43a2-a68e-895ab44a5824" />
-<img width="1434" height="857" alt="2026-07-09_125110" src="https://github.com/user-attachments/assets/95eb3642-2844-463a-a8f1-1e3ed72e7828" />
-<img width="1438" height="634" alt="2026-07-09_125119" src="https://github.com/user-attachments/assets/7aa9fe81-c8ca-45f0-a054-df6dc1fcc119" />
+<img width="1440" height="860" alt="2026-07-29_180529" src="https://github.com/user-attachments/assets/7888e96f-f854-4b68-bd82-58f76b85f630" />
+<img width="874" height="903" alt="2026-07-29_180545" src="https://github.com/user-attachments/assets/0fc63c83-b314-4c95-96ab-ac5cdd7c3d53" />
+<img width="839" height="960" alt="2026-07-29_180556" src="https://github.com/user-attachments/assets/6ebf5e5e-32a5-41cf-97f0-25726ceeea85" />
+<img width="746" height="1080" alt="2026-07-29_180639" src="https://github.com/user-attachments/assets/840ef269-6259-4c84-a1b6-8fd44f390aad" />
+<img width="900" height="663" alt="2026-07-29_180652" src="https://github.com/user-attachments/assets/4f38b63a-860c-468a-843f-6982c5287a7b" />
 
 
 ## License
