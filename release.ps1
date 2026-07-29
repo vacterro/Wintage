@@ -66,6 +66,11 @@ if ($LASTEXITCODE -ne 0) { throw "Repainter polarity test failed - release abort
 node (Join-Path $PSScriptRoot 'tools/build-desktop.js')
 if ($LASTEXITCODE -ne 0) { throw "Building the desktop themes failed - release aborted, version line already bumped, fix and rerun" }
 
+# The FastPrompter-imported packs are generated too; a hand-edited one would drift
+# from its source the same way a hand-edited derived palette does.
+node (Join-Path $PSScriptRoot 'tools/import-fastprompter.js') --check
+if ($LASTEXITCODE -ne 0) { throw "An imported FastPrompter pack is out of date - run 'node tools/import-fastprompter.js', review the diff, then rerun" }
+
 node (Join-Path $PSScriptRoot 'tools/derive-palette.js') --check
 if ($LASTEXITCODE -ne 0) { throw "A derived palette is out of date - run 'node tools/derive-palette.js', review the diff, then rerun" }
 

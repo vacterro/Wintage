@@ -3,6 +3,8 @@
 ## DOING
 
 ## TODO
+- [ ] T-047 GUI polish once the user has looked at it: whatever reads wrong on screen (spacing, truncated labels, colours that fight the Win95 idiom) | needs: T-046 | verify: user confirms the window reads correctly
+- [ ] T-048 README for the installer GUI: what Apply does per target, what Custom writes, how to revert | needs: T-046,T-037 | verify: each documented step runs as written
 - [ ] T-034 K-Lite / MPC-HC: native Win32, registry only -- set what HKCU\Software\MPC-HC exposes, write a .reg backup first, and REPORT what the app does not let a theme reach rather than claiming full coverage | needs: T-031 | verify: keys applied, backup restores the previous state, uncovered surfaces named explicitly
 - [ ] T-037 README for the desktop side: what each target can and cannot be themed, how to re-apply after an app update, how to revert | needs: T-032,T-033,T-034,T-035,T-036 | verify: each documented command runs as written
 - [ ] T-038 wintage.user_old.js got swept into the v1.11.1 commit by release.ps1's `git add -A` -- it is a pre-session leftover; confirm with the user whether to delete it or gitignore it | verify: file removed or ignored, and release.ps1 no longer picks up stray backups
@@ -14,6 +16,9 @@
 - [ ] T-028 release.ps1 bumps `// @version` but not `const W95_VERSION` (:94), so the data-w95-ver diagnostic stamp reports a stale build — derive the constant from the header at load, or bump both | verify: run release.ps1, both values agree; a deliberately mismatched pair FAILs the gate
 
 ## DONE
+- [x] T-044 Removed scratch.py/scratch2.py/wintage.user_old.js and widened .gitignore so release.ps1's `git add -A` stops re-committing strays | verify: files gone, .gitignore covers scratch*.py and *_old.js -- E-109
+- [x] T-045 Imported FastPrompter's nine themes as packs (blended to 18 tokens, semantic trio kept at UI.md, six AA lifts reported) | verify: 15 packs all PASS check-css; Vintage Classic imported LIGHT, exercising the T-019 polarity work -- E-110, E-111
+- [x] T-046 desktop/WintageInstaller.ps1 -- WinForms GUI: theme list with colour chips, target checklist parsed from install.ps1's own output, live Win95 preview, 18 colour swatches, Custom fork on edit, live WCAG readout, Apply/Save/Revert | verify: parse PASS, window alive with correct title, 6/6 targets parsed incl. 'claude fused shut' -- E-112, E-113, E-114
 - [x] T-042 Claude desktop will not launch when themed: Electron fuses OnlyLoadAppFromAsar + EnableEmbeddedAsarIntegrityValidation are both ENABLED, so the shim can never run and repacking is closed off too. tools/electron-fuses.js now reads them and the installer refuses BEFORE moving anything | verify: Claude refused with both reasons, exit 1, app.asar untouched; Freebuff/Antigravity unaffected -- E-104, E-106
 - [x] T-043 Per-target palette picking: install.ps1's listing shows present/themed/which-palette per app and flags fused-shut ones | verify: table reads 'claude fused shut', 'freebuff themed golden', 'antigravity all (pick in the editor)' -- E-107
 - [x] T-041 Scrollbar gutters never disappearing in Electron targets: styling ::-webkit-scrollbar makes overlay scrollbars classic, so every `overflow: scroll` container kept a permanent 16px gutter -- shim now converts computed scroll->auto from script; also found and fixed a triple injection of the same stylesheet per document | verify: status file reads one stylesheet + one scrollfix per document on splash and app -- E-100, E-101, E-102

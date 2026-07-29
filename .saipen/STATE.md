@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-043
-next_action: "PHASE SHIP T-043 [fuse guard + per-target palettes]"
+task: T-046
+next_action: "PHASE SHIP T-046 [installer GUI + 9 imported palettes]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -10,10 +10,10 @@ schema_version: 1
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 2
-goal_tickets: 17
+goal_tickets: 20
 transition_from: REVIEW
-last_event: 108
-updated: 2026-07-29T06:23:00Z
+last_event: 115
+updated: 2026-07-29T07:07:00Z
 ---
 
 # Wintage — five extra themes (goal wave 1)

@@ -1,0 +1,26 @@
+{
+  "slug": "goldenvintage",
+  "label": "Golden Vintage",
+  "order": 21,
+  "source": "imported from FastPrompter (src/fastprompter/theme/themes.py): nine declared colours, the rest blended from them; semantic trio and teal kept at UI.md values",
+  "tokens": {
+    "background": "#0F0F0F",
+    "backgroundSoft": "#1A1A1A",
+    "surface": "#2B2B2B",
+    "surfaceRaised": "#333333",
+    "surfaceAlt": "#393939",
+    "borderDark": "#050505",
+    "borderHighlight": "#D6BE76",
+    "borderMuted": "#4A4A4A",
+    "textPrimary": "#C4BA9F",
+    "textSecondary": "#8E8774",
+    "textMuted": "#605C50",
+    "accentTeal": "#008080",
+    "accentTealDeep": "#004C4C",
+    "success": "#4A7A20",
+    "warning": "#7A7A20",
+    "danger": "#7A2020",
+    "selection": "#333333",
+    "compareBack": "#0B0B0B"
+  }
+}

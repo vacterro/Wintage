@@ -1,0 +1,26 @@
+{
+  "slug": "oled",
+  "label": "Dark 2 (OLED)",
+  "order": 25,
+  "source": "imported from FastPrompter (src/fastprompter/theme/themes.py): nine declared colours, the rest blended from them; semantic trio and teal kept at UI.md values",
+  "tokens": {
+    "background": "#000000",
+    "backgroundSoft": "#000000",
+    "surface": "#0A0A0A",
+    "surfaceRaised": "#141414",
+    "surfaceAlt": "#1C1C1C",
+    "borderDark": "#1A1A1A",
+    "borderHighlight": "#FFFFFF",
+    "borderMuted": "#333333",
+    "textPrimary": "#A0A0A0",
+    "textSecondary": "#777777",
+    "textMuted": "#484848",
+    "accentTeal": "#008080",
+    "accentTealDeep": "#004C4C",
+    "success": "#4A7A20",
+    "warning": "#7A7A20",
+    "danger": "#7A2020",
+    "selection": "#141414",
+    "compareBack": "#000000"
+  }
+}

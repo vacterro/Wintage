@@ -2,7 +2,7 @@
   "name": "wintage-themes",
   "displayName": "Wintage — Win95 Vintage Themes",
   "description": "Dark Golden Windows 95 aesthetic, and five palettes derived from it. Generated from the Wintage theme packs.",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "publisher": "vacterro",
   "engines": {
     "vscode": "^1.60.0"
@@ -41,6 +41,51 @@
         "label": "Wintage NomadCode",
         "uiTheme": "vs-dark",
         "path": "./themes/wintage-nomadcode-color-theme.json"
+      },
+      {
+        "label": "Wintage Default",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-fpdefault-color-theme.json"
+      },
+      {
+        "label": "Wintage Golden Vintage",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-goldenvintage-color-theme.json"
+      },
+      {
+        "label": "Wintage Golden Default",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-goldendefault-color-theme.json"
+      },
+      {
+        "label": "Wintage Vintage Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-vintagedark-color-theme.json"
+      },
+      {
+        "label": "Wintage Vintage Classic",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-vintageclassic-color-theme.json"
+      },
+      {
+        "label": "Wintage Dark 2 (OLED)",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-oled-color-theme.json"
+      },
+      {
+        "label": "Wintage Dracula",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-dracula-color-theme.json"
+      },
+      {
+        "label": "Wintage Nord",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-nord-color-theme.json"
+      },
+      {
+        "label": "Wintage Solarized Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wintage-solarized-color-theme.json"
       }
     ]
   }
