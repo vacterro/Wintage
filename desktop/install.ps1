@@ -1,4 +1,4 @@
-# Installs the Wintage look into desktop applications.
+﻿# Installs the Wintage look into desktop applications.
 #
 # Design constraint that shapes everything here: applications update themselves, and
 # an update must not take the theme with it. So every target is installed into the
@@ -17,11 +17,12 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'all')]
+    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'all')]
     [string]$Target,
     [string]$Palette = 'golden',
     [switch]$Revert,
-    [switch]$Force
+    [switch]$Force,
+    [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -94,7 +95,7 @@ $ELECTRON = @{
     }
 }
 
-# РІвЂќР‚РІвЂќР‚РІвЂќР‚ MPC-HC (K-Lite) РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚
+# Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ MPC-HC (K-Lite) Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 # Native Win32, no stylesheet, no injection point. Its dark theme's colours are
 # COMPILED IN (CMPCTheme in the MPC-HC source) and no registry value exposes them,
 # so this target cannot carry a palette at all. What it can do is switch the dark
@@ -208,8 +209,50 @@ function Invoke-TotalCmd {
     }
 }
 
+function Invoke-Saipenview {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+    if (-not (Test-Path $SaipenviewPath)) { Say "SAIPENVIEW: not found at $SaipenviewPath" 'DarkYellow'; return }
+    
+    $cssFile = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css'
+    $bakFile = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'
+    
+    if ($DoRevert) {
+        if (Test-Path $bakFile) {
+            if ($PSCmdlet.ShouldProcess($cssFile, 'Restore SAIPENVIEW original CSS')) {
+                Copy-Item $bakFile $cssFile -Force
+                Remove-Item $bakFile -Force
+                Say "SAIPENVIEW: restored from backup" 'Green'
+            }
+        } else {
+            Say "SAIPENVIEW: nothing to revert." 'DarkYellow'
+        }
+        return
+    }
+    
+    if (-not (Test-Path $cssFile)) { Say "SAIPENVIEW: CSS file not found ($cssFile)" 'DarkYellow'; return }
+    
+    if ($PSCmdlet.ShouldProcess($cssFile, 'Install Wintage theme')) {
+        if (-not (Test-Path $bakFile)) {
+            Copy-Item $cssFile $bakFile -Force
+        }
+        $winCss = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
+        $origCss = Get-Content $bakFile -Raw
+        Set-Content $cssFile ($origCss + "
+/* WINTAGE THEME */
+" + $winCss) -Encoding UTF8
+        Say "SAIPENVIEW: installed theme -> $cssFile" 'Green'
+    }
+}
+
 function Invoke-CodeNomad {
     param([switch]$DoRevert, [string]$PaletteSlug)
+    $svCss = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css'
+    $svBak = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'
+    $sv = if (Test-Path $SaipenviewPath) {
+        if (Test-Path $svBak) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
+
     $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
     $cnCss = Join-Path $cnConfig 'custom.css'
     
@@ -441,6 +484,13 @@ if (-not $Target) {
 
     Say ""
 
+    $svCss = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css'
+    $svBak = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'
+    $sv = if (Test-Path $SaipenviewPath) {
+        if (Test-Path $svBak) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
+
     $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
     $cnCss = Join-Path $cnConfig 'custom.css'
     $cn = if (Test-Path $cnConfig) {
@@ -498,18 +548,19 @@ elseif (-not $Force) {
     Say "node not found - cannot verify the build is current. Installing what is in desktop/out as-is." 'Yellow'
 }
 
-$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) + @('mpchc') } else { @($Target) }
+$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) + @('mpchc', 'saipenview') } else { @($Target) }
 
 foreach ($name in $names) {
 
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
+    if ($name -eq 'saipenview') { Invoke-Saipenview -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'codenomad') { Invoke-CodeNomad -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'discord') { Invoke-BetterDiscord -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd') { Invoke-TotalCmd -Index 1 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd2') { Invoke-TotalCmd -Index 2 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'obsidian') { Invoke-Obsidian -DoRevert:$Revert -PaletteSlug $Palette; continue }
 
-    # РІвЂќР‚РІвЂќР‚РІвЂќР‚ Electron targets РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚
+    # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Electron targets Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
     if ($ELECTRON.ContainsKey($name)) {
         $e = $ELECTRON[$name]
         if (-not (Test-ElectronApp $e.Resources)) {
@@ -579,4 +630,7 @@ foreach ($name in $names) {
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
     }
 }
+
+
+
 
