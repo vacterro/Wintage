@@ -17,7 +17,7 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'nomadcode', 'all')]
+    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'nomadcode', 'mpchc', 'all')]
     [string]$Target,
     [string]$Palette = 'golden',
     [switch]$Revert,
@@ -99,6 +99,68 @@ $ELECTRON = @{
     }
 }
 
+# ─── MPC-HC (K-Lite) ─────────────────────────────────────────────────────────
+# Native Win32, no stylesheet, no injection point. Its dark theme's colours are
+# COMPILED IN (CMPCTheme in the MPC-HC source) and no registry value exposes them,
+# so this target cannot carry a palette at all. What it can do is switch the dark
+# theme on and put the UI.md typography rules on the one surface MPC-HC does let a
+# user control -- the OSD. Saying that plainly beats claiming a coverage that does
+# not exist, which is why the report below names what is out of reach.
+$MPC_KEY = 'HKCU:\Software\MPC-HC\MPC-HC\Settings'
+$MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
+
+function Invoke-MpcHc {
+    param([switch]$DoRevert)
+
+    if (-not (Test-Path $MPC_KEY)) { Say 'MPC-HC: not installed on this machine - skipped.' 'DarkYellow'; return }
+
+    $bakDir = Join-Path $here 'backup'
+    $bak = Join-Path $bakDir 'mpc-hc-settings.reg'
+
+    if ($DoRevert) {
+        if (-not (Test-Path $bak)) { Say 'MPC-HC: no backup to restore from.' 'DarkYellow'; return }
+        if ($PSCmdlet.ShouldProcess($MPC_REG, "Restore from $bak")) {
+            # reg import merges; it restores the values that were captured and leaves
+            # anything created since. That is the honest limit of a .reg backup and
+            # it is stated rather than glossed.
+            & reg import $bak 2>&1 | Out-Null
+            Say "MPC-HC: restored the captured values from $bak" 'Green'
+        }
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($MPC_REG, 'Back up and apply the Wintage/UI.md settings')) {
+        New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
+        if (-not (Test-Path $bak)) {
+            & reg export $MPC_REG $bak /y 2>&1 | Out-Null
+            Say "MPC-HC: settings backed up to $bak" 'DarkGray'
+        }
+        else { Say "MPC-HC: keeping the existing backup at $bak (it holds the pre-Wintage state)" 'DarkGray' }
+
+        # MPCTheme 1 = the dark UI. ModernThemeMode 2 = dark title bar too.
+        # OSD: Verdana per UI.md law 1, a size on its ladder, zero transparency
+        # (law 2 forbids it outright), and a border so it reads as a raised surface.
+        $vals = @{
+            MPCTheme         = 1
+            ModernThemeMode  = 2
+            OSDFont          = 'Verdana'
+            OSDSize          = 16
+            OSDTransparency  = 0
+            OSDBorder        = 1
+            TitleBarTextStyle = 1
+        }
+        foreach ($k in $vals.Keys) {
+            $type = if ($vals[$k] -is [string]) { 'String' } else { 'DWord' }
+            Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
+        }
+        Say 'MPC-HC: dark theme on, OSD set to Verdana 16, zero transparency, bordered.' 'Green'
+        Say '  NOT reachable: the player chrome colours are compiled into MPC-HC and no' 'Yellow'
+        Say '  registry value exposes them, so this target cannot take a palette. Only the' 'Yellow'
+        Say '  built-in dark theme and the OSD typography are settable.' 'Yellow'
+        Say '  MPC-HC rewrites these on exit - close it BEFORE applying, or re-apply after.' 'Yellow'
+    }
+}
+
 # Resolved BEFORE the listing, not after: the listing reads Electron fuses through
 # node, and when this lived below it, $node was still empty there -- so every app
 # silently reported "not themed" instead of "fused shut", which is the one line in
@@ -147,6 +209,11 @@ if (-not $Target) {
         Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $k, $e.Name, $state, $pal)
     }
 
+    $mpc = if (Test-Path $MPC_KEY) {
+        if ((Get-ItemProperty $MPC_KEY).OSDFont -eq 'Verdana') { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'mpchc', 'MPC-HC (K-Lite)', $mpc, 'n/a - colours are compiled in')
+
     Say ""
     Say "Palettes: $palettes" 'DarkGray'
     Say "  .\install.ps1 -Target freebuff -Palette klite     one app, one palette" 'Cyan'
@@ -169,9 +236,11 @@ elseif (-not $Force) {
     Say "node not found - cannot verify the build is current. Installing what is in desktop/out as-is." 'Yellow'
 }
 
-$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) } else { @($Target) }
+$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) + @('mpchc') } else { @($Target) }
 
 foreach ($name in $names) {
+
+    if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
 
     # ─── Electron targets ────────────────────────────────────────────────────
     if ($ELECTRON.ContainsKey($name)) {

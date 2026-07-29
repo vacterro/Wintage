@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "version": "1.15.0",
+  "name": "Wintage Golden Default",
+  "description": "Wintage Golden Default for the browser chrome. Companion to the Wintage userscript.",
+  "theme": {
+    "colors": {
+      "frame": [
+        26,
+        24,
+        16
+      ],
+      "frame_inactive": [
+        51,
+        46,
+        34
+      ],
+      "frame_incognito": [
+        20,
+        18,
+        12
+      ],
+      "frame_incognito_inactive": [
+        20,
+        18,
+        12
+      ],
+      "toolbar": [
+        51,
+        46,
+        34
+      ],
+      "tab_text": [
+        212,
+        200,
+        154
+      ],
+      "tab_background_text": [
+        156,
+        147,
+        113
+      ],
+      "bookmark_text": [
+        212,
+        200,
+        154
+      ],
+      "toolbar_button_icon": [
+        212,
+        200,
+        154
+      ],
+      "omnibox_background": [
+        20,
+        18,
+        12
+      ],
+      "omnibox_text": [
+        212,
+        200,
+        154
+      ],
+      "button_background": [
+        61,
+        55,
+        42
+      ],
+      "ntp_background": [
+        26,
+        24,
+        16
+      ],
+      "ntp_text": [
+        212,
+        200,
+        154
+      ],
+      "ntp_link": [
+        240,
+        208,
+        96
+      ],
+      "ntp_header": [
+        240,
+        208,
+        96
+      ],
+      "ntp_section": [
+        51,
+        46,
+        34
+      ],
+      "ntp_section_text": [
+        156,
+        147,
+        113
+      ],
+      "ntp_section_link": [
+        240,
+        208,
+        96
+      ]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}

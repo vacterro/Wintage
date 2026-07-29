@@ -173,7 +173,21 @@ function checkThemes() {
   }
 }
 
+// The version appears twice in the userscript and they must agree -- see the note
+// in release.ps1. This is the gate that makes "bump both" enforceable rather than
+// remembered.
+function checkVersion() {
+  const header = /\/\/ @version\s+(\d+\.\d+\.\d+)/.exec(src);
+  const konst = /const W95_VERSION = '(\d+\.\d+\.\d+)'/.exec(src);
+  if (!header) return fail('no // @version line');
+  if (!konst) return fail('no const W95_VERSION');
+  if (header[1] !== konst[1]) {
+    fail('@version ' + header[1] + ' but W95_VERSION ' + konst[1] + ' - the data-w95-ver stamp would report a stale build');
+  } else if (!failures) console.log('version: PASS (' + header[1] + ' in both places)');
+}
+
 checkThemes();
+checkVersion();
 
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('CSS check PASS');

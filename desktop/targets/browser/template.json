@@ -1,0 +1,25 @@
+{
+  "_note": "Chromium theme, one per palette. Written by ROLE rather than derived from the old hand-made manifest: that manifest's literals stopped matching golden.json the moment the palette was retuned, so a hex-to-token mapping silently produced zero matches. Roles do not go stale.",
+  "colors": {
+    "frame": "${background}",
+    "frame_inactive": "${surface}",
+    "frame_incognito": "${compareBack}",
+    "frame_incognito_inactive": "${compareBack}",
+    "toolbar": "${surface}",
+    "tab_text": "${textPrimary}",
+    "tab_background_text": "${textSecondary}",
+    "bookmark_text": "${textPrimary}",
+    "toolbar_button_icon": "${textPrimary}",
+    "omnibox_background": "${compareBack}",
+    "omnibox_text": "${textPrimary}",
+    "button_background": "${surfaceRaised}",
+    "ntp_background": "${background}",
+    "ntp_text": "${textPrimary}",
+    "ntp_link": "${borderHighlight}",
+    "ntp_header": "${borderHighlight}",
+    "ntp_section": "${surface}",
+    "ntp_section_text": "${textSecondary}",
+    "ntp_section_link": "${borderHighlight}"
+  },
+  "properties": { "ntp_background_alignment": "center" }
+}

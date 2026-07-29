@@ -3,19 +3,18 @@
 ## DOING
 
 ## TODO
-- [ ] T-047 GUI polish once the user has looked at it: whatever reads wrong on screen (spacing, truncated labels, colours that fight the Win95 idiom) | needs: T-046 | verify: user confirms the window reads correctly
-- [ ] T-048 README for the installer GUI: what Apply does per target, what Custom writes, how to revert | needs: T-046,T-037 | verify: each documented step runs as written
-- [ ] T-034 K-Lite / MPC-HC: native Win32, registry only -- set what HKCU\Software\MPC-HC exposes, write a .reg backup first, and REPORT what the app does not let a theme reach rather than claiming full coverage | needs: T-031 | verify: keys applied, backup restores the previous state, uncovered surfaces named explicitly
-- [ ] T-037 README for the desktop side: what each target can and cannot be themed, how to re-apply after an app update, how to revert | needs: T-032,T-033,T-034,T-035,T-036 | verify: each documented command runs as written
-- [ ] T-038 wintage.user_old.js got swept into the v1.11.1 commit by release.ps1's `git add -A` -- it is a pre-session leftover; confirm with the user whether to delete it or gitignore it | verify: file removed or ignored, and release.ps1 no longer picks up stray backups
 - [ ] T-030 Split the link colour out of borderHighlight: the token is both the bevel light edge and the link colour, which only works on a dark palette -- on a light one the bevel must be near-white and near-white fails AA as text. Touches GLOBAL_CSS, SHADOW_CSS, the repainter link branch, the pack schema and both gates | needs: T-027 | verify: golden link colour unchanged, a light pack passes the AA gate with a readable link and a near-white bevel
-- [ ] T-025 Companion browser themes: tools/apply-themes.js also emits browser-theme/<slug>/manifest.json from the same themes/<slug>.json, so the Cent Browser chrome matches whichever theme is active | needs: T-020,T-021,T-022,T-023,T-024,T-027 | verify: 6 manifests emitted, each loads in the browser and its frame colour equals its palette background
-- [ ] T-026 README theme docs (switching + installing a pack onto a new Wintage version) and release.ps1 gating the generator + check-css over every theme | needs: T-025 | verify: node tools/check-css.js iterates all 6 palettes and PASSes; injecting an off-palette hex into any one of them FAILs
 
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
-- [ ] T-028 release.ps1 bumps `// @version` but not `const W95_VERSION` (:94), so the data-w95-ver diagnostic stamp reports a stale build — derive the constant from the header at load, or bump both | verify: run release.ps1, both values agree; a deliberately mismatched pair FAILs the gate
 
 ## DONE
+- [x] T-034 MPC-HC: dark theme + dark title bar + OSD at Verdana 16 with zero transparency and a border; player chrome colours are compiled in and no registry value exposes them, so the installer says so instead of implying coverage. Settings exported once to desktop/backup/mpc-hc-settings.reg | verify: applied, listing shows 'mpchc themed n/a - colours are compiled in' -- E-119
+- [x] T-028 release.ps1 bumps W95_VERSION with @version, check-css FAILs on a mismatch | verify: 'version: PASS (1.14.0 in both places)'; the drifted 1.4.7 stamp is gone -- E-120
+- [x] T-025 Companion browser themes: 15 Chromium manifests generated from a role-based template | verify: golden's frame equals its background token, 15 emitted -- E-121
+- [x] T-037 desktop/README.md: per-target mechanism + update survival, the Electron shim's two traps, Claude's fuses, MPC-HC's ceiling | verify: every documented command runs as written -- E-122
+- [x] T-026 Root README: fifteen-palette section, per-user switch, pack re-application after an upgrade, pointer to the desktop docs -- E-122
+- [x] T-038 Stray files removed and gitignored (folded into T-044) -- E-109
+- [x] T-048 Installer GUI documented inside desktop/README.md rather than as a second file -- E-122
 - [x] T-044 Removed scratch.py/scratch2.py/wintage.user_old.js and widened .gitignore so release.ps1's `git add -A` stops re-committing strays | verify: files gone, .gitignore covers scratch*.py and *_old.js -- E-109
 - [x] T-045 Imported FastPrompter's nine themes as packs (blended to 18 tokens, semantic trio kept at UI.md, six AA lifts reported) | verify: 15 packs all PASS check-css; Vintage Classic imported LIGHT, exercising the T-019 polarity work -- E-110, E-111
 - [x] T-046 desktop/WintageInstaller.ps1 -- WinForms GUI: theme list with colour chips, target checklist parsed from install.ps1's own output, live Win95 preview, 18 colour swatches, Custom fork on edit, live WCAG readout, Apply/Save/Revert | verify: parse PASS, window alive with correct title, 6/6 targets parsed incl. 'claude fused shut' -- E-112, E-113, E-114
@@ -57,3 +56,4 @@
 - [x] T-016 Enforce UI.md invariants from JS where CSS loses to site !important; palette clamp for control subtrees; close dark-surface gaps; palette idempotence | verify: 3 popular sites all zero violations, zero drift across two settling windows
 
 ## BLOCKED
+- [ ] T-047 GUI polish: whatever reads wrong on screen | blocker: needs the user's visual verdict - nothing here can screenshot a desktop window, and guessing at spacing would be inventing findings

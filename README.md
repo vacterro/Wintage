@@ -21,6 +21,40 @@ _Every element communicates its purpose at a glance, reducing cognitive load and
 - **Automatic:** the script carries `@updateURL`/`@downloadURL` pointing at this repo, so Tampermonkey picks up new versions on its regular update checks.
 - **Manual refresh:** Tampermonkey → **Utilities → Check for userscript updates**, or just click the install link again — it replaces the old version in place, no uninstall needed.
 
+## Fifteen palettes, and a switch
+
+Wintage is no longer one palette. Six are UI.md's own structure rotated to another
+hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, NomadCode) and
+nine are imported from [FastPrompter](https://github.com/vacterro) (Default, Golden
+Vintage, Golden Default, Vintage Dark, Vintage Classic, Dark 2 OLED, Dracula, Nord,
+Solarized Dark). Every one of them clears WCAG AA on the three tokens that carry
+text -- the build gate refuses a palette that does not.
+
+Pick one from the **Tampermonkey menu** on any page; the choice is stored per user,
+not per site, so it holds across every domain.
+
+Palettes live in `themes/*.json`, outside the script, for one reason: Tampermonkey
+re-downloads `wintage.user.js` on every update, so a palette edited into it by hand
+would vanish. Re-apply them onto a fresh build with:
+
+```powershell
+.\install-themes.ps1 -Latest
+```
+
+## Beyond the browser
+
+The same palettes install into desktop applications -- VS Code and Antigravity as
+colour themes, Electron apps (Freebuff, the Antigravity agent app) through a shim
+that injects the very stylesheet this userscript uses. There is a small GUI for it:
+
+```powershell
+powershell -File desktop\WintageInstaller.ps1
+```
+
+What each target can and cannot reach -- including the two apps that are fused shut
+or have their colours compiled in -- is written down in
+**[desktop/README.md](desktop/README.md)**.
+
 ## Features
 
 - **Dark golden palette** — deep brown-black canvas `#1A0F05`, golden text `#D4B87A`, golden bevel highlights `#C0A060`. Solid flat surfaces only: no gradients, no blur, no transparency effects.

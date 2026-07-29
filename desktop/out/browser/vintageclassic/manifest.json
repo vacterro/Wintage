@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "version": "1.15.0",
+  "name": "Wintage Vintage Classic",
+  "description": "Wintage Vintage Classic for the browser chrome. Companion to the Wintage userscript.",
+  "theme": {
+    "colors": {
+      "frame": [
+        192,
+        192,
+        192
+      ],
+      "frame_inactive": [
+        192,
+        192,
+        192
+      ],
+      "frame_incognito": [
+        208,
+        208,
+        208
+      ],
+      "frame_incognito_inactive": [
+        208,
+        208,
+        208
+      ],
+      "toolbar": [
+        192,
+        192,
+        192
+      ],
+      "tab_text": [
+        0,
+        0,
+        0
+      ],
+      "tab_background_text": [
+        58,
+        58,
+        58
+      ],
+      "bookmark_text": [
+        0,
+        0,
+        0
+      ],
+      "toolbar_button_icon": [
+        0,
+        0,
+        0
+      ],
+      "omnibox_background": [
+        208,
+        208,
+        208
+      ],
+      "omnibox_text": [
+        0,
+        0,
+        0
+      ],
+      "button_background": [
+        208,
+        208,
+        208
+      ],
+      "ntp_background": [
+        192,
+        192,
+        192
+      ],
+      "ntp_text": [
+        0,
+        0,
+        0
+      ],
+      "ntp_link": [
+        94,
+        122,
+        122
+      ],
+      "ntp_header": [
+        94,
+        122,
+        122
+      ],
+      "ntp_section": [
+        192,
+        192,
+        192
+      ],
+      "ntp_section_text": [
+        58,
+        58,
+        58
+      ],
+      "ntp_section_link": [
+        94,
+        122,
+        122
+      ]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}

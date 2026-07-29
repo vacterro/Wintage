@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "version": "1.15.0",
+  "name": "Wintage Nord",
+  "description": "Wintage Nord for the browser chrome. Companion to the Wintage userscript.",
+  "theme": {
+    "colors": {
+      "frame": [
+        39,
+        44,
+        54
+      ],
+      "frame_inactive": [
+        59,
+        66,
+        82
+      ],
+      "frame_incognito": [
+        29,
+        33,
+        41
+      ],
+      "frame_incognito_inactive": [
+        29,
+        33,
+        41
+      ],
+      "toolbar": [
+        59,
+        66,
+        82
+      ],
+      "tab_text": [
+        216,
+        222,
+        233
+      ],
+      "tab_background_text": [
+        163,
+        169,
+        179
+      ],
+      "bookmark_text": [
+        216,
+        222,
+        233
+      ],
+      "toolbar_button_icon": [
+        216,
+        222,
+        233
+      ],
+      "omnibox_background": [
+        29,
+        33,
+        41
+      ],
+      "omnibox_text": [
+        216,
+        222,
+        233
+      ],
+      "button_background": [
+        63,
+        71,
+        88
+      ],
+      "ntp_background": [
+        39,
+        44,
+        54
+      ],
+      "ntp_text": [
+        216,
+        222,
+        233
+      ],
+      "ntp_link": [
+        136,
+        192,
+        208
+      ],
+      "ntp_header": [
+        136,
+        192,
+        208
+      ],
+      "ntp_section": [
+        59,
+        66,
+        82
+      ],
+      "ntp_section_text": [
+        163,
+        169,
+        179
+      ],
+      "ntp_section_link": [
+        136,
+        192,
+        208
+      ]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}

@@ -24,6 +24,14 @@ switch ($Bump) {
 }
 $new = "$maj.$min.$pat"
 $content = $content -replace '(// @version\s+)\d+\.\d+\.\d+', "`${1}$new"
+# The file carries the version TWICE: the @version header Tampermonkey reads, and
+# const W95_VERSION, which is stamped onto every injected <style> so a console can
+# say which build is live. Bumping only the header made that stamp lie -- it read
+# 1.4.7 on a 1.5.0 build, and a version stamp that lies is worse than none, because
+# the one question it exists to answer ("am I looking at a stale install?") gets a
+# confident wrong answer. Both move together now, and check-css.js fails if they
+# ever disagree again.
+$content = $content -replace "(const W95_VERSION = ')\d+\.\d+\.\d+(')", "`${1}$new`${2}"
 [System.IO.File]::WriteAllText($script, $content, $utf8)
 
 node --check $script

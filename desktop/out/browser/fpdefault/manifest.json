@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "version": "1.15.0",
+  "name": "Wintage Default",
+  "description": "Wintage Default for the browser chrome. Companion to the Wintage userscript.",
+  "theme": {
+    "colors": {
+      "frame": [
+        26,
+        26,
+        26
+      ],
+      "frame_inactive": [
+        43,
+        43,
+        43
+      ],
+      "frame_incognito": [
+        20,
+        20,
+        20
+      ],
+      "frame_incognito_inactive": [
+        20,
+        20,
+        20
+      ],
+      "toolbar": [
+        43,
+        43,
+        43
+      ],
+      "tab_text": [
+        192,
+        192,
+        192
+      ],
+      "tab_background_text": [
+        148,
+        148,
+        148
+      ],
+      "bookmark_text": [
+        192,
+        192,
+        192
+      ],
+      "toolbar_button_icon": [
+        192,
+        192,
+        192
+      ],
+      "omnibox_background": [
+        20,
+        20,
+        20
+      ],
+      "omnibox_text": [
+        192,
+        192,
+        192
+      ],
+      "button_background": [
+        52,
+        52,
+        52
+      ],
+      "ntp_background": [
+        26,
+        26,
+        26
+      ],
+      "ntp_text": [
+        192,
+        192,
+        192
+      ],
+      "ntp_link": [
+        131,
+        155,
+        176
+      ],
+      "ntp_header": [
+        131,
+        155,
+        176
+      ],
+      "ntp_section": [
+        43,
+        43,
+        43
+      ],
+      "ntp_section_text": [
+        148,
+        148,
+        148
+      ],
+      "ntp_section_link": [
+        131,
+        155,
+        176
+      ]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}

@@ -159,9 +159,36 @@ function buildElectron(packs) {
   }
 }
 
+// ─── TARGET: browser ─────────────────────────────────────────────────────────
+// A Chromium theme so the browser's own chrome matches the pages the userscript is
+// repainting. Its colours are RGB triples, not hex, so the fill happens on the hex
+// and is converted after -- a `${token}` inside a JSON array would not survive
+// JSON.parse in the first place.
+function buildBrowser(packs) {
+  const template = JSON.parse(fs.readFileSync(path.join(DESKTOP, 'targets', 'browser', 'template.json'), 'utf8'));
+  const toRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+  for (const pack of packs) {
+    const colors = {};
+    for (const [k, v] of Object.entries(template.colors)) {
+      const filled = fill(v, pack.tokens, { __file: 'browser/template.json' });
+      colors[k] = toRgb(filled);
+    }
+    const manifest = {
+      manifest_version: 3,
+      version: VERSION,
+      name: 'Wintage ' + pack.label,
+      description: 'Wintage ' + pack.label + ' for the browser chrome. Companion to the Wintage userscript.',
+      theme: { colors, properties: template.properties }
+    };
+    emit(path.join(OUT, 'browser', pack.slug, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  }
+}
+
 const packs = loadPacks();
 buildVscode(packs);
 buildElectron(packs);
+buildBrowser(packs);
 
 if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }
 console.log('build-desktop: ' + (wrote ? wrote + ' file(s) written' : 'everything up to date') +

@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "version": "1.15.0",
+  "name": "Wintage FreeBuff",
+  "description": "Wintage FreeBuff for the browser chrome. Companion to the Wintage userscript.",
+  "theme": {
+    "colors": {
+      "frame": [
+        27,
+        35,
+        43
+      ],
+      "frame_inactive": [
+        40,
+        48,
+        61
+      ],
+      "frame_incognito": [
+        19,
+        24,
+        29
+      ],
+      "frame_incognito_inactive": [
+        19,
+        24,
+        29
+      ],
+      "toolbar": [
+        40,
+        48,
+        61
+      ],
+      "tab_text": [
+        160,
+        226,
+        149
+      ],
+      "tab_background_text": [
+        122,
+        197,
+        110
+      ],
+      "bookmark_text": [
+        160,
+        226,
+        149
+      ],
+      "toolbar_button_icon": [
+        160,
+        226,
+        149
+      ],
+      "omnibox_background": [
+        19,
+        24,
+        29
+      ],
+      "omnibox_text": [
+        160,
+        226,
+        149
+      ],
+      "button_background": [
+        51,
+        59,
+        75
+      ],
+      "ntp_background": [
+        27,
+        35,
+        43
+      ],
+      "ntp_text": [
+        160,
+        226,
+        149
+      ],
+      "ntp_link": [
+        137,
+        211,
+        122
+      ],
+      "ntp_header": [
+        137,
+        211,
+        122
+      ],
+      "ntp_section": [
+        40,
+        48,
+        61
+      ],
+      "ntp_section_text": [
+        122,
+        197,
+        110
+      ],
+      "ntp_section_link": [
+        137,
+        211,
+        122
+      ]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}

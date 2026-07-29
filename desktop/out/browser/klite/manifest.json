@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "version": "1.15.0",
+  "name": "Wintage K-Lite (MPC-HC)",
+  "description": "Wintage K-Lite (MPC-HC) for the browser chrome. Companion to the Wintage userscript.",
+  "theme": {
+    "colors": {
+      "frame": [
+        33,
+        35,
+        37
+      ],
+      "frame_inactive": [
+        48,
+        50,
+        53
+      ],
+      "frame_incognito": [
+        23,
+        24,
+        25
+      ],
+      "frame_incognito_inactive": [
+        23,
+        24,
+        25
+      ],
+      "toolbar": [
+        48,
+        50,
+        53
+      ],
+      "tab_text": [
+        184,
+        186,
+        191
+      ],
+      "tab_background_text": [
+        149,
+        152,
+        158
+      ],
+      "bookmark_text": [
+        184,
+        186,
+        191
+      ],
+      "toolbar_button_icon": [
+        184,
+        186,
+        191
+      ],
+      "omnibox_background": [
+        23,
+        24,
+        25
+      ],
+      "omnibox_text": [
+        184,
+        186,
+        191
+      ],
+      "button_background": [
+        60,
+        63,
+        66
+      ],
+      "ntp_background": [
+        33,
+        35,
+        37
+      ],
+      "ntp_text": [
+        184,
+        186,
+        191
+      ],
+      "ntp_link": [
+        162,
+        165,
+        171
+      ],
+      "ntp_header": [
+        162,
+        165,
+        171
+      ],
+      "ntp_section": [
+        48,
+        50,
+        53
+      ],
+      "ntp_section_text": [
+        149,
+        152,
+        158
+      ],
+      "ntp_section_link": [
+        162,
+        165,
+        171
+      ]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}
