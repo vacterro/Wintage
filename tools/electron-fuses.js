@@ -77,7 +77,23 @@ function blockers(exe) {
   return { reasons, detail: r };
 }
 
-module.exports = { readFuses, blockers };
+function defuse(exe) {
+  let data;
+  try { data = fs.readFileSync(exe); } catch (e) { return { error: e.message }; }
+  const i = data.indexOf(SENTINEL);
+  if (i < 0) return { error: 'no fuse wire' };
+  const at = i + SENTINEL.length;
+  let changed = false;
+  if (data[at + 6] === 0x31) { data[at + 6] = 0x30; changed = true; } // EnableEmbeddedAsarIntegrityValidation
+  if (data[at + 7] === 0x31) { data[at + 7] = 0x30; changed = true; } // OnlyLoadAppFromAsar
+  if (changed) {
+    try { fs.writeFileSync(exe, data); }
+    catch (e) { return { error: 'could not write ' + exe + ': ' + e.message + ' (is the app running?)' }; }
+  }
+  return { success: true, changed };
+}
+
+module.exports = { readFuses, blockers, defuse };
 
 if (require.main === module) {
   const exe = process.argv[2];

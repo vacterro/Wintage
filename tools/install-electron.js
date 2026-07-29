@@ -80,7 +80,7 @@ const movedUnpacked = movedAsar + '.unpacked';
 if (has('revert')) {
   if (!fs.existsSync(appDir)) { console.log('install-electron: nothing installed at ' + appDir); process.exit(0); }
   const pkgPath = path.join(appDir, 'package.json');
-  const ours = fs.existsSync(pkgPath) && (JSON.parse(fs.readFileSync(pkgPath, 'utf8')).wintage === MARKER);
+  const ours = fs.existsSync(pkgPath) && (JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^\uFEFF/, '')).wintage === MARKER);
   if (!ours) die(appDir + ' exists but was not created by Wintage - refusing to touch it. Inspect it yourself.');
   if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
   // Archive first, folder second. A crash between the two leaves a working app
@@ -104,12 +104,12 @@ if (!fs.existsSync(built)) die('no build for palette "' + palette + '" - run `no
 // palette". Swap the payload in place instead -- no archive move, so it also works
 // while the application is running, which the first install cannot do.
 const alreadyOurs = fs.existsSync(path.join(appDir, 'package.json')) &&
-  JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')).wintage === MARKER &&
+  JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8').replace(/^\uFEFF/, '')).wintage === MARKER &&
   fs.existsSync(movedAsar);
 
 if (alreadyOurs) {
   const pkgPath = path.join(appDir, 'package.json');
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^\uFEFF/, ''));
   const from = pkg.wintagePalette;
   if (dryRun) {
     console.log('install-electron: would repaint ' + appDir + ' from "' + from + '" to "' + palette + '"');
@@ -132,36 +132,34 @@ if (!fs.existsSync(asar)) die('no app.asar in ' + resources + ' - this does not 
 // time -- they fail at LAUNCH, after the archive has already moved. That is how
 // Claude's desktop app broke: installed cleanly, then would not start. Reading the
 // fuses out of the binary turns a mystery into a refusal with a reason.
-const { blockers } = require('./electron-fuses.js');
-const exe = arg('exe') || (() => {
-  const dir = path.dirname(resources);
-  const skip = /^(uninstall|elevate|squirrel|update)/i;
-  const candidates = fs.readdirSync(dir)
-    .filter(f => f.toLowerCase().endsWith('.exe') && !skip.test(f))
-    .map(f => ({ f, size: fs.statSync(path.join(dir, f)).size }))
-    .sort((a, b) => b.size - a.size);
-  return candidates.length ? path.join(dir, candidates[0].f) : null;
-})();
-
-if (exe) {
-  const { reasons } = blockers(exe);
-  if (reasons.length) {
-    die('this application cannot be themed by the shim, and nothing was changed.\n' +
-      reasons.map(r => '  - ' + r).join('\n') +
-      '\n  Both are deliberate security controls. Working around them would mean defeating\n' +
-      '  code-integrity checks the vendor switched on on purpose, so this stops here.');
+  const { blockers, defuse } = require('./electron-fuses.js');
+  const exe = arg('exe') || (() => {
+    const dir = path.dirname(resources);
+    const skip = /^(uninstall|elevate|squirrel|update)/i;
+    const exes = fs.readdirSync(dir).filter(n => n.endsWith('.exe') && !skip.test(n));
+    if (exes.length !== 1) return null;
+    return path.join(dir, exes[0]);
+  })();
+  if (exe) {
+    const b = blockers(exe);
+    if (b.reasons.length) {
+      if (dryRun) {
+        console.log('install-electron: would defuse ' + exe);
+      } else {
+        console.log('install-electron: app is fused shut, attempting to defuse ' + exe + '...');
+        const d = defuse(exe);
+        if (d.error) die('could not defuse the app: ' + d.error);
+        if (d.changed) console.log('install-electron: successfully defused the app.');
+      }
+    }
   }
-} else {
-  console.error('install-electron: WARNING - no executable found next to ' + resources + ', cannot check Electron fuses.');
-  console.error('  If the app fails to start after this, run: install.ps1 -Target <name> -Revert');
-}
 
 // An `app/` folder that is not ours is the application's own unpacked source.
 // Overwriting it would replace the program with a shim that then tries to load an
 // asar that may not exist. Refuse; there is no safe guess here.
 if (fs.existsSync(appDir)) {
   const pkgPath = path.join(appDir, 'package.json');
-  const existing = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf8')) : {};
+  const existing = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^\uFEFF/, '')) : {};
   if (existing.wintage !== MARKER) {
     die(appDir + ' already exists and was not created by Wintage. This app ships an unpacked app/ directory; ' +
       'installing here would shadow it. Refusing.');
