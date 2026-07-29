@@ -1,4 +1,4 @@
-﻿// Wintage shim for Electron applications.
+// Wintage shim for Electron applications.
 //
 // The application's archive is moved to `app.asar` INSIDE this folder and this
 // file becomes the entry point. Nothing of the app is rewritten -- only relocated
@@ -143,14 +143,19 @@ if (css) {
 }
 
 // Hand control to the real application. Anything thrown here is the app's own
-// problem, not the theme's вЂ” but if the shim itself is what broke, the message
+// problem, not the theme's — but if the shim itself is what broke, the message
 // says so plainly, because a user staring at an app that will not start needs to
 // know which of the two to blame.
 try {
+  const { app } = require('electron');
+  if (app && app.setAppPath) {
+    app.setAppPath(ASAR);
+  }
   require(ASAR);
 } catch (e) {
   console.error('[wintage] failed to load the original app.asar at ' + ASAR);
   console.error('[wintage] delete this folder (resources/app) to restore the app exactly as it was.');
   throw e;
-}
 
+
+}

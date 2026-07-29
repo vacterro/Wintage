@@ -164,3 +164,11 @@
 - 29.07.26 13:26 [E-149] [parent: E-148] [T-030] DEC: goal_tickets 0->1
 - 29.07.26 13:32 [E-150] [parent: E-149] [T-030] RUN: ship v1.17.0 -> pushed 229c0e0..ec4e733 (79 files: the token add rippled through all 16 packs + every desktop output). release.ps1 tripped on its own git-add CRLF warnings under a piped invocation again -- version bump + gates completed, commit/push finished by hand from the staged tree. This is the fourth time that pipe interaction has bitten; worth a release.ps1 fix (T-053) so it stops needing a manual finish.
 - 29.07.26 13:33 [E-151] [parent: E-150] [T-none] RUN: HUNT -- gates all green, tree clean, no new autonomous findings. Board holds only human-gated work: T-029 (live shadow-DOM check in the user's Tampermonkey) and T-047 (GUI visual verdict), plus the newly ticketed T-053 (release.ps1 stderr-pipe fragility). Nothing an agent can close without the user.
+- 29.07.26 18:13 [E-081] [parent: E-080] RUN: SHIP - Fixed Electron shim to correctly set app.getAppPath(ASAR) to prevent apps from falling back to web mode.
+
+- 29.07.26 18:16 [E-082] [parent: E-081] RUN: SHIP - Added SAIPENVIEW support to Wintage Installer.
+
+- 29.07.26 18:22 [E-083] [parent: E-082] RUN: SHIP - Added SMART VAC CLEANER and WildRiftAssistant targets to Wintage Installer.
+
+- 29.07.26 19:25 [E-084] [parent: E-083] RUN: FIX - Fixed bug where OLED/Dracula themes caused empty string syntax errors in SMART VAC CLEANER because accentCursor was missing. Mapped it to textPrimary instead.
+
