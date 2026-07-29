@@ -107,11 +107,15 @@ $MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
 
 function Invoke-TotalCmd {
     param([int]$Index, [switch]$DoRevert, [string]$PaletteSlug)
-    $tcDir = if ($Index -eq 1) { Join-Path $env:APPDATA 'GHISLER' } else { Join-Path $env:LOCALAPPDATA 'GHISLER' }
-    $ini = Join-Path $tcDir 'wincmd.ini'
     $appName = if ($Index -eq 1) { 'Total Commander' } else { 'Total Commander (Local)' }
+    $candidates = if ($Index -eq 1) {
+        @('V:\___VAC\__P\_TOTALCMD\wincmd.ini', (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
+    } else {
+        @('V:\___VAC\__P\_TOTALCMD2\wincmd.ini', (Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini'))
+    }
+    $ini = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-    if (-not (Test-Path $ini)) { Say "$($appName): not installed (no wincmd.ini in $tcDir)" 'DarkYellow'; return }
+    if (-not $ini) { Say "$($appName): not installed (no wincmd.ini found)" 'DarkYellow'; return }
 
     if ($DoRevert) {
         if ($PSCmdlet.ShouldProcess($ini, 'Revert Wintage theme')) {
