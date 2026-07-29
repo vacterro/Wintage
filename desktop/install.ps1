@@ -17,12 +17,14 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'all')]
+    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
     [string]$Target,
     [string]$Palette = 'golden',
     [switch]$Revert,
     [switch]$Force,
-    [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\'
+    [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\',
+    [string]$SmartVacPath = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\',
+    [string]$WildRiftPath = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -209,6 +211,60 @@ function Invoke-TotalCmd {
     }
 }
 
+function Invoke-SmartVac {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+    if (-not (Test-Path $SmartVacPath)) { Say "SMART VAC CLEANER: not found at $SmartVacPath" 'DarkYellow'; return }
+    $themeFile = Join-Path $SmartVacPath 'wintage-theme.json'
+    
+    if ($DoRevert) {
+        if (Test-Path $themeFile) {
+            Remove-Item $themeFile -Force
+            Say "SMART VAC CLEANER: removed wintage-theme.json" 'Green'
+        } else {
+            Say "SMART VAC CLEANER: nothing to revert." 'DarkYellow'
+        }
+        return
+    }
+    
+    $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw
+    Set-Content $themeFile $json -Encoding UTF8
+    Say "SMART VAC CLEANER: installed theme -> $themeFile" 'Green'
+}
+
+function Invoke-WildRift {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+    if (-not (Test-Path $WildRiftPath)) { Say "WildRiftAssistant: not found at $WildRiftPath" 'DarkYellow'; return }
+    
+    $pyFile = Join-Path $WildRiftPath 'theme.py'
+    $bakFile = Join-Path $WildRiftPath 'theme.py.bak'
+    if (-not (Test-Path $pyFile)) { Say "WildRiftAssistant: theme.py not found" 'DarkYellow'; return }
+    
+    if ($DoRevert) {
+        if (Test-Path $bakFile) {
+            Copy-Item $bakFile $pyFile -Force
+            Remove-Item $bakFile -Force
+            Say "WildRiftAssistant: restored from backup" 'Green'
+        } else {
+            Say "WildRiftAssistant: nothing to revert." 'DarkYellow'
+        }
+        return
+    }
+    
+    if (-not (Test-Path $bakFile)) {
+        Copy-Item $pyFile $bakFile -Force
+    }
+    $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw | ConvertFrom-Json
+    $pyTokens = "TOKENS = {`r`n"
+    foreach ($p in $json.tokens.psobject.properties) {
+        $pyTokens += "    `"$($p.Name)`": `"$($p.Value)`",`r`n"
+    }
+    $pyTokens += "}"
+    $code = Get-Content $bakFile -Raw
+    $code = $code -replace '(?s)TOKENS\s*=\s*\{.*?\}', $pyTokens
+    Set-Content $pyFile $code -Encoding UTF8
+    Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
+}
+
 function Invoke-Saipenview {
     param([switch]$DoRevert, [string]$PaletteSlug)
     if (-not (Test-Path $SaipenviewPath)) { Say "SAIPENVIEW: not found at $SaipenviewPath" 'DarkYellow'; return }
@@ -252,6 +308,18 @@ function Invoke-CodeNomad {
         if (Test-Path $svBak) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
+
+    $smTheme = Join-Path $SmartVacPath 'wintage-theme.json'
+    $sm = if (Test-Path $SmartVacPath) {
+        if (Test-Path $smTheme) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'smartvac', 'SMART VAC CLEANER', $sm, '-')
+
+    $wrBak = Join-Path $WildRiftPath 'theme.py.bak'
+    $wr = if (Test-Path $WildRiftPath) {
+        if (Test-Path $wrBak) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'wildrift', 'WildRiftAssistant', $wr, '-')
 
     $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
     $cnCss = Join-Path $cnConfig 'custom.css'
@@ -491,6 +559,18 @@ if (-not $Target) {
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
 
+    $smTheme = Join-Path $SmartVacPath 'wintage-theme.json'
+    $sm = if (Test-Path $SmartVacPath) {
+        if (Test-Path $smTheme) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'smartvac', 'SMART VAC CLEANER', $sm, '-')
+
+    $wrBak = Join-Path $WildRiftPath 'theme.py.bak'
+    $wr = if (Test-Path $WildRiftPath) {
+        if (Test-Path $wrBak) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'wildrift', 'WildRiftAssistant', $wr, '-')
+
     $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
     $cnCss = Join-Path $cnConfig 'custom.css'
     $cn = if (Test-Path $cnConfig) {
@@ -548,12 +628,14 @@ elseif (-not $Force) {
     Say "node not found - cannot verify the build is current. Installing what is in desktop/out as-is." 'Yellow'
 }
 
-$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) + @('mpchc', 'saipenview') } else { @($Target) }
+$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) + @('mpchc', 'saipenview', 'smartvac', 'wildrift') } else { @($Target) }
 
 foreach ($name in $names) {
 
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
     if ($name -eq 'saipenview') { Invoke-Saipenview -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'smartvac') { Invoke-SmartVac -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'wildrift') { Invoke-WildRift -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'codenomad') { Invoke-CodeNomad -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'discord') { Invoke-BetterDiscord -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd') { Invoke-TotalCmd -Index 1 -DoRevert:$Revert -PaletteSlug $Palette; continue }
