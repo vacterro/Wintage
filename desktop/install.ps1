@@ -19,7 +19,7 @@
 param(
     [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
     [string]$Target,
-    [string]$Palette = 'golden',
+    [string]$Palette = 'goldendefault',
     [switch]$Revert,
     [switch]$Force,
     [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\',
