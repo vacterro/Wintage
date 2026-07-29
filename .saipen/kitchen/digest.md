@@ -1,3 +1,7 @@
-done: v1.17.0. Split the hyperlink colour out of the bevel highlight into a 19th token `link`. Dark palettes render byte-identical (link=borderHighlight, golden link #D3B57A unchanged); the one light palette (Vintage Classic) now gets a proper near-white raised bevel edge AND a readable dark link (#5E7A7A, 4.62:1) instead of one value doing both badly. Rippled cleanly through all 16 packs, both generators, both gates, all desktop templates and the GUI.
-remaining: nothing an agent can close alone. T-029 live shadow-DOM check (your Tampermonkey), T-047 GUI visual polish (your eyes), T-053 release.ps1 stderr-pipe fragility (needs a real release run to verify a fix).
-awaiting: your call on those three. Everything shipped and in sync (origin ec4e733).
+done: v1.18.0. SAIPENVIEW now RECOLOURED, not stylesheet-appended: only its own `--token:#hex` values change, so the text no longer moves (proven by masking every hex and diffing against the backup - structurally identical, 695 lines both sides). T-053 fixed for real (Git-Safe helper; this release committed+pushed under a pipe with no manual finish). Two CRLF bugs found by hunt: the apply-themes release gate could never go green on a CRLF working copy, and a test's fixture stripped nothing because JS dot does not match CR - a green test that covered nothing. `Wintage Installer.cmd` at the repo root so the GUI is obvious. T-047 closed as accepted-as-is.
+remaining: nothing an agent can close alone.
+awaiting: T-029 only - the 30-second live check described below.
+
+T-029, in full: after the @sandbox raw change the userscript should still run in PAGE context, which is what lets it theme shadow DOM. Nothing offline can observe that, and it fails SILENTLY (everything else looks fine, shadow roots just stay unthemed). Open reddit.com or youtube.com with Wintage active, F12 console, run:
+  [...document.querySelectorAll('*')].filter(e=>e.shadowRoot).slice(0,3).map(e=>[e.tagName, !!e.shadowRoot.querySelector('style[data-w95]')])
+Every entry should read true. Then switch palette from the Tampermonkey menu and navigate to a different domain - the choice must survive.

@@ -1,7 +1,7 @@
 ﻿---
-phase: SHIP
-task: T-054
-next_action: "PHASE SHIP T-054 [SAIPENVIEW recolour, CRLF fixes, root launcher]"
+phase: DONE
+task: none
+next_action: "PHASE HUNT [board TODO holds only the user-gated T-029]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -10,10 +10,10 @@ schema_version: 1
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
-goal_tickets: 5
-transition_from: REVIEW
-last_event: 165
-updated: 2026-07-29T21:09:32Z
+goal_tickets: 6
+transition_from: SHIP
+last_event: 166
+updated: 2026-07-29T21:10:19Z
 ---
 
 # Wintage вЂ” five extra themes (goal wave 1)
