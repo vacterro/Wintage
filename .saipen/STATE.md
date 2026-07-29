@@ -1,7 +1,7 @@
----
+﻿---
 phase: DONE
 task: none
-next_action: "PHASE HUNT [only human-gated T-029/T-047 and the new T-053 remain]"
+next_action: "WAIT FOR HUMAN [T-029/T-047 human-gated, T-053 built]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -16,9 +16,9 @@ last_event: 151
 updated: 2026-07-29T13:33:00Z
 ---
 
-# Wintage — five extra themes (goal wave 1)
+# Wintage вЂ” five extra themes (goal wave 1)
 
-Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, NomadCode —
+Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, NomadCode вЂ”
 five palettes alongside the existing Dark Golden, switchable at runtime.
 
 T-017..T-026 on BOARD. Infrastructure first (registry, switch, palette-independent
@@ -28,7 +28,7 @@ Open question, not blocking T-017/T-018/T-019: FreeBuff and NomadCode have no
 public palette I can trace. Golden, Claude Code, Antigravity and K-Lite/MPC-HC do.
 If the user has a screenshot or a source file for those two, it beats guessing.
 
-## Previous wave — UI.md conformance (v1.4.0 .. v1.4.7)
+## Previous wave вЂ” UI.md conformance (v1.4.0 .. v1.4.7)
 
 T-006..T-012 BUILT + VERIFIED as v1.4.0. Reasoning + deviations in
 KNOWLEDGE/ADR-003.md; perf history in ADR-002.md; animation history in ADR-001.md.
@@ -46,8 +46,8 @@ Measured live, en.wikipedia.org WWII, 16921 elements:
 
 Two bugs were caught only by live measurement, both now guarded:
 
-1. **Specificity.** The base type selector's six `:not([class*="…" i])` matches
-   score (0,6,4), so `h1 { font-size: 16px !important }` at (0,0,1) LOST — every
+1. **Specificity.** The base type selector's six `:not([class*="вЂ¦" i])` matches
+   score (0,6,4), so `h1 { font-size: 16px !important }` at (0,0,1) LOST вЂ” every
    heading silently flattened to 12px. Exceptions are now carved out of the base
    selector (disjoint, no specificity race); the `font-weight` pair had the same
    bug, fixed with a `:root`/`:host` prefix.
@@ -64,4 +64,5 @@ or `box-sizing`; no `body{overflow-x:hidden}`; no class-name-based status colour
 semantic tokens never used as text colour (1.8:1 fails AA).
 
 Also open: local branch `perf-verify` still exists (squash-merged, so git calls it
-unmerged — `-D` is destructive and needs the user's word).
+unmerged вЂ” `-D` is destructive and needs the user's word).
+
