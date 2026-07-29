@@ -214,21 +214,54 @@ function Invoke-TotalCmd {
 function Invoke-SmartVac {
     param([switch]$DoRevert, [string]$PaletteSlug)
     if (-not (Test-Path $SmartVacPath)) { Say "SMART VAC CLEANER: not found at $SmartVacPath" 'DarkYellow'; return }
-    $themeFile = Join-Path $SmartVacPath 'wintage-theme.json'
+    
+    $pyFile = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py'
+    $bakFile = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py.bak'
+    if (-not (Test-Path $pyFile)) { Say "SMART VAC CLEANER: _SMART_VAC_CLEANER.py not found" 'DarkYellow'; return }
     
     if ($DoRevert) {
-        if (Test-Path $themeFile) {
-            Remove-Item $themeFile -Force
-            Say "SMART VAC CLEANER: removed wintage-theme.json" 'Green'
+        if (Test-Path $bakFile) {
+            Copy-Item $bakFile $pyFile -Force
+            Remove-Item $bakFile -Force
+            Say "SMART VAC CLEANER: restored from backup" 'Green'
         } else {
             Say "SMART VAC CLEANER: nothing to revert." 'DarkYellow'
         }
         return
     }
     
-    $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw
-    Set-Content $themeFile $json -Encoding UTF8
-    Say "SMART VAC CLEANER: installed theme -> $themeFile" 'Green'
+    if (-not (Test-Path $bakFile)) {
+        Copy-Item $pyFile $bakFile -Force
+    }
+    $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw | ConvertFrom-Json
+    $t = $json.tokens
+    $code = Get-Content $bakFile -Raw
+    
+    $code = $code -replace '(?m)^WIN95_BG\s*=\s*''[^'']+''', "WIN95_BG           = '$($t.background)'"
+    $code = $code -replace '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+''', "WIN95_BG_SOFT      = '$($t.backgroundSoft)'"
+    $code = $code -replace '(?m)^WIN95_SURFACE\s*=\s*''[^'']+''', "WIN95_SURFACE      = '$($t.surface)'"
+    $code = $code -replace '(?m)^WIN95_SURFACE_RAISED\s*=\s*''[^'']+''', "WIN95_SURFACE_RAISED = '$($t.surfaceRaised)'"
+    $code = $code -replace '(?m)^WIN95_SURFACE_ALT\s*=\s*''[^'']+''', "WIN95_SURFACE_ALT  = '$($t.surfaceAlt)'"
+    $code = $code -replace '(?m)^WIN95_BEVEL_HI\s*=\s*''[^'']+''', "WIN95_BEVEL_HI     = '$($t.borderHighlight)'"
+    $code = $code -replace '(?m)^WIN95_BEVEL_SH\s*=\s*''[^'']+''', "WIN95_BEVEL_SH     = '$($t.borderDark)'"
+    $code = $code -replace '(?m)^WIN95_BORDER_MUTED\s*=\s*''[^'']+''', "WIN95_BORDER_MUTED = '$($t.borderMuted)'"
+    $code = $code -replace '(?m)^WIN95_TEXT\s*=\s*''[^'']+''', "WIN95_TEXT         = '$($t.textPrimary)'"
+    $code = $code -replace '(?m)^WIN95_TEXT_DIM\s*=\s*''[^'']+''', "WIN95_TEXT_DIM     = '$($t.textSecondary)'"
+    $code = $code -replace '(?m)^WIN95_TEXT_MUTED\s*=\s*''[^'']+''', "WIN95_TEXT_MUTED   = '$($t.textMuted)'"
+    $code = $code -replace '(?m)^WIN95_GOLD\s*=\s*''[^'']+''', "WIN95_GOLD         = '$($t.textPrimary)'"
+    $code = $code -replace '(?m)^WIN95_GOLD_LIGHT\s*=\s*''[^'']+''', "WIN95_GOLD_LIGHT   = '$($t.borderHighlight)'"
+    $code = $code -replace '(?m)^WIN95_GOLD_DIM\s*=\s*''[^'']+''', "WIN95_GOLD_DIM     = '$($t.textSecondary)'"
+    $code = $code -replace '(?m)^WIN95_GOLD_DARK\s*=\s*''[^'']+''', "WIN95_GOLD_DARK    = '$($t.textMuted)'"
+    $code = $code -replace '(?m)^WIN95_RED\s*=\s*''[^'']+''', "WIN95_RED          = '$($t.danger)'"
+    $code = $code -replace '(?m)^WIN95_GREEN\s*=\s*''[^'']+''', "WIN95_GREEN        = '$($t.success)'"
+    $code = $code -replace '(?m)^WIN95_BUTTON\s*=\s*''[^'']+''', "WIN95_BUTTON       = '$($t.surfaceRaised)'"
+    $code = $code -replace '(?m)^WIN95_BUTTON_HOVER\s*=\s*''[^'']+''', "WIN95_BUTTON_HOVER = '$($t.surfaceAlt)'"
+    $code = $code -replace '(?m)^WIN95_ENTRY\s*=\s*''[^'']+''', "WIN95_ENTRY        = '$($t.background)'"
+    $code = $code -replace '(?m)^WIN95_SCROLL\s*=\s*''[^'']+''', "WIN95_SCROLL       = '$($t.surfaceRaised)'"
+    $code = $code -replace '(?m)^WIN95_SCROLL_HOVER\s*=\s*''[^'']+''', "WIN95_SCROLL_HOVER = '$($t.surfaceAlt)'"
+    
+    Set-Content $pyFile $code -Encoding UTF8
+    Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
 }
 
 function Invoke-WildRift {
@@ -309,9 +342,9 @@ function Invoke-CodeNomad {
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
 
-    $smTheme = Join-Path $SmartVacPath 'wintage-theme.json'
+    $smBak = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py.bak'
     $sm = if (Test-Path $SmartVacPath) {
-        if (Test-Path $smTheme) { 'themed' } else { 'found, not themed' }
+        if (Test-Path $smBak) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'smartvac', 'SMART VAC CLEANER', $sm, '-')
 
@@ -559,9 +592,9 @@ if (-not $Target) {
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
 
-    $smTheme = Join-Path $SmartVacPath 'wintage-theme.json'
+    $smBak = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py.bak'
     $sm = if (Test-Path $SmartVacPath) {
-        if (Test-Path $smTheme) { 'themed' } else { 'found, not themed' }
+        if (Test-Path $smBak) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'smartvac', 'SMART VAC CLEANER', $sm, '-')
 
@@ -712,6 +745,7 @@ foreach ($name in $names) {
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
     }
 }
+
 
 
 
