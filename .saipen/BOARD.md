@@ -3,6 +3,7 @@
 ## DOING
 
 ## TODO
+- [ ] T-053 release.ps1's git steps emit CRLF warnings on stderr that abort the script when it is invoked under a 2>&1 pipe, forcing a manual commit/push every release; make the git calls tolerate the warning (redirect or `--%`/`-c core.safecrlf=false`) | verify: a full release run commits+pushes without a manual finish
 
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
 

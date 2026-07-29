@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-030
-next_action: "PHASE SHIP T-030 [link/bevel token split]"
+phase: DONE
+task: none
+next_action: "PHASE HUNT [only human-gated T-029/T-047 and the new T-053 remain]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -11,9 +11,9 @@ saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
 goal_tickets: 1
-transition_from: REVIEW
-last_event: 149
-updated: 2026-07-29T13:26:00Z
+transition_from: SHIP
+last_event: 151
+updated: 2026-07-29T13:33:00Z
 ---
 
 # Wintage — five extra themes (goal wave 1)
