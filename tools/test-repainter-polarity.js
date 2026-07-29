@@ -56,7 +56,7 @@ function decide(theme, colour) {
   return { bg, fg, readable: cr >= 4.5 };
 }
 
-const golden = { background: '#1A0F05', backgroundSoft: '#1E1408' };
+const golden = { background: '#342012', backgroundSoft: '#3A2616' };
 const light = { background: '#F5F3EE', backgroundSoft: '#EDEAE3' };
 
 // 1. Golden: the exact decisions v1.6.0 made, listed as literals so a change to

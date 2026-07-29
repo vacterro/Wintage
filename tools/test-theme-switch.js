@@ -59,7 +59,7 @@ function run({ gm, stored, isTop }) {
 // 1. no GM API at all -> default palette, nothing thrown
 let r = run({ gm: false, isTop: true });
 check('no GM API -> golden', r.out.THEME_ID, 'golden');
-check('no GM API -> paints golden background', r.painted['background-color'], '#1A0F05');
+check('no GM API -> paints golden background', r.painted['background-color'], '#342012');
 check('no GM API -> no menu', r.menu.length, 0);
 
 // 2. stored slug that no longer exists -> default, not a crash

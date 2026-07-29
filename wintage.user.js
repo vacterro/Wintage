@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.12.2
+// @version      1.13.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -73,73 +73,73 @@
     golden: {
       label: 'Dark Golden (Win95)',
       tokens: {
-        background: '#1A0F05', backgroundSoft: '#1E1408',
-        surface: '#2A1C0A', surfaceRaised: '#362812', surfaceAlt: '#3A2A15',
-        borderDark: '#0E0803', borderHighlight: '#C0A060', borderMuted: '#4A3820',
-        textPrimary: '#D4B87A', textSecondary: '#B09558', textMuted: '#7A6838',
-        accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#362812', compareBack: '#0F0A04'
+        background: '#342012', backgroundSoft: '#3A2616',
+        surface: '#4A341B', surfaceRaised: '#5A4324', surfaceAlt: '#634B2B',
+        borderDark: '#1C1208', borderHighlight: '#D3B57A', borderMuted: '#665033',
+        textPrimary: '#E2CA95', textSecondary: '#C5AB6E', textMuted: '#95804C',
+        accentTeal: '#008080', accentTealDeep: '#006060',
+        success: '#5B9630', warning: '#969630', danger: '#963030',
+        selection: '#5A4324', compareBack: '#24170C'
       }
     },
     claudecode: {
       label: 'Claude Code',
       tokens: {
-        background: '#13110C', backgroundSoft: '#17150F',
-        surface: '#201D14', surfaceRaised: '#2A281E', surfaceAlt: '#2E2B21',
-        borderDark: '#0A0907', borderHighlight: '#BE8B62', borderMuted: '#3C392E',
-        textPrimary: '#D2A57C', textSecondary: '#AE825A', textMuted: '#785A3A',
-        accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#2A281E', compareBack: '#0B0A08'
+        background: '#29241D', backgroundSoft: '#2E2922',
+        surface: '#3B362A', surfaceRaised: '#484436', surfaceAlt: '#514C3D',
+        borderDark: '#15130F', borderHighlight: '#D1A27C', borderMuted: '#555144',
+        textPrimary: '#E0B997', textSecondary: '#C39870', textMuted: '#93704E',
+        accentTeal: '#008080', accentTealDeep: '#006060',
+        success: '#5B9630', warning: '#969630', danger: '#963030',
+        selection: '#484436', compareBack: '#1C1914'
       }
     },
     antigravity: {
       label: 'Antigravity',
       tokens: {
-        background: '#0A0D15', backgroundSoft: '#0D0F19',
-        surface: '#121422', surfaceRaised: '#1B1D2D', surfaceAlt: '#1E2131',
-        borderDark: '#06070B', borderHighlight: '#60BDC0', borderMuted: '#2B2D40',
-        textPrimary: '#7ACFD4', textSecondary: '#58ABB0', textMuted: '#38747A',
-        accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#1B1D2D', compareBack: '#07080C'
+        background: '#1B1F2C', backgroundSoft: '#1F2431',
+        surface: '#272B3E', surfaceRaised: '#31354D', surfaceAlt: '#393D55',
+        borderDark: '#0D0F17', borderHighlight: '#7AD0D3', borderMuted: '#404359',
+        textPrimary: '#95DEE2', textSecondary: '#6EBFC5', textMuted: '#4C8F95',
+        accentTeal: '#008080', accentTealDeep: '#006060',
+        success: '#5B9630', warning: '#969630', danger: '#963030',
+        selection: '#31354D', compareBack: '#12151E'
       }
     },
     klite: {
       label: 'K-Lite (MPC-HC)',
       tokens: {
-        background: '#0E1011', backgroundSoft: '#121314',
-        surface: '#181A1C', surfaceRaised: '#222426', surfaceAlt: '#25272A',
-        borderDark: '#080909', borderHighlight: '#8B8E95', borderMuted: '#323538',
-        textPrimary: '#A3A5AC', textSecondary: '#808288', textMuted: '#56575C',
-        accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#222426', compareBack: '#09090A'
+        background: '#212325', backgroundSoft: '#26282A',
+        surface: '#303235', surfaceRaised: '#3C3F42', surfaceAlt: '#44474A',
+        borderDark: '#111213', borderHighlight: '#A2A5AB', borderMuted: '#494C50',
+        textPrimary: '#B8BABF', textSecondary: '#95989E', textMuted: '#6D6F74',
+        accentTeal: '#008080', accentTealDeep: '#006060',
+        success: '#5B9630', warning: '#969630', danger: '#963030',
+        selection: '#3C3F42', compareBack: '#171819'
       }
     },
     freebuff: {
       label: 'FreeBuff',
       tokens: {
-        background: '#0B0F14', backgroundSoft: '#0E1218',
-        surface: '#131821', surfaceRaised: '#1C212C', surfaceAlt: '#1F2530',
-        borderDark: '#06080B', borderHighlight: '#70C060', borderMuted: '#2C323E',
-        textPrimary: '#87D47A', textSecondary: '#64B058', textMuted: '#3F7A38',
-        accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#1C212C', compareBack: '#07090C'
+        background: '#1B232B', backgroundSoft: '#202830',
+        surface: '#28303D', surfaceRaised: '#333B4B', surfaceAlt: '#3A4354',
+        borderDark: '#0E1116', borderHighlight: '#89D37A', borderMuted: '#414958',
+        textPrimary: '#A0E295', textSecondary: '#7AC56E', textMuted: '#55954C',
+        accentTeal: '#008080', accentTealDeep: '#006060',
+        success: '#5B9630', warning: '#969630', danger: '#963030',
+        selection: '#333B4B', compareBack: '#13181D'
       }
     },
     nomadcode: {
       label: 'NomadCode',
       tokens: {
-        background: '#0B0F14', backgroundSoft: '#0F1217',
-        surface: '#141920', surfaceRaised: '#1D222B', surfaceAlt: '#20262F',
-        borderDark: '#06090B', borderHighlight: '#8C73C1', borderMuted: '#2D333D',
-        textPrimary: '#9A7FD0', textSecondary: '#8B74B8', textMuted: '#523B77',
-        accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
-        selection: '#1D222B', compareBack: '#07090C'
+        background: '#1C242A', backgroundSoft: '#21282F',
+        surface: '#29313C', surfaceRaised: '#343D4A', surfaceAlt: '#3C4552',
+        borderDark: '#0E1216', borderHighlight: '#9D86D1', borderMuted: '#424A57',
+        textPrimary: '#B099DE', textSecondary: '#9C84C8', textMuted: '#675091',
+        accentTeal: '#008080', accentTealDeep: '#006060',
+        success: '#5B9630', warning: '#969630', danger: '#963030',
+        selection: '#343D4A', compareBack: '#13181D'
       }
     }
   };

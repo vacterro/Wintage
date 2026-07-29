@@ -99,29 +99,65 @@ $ELECTRON = @{
     }
 }
 
+# Resolved BEFORE the listing, not after: the listing reads Electron fuses through
+# node, and when this lived below it, $node was still empty there -- so every app
+# silently reported "not themed" instead of "fused shut", which is the one line in
+# the table a user actually needs when an app refuses to start.
+$node = Get-Command node -ErrorAction SilentlyContinue
+
 if (-not $Target) {
+    # The whole point of the listing is answering three questions at once: is the app
+    # here, is it themed, and WHICH palette is on it. Without the third column,
+    # "which one did I put on Freebuff again" has no answer short of reading JSON.
+    $palettes = (Get-ChildItem (Join-Path $root 'themes') -Filter '*.json' | ForEach-Object { $_.BaseName }) -join '|'
+
     Say "Wintage desktop targets:" 'Cyan'
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'target', 'application', 'state', 'palette') 'DarkGray'
+
     foreach ($k in $TARGETS.Keys | Sort-Object) {
         $t = $TARGETS[$k]
-        $present = if (Test-Path $t.Dir) { 'found' } else { 'NOT found on this machine' }
-        Say ("  {0,-12} {1,-22} {2}" -f $k, $t.Name, $present)
-        Say ("               {0}" -f $t.Note) 'DarkGray'
+        $dest = Join-Path $t.Dir 'wintage-themes'
+        $state = if (-not (Test-Path $t.Dir)) { 'not installed' }
+                 elseif (Test-Path $dest) { 'themed' }
+                 else { 'found, not themed' }
+        # A VS Code target carries EVERY palette at once and the user picks in the
+        # editor, so naming one here would be a lie.
+        $pal = if (Test-Path $dest) { 'all (pick in the editor)' } else { '-' }
+        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $k, $t.Name, $state, $pal)
     }
+
     foreach ($k in $ELECTRON.Keys | Sort-Object) {
         $e = $ELECTRON[$k]
-        $present = if (Test-ElectronApp $e.Resources) { if (Test-Path (Join-Path $e.Resources 'app/package.json')) { 'found, THEMED' } else { 'found' } } else { 'NOT found on this machine' }
-        Say ("  {0,-16} {1,-38} {2}" -f $k, $e.Name, $present)
-        Say ("                   {0}" -f $e.Note) 'DarkGray'
+        $pkg = Join-Path $e.Resources 'app/package.json'
+        $blocked = $null
+        if (Test-ElectronApp $e.Resources) {
+            $exe = Get-ChildItem (Split-Path $e.Resources -Parent) -Filter '*.exe' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notmatch '^(Uninstall|elevate|Squirrel|Update)' } |
+                Sort-Object Length -Descending | Select-Object -First 1
+            if ($exe -and $node) {
+                $fuse = & node (Join-Path $root 'tools/electron-fuses.js') $exe.FullName 2>$null
+                if ($fuse -match 'NOT themeable') { $blocked = 'fused shut' }
+            }
+        }
+        $state = if (-not (Test-ElectronApp $e.Resources)) { 'not installed' }
+                 elseif ($blocked) { $blocked }
+                 elseif (Test-Path $pkg) { 'themed' }
+                 else { 'found, not themed' }
+        $pal = if (Test-Path $pkg) { (Get-Content $pkg -Raw | ConvertFrom-Json).wintagePalette } else { '-' }
+        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $k, $e.Name, $state, $pal)
     }
+
     Say ""
-    Say "Run:  .\install.ps1 -Target <name> [-Palette golden|claudecode|antigravity|klite|freebuff|nomadcode]" 'Cyan'
-    Say "      .\install.ps1 -Target all          .\install.ps1 -Target claude -Revert" 'Cyan'
+    Say "Palettes: $palettes" 'DarkGray'
+    Say "  .\install.ps1 -Target freebuff -Palette klite     one app, one palette" 'Cyan'
+    Say "  .\install.ps1 -Target all -Palette golden         everything, one palette" 'Cyan'
+    Say "  .\install.ps1 -Target freebuff -Revert            undo one" 'Cyan'
+    Say "Repainting an already-themed app works while it is running; a first install does not." 'DarkGray'
     return
 }
 
 # The built output is generated, not committed by hand -- refuse to install a stale
 # or missing build rather than silently shipping last week's colours.
-$node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
     & node (Join-Path $root 'tools/build-desktop.js') --check | Out-Null
     if ($LASTEXITCODE -ne 0) {

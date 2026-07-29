@@ -127,6 +127,35 @@ if (alreadyOurs) {
 
 if (!fs.existsSync(asar)) die('no app.asar in ' + resources + ' - this does not look like a packed Electron app');
 
+// ─── Fuse check, BEFORE anything moves ───────────────────────────────────────
+// Two Electron fuses make the shim unrunnable, and they do not fail at install
+// time -- they fail at LAUNCH, after the archive has already moved. That is how
+// Claude's desktop app broke: installed cleanly, then would not start. Reading the
+// fuses out of the binary turns a mystery into a refusal with a reason.
+const { blockers } = require('./electron-fuses.js');
+const exe = arg('exe') || (() => {
+  const dir = path.dirname(resources);
+  const skip = /^(uninstall|elevate|squirrel|update)/i;
+  const candidates = fs.readdirSync(dir)
+    .filter(f => f.toLowerCase().endsWith('.exe') && !skip.test(f))
+    .map(f => ({ f, size: fs.statSync(path.join(dir, f)).size }))
+    .sort((a, b) => b.size - a.size);
+  return candidates.length ? path.join(dir, candidates[0].f) : null;
+})();
+
+if (exe) {
+  const { reasons } = blockers(exe);
+  if (reasons.length) {
+    die('this application cannot be themed by the shim, and nothing was changed.\n' +
+      reasons.map(r => '  - ' + r).join('\n') +
+      '\n  Both are deliberate security controls. Working around them would mean defeating\n' +
+      '  code-integrity checks the vendor switched on on purpose, so this stops here.');
+  }
+} else {
+  console.error('install-electron: WARNING - no executable found next to ' + resources + ', cannot check Electron fuses.');
+  console.error('  If the app fails to start after this, run: install.ps1 -Target <name> -Revert');
+}
+
 // An `app/` folder that is not ours is the application's own unpacked source.
 // Overwriting it would replace the program with a shim that then tries to load an
 // asar that may not exist. Refuse; there is no safe guess here.
