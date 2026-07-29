@@ -20,7 +20,7 @@ $here = $PSScriptRoot
 $root = Split-Path $here -Parent
 $themeDir = Join-Path $root 'themes'
 
-# ─── PALETTE LOADING ─────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ PALETTE LOADING в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 $script:packs = @{}
 function Load-Packs {
     $script:packs = @{}
@@ -64,7 +64,7 @@ function Contrast($a, $b) {
     [Math]::Round((([Math]::Max($x, $y) + 0.05) / ([Math]::Min($x, $y) + 0.05)), 2)
 }
 
-# ─── WIN95 DRAWING ───────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ WIN95 DRAWING в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # Depth is a 2px bevel and nothing else (UI.md law 3): light on top/left, dark on
 # bottom/right for raised, swapped for sunken. Drawn by hand because every native
 # control style available here has either rounded corners or a gradient.
@@ -82,7 +82,7 @@ function Draw-Bevel($g, $rect, $light, $dark, [bool]$raised = $true) {
 $FONT = New-Object Drawing.Font('Verdana', 8.25, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Point)
 $FONTB = New-Object Drawing.Font('Verdana', 8.25, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Point)
 
-# ─── FORM ────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ FORM в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 $form = New-Object Windows.Forms.Form
 $form.Text = 'Wintage Theme Installer'
 $form.Size = New-Object Drawing.Size(880, 620)
@@ -105,10 +105,18 @@ $lstThemes.IntegralHeight = $false
 $lblTargets = New-Object Windows.Forms.Label
 $lblTargets.Text = 'APPLY TO'; $lblTargets.Location = '12,338'; $lblTargets.Size = '200,16'; $lblTargets.Font = $FONTB
 $clbTargets = New-Object Windows.Forms.CheckedListBox
-$clbTargets.Location = '12,356'; $clbTargets.Size = '200,180'
+$clbTargets.Location = '12,356'; $clbTargets.Size = '200,146'
 $clbTargets.BorderStyle = 'FixedSingle'
 $clbTargets.CheckOnClick = $true
 $clbTargets.IntegralHeight = $false
+
+$btnSelectAll = New-Object Windows.Forms.Button
+$btnSelectAll.Text = 'ALL'; $btnSelectAll.Location = '12,508'; $btnSelectAll.Size = '96,24'; $btnSelectAll.Font = $FONT
+$btnSelectAll.FlatStyle = 'Flat'; $btnSelectAll.FlatAppearance.BorderSize = 0
+
+$btnSelectNone = New-Object Windows.Forms.Button
+$btnSelectNone.Text = 'NONE'; $btnSelectNone.Location = '116,508'; $btnSelectNone.Size = '96,24'; $btnSelectNone.Font = $FONT
+$btnSelectNone.FlatStyle = 'Flat'; $btnSelectNone.FlatAppearance.BorderSize = 0
 
 # Preview ---------------------------------------------------------------------
 $lblPreview = New-Object Windows.Forms.Label
@@ -133,8 +141,12 @@ $btnApply.Text = 'APPLY'; $btnApply.Location = '640,356'; $btnApply.Size = '212,
 $btnApply.FlatStyle = 'Flat'; $btnApply.FlatAppearance.BorderSize = 0
 
 $btnSave = New-Object Windows.Forms.Button
-$btnSave.Text = 'SAVE CUSTOM'; $btnSave.Location = '640,396'; $btnSave.Size = '212,26'
+$btnSave.Text = 'SAVE'; $btnSave.Location = '640,396'; $btnSave.Size = '104,26'
 $btnSave.FlatStyle = 'Flat'; $btnSave.FlatAppearance.BorderSize = 0
+
+$btnDelCustom = New-Object Windows.Forms.Button
+$btnDelCustom.Text = 'DEL CUSTOM'; $btnDelCustom.Location = '748,396'; $btnDelCustom.Size = '104,26'
+$btnDelCustom.FlatStyle = 'Flat'; $btnDelCustom.FlatAppearance.BorderSize = 0
 
 $btnRevert = New-Object Windows.Forms.Button
 $btnRevert.Text = 'REVERT SELECTED TARGETS'; $btnRevert.Location = '640,428'; $btnRevert.Size = '212,26'
@@ -148,10 +160,10 @@ $log.BorderStyle = 'FixedSingle'
 $status = New-Object Windows.Forms.Label
 $status.Location = '12,546'; $status.Size = '840,26'
 
-$form.Controls.AddRange(@($lblThemes, $lstThemes, $lblTargets, $clbTargets, $lblPreview, $preview,
-        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnRevert, $log, $status))
+$form.Controls.AddRange(@($lblThemes, $lstThemes, $lblTargets, $clbTargets, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
+        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $log, $status))
 
-# ─── TARGET DISCOVERY ────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ TARGET DISCOVERY в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # Read from install.ps1's own listing rather than duplicated here: one source of
 # truth for what exists on this machine, and a target added there shows up here
 # without a second edit.
@@ -177,7 +189,7 @@ function Load-Targets {
     $clbTargets.SetItemChecked($clbTargets.Items.Count - 1, $true)
 }
 
-# ─── RENDERING ───────────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ RENDERING в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 $lstThemes.Add_DrawItem({
         param($s, $e)
         $e.DrawBackground()
@@ -340,7 +352,7 @@ function Update-Info {
     "`r`n`r`nApply runs the same install.ps1 the`r`nterminal does - no second code path."
 }
 
-# ─── ACTIONS ─────────────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ ACTIONS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 function Say-Log($msg) { $log.AppendText($msg + "`r`n"); $log.SelectionStart = $log.TextLength; $log.ScrollToCaret() }
 
 function Save-Custom {
@@ -348,16 +360,35 @@ function Save-Custom {
     $pack = [ordered]@{ slug = 'custom'; label = 'Custom'; order = 99; source = 'built in the Wintage Theme Installer'; tokens = [ordered]@{} }
     foreach ($k in $TOKENS) { $pack.tokens[$k] = $t.$k }
     $file = Join-Path $themeDir 'custom.json'
-    ($pack | ConvertTo-Json -Depth 5) | Set-Content $file -Encoding UTF8
+    $json = ($pack | ConvertTo-Json -Depth 5)
+    [System.IO.File]::WriteAllText($file, $json, (New-Object System.Text.UTF8Encoding $false))
     Say-Log "saved themes/custom.json"
     & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
     & node (Join-Path $root 'tools/build-desktop.js') | Out-Null
     Load-Packs
-    Say-Log "rebuilt userscript + desktop output"
+}
+
+function Delete-Custom {
+    $file = Join-Path $themeDir 'custom.json'
+    if (Test-Path $file) {
+        Remove-Item $file -Force
+        Say-Log "deleted themes/custom.json"
+        & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
+        & node (Join-Path $root 'tools/build-desktop.js') | Out-Null
+        Load-Packs
+        $script:current = 'golden'
+        $lstThemes.SelectedItem = $script:packs[$script:current].label
+    } else {
+        Say-Log "no custom theme to delete"
+    }
 }
 
 $btnSave.Add_Click({
         try { Save-Custom } catch { Say-Log ("SAVE FAILED: " + $_.Exception.Message) }
+    })
+
+$btnDelCustom.Add_Click({
+        try { Delete-Custom } catch { Say-Log ("DELETE FAILED: " + $_.Exception.Message) }
     })
 
 $btnApply.Add_Click({
@@ -383,6 +414,13 @@ $btnApply.Add_Click({
         }
         catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message) }
         finally { $btnApply.Enabled = $true }
+    })
+
+$btnSelectAll.Add_Click({
+        for ($i = 0; $i -lt $clbTargets.Items.Count; $i++) { $clbTargets.SetItemChecked($i, $true) }
+    })
+$btnSelectNone.Add_Click({
+        for ($i = 0; $i -lt $clbTargets.Items.Count; $i++) { $clbTargets.SetItemChecked($i, $false) }
     })
 
 $btnRevert.Add_Click({
@@ -412,7 +450,7 @@ $lstThemes.Add_SelectedIndexChanged({
         Refresh-Swatches; Update-Info; $preview.Invalidate()
     })
 
-# ─── SKIN THE INSTALLER ITSELF ───────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ SKIN THE INSTALLER ITSELF в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # The window wears the palette it is about to install. It is the fastest possible
 # preview and it also keeps the tool honest: a palette that makes this window
 # unreadable is one you can see is unreadable.
@@ -427,7 +465,7 @@ function Skin-Self {
     foreach ($c in @($lstThemes, $clbTargets, $log)) {
         $c.BackColor = C $t.compareBack; $c.ForeColor = C $t.textPrimary
     }
-    foreach ($b in @($btnApply, $btnSave, $btnRevert)) {
+    foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnSelectAll, $btnSelectNone)) {
         $b.BackColor = C $t.surfaceRaised; $b.ForeColor = C $t.textPrimary
         $b.FlatAppearance.BorderColor = C $t.borderHighlight
         $b.FlatAppearance.BorderSize = 2
