@@ -17,8 +17,9 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('antigravity', 'vscode', 'all')]
+    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'nomadcode', 'all')]
     [string]$Target,
+    [string]$Palette = 'golden',
     [switch]$Revert,
     [switch]$Force
 )
@@ -51,6 +52,53 @@ $TARGETS = @{
     }
 }
 
+# Electron applications. These are themed by dropping a resources/app/ folder that
+# Electron loads INSTEAD of app.asar, which then injects the stylesheet and loads
+# the original asar untouched. Nothing of the app is rewritten, and -Revert deletes
+# the folder. The catch, stated plainly rather than glossed: an app update replaces
+# its program folder, so the shim goes with it and the installer has to be re-run.
+# An app is "present" if its archive is at EITHER location: resources/app.asar for a
+# clean install, or resources/app/app.asar once the shim has moved it. Checking only
+# the first made an already-themed app report itself as not installed, which then
+# refused to revert -- the one situation where you most need the command to work.
+function Test-ElectronApp($resources) {
+    if (-not $resources) { return $false }
+    (Test-Path (Join-Path $resources 'app.asar')) -or (Test-Path (Join-Path $resources 'app/app.asar'))
+}
+
+function Get-ClaudeResources {
+    # Squirrel keeps every version side by side; only the newest is the live one.
+    $root = Join-Path $env:LOCALAPPDATA 'AnthropicClaude'
+    if (-not (Test-Path $root)) { return $null }
+    $app = Get-ChildItem $root -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Sort-Object { [version]($_.Name -replace '^app-', '') } | Select-Object -Last 1
+    if (-not $app) { return $null }
+    Join-Path $app.FullName 'resources'
+}
+
+$ELECTRON = @{
+    claude          = @{
+        Name      = 'Claude (desktop app)'
+        Resources = (Get-ClaudeResources)
+        Note      = 'Electron. Update creates a new app-<version> folder, so re-run after an update.'
+    }
+    freebuff        = @{
+        Name      = 'Freebuff'
+        Resources = Join-Path $env:LOCALAPPDATA 'Programs/@codebufffreebuff-desktop/resources'
+        Note      = 'Electron.'
+    }
+    'antigravity-app' = @{
+        Name      = 'Antigravity (agent app, not the IDE)'
+        Resources = Join-Path $env:LOCALAPPDATA 'Programs/Antigravity/resources'
+        Note      = 'Electron. Separate program from the IDE, themed separately.'
+    }
+    nomadcode       = @{
+        Name      = 'NomadCode'
+        Resources = Join-Path $env:LOCALAPPDATA 'Programs/codenomad-electron-app/resources'
+        Note      = 'Electron. Only AppData leftovers found on this machine - no installed program.'
+    }
+}
+
 if (-not $Target) {
     Say "Wintage desktop targets:" 'Cyan'
     foreach ($k in $TARGETS.Keys | Sort-Object) {
@@ -59,8 +107,15 @@ if (-not $Target) {
         Say ("  {0,-12} {1,-22} {2}" -f $k, $t.Name, $present)
         Say ("               {0}" -f $t.Note) 'DarkGray'
     }
+    foreach ($k in $ELECTRON.Keys | Sort-Object) {
+        $e = $ELECTRON[$k]
+        $present = if (Test-ElectronApp $e.Resources) { if (Test-Path (Join-Path $e.Resources 'app/package.json')) { 'found, THEMED' } else { 'found' } } else { 'NOT found on this machine' }
+        Say ("  {0,-16} {1,-38} {2}" -f $k, $e.Name, $present)
+        Say ("                   {0}" -f $e.Note) 'DarkGray'
+    }
     Say ""
-    Say "Run:  .\install.ps1 -Target <name>   (or -Target all)" 'Cyan'
+    Say "Run:  .\install.ps1 -Target <name> [-Palette golden|claudecode|antigravity|klite|freebuff|nomadcode]" 'Cyan'
+    Say "      .\install.ps1 -Target all          .\install.ps1 -Target claude -Revert" 'Cyan'
     return
 }
 
@@ -78,9 +133,36 @@ elseif (-not $Force) {
     Say "node not found - cannot verify the build is current. Installing what is in desktop/out as-is." 'Yellow'
 }
 
-$names = if ($Target -eq 'all') { $TARGETS.Keys } else { @($Target) }
+$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) } else { @($Target) }
 
 foreach ($name in $names) {
+
+    # ─── Electron targets ────────────────────────────────────────────────────
+    if ($ELECTRON.ContainsKey($name)) {
+        $e = $ELECTRON[$name]
+        if (-not (Test-ElectronApp $e.Resources)) {
+            Say "$($e.Name): not installed on this machine - skipped." 'DarkYellow'
+            continue
+        }
+        if (-not $node) { Say "$($e.Name): needs node to read the app's package.json out of app.asar - skipped." 'Yellow'; continue }
+
+        $script = Join-Path $root 'tools/install-electron.js'
+        if ($Revert) {
+            if ($PSCmdlet.ShouldProcess($e.Resources, 'Remove the Wintage shim')) {
+                & node $script --resources $e.Resources --revert
+            }
+            continue
+        }
+        $action = "Install Wintage ($Palette) shim"
+        if ($WhatIfPreference) { & node $script --resources $e.Resources --palette $Palette --dry-run; continue }
+        if ($PSCmdlet.ShouldProcess($e.Resources, $action)) {
+            & node $script --resources $e.Resources --palette $Palette
+            if ($LASTEXITCODE -ne 0) { Say "$($e.Name): FAILED - see the message above." 'Red' }
+            else { Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray' }
+        }
+        continue
+    }
+
     $t = $TARGETS[$name]
 
     if (-not (Test-Path $t.Dir)) {

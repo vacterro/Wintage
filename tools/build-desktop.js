@@ -101,8 +101,67 @@ function buildVscode(packs) {
   }, null, 2) + '\n');
 }
 
+// ─── TARGET: electron ────────────────────────────────────────────────────────
+// Claude Code's desktop app, FreeBuff and NomadCode are all Electron, which means
+// their UI is a web page and the userscript's own stylesheet already knows how to
+// impose UI.md on one. So the CSS is not rewritten here — it is EXTRACTED from
+// wintage.user.js and its ${T.x} interpolations resolved against the palette.
+// Duplicating it would mean every bevel fix, scrollbar rebuild and type-ladder
+// correction had to be made twice, and the second copy would rot.
+//
+// What does NOT come along is the repainter (the JS that fixes what CSS cannot win
+// on arbitrary sites). For a single known application that is a much smaller loss
+// than it is on the open web, and it keeps the injected payload to one stylesheet.
+function buildElectron(packs) {
+  const src = fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8');
+
+  const literal = name => {
+    const decl = 'const ' + name + ' = `';
+    const i = src.indexOf(decl);
+    if (i < 0) throw new Error(name + ' not found in wintage.user.js');
+    const start = i + decl.length;
+    return src.slice(start, start + /\n[ \t]*`;/.exec(src.slice(start)).index);
+  };
+  // The two bevel constants and the font stack are themselves template literals
+  // referencing tokens, so they are resolved first and then substituted.
+  const constLiteral = name => {
+    const m = new RegExp('const ' + name + " = [`']([^`']*)[`']").exec(src);
+    if (!m) throw new Error(name + ' not found in wintage.user.js');
+    return m[1];
+  };
+
+  const globalCss = literal('GLOBAL_CSS');
+  const shadowCss = literal('SHADOW_CSS');
+  const bevels = {
+    B_OUTER: constLiteral('B_OUTER'),
+    B_INNER: constLiteral('B_INNER'),
+    FONT: constLiteral('FONT')
+  };
+  bevels.B_SUNK = bevels.B_INNER;
+
+  const shim = fs.readFileSync(path.join(DESKTOP, 'targets', 'electron', 'shim.cjs'), 'utf8');
+
+  for (const pack of packs) {
+    const resolve = text => text
+      .replace(/\$\{(B_OUTER|B_INNER|B_SUNK|FONT)\}/g, (m, k) => bevels[k])
+      .replace(/\$\{T\.(\w+)\}/g, (m, k) => {
+        if (!(k in pack.tokens)) throw new Error('unknown token T.' + k);
+        return pack.tokens[k];
+      })
+      .replace(/\$\{DARK \? '(\w+)' : '(\w+)'\}/g, '$1');
+    // Two passes: the bevel constants themselves contain ${T.x}.
+    const css = resolve(resolve(globalCss)) + '\n' + resolve(resolve(shadowCss));
+    const left = /\$\{/.exec(css);
+    if (left) throw new Error('unresolved placeholder in ' + pack.slug + ' css near: ' + css.slice(left.index, left.index + 60));
+    emit(path.join(OUT, 'electron', pack.slug, 'wintage.css'),
+      '/* Wintage ' + pack.label + ' - generated from wintage.user.js v' + VERSION + '. Do not edit. */\n' + css + '\n');
+    emit(path.join(OUT, 'electron', pack.slug, 'shim.cjs'), shim);
+  }
+}
+
 const packs = loadPacks();
 buildVscode(packs);
+buildElectron(packs);
 
 if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }
 console.log('build-desktop: ' + (wrote ? wrote + ' file(s) written' : 'everything up to date') +
