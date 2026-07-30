@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.18.1",
+  "version": "1.18.2",
   "name": "Wintage Dark Golden (Win95)",
   "description": "Wintage Dark Golden (Win95) for the browser chrome. Companion to the Wintage userscript.",
   "theme": {

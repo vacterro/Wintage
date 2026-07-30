@@ -2,7 +2,7 @@
   "name": "wintage-themes",
   "displayName": "Wintage вЂ” Win95 Vintage Themes",
   "description": "Dark Golden Windows 95 aesthetic, and five palettes derived from it. Generated from the Wintage theme packs.",
-  "version": "1.18.1",
+  "version": "1.18.2",
   "publisher": "vacterro",
   "engines": {
     "vscode": "^1.60.0"
