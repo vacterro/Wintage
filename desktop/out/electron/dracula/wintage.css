@@ -1,4 +1,4 @@
-/* Wintage Dracula - generated from wintage.user.js v1.18.2. Do not edit. */
+/* Wintage Dracula - generated from wintage.user.js v1.19.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
@@ -95,6 +95,22 @@
   transition-delay: 0s !important;
   animation-duration: 0.001s !important;
   animation-delay: 0s !important;
+  /* 🚨 SNAPBACK — this line is why reuters.com rendered a blank page 🚨
+     The comment above used to argue snapback "only affects already-broken
+     sites". That was wrong, and Reuters is the proof: header drawn, article
+     body empty, full-height scrollbar. The pattern is completely ordinary —
+     base state opacity:0, a reveal animation with no fill-mode, and the
+     final visible state left to the animation. Slam the duration to 0.001s
+     and the animation ends immediately, the effect stops applying, and the
+     element falls back to its base opacity:0. Forever.
+     'forwards' makes the last keyframe persist, which is exactly what such a
+     site would have written itself. Not 'both': that would also apply the
+     FROM state before the animation starts, a behaviour change this does not
+     need since the delay is already 0s. Reveal animations now land visible;
+     nothing else about the no-motion rule changes.
+     (Backticks are banned in here -- this whole block is a JS template
+     literal, so one backtick ends the stylesheet mid-file.) */
+  animation-fill-mode: forwards !important;
 }
 html { scroll-behavior: auto !important; }
 
@@ -117,6 +133,11 @@ html { scroll-behavior: auto !important; }
   transition-timing-function: step-end !important;
 }
 
+/* The page's own photo backdrop goes at the root too. The repainter handles the
+   full-bleed DIVs sites use for this (see the page-sized backdrop rule there),
+   but html/body are the classic carriers and need no measurement to judge: a
+   background image on the document root is never an icon. */
+html, body { background-image: none !important; }
 html { background-color: #21222C !important; color: #F8F8F2 !important; }
 body { background-color: #282A36 !important; color: #F8F8F2 !important; margin: 0 !important; padding: 0 !important; }
 
@@ -418,10 +439,31 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 ::-webkit-scrollbar-corner { background: #282A36 !important; }
 ::-webkit-scrollbar-button { background: #4C526D !important; border: 2px solid !important; border-color: #BD93F9 #191A21 #191A21 #BD93F9 !important; box-shadow: none !important; height: 16px !important; width: 16px !important; }
 
+/* JS-DRAWN SCROLLBARS THAT ARE NOT SCROLLBARS YET.
+   Monaco (VS Code, Antigravity, and every embedded editor on the web) does not use
+   a native scrollbar: it renders its own shells and keeps them in the DOM at all
+   times, hidden by opacity/visibility until there is something to scroll. Our
+   surface + bevel rules paint those shells unconditionally, so they turn into
+   permanent Win95 scrollbars that scroll nothing -- decoration, exactly as
+   reported in Antigravity. Handing these back to the app is the only correct
+   move: it already knows when they should be visible. */
+.monaco-scrollable-element > .scrollbar,
+.monaco-scrollable-element > .scrollbar > .slider,
+.monaco-scrollable-element > .invisible {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.monaco-scrollable-element > .scrollbar.invisible { visibility: hidden !important; }
+.monaco-scrollable-element > .scrollbar > .slider { background-color: #4C526D !important; }
+
     /* Height-only 1ms transition + near-zero animation (see GLOBAL_CSS motion
        note): transitionend/animationend keep firing for collapse + rc-motion
        state machines, without touching top/left/width/transform. */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; }
+    /* animation-fill-mode: forwards for the same snapback reason as the global
+       layer -- a shadow tree reveals its content the same way a light one does. */
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; animation-fill-mode: forwards !important; }
     /* Zero shadow / zero blur, same as the global layer (UI.md law 2). Shadow
        roots are where modern component libraries keep their elevation, so
        skipping this here would leave every web-component card floating while the

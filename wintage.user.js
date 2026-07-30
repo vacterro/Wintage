@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.18.2
+// @version      1.19.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -353,6 +353,9 @@
         location.reload();
       });
     }
+    GM_registerMenuCommand('☕ Buy me a coffee', function() {
+      window.open('https://buymeacoffee.com/vacuum34', '_blank');
+    });
   }
 
   // Stamped as data-w95-ver on every injected <style>, so a console diagnostic can
@@ -362,7 +365,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.18.2';
+  const W95_VERSION = '1.19.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -478,6 +481,22 @@
   transition-delay: 0s !important;
   animation-duration: 0.001s !important;
   animation-delay: 0s !important;
+  /* 🚨 SNAPBACK — this line is why reuters.com rendered a blank page 🚨
+     The comment above used to argue snapback "only affects already-broken
+     sites". That was wrong, and Reuters is the proof: header drawn, article
+     body empty, full-height scrollbar. The pattern is completely ordinary —
+     base state opacity:0, a reveal animation with no fill-mode, and the
+     final visible state left to the animation. Slam the duration to 0.001s
+     and the animation ends immediately, the effect stops applying, and the
+     element falls back to its base opacity:0. Forever.
+     'forwards' makes the last keyframe persist, which is exactly what such a
+     site would have written itself. Not 'both': that would also apply the
+     FROM state before the animation starts, a behaviour change this does not
+     need since the delay is already 0s. Reveal animations now land visible;
+     nothing else about the no-motion rule changes.
+     (Backticks are banned in here -- this whole block is a JS template
+     literal, so one backtick ends the stylesheet mid-file.) */
+  animation-fill-mode: forwards !important;
 }
 html { scroll-behavior: auto !important; }
 
@@ -500,6 +519,11 @@ html { scroll-behavior: auto !important; }
   transition-timing-function: step-end !important;
 }
 
+/* The page's own photo backdrop goes at the root too. The repainter handles the
+   full-bleed DIVs sites use for this (see the page-sized backdrop rule there),
+   but html/body are the classic carriers and need no measurement to judge: a
+   background image on the document root is never an icon. */
+html, body { background-image: none !important; }
 html { background-color: ${T.background} !important; color: ${T.textPrimary} !important; }
 body { background-color: ${T.backgroundSoft} !important; color: ${T.textPrimary} !important; margin: 0 !important; padding: 0 !important; }
 
@@ -800,6 +824,25 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 ::-webkit-scrollbar-thumb:active { background: ${T.surface} !important; ${B_INNER} }
 ::-webkit-scrollbar-corner { background: ${T.backgroundSoft} !important; }
 ::-webkit-scrollbar-button { background: ${T.surfaceRaised} !important; ${B_OUTER} height: 16px !important; width: 16px !important; }
+
+/* JS-DRAWN SCROLLBARS THAT ARE NOT SCROLLBARS YET.
+   Monaco (VS Code, Antigravity, and every embedded editor on the web) does not use
+   a native scrollbar: it renders its own shells and keeps them in the DOM at all
+   times, hidden by opacity/visibility until there is something to scroll. Our
+   surface + bevel rules paint those shells unconditionally, so they turn into
+   permanent Win95 scrollbars that scroll nothing -- decoration, exactly as
+   reported in Antigravity. Handing these back to the app is the only correct
+   move: it already knows when they should be visible. */
+.monaco-scrollable-element > .scrollbar,
+.monaco-scrollable-element > .scrollbar > .slider,
+.monaco-scrollable-element > .invisible {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.monaco-scrollable-element > .scrollbar.invisible { visibility: hidden !important; }
+.monaco-scrollable-element > .scrollbar > .slider { background-color: ${T.surfaceRaised} !important; }
 `;
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
@@ -807,7 +850,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     /* Height-only 1ms transition + near-zero animation (see GLOBAL_CSS motion
        note): transitionend/animationend keep firing for collapse + rc-motion
        state machines, without touching top/left/width/transform. */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; }
+    /* animation-fill-mode: forwards for the same snapback reason as the global
+       layer -- a shadow tree reveals its content the same way a light one does. */
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; animation-fill-mode: forwards !important; }
     /* Zero shadow / zero blur, same as the global layer (UI.md law 2). Shadow
        roots are where modern component libraries keep their elevation, so
        skipping this here would leave every web-component card floating while the
@@ -1367,6 +1412,25 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       const tagG = (el.tagName || '').toUpperCase();
       const roleG = el.getAttribute ? el.getAttribute('role') : null;
       if (tagG !== 'PROGRESS' && tagG !== 'METER' && roleG !== 'progressbar' && roleG !== 'slider') {
+        w.push(el, 'background-image', 'none');
+      }
+    }
+
+    // PAGE-SIZED PHOTO BACKDROPS.
+    // url() backgrounds are deliberately kept (see above): on most elements they
+    // are icons, and killing them leaves invisible buttons. But at page scale the
+    // same rule is what left steamcommunity.com with its neon profile artwork
+    // blazing down both sides of a themed column -- the site paints a photo on a
+    // full-bleed div, our surfaces go brown around it, and the result is the
+    // screenshot the user sent.
+    //
+    // Size is the discriminator, and it is a safe one: nothing that is an icon is
+    // 70% of the viewport in BOTH dimensions. Measured only when a url() is
+    // actually present, so the layout read costs nothing on the elements that
+    // make up the bulk of a page.
+    if (bgImg && bgImg !== 'none' && /url\(/i.test(bgImg)) {
+      const r = el.getBoundingClientRect();
+      if (r.width > innerWidth * 0.7 && r.height > innerHeight * 0.7) {
         w.push(el, 'background-image', 'none');
       }
     }

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.18.2",
+  "version": "1.19.0",
   "name": "Wintage Vintage Dark",
   "description": "Wintage Vintage Dark for the browser chrome. Companion to the Wintage userscript.",
   "theme": {

@@ -1,4 +1,4 @@
-﻿# Wintage Theme Installer - a small Win95-looking GUI over the command-line tools.
+# Wintage Theme Installer - a small Win95-looking GUI over the command-line tools.
 #
 # WinForms on purpose. The alternative (an Electron or web UI) would mean shipping a
 # browser to configure a theme, and this window has to LOOK like the thing it
@@ -110,6 +110,30 @@ $clbTargets.BorderStyle = 'FixedSingle'
 $clbTargets.CheckOnClick = $true
 $clbTargets.IntegralHeight = $false
 
+$script:customPaths = @{}
+$clbTargets.Add_ItemCheck({
+    param($sender, $e)
+    if ($e.NewValue -eq 'Checked') {
+        $item = $clbTargets.Items[$e.Index]
+        $key = ($item -split '\s+')[0]
+        if ($key -in @('saipenview', 'smartvac', 'wildrift')) {
+            $defaults = @{
+                'saipenview' = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\'
+                'smartvac' = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\'
+                'wildrift' = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\'
+            }
+            $dlg = New-Object Windows.Forms.FolderBrowserDialog
+            $dlg.Description = "Select folder for $key"
+            $dlg.SelectedPath = $defaults[$key]
+            if ($dlg.ShowDialog() -eq 'OK') {
+                $script:customPaths[$key] = $dlg.SelectedPath
+            } else {
+                $e.NewValue = 'Unchecked'
+            }
+        }
+    }
+})
+
 $btnSelectAll = New-Object Windows.Forms.Button
 $btnSelectAll.Text = 'ALL'; $btnSelectAll.Location = '12,508'; $btnSelectAll.Size = '96,24'; $btnSelectAll.Font = $FONT
 $btnSelectAll.FlatStyle = 'Flat'; $btnSelectAll.FlatAppearance.BorderSize = 0
@@ -182,7 +206,7 @@ function Load-Targets {
             $i = $clbTargets.Items.Count - 1
             # Pre-check what is installable and already themed; leave the rest alone
             # so Apply never silently touches something the user did not ask for.
-            if ($t.State -eq 'themed') { $clbTargets.SetItemChecked($i, $true) }
+            if ($t.State -eq 'themed' -and $t.Key -notin @('saipenview', 'smartvac', 'wildrift')) { $clbTargets.SetItemChecked($i, $true) }
         }
     }
     [void]$clbTargets.Items.Add('userscript      (Tampermonkey)')
@@ -405,7 +429,11 @@ $btnApply.Add_Click({
                     Say-Log 'userscript: themes written (pick it from the Tampermonkey menu)'
                     continue
                 }
-                $out = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'install.ps1') -Target $key -Palette $slug 2>&1
+                $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Palette", $slug)
+                if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
+                if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
+                if ($key -eq 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
+                $out = & powershell $argsList 2>&1
                 $last = ($out | Where-Object { $_ -match '\S' } | Select-Object -Last 1)
                 Say-Log ("{0}: {1}" -f $key, $last)
             }
@@ -434,7 +462,11 @@ $btnRevert.Add_Click({
         foreach ($i in $clbTargets.CheckedIndices) {
             $key = (($clbTargets.Items[$i]) -split '\s+')[0]
             if ($key -eq 'userscript') { continue }
-            $out = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'install.ps1') -Target $key -Revert 2>&1
+            $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Revert")
+            if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
+            if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
+            if ($key -eq 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
+            $out = & powershell $argsList 2>&1
             Say-Log ("{0}: {1}" -f $key, ($out | Where-Object { $_ -match '\S' } | Select-Object -Last 1))
         }
         Load-Targets

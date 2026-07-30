@@ -1,4 +1,4 @@
-﻿# Installs the Wintage look into desktop applications.
+# Installs the Wintage look into desktop applications.
 #
 # Design constraint that shapes everything here: applications update themselves, and
 # an update must not take the theme with it. So every target is installed into the
@@ -84,6 +84,7 @@ $ELECTRON = @{
         Name      = 'Claude (desktop app)'
         Resources = (Get-ClaudeResources)
         Note      = 'Electron. Update creates a new app-<version> folder, so re-run after an update.'
+        InPlace   = $true
     }
     freebuff        = @{
         Name      = 'Freebuff'
@@ -235,7 +236,8 @@ function Invoke-SmartVac {
     }
     $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw | ConvertFrom-Json
     $t = $json.tokens
-    $code = Get-Content $bakFile -Raw
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $code = [System.IO.File]::ReadAllText($bakFile, $utf8)
     
     $code = $code -replace '(?m)^WIN95_BG\s*=\s*''[^'']+''', "WIN95_BG           = '$($t.background)'"
     $code = $code -replace '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+''', "WIN95_BG_SOFT      = '$($t.backgroundSoft)'"
@@ -260,7 +262,7 @@ function Invoke-SmartVac {
     $code = $code -replace '(?m)^WIN95_SCROLL\s*=\s*''[^'']+''', "WIN95_SCROLL       = '$($t.surfaceRaised)'"
     $code = $code -replace '(?m)^WIN95_SCROLL_HOVER\s*=\s*''[^'']+''', "WIN95_SCROLL_HOVER = '$($t.surfaceAlt)'"
     
-    Set-Content $pyFile $code -Encoding UTF8
+    [System.IO.File]::WriteAllText($pyFile, $code, $utf8)
     Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
 }
 
@@ -688,7 +690,7 @@ if (-not $Target) {
 # The built output is generated, not committed by hand -- refuse to install a stale
 # or missing build rather than silently shipping last week's colours.
 if ($node) {
-    & node (Join-Path $root 'tools/build-desktop.js') --check | Out-Null
+    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         if (-not $Force) { throw "desktop/out is out of date with themes/*.json. Run 'node tools/build-desktop.js' first, or pass -Force to install what is already built." }
         Say "WARNING: installing a build that is out of date with themes/*.json (-Force)." 'Yellow'
@@ -722,16 +724,19 @@ foreach ($name in $names) {
         if (-not $node) { Say "$($e.Name): needs node to read the app's package.json out of app.asar - skipped." 'Yellow'; continue }
 
         $script = Join-Path $root 'tools/install-electron.js'
+        $nodeArgs = @($script, '--resources', $e.Resources)
+        if ($e.InPlace) { $nodeArgs += '--in-place' }
+        
         if ($Revert) {
             if ($PSCmdlet.ShouldProcess($e.Resources, 'Remove the Wintage shim')) {
-                & node $script --resources $e.Resources --revert
+                & node $nodeArgs --revert
             }
             continue
         }
         $action = "Install Wintage ($Palette) shim"
-        if ($WhatIfPreference) { & node $script --resources $e.Resources --palette $Palette --dry-run; continue }
+        if ($WhatIfPreference) { & node $nodeArgs --palette $Palette --dry-run; continue }
         if ($PSCmdlet.ShouldProcess($e.Resources, $action)) {
-            & node $script --resources $e.Resources --palette $Palette
+            & node $nodeArgs --palette $Palette
             if ($LASTEXITCODE -ne 0) { Say "$($e.Name): FAILED - see the message above." 'Red' }
             else { Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray' }
         }
@@ -782,6 +787,8 @@ foreach ($name in $names) {
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
     }
 }
+
+
 
 
 

@@ -42,6 +42,7 @@ if (!fs.existsSync(resources)) die('resources directory not found: ' + resources
 const asar = path.join(resources, 'app.asar');
 const appDir = path.join(resources, 'app');
 const dryRun = has('dry-run');
+const inPlace = has('in-place');
 
 // ─── Reading the original package.json out of the asar ──────────────────────
 // This matters more than it looks. Electron derives the app NAME from the entry
@@ -78,21 +79,32 @@ const unpacked = asar + '.unpacked';
 const movedUnpacked = movedAsar + '.unpacked';
 
 if (has('revert')) {
-  if (!fs.existsSync(appDir)) { console.log('install-electron: nothing installed at ' + appDir); process.exit(0); }
-  const pkgPath = path.join(appDir, 'package.json');
-  const ours = fs.existsSync(pkgPath) && (JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^\uFEFF/, '')).wintage === MARKER);
-  if (!ours) die(appDir + ' exists but was not created by Wintage - refusing to touch it. Inspect it yourself.');
-  if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
-  // Archive first, folder second. A crash between the two leaves a working app
-  // with a stray folder Electron ignores; the other order leaves no app at all.
-  if (fs.existsSync(movedAsar)) {
-    if (fs.existsSync(asar)) die('both ' + asar + ' and ' + movedAsar + ' exist - the app was probably updated. Delete ' + appDir + ' by hand.');
-    fs.renameSync(movedAsar, asar);
-    if (fs.existsSync(movedUnpacked)) fs.renameSync(movedUnpacked, unpacked);
+  if (inPlace) {
+    const asarBak = asar + '.bak';
+    if (!fs.existsSync(asarBak)) { console.log('install-electron: no backup found at ' + asarBak); process.exit(0); }
+    if (dryRun) { console.log('install-electron: would restore ' + asarBak + ' -> ' + asar); process.exit(0); }
+    fs.copyFileSync(asarBak, asar);
+    fs.unlinkSync(asarBak);
+    try { fs.unlinkSync(path.join(resources, 'wintage-shim.cjs')); } catch (e) {}
+    try { fs.unlinkSync(path.join(resources, 'wintage.css')); } catch (e) {}
+    try { fs.unlinkSync(path.join(resources, 'wintage-status.txt')); } catch (e) {}
+    console.log('install-electron: restored original ' + path.basename(asar) + ' from backup');
+    process.exit(0);
+  } else {
+    if (!fs.existsSync(appDir)) { console.log('install-electron: nothing installed at ' + appDir); process.exit(0); }
+    const pkgPath = path.join(appDir, 'package.json');
+    const ours = fs.existsSync(pkgPath) && (JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^﻿/, '')).wintage === MARKER);
+    if (!ours) die(appDir + ' exists but was not created by Wintage - refusing to touch it. Inspect it yourself.');
+    if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
+    if (fs.existsSync(movedAsar)) {
+      if (fs.existsSync(asar)) die('both ' + asar + ' and ' + movedAsar + ' exist - the app was probably updated. Delete ' + appDir + ' by hand.');
+      fs.renameSync(movedAsar, asar);
+      if (fs.existsSync(movedUnpacked)) fs.renameSync(movedUnpacked, unpacked);
+    }
+    fs.rmSync(appDir, { recursive: true, force: true });
+    console.log('install-electron: restored ' + path.basename(asar) + ' and removed ' + appDir);
+    process.exit(0);
   }
-  fs.rmSync(appDir, { recursive: true, force: true });
-  console.log('install-electron: restored ' + path.basename(asar) + ' and removed ' + appDir);
-  process.exit(0);
 }
 
 const palette = arg('palette', 'golden');
@@ -103,11 +115,29 @@ if (!fs.existsSync(built)) die('no build for palette "' + palette + '" - run `no
 // original location fails the most ordinary request there is: "same app, different
 // palette". Swap the payload in place instead -- no archive move, so it also works
 // while the application is running, which the first install cannot do.
-const alreadyOurs = fs.existsSync(path.join(appDir, 'package.json')) &&
-  JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8').replace(/^\uFEFF/, '')).wintage === MARKER &&
-  fs.existsSync(movedAsar);
+const asarBak = asar + '.bak';
+let alreadyOurs = false;
+if (inPlace) {
+  alreadyOurs = fs.existsSync(asarBak) && fs.existsSync(path.join(resources, 'wintage-shim.cjs'));
+} else {
+  alreadyOurs = fs.existsSync(path.join(appDir, 'package.json')) &&
+    JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8').replace(/^\uFEFF/, '')).wintage === MARKER &&
+    fs.existsSync(movedAsar);
+}
 
 if (alreadyOurs) {
+  if (inPlace) {
+    if (dryRun) { console.log('install-electron: would repaint ' + asar + ' to "' + palette + '"'); process.exit(0); }
+    let shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
+    const original = asarPackageJson(asarBak);
+    shimCode = shimCode.replace("require(ASAR);", "require(path.join(ASAR, '" + original.main + "'));");
+    fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
+    fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
+    try { fs.unlinkSync(path.join(resources, 'wintage-status.txt')); } catch (e) { }
+    console.log('install-electron: repainted ' + asar + ' in-place to "' + palette + '"');
+    console.log('  restart the app to see it');
+    process.exit(0);
+  }
   const pkgPath = path.join(appDir, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^\uFEFF/, ''));
   const from = pkg.wintagePalette;
@@ -167,44 +197,124 @@ if (fs.existsSync(appDir)) {
 }
 
 const original = asarPackageJson(asar);
-const pkg = Object.assign({}, original, {
-  main: 'shim.cjs',
-  wintage: MARKER,
-  wintagePalette: palette,
-  wintageOriginalMain: original.main
-});
 
-if (dryRun) {
-  console.log('install-electron: would install palette "' + palette + '" into ' + appDir);
-  console.log('  app name/version preserved: ' + original.name + ' ' + original.version);
-  console.log('  original main: ' + original.main + ' -> shim.cjs');
-  process.exit(0);
-}
-
-fs.mkdirSync(appDir, { recursive: true });
-// Payload first, archive move last: until the archive moves, Electron still finds
-// app.asar and the app runs exactly as before, so an interruption anywhere in here
-// leaves a working application rather than a headless folder.
-fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
-fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(appDir, 'shim.cjs'));
-fs.copyFileSync(path.join(built, 'wintage.css'), path.join(appDir, 'wintage.css'));
-// A RUNNING app holds app.asar open, and Windows refuses the rename with EBUSY.
-// That is not an error to dump a stack trace for -- it is the single most likely
-// thing to happen, and the fix is one sentence. The half-written payload folder is
-// removed on the way out so the next attempt starts clean; the app itself was never
-// touched, because the move is the last step for exactly this reason.
-try {
-  fs.renameSync(asar, movedAsar);
-} catch (e) {
-  fs.rmSync(appDir, { recursive: true, force: true });
-  if (e.code === 'EBUSY' || e.code === 'EPERM') {
-    die('the application is running - close it completely (check the tray) and run this again.\n' +
-      '  Nothing was changed: ' + path.basename(asar) + ' is still where it was.');
+if (inPlace) {
+  // In-place patch: Instead of patching package.json, we patch Claude's main process
+  // directly. Node cannot resolve `../` out of an ASAR via package.json main.
+  // We overwrite the sentry-dbid string in `.vite/build/index.pre.js` to require our shim.
+  if (dryRun) {
+    console.log('install-electron: would install palette "' + palette + '" IN-PLACE into ' + asar);
+    console.log('  app name/version preserved: ' + original.name + ' ' + original.version);
+    console.log('  injecting wintage-shim.cjs into index.pre.js');
+    process.exit(0);
   }
-  throw e;
-}
-if (fs.existsSync(unpacked)) fs.renameSync(unpacked, movedUnpacked);
 
-console.log('install-electron: installed palette "' + palette + '" into ' + appDir);
-console.log('  ' + original.name + ' ' + original.version + ' - name and version preserved, so userData does not move');
-console.log('  restart the app to see it; `--revert` removes the folder and restores it exactly');
+  // Backup first
+  const asarBak = asar + '.bak';
+  try {
+    fs.copyFileSync(asar, asarBak);
+  } catch (e) {
+    if (e.code === 'EBUSY' || e.code === 'EPERM') {
+      die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
+    }
+    throw e;
+  }
+  
+  // Create wintage-shim.cjs
+  let shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
+  // We injected the require inside index.pre.js, so the shim does NOT need to require the app again.
+  // We just remove the handoff block entirely.
+  shimCode = shimCode.replace(/try\s*\{\s*const\s*\{\s*app\s*\}\s*=\s*require\('electron'\);\s*if\s*\(app\s*&&\s*app\.setAppPath\)[\s\S]*?\}\s*catch\s*\(e\)\s*\{[\s\S]*?throw\s*e;\s*\}/, "");
+  fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
+  fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
+
+  // Patch ASAR in-place
+  const fd = fs.openSync(asar, 'r+');
+  try {
+    const head = Buffer.alloc(16);
+    fs.readSync(fd, head, 0, 16, 0);
+    const pickleSize = head.readUInt32LE(4);
+    const jsonLen = head.readUInt32LE(12);
+    const header = Buffer.alloc(jsonLen);
+    fs.readSync(fd, header, 0, jsonLen, 16);
+    const index = JSON.parse(header.toString('utf8').replace(/^\uFEFF|\0+$/g, ''));
+    
+    const entry = index.files['.vite']?.files['build']?.files['index.pre.js'];
+    if (!entry) throw new Error("index.pre.js not found in ASAR index");
+    
+    const base = 8 + pickleSize;
+    const buf = Buffer.alloc(entry.size);
+    fs.readSync(fd, buf, 0, entry.size, base + Number(entry.offset));
+    
+    let code = buf.toString('utf8');
+    const targetRegex = /"sentry-dbid-[a-f0-9\-]{36}"/;
+    const match = code.match(targetRegex);
+    if (!match) throw new Error("Could not find sentry-dbid in index.pre.js to inject shim");
+    
+    const target = match[0];
+    const replacement = 'require("../../../wintage-shim.cjs") || "xxxxxxxx"';
+    if (target.length !== replacement.length) {
+      throw new Error(`Length mismatch: target is ${target.length}, replacement is ${replacement.length}`);
+    }
+    
+    code = code.replace(target, replacement);
+    const newBuf = Buffer.from(code, 'utf8');
+    
+    if (newBuf.length !== buf.length) throw new Error("length mismatch during in-place patch");
+    
+    fs.writeSync(fd, newBuf, 0, newBuf.length, base + Number(entry.offset));
+    
+    // Update ASAR integrity hashes if they exist
+    if (entry.integrity && entry.integrity.hash) {
+      const crypto = require('crypto');
+      const oldHash = entry.integrity.hash;
+      const newHash = crypto.createHash('sha256').update(newBuf).digest('hex');
+      const headerStr = header.toString('utf8');
+      const newHeaderStr = headerStr.split(oldHash).join(newHash);
+      const newHeader = Buffer.from(newHeaderStr, 'utf8');
+      if (header.length !== newHeader.length) throw new Error("ASAR header length changed during hash update!");
+      fs.writeSync(fd, newHeader, 0, newHeader.length, 16);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  console.log('install-electron: installed palette "' + palette + '" IN-PLACE into ' + asar);
+  console.log('  ' + original.name + ' ' + original.version + ' - name and version preserved, so userData does not move');
+  console.log('  restart the app to see it; `--revert` restores the original ASAR from backup');
+
+} else {
+  const pkg = Object.assign({}, original, {
+    main: 'shim.cjs',
+    wintage: MARKER,
+    wintagePalette: palette,
+    wintageOriginalMain: original.main
+  });
+
+  if (dryRun) {
+    console.log('install-electron: would install palette "' + palette + '" into ' + appDir);
+    console.log('  app name/version preserved: ' + original.name + ' ' + original.version);
+    console.log('  original main: ' + original.main + ' -> shim.cjs');
+    process.exit(0);
+  }
+
+  fs.mkdirSync(appDir, { recursive: true });
+  fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+  fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(appDir, 'shim.cjs'));
+  fs.copyFileSync(path.join(built, 'wintage.css'), path.join(appDir, 'wintage.css'));
+  try {
+    fs.renameSync(asar, movedAsar);
+  } catch (e) {
+    fs.rmSync(appDir, { recursive: true, force: true });
+    if (e.code === 'EBUSY' || e.code === 'EPERM') {
+      die('the application is running - close it completely (check the tray) and run this again.\n' +
+        '  Nothing was changed: ' + path.basename(asar) + ' is still where it was.');
+    }
+    throw e;
+  }
+  if (fs.existsSync(unpacked)) fs.renameSync(unpacked, movedUnpacked);
+
+  console.log('install-electron: installed palette "' + palette + '" into ' + appDir);
+  console.log('  ' + original.name + ' ' + original.version + ' - name and version preserved, so userData does not move');
+  console.log('  restart the app to see it; `--revert` removes the folder and restores it exactly');
+}

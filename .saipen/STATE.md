@@ -1,7 +1,7 @@
-﻿---
-phase: DONE
-task: none
-next_action: "PHASE SCOUT T-058 [in-archive main patch so Claude keeps its resourcesPath helpers]"
+---
+phase: SHIP
+task: T-060
+next_action: "PHASE SHIP T-060 [reveal snapback, page backdrops, Monaco scrollbars]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -11,9 +11,9 @@ saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
 goal_tickets: 7
-transition_from: SHIP
-last_event: 170
-updated: 2026-07-29T22:58:00Z
+transition_from: REVIEW
+last_event: 188
+updated: 2026-07-30T23:00:00Z
 ---
 
 # Wintage вЂ” five extra themes (goal wave 1)

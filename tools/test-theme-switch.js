@@ -24,6 +24,14 @@ slice = slice.replace(/(\n  \};)/, `,
         danger: '#7A2020', selection: '#181818', compareBack: '#0A0A0A' }
     }$1`);
 
+// The default palette is the user's choice, not this test's: it is read from the
+// source instead of hardcoded. Pinning 'golden' here turned a deliberate change of
+// DEFAULT_THEME into three red tests that said nothing about the switch logic.
+const DEFAULT_THEME = (/const DEFAULT_THEME = '(\w+)'/.exec(src) || [, 'golden'])[1];
+const themeBlock = src.slice(src.indexOf('\n    ' + DEFAULT_THEME + ': {'), src.indexOf('\n    ' + DEFAULT_THEME + ': {') + 900);
+const DEFAULT_LABEL = /label: '([^']+)'/.exec(themeBlock)[1];
+const DEFAULT_BG = /background: '(#[0-9A-Fa-f]{6})'/.exec(themeBlock)[1];
+
 let bad = 0;
 const check = (label, got, want) => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
@@ -58,13 +66,13 @@ function run({ gm, stored, isTop }) {
 
 // 1. no GM API at all -> default palette, nothing thrown
 let r = run({ gm: false, isTop: true });
-check('no GM API -> golden', r.out.THEME_ID, 'golden');
-check('no GM API -> paints golden background', r.painted['background-color'], '#342012');
+check('no GM API -> default palette', r.out.THEME_ID, DEFAULT_THEME);
+check('no GM API -> paints the default background', r.painted['background-color'], DEFAULT_BG);
 check('no GM API -> no menu', r.menu.length, 0);
 
 // 2. stored slug that no longer exists -> default, not a crash
 r = run({ gm: true, stored: 'deleted-pack', isTop: true });
-check('unknown slug -> golden', r.out.THEME_ID, 'golden');
+check('unknown slug -> default palette', r.out.THEME_ID, DEFAULT_THEME);
 
 // 3. stored valid slug -> that palette, and the FIRST paint follows it
 r = run({ gm: true, stored: 'testpal', isTop: true });
@@ -74,20 +82,29 @@ check('first paint text follows the theme', r.painted['color'], '#EEEEEE');
 check('data-w95-theme stamped', r.attrs['data-w95-theme'], 'testpal');
 
 // 4. menu: one entry per theme, top frame only, active one marked
-r = run({ gm: true, stored: 'golden', isTop: true });
+r = run({ gm: true, stored: DEFAULT_THEME, isTop: true });
 // Counted from the table the script actually declares, not hardcoded — a test that
 // has to be edited every time a theme pack is added stops being run.
 const themeCount = Object.keys(r.out.THEMES).length;
-check('menu entry per theme', r.menu.length, themeCount);
-check('active entry marked', r.menu[0][0], '● Dark Golden (Win95)');
-check('every inactive entry marked', r.menu.slice(1).every(m => m[0].startsWith('○ ')), true);
+// The menu is allowed to carry entries that are not themes (there is a "Buy me a
+// coffee" one). Counting r.menu.length made an unrelated menu addition look like a
+// broken switch, so only the marked theme rows are counted.
+const themeMenu = r.menu.filter(m => m[0].startsWith('● ') || m[0].startsWith('○ '));
+check('menu entry per theme', themeMenu.length, themeCount);
+// The ACTIVE entry is wherever the default palette sits in menu order, not index 0.
+// Assuming index 0 only held while the default happened to be the first pack; the
+// moment DEFAULT_THEME changed, four checks went red about the wrong thing.
+const activeIdx = r.menu.findIndex(m => m[0].startsWith('● '));
+check('exactly one entry marked active', r.menu.filter(m => m[0].startsWith('● ')).length, 1);
+check('the active entry is the default palette', r.menu[activeIdx][0], '● ' + DEFAULT_LABEL);
+check('every other theme entry marked inactive', themeMenu.filter(m => !m[0].startsWith('● ')).every(m => m[0].startsWith('○ ')), true);
 const testEntry = r.menu.findIndex(m => m[0] === '○ Test Palette');
-check('injected test palette present in the menu', testEntry > 0, true);
-const sub = run({ gm: true, stored: 'golden', isTop: false });
+check('injected test palette present in the menu', testEntry >= 0, true);
+const sub = run({ gm: true, stored: DEFAULT_THEME, isTop: false });
 check('sub-frame registers nothing', sub.menu.length, 0);
 
 // 5. clicking: active = no-op, other = persist + reload
-r.menu[0][1]();
+r.menu[activeIdx][1]();
 check('clicking the active theme does not write', r.wrote, null);
 check('clicking the active theme does not reload', r.reloads, 0);
 r.menu[testEntry][1]();

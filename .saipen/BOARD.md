@@ -1,13 +1,18 @@
-﻿# BOARD
+# BOARD
 
 ## DOING
 
 ## TODO
+- [ ] T-065 YouTube Studio analytics bars disappear under the theme. Needs your account to inspect: open Studio > Analytics, devtools on one bar, and send its class plus computed background-color and background-image -- that names which rule eats it in one step | verify: bars visible again on the analytics table
 - [ ] T-058 Claude hardcodes `path.join(process.resourcesPath, "app.asar", ...)` for its MCP runtime and shell-path worker, which the relocation breaks and getAppPath cannot fix. Real fix: leave the archive in place and patch `main` INSIDE it to `../wintage-shim.cjs`, space-padded to the identical byte length so no header rewrite is needed (legal now that the integrity fuse is off) | verify: with Claude closed, install, launch, confirm the desktop UI loads AND an MCP server starts; revert restores the original bytes
 
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
 
 ## DONE
+- [x] T-060 reuters.com blank body: our 0.001s animation rule caused reveal snapback (base opacity:0 + fill-mode-less reveal animation). animation-fill-mode: forwards in both stylesheets | verify: mechanism reproduced in a real Chromium, computed opacity 0 without the fix -- E-181, E-182
+- [x] T-061 steamcommunity artwork bleeding around the themed column: url() backgrounds were preserved with no size sense. html/body lose theirs outright; the repainter kills any covering >70% of the viewport in both dimensions | verify: node --check + check-css PASS, measured only when a url() is present -- E-183
+- [x] T-062 Antigravity decorative scrollbars: Monaco keeps its own scrollbar shells in the DOM permanently and our surface+bevel rules painted them. Shells handed back to the app, slider still tinted | verify: rebuilt and reinstalled to Antigravity + Freebuff; needs your eyes -- E-184
+- [x] T-063 theme-switch test pinned things it does not own (DEFAULT_THEME, active entry at index 0, every menu row a theme) and went red on the user's own changes; now reads them from the source | verify: theme-switch test PASS -- E-185
 - [x] T-059 SAIPENVIEW's style.css had regressed to the pre-T-054 append behaviour (working-tree drift, never committed that way -- HEAD already had T-054's fix, something local just hadn't run it). While there: default `$Palette` in install.ps1 and `DEFAULT_THEME` in wintage.user.js changed from `golden` to `goldendefault` per user request. v1.18.1 -> v1.18.2 | verify: SAIPENVIEW's own repo, style.css restored from style.css.bak (byte-identical to its HEAD); `node --check` n/a (PowerShell), install.ps1 parses clean via [Parser]::ParseFile -- done from the SAIPENVIEW side of a cross-repo session, logged here for the record
 - [x] T-057 Claude opened the web version after patching: its main resolves the renderer through app.getAppPath(), which the relocation repointed at the shim folder, so the local load failed and it fell back to claude.ai. Shim now restores getAppPath() to the archive | verify: renderer present in archive (112589 bytes), fix installed in all 3 Electron targets -- E-167, E-168
 - [x] T-053 release.ps1 git steps: Git-Safe helper (stderr merged, success judged by $LASTEXITCODE) + core.autocrlf=false, replacing the safecrlf attempt that still died under a pipe | verify: a full release run finishes commit+push with no manual finish -- E-156
