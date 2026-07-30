@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-060
-next_action: "PHASE SHIP T-060 [reveal snapback, page backdrops, Monaco scrollbars]"
+phase: DONE
+task: none
+next_action: "PHASE HUNT [T-065 YouTube bars and T-058 Claude in-archive patch both need the user]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -11,9 +11,9 @@ saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
 goal_tickets: 7
-transition_from: REVIEW
-last_event: 188
-updated: 2026-07-30T23:00:00Z
+transition_from: SHIP
+last_event: 189
+updated: 2026-07-30T23:10:00Z
 ---
 
 # Wintage вЂ” five extra themes (goal wave 1)

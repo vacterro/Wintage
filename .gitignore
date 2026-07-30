@@ -9,3 +9,10 @@ Cached Theme.pak
 # one-off fuse probes, superseded by tools/electron-fuses.js
 /check.js
 /patch.js
+
+# throwaway patch/probe scripts from ad-hoc sessions
+/patch*.py
+/restore.py
+/test.js
+/test_stale.js
+/test_fbd.ps1
