@@ -747,7 +747,27 @@ elseif (-not $Force) {
     Say "node not found - cannot verify the build is current. Installing what is in desktop/out as-is." 'Yellow'
 }
 
-$names = if ($Target -eq 'all') { @($TARGETS.Keys) + @($ELECTRON.Keys) + @('mpchc', 'saipenview', 'smartvac', 'wildrift') } else { @($Target) }
+# Every target that is neither a VS Code extension nor an Electron app -- i.e. one
+# with its own Invoke-* handler. Declared ONCE, because the hand-kept version of
+# this list silently dropped five targets: codenomad, discord, totalcmd, totalcmd2
+# and obsidian were all reachable individually but were skipped by `-Target all`,
+# so "everything" quietly meant nine of fourteen.
+$SIMPLE = @('mpchc', 'saipenview', 'smartvac', 'wildrift', 'codenomad', 'discord', 'totalcmd', 'totalcmd2', 'obsidian')
+
+# And this is the guard that stops it happening a third time: the parameter's own
+# ValidateSet is the definition of what a user may ask for, so anything in it that
+# no dispatch list covers is a target `-Target all` would skip. Checked at startup
+# rather than trusted, because the drift is invisible until someone counts.
+$known = @($TARGETS.Keys) + @($ELECTRON.Keys) + $SIMPLE
+$declared = (Get-Command $PSCommandPath).Parameters['Target'].Attributes |
+    Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } |
+    Select-Object -First 1 -ExpandProperty ValidValues
+$orphans = @($declared | Where-Object { $_ -ne 'all' -and $known -notcontains $_ })
+if ($orphans.Count) {
+    Say "WARNING: -Target all would skip $($orphans -join ', ') - they are selectable but in no dispatch list." 'Yellow'
+}
+
+$names = if ($Target -eq 'all') { $known } else { @($Target) }
 
 foreach ($name in $names) {
 

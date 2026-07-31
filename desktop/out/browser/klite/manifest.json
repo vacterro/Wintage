@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.21.0",
+  "version": "1.21.1",
   "name": "Wintage K-Lite (MPC-HC)",
   "description": "Wintage K-Lite (MPC-HC) for the browser chrome. Companion to the Wintage userscript.",
   "theme": {

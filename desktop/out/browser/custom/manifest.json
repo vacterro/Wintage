@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.21.0",
+  "version": "1.21.1",
   "name": "Wintage Custom",
   "description": "Wintage Custom for the browser chrome. Companion to the Wintage userscript.",
   "theme": {
