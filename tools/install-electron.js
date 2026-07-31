@@ -220,15 +220,27 @@ if (inPlace) {
     throw e;
   }
   
-  // Create wintage-shim.cjs
-  let shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
-  // We injected the require inside index.pre.js, so the shim does NOT need to require the app again.
-  // We just remove the handoff block entirely.
-  shimCode = shimCode.replace(/try\s*\{\s*const\s*\{\s*app\s*\}\s*=\s*require\('electron'\);\s*if\s*\(app\s*&&\s*app\.setAppPath\)[\s\S]*?\}\s*catch\s*\(e\)\s*\{[\s\S]*?throw\s*e;\s*\}/, "");
-  fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
+  // The shim keeps its handoff: it is the entry point now, so it must require the
+  // real archive itself. (The previous version stripped that block because it
+  // injected a require INTO index.pre.js instead -- see the note below.)
+  fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(resources, 'wintage-shim.cjs'));
   fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
 
-  // Patch ASAR in-place
+  // Patch `main` inside the archive's package.json, byte-length-identical.
+  //
+  // The earlier approach overwrote a "sentry-dbid-<uuid>" string literal inside
+  // .vite/build/index.pre.js with a require() of the same length. Verified against
+  // a COPY of the installed archive: that literal DOES NOT EXIST in this build, so
+  // the install would have thrown "Could not find sentry-dbid in index.pre.js".
+  // It was also fragile by construction -- it depended on an unrelated vendor
+  // string keeping an exact length.
+  //
+  // Rewriting `main` is the stable equivalent: the value is shorter than the
+  // original, so it is padded with spaces (JSON ignores whitespace between
+  // tokens) and every offset in the header stays valid. Its reason for being
+  // rejected before -- "Node cannot resolve ../ out of an ASAR via package.json
+  // main" -- was tested and is not true: path.join(appPath, '../wintage-shim.cjs')
+  // normalises the .asar component away entirely, and requiring the result works.
   const fd = fs.openSync(asar, 'r+');
   try {
     const head = Buffer.alloc(16);
@@ -237,44 +249,43 @@ if (inPlace) {
     const jsonLen = head.readUInt32LE(12);
     const header = Buffer.alloc(jsonLen);
     fs.readSync(fd, header, 0, jsonLen, 16);
-    const index = JSON.parse(header.toString('utf8').replace(/^\uFEFF|\0+$/g, ''));
-    
-    const entry = index.files['.vite']?.files['build']?.files['index.pre.js'];
-    if (!entry) throw new Error("index.pre.js not found in ASAR index");
-    
+    const index = JSON.parse(header.toString('utf8').replace(/^﻿| +$/g, ''));
+
+    const entry = index.files['package.json'];
+    if (!entry) throw new Error('no package.json inside the archive');
     const base = 8 + pickleSize;
     const buf = Buffer.alloc(entry.size);
     fs.readSync(fd, buf, 0, entry.size, base + Number(entry.offset));
-    
-    let code = buf.toString('utf8');
-    const targetRegex = /"sentry-dbid-[a-f0-9\-]{36}"/;
-    const match = code.match(targetRegex);
-    if (!match) throw new Error("Could not find sentry-dbid in index.pre.js to inject shim");
-    
-    const target = match[0];
-    const replacement = 'require("../../../wintage-shim.cjs") || "xxxxxxxx"';
-    if (target.length !== replacement.length) {
-      throw new Error(`Length mismatch: target is ${target.length}, replacement is ${replacement.length}`);
+
+    const text = buf.toString('utf8');
+    const m = /"main"\s*:\s*"([^"]*)"/.exec(text);
+    if (!m) throw new Error('no "main" field in the archive package.json');
+
+    const want = '"main":"../wintage-shim.cjs"';
+    const budget = Buffer.byteLength(m[0]);
+    if (Buffer.byteLength(want) > budget) {
+      // Growing the string would shift every byte after it and invalidate every
+      // offset in the archive. Refuse instead of corrupting it.
+      throw new Error('replacement main does not fit (' + Buffer.byteLength(want) + ' > ' + budget +
+        ') - this app needs the relocation mode instead');
     }
-    
-    code = code.replace(target, replacement);
-    const newBuf = Buffer.from(code, 'utf8');
-    
-    if (newBuf.length !== buf.length) throw new Error("length mismatch during in-place patch");
-    
+    const padded = want + ' '.repeat(budget - Buffer.byteLength(want));
+    const newBuf = Buffer.from(text.slice(0, m.index) + padded + text.slice(m.index + m[0].length), 'utf8');
+    if (newBuf.length !== buf.length) throw new Error('package.json changed size during the patch');
     fs.writeSync(fd, newBuf, 0, newBuf.length, base + Number(entry.offset));
-    
-    // Update ASAR integrity hashes if they exist
+
+    // The archive carries per-file integrity hashes. They are only ENFORCED while
+    // the integrity fuse is on (it is off here, or the caller would have refused),
+    // but leaving a stale hash behind is a landmine for anyone who re-enables it.
     if (entry.integrity && entry.integrity.hash) {
       const crypto = require('crypto');
-      const oldHash = entry.integrity.hash;
       const newHash = crypto.createHash('sha256').update(newBuf).digest('hex');
-      const headerStr = header.toString('utf8');
-      const newHeaderStr = headerStr.split(oldHash).join(newHash);
+      const newHeaderStr = header.toString('utf8').split(entry.integrity.hash).join(newHash);
       const newHeader = Buffer.from(newHeaderStr, 'utf8');
-      if (header.length !== newHeader.length) throw new Error("ASAR header length changed during hash update!");
+      if (newHeader.length !== header.length) throw new Error('header length changed during the hash update');
       fs.writeSync(fd, newHeader, 0, newHeader.length, 16);
     }
+    console.log('install-electron: main "' + m[1] + '" -> "../wintage-shim.cjs" (padded to ' + budget + ' bytes)');
   } finally {
     fs.closeSync(fd);
   }
