@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-070
-next_action: "PHASE SHIP T-070 [-Target all coverage]"
+phase: DONE
+task: none
+next_action: "PHASE HUNT [only user-gated T-065/T-029 remain; work moved to the SAIPENVIEW repo]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -11,9 +11,9 @@ saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
 goal_tickets: 7
-transition_from: REVIEW
-last_event: 203
-updated: 2026-07-31T20:47:00Z
+transition_from: SHIP
+last_event: 205
+updated: 2026-07-31T20:52:00Z
 ---
 
 # Wintage вЂ” five extra themes (goal wave 1)
