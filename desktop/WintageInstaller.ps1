@@ -138,7 +138,7 @@ $clbTargets.Add_ItemCheck({
             }
             $dlg = New-Object Windows.Forms.FolderBrowserDialog
             $dlg.Description = "Select folder for $key"
-            $dlg.SelectedPath = $defaults[$key]
+            $dlg.SelectedPath = if ($script:customPaths.ContainsKey($key)) { $script:customPaths[$key] } else { $defaults[$key] }
             if ($dlg.ShowDialog() -eq 'OK') {
                 $script:customPaths[$key] = $dlg.SelectedPath
             } else {

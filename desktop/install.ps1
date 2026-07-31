@@ -283,8 +283,7 @@ function Invoke-SmartVac {
     }
     $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw | ConvertFrom-Json
     $t = $json.tokens
-    $utf8 = New-Object System.Text.UTF8Encoding($false)
-    $code = [System.IO.File]::ReadAllText($bakFile, $utf8)
+    $code = Read-Utf8 $bakFile
     
     $code = $code -replace '(?m)^WIN95_BG\s*=\s*''[^'']+''', "WIN95_BG           = '$($t.background)'"
     $code = $code -replace '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+''', "WIN95_BG_SOFT      = '$($t.backgroundSoft)'"
@@ -309,7 +308,7 @@ function Invoke-SmartVac {
     $code = $code -replace '(?m)^WIN95_SCROLL\s*=\s*''[^'']+''', "WIN95_SCROLL       = '$($t.surfaceRaised)'"
     $code = $code -replace '(?m)^WIN95_SCROLL_HOVER\s*=\s*''[^'']+''', "WIN95_SCROLL_HOVER = '$($t.surfaceAlt)'"
     
-    [System.IO.File]::WriteAllText($pyFile, $code, $utf8)
+    Write-Utf8 $pyFile $code
     Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
 }
 
@@ -397,8 +396,7 @@ function Invoke-Saipenview {
         # top, which then shows up as a stray glyph before `:root`. Caught by diffing
         # the patched file against the backup: 30-odd comment lines had changed that
         # this patch has no business touching.
-        $utf8 = New-Object System.Text.UTF8Encoding($false)
-        $text = [System.IO.File]::ReadAllText($bakFile, $utf8)
+        $text = Read-Utf8 $bakFile
         $applied = @(); $missing = @()
         foreach ($k in $t.PSObject.Properties.Name) {
             $pattern = "(--$k\s*:\s*)#[0-9A-Fa-f]{6}"
@@ -407,7 +405,7 @@ function Invoke-Saipenview {
                 $applied += $k
             } else { $missing += $k }
         }
-        [System.IO.File]::WriteAllText($cssFile, $text, $utf8)
+        Write-Utf8 $cssFile $text
 
         Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
         if ($missing.Count) {
