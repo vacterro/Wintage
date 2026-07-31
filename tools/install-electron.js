@@ -4,17 +4,17 @@
 // The obvious approach does not work, and it fails silently, so it is worth writing
 // down: dropping a `resources/app/` folder next to `app.asar` does NOTHING, because
 // Electron searches `resources/app.asar` FIRST and only falls back to `resources/app`
-// when the archive is absent. Tried it on Freebuff — the app started perfectly and
+// when the archive is absent. Tried it on Freebuff вЂ” the app started perfectly and
 // the theme simply never ran, with no error anywhere.
 //
 // So the archive is MOVED instead: `resources/app.asar` becomes
 // `resources/app/app.asar`, its `app.asar.unpacked` sibling moves with it (that
-// pairing is by filename — separating them breaks every native module), and the
+// pairing is by filename вЂ” separating them breaks every native module), and the
 // shim takes the now-empty `resources/app` slot. The application's own bytes are
 // never rewritten; only their location changes, and -Revert moves them back.
 //
 // After an app update the archive reappears at `resources/app.asar` and wins the
-// search again, so the app runs unthemed rather than broken — a good failure mode,
+// search again, so the app runs unthemed rather than broken вЂ” a good failure mode,
 // and the reason the installer is meant to be re-run rather than trusted to persist.
 //
 // Usage:
@@ -44,9 +44,9 @@ const appDir = path.join(resources, 'app');
 const dryRun = has('dry-run');
 const inPlace = has('in-place');
 
-// ─── Reading the original package.json out of the asar ──────────────────────
+// в”Ђв”Ђв”Ђ Reading the original package.json out of the asar в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // This matters more than it looks. Electron derives the app NAME from the entry
-// package.json, and the name decides where userData lives — so a shim that
+// package.json, and the name decides where userData lives вЂ” so a shim that
 // declares its own name silently moves the app to an empty profile: no session,
 // no settings, no history, and no error message either. The original values are
 // copied verbatim and only `main` is changed.
@@ -57,7 +57,7 @@ function asarPackageJson(file) {
     fs.readSync(fd, head, 0, 16, 0);
     // asar layout: [u32 = 4][u32 pickleSize][u32 jsonSize][u32 jsonLen][json][files]
     // The JSON is read using the length at offset 12, but the FILE DATA starts at
-    // 8 + pickleSize — which is not the same number, because the pickle is padded
+    // 8 + pickleSize вЂ” which is not the same number, because the pickle is padded
     // to a 4-byte boundary. Using the JSON length for both worked on one app and
     // produced a truncated package.json on the next; the padding is the difference.
     const pickleSize = head.readUInt32LE(4);
@@ -93,7 +93,7 @@ if (has('revert')) {
   } else {
     if (!fs.existsSync(appDir)) { console.log('install-electron: nothing installed at ' + appDir); process.exit(0); }
     const pkgPath = path.join(appDir, 'package.json');
-    const ours = fs.existsSync(pkgPath) && (JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^﻿/, '')).wintage === MARKER);
+    const ours = fs.existsSync(pkgPath) && (JSON.parse(fs.readFileSync(pkgPath, 'utf8').replace(/^\uFEFF/, '')).wintage === MARKER);
     if (!ours) die(appDir + ' exists but was not created by Wintage - refusing to touch it. Inspect it yourself.');
     if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
     if (fs.existsSync(movedAsar)) {
@@ -157,7 +157,7 @@ if (alreadyOurs) {
 
 if (!fs.existsSync(asar)) die('no app.asar in ' + resources + ' - this does not look like a packed Electron app');
 
-// ─── Fuse check, BEFORE anything moves ───────────────────────────────────────
+// в”Ђв”Ђв”Ђ Fuse check, BEFORE anything moves в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // Two Electron fuses make the shim unrunnable, and they do not fail at install
 // time -- they fail at LAUNCH, after the archive has already moved. That is how
 // Claude's desktop app broke: installed cleanly, then would not start. Reading the
@@ -249,7 +249,7 @@ if (inPlace) {
     const jsonLen = head.readUInt32LE(12);
     const header = Buffer.alloc(jsonLen);
     fs.readSync(fd, header, 0, jsonLen, 16);
-    const index = JSON.parse(header.toString('utf8').replace(/^﻿| +$/g, ''));
+    const index = JSON.parse(header.toString('utf8').replace(/^\uFEFF| +$/g, ''));
 
     const entry = index.files['package.json'];
     if (!entry) throw new Error('no package.json inside the archive');
@@ -329,3 +329,4 @@ if (inPlace) {
   console.log('  ' + original.name + ' ' + original.version + ' - name and version preserved, so userData does not move');
   console.log('  restart the app to see it; `--revert` removes the folder and restores it exactly');
 }
+

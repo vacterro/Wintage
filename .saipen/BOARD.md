@@ -8,6 +8,10 @@
 - [ ] T-029 Confirm live in Tampermonkey that @sandbox raw kept page context: open any site with shadow DOM (reddit, youtube) and check `document.querySelector('*').shadowRoot?.querySelector('style[data-w95]')` is non-null, plus the theme menu switches and persists across origins | needs: T-018 | verify: shadow style present on 2 shadow-DOM sites, switch survives a cross-origin navigation
 
 ## DONE
+- [x] T-075 Total Commander wincmd.ini encoding regression: stripping the BOM in T-066 caused Win32 INI parsers to fall back to ANSI, mojibaking Cyrillic paths. Fixed by adding a Write-Utf8BomLines helper exclusively for TotalCmd to preserve the UTF-8 BOM | verify: wincmd.ini writes with a BOM, all other targets write without a BOM -- E-210, E-211
+- [x] T-076 Corrupted BOM stripping regex in 	ools/install-electron.js contained literal mojibake (п»ї) instead of the safe \uFEFF escape. Replaced with \uFEFF | verify: script passes --check and patches ASARs cleanly -- E-212, E-213
+- [x] T-077 Desktop themes were STALE because wintage.user.js was modified (Support developer badge change) but uild-desktop.js was not run. Rebuilt the artifacts | verify: 
+ode tools/build-desktop.js --check passes -- E-214, E-215
 - [x] T-071 WintageInstaller: FolderBrowserDialog now remembers previously selected custom paths when targets are unchecked and re-checked instead of resetting to defaults | verify: uncheck SAIPENVIEW and check again, old path restored -- E-206, E-207
 - [x] T-072 Refactored raw [System.IO.File]::ReadAllText calls left over in Invoke-Saipenview/Invoke-SmartVac/Invoke-WildRift to use the project's standard Read-Utf8 helper introduced in T-066 | verify: no System.IO.File left in file operations -- E-208, E-209
 - [x] T-070 `-Target all` skipped codenomad, discord, totalcmd, totalcmd2 and obsidian - the dispatch list was hand-kept and had drifted twice. Built from one declared registry now, with a startup guard that reads the ValidateSet back and warns about any target no dispatch list covers | verify: -Target all -WhatIf touches 12, no orphans, all gates PASS -- E-202, E-203
@@ -79,6 +83,7 @@
 - [x] T-016 Enforce UI.md invariants from JS where CSS loses to site !important; palette clamp for control subtrees; close dark-surface gaps; palette idempotence | verify: 3 popular sites all zero violations, zero drift across two settling windows
 
 ## BLOCKED
+
 
 
 

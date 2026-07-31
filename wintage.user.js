@@ -353,7 +353,7 @@
         location.reload();
       });
     }
-    GM_registerMenuCommand('☕ Buy me a coffee', function() {
+    GM_registerMenuCommand('🤍 Support developer', function() {
       window.open('https://buymeacoffee.com/vacuum34', '_blank');
     });
   }

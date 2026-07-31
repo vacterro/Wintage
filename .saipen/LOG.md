@@ -220,3 +220,10 @@
 - 31.07.26 23:56 [E-207] [parent: E-206] [T-071] RUN: BUILD -- Added $script:customPaths check to initialize the dialog's SelectedPath to the user's last choice instead of the default.
 - 31.07.26 23:57 [E-208] [parent: E-207] [T-072] H: Found leftover technical debt from my own previous edits: raw [System.IO.File]::ReadAllText and WriteAllText calls in install.ps1 (in Invoke-Saipenview, Invoke-SmartVac, and Invoke-WildRift) bypassing the Read-Utf8 / Write-Utf8 helpers introduced in T-066.
 - 31.07.26 23:58 [E-209] [parent: E-208] [T-072] RUN: BUILD -- Refactored all raw System.IO.File calls to use the standard helpers, ensuring consistent encoding enforcement and stripping local $utf8 variables.
+- 01.08.26 00:15 [E-210] [parent: E-209] [T-075] H: The BOM strip applied to all targets in T-066 broke Total Commander's wincmd.ini. Unlike web apps (which expect UTF-8 without BOM), Win32 INI parsers default to the system ANSI codepage (e.g. cp1251) unless a UTF-8/16 BOM is present. Stripping the BOM caused Total Commander to fall back to ANSI, completely mojibaking Cyrillic paths and localized settings in the INI file.
+- 01.08.26 00:16 [E-211] [parent: E-210] [T-075] RUN: BUILD -- Added a Write-Utf8BomLines helper specifically for Win32 targets. Invoke-TotalCmd now uses it, preserving the UTF-8 BOM so Total Commander correctly parses it as UTF-8.
+- 01.08.26 00:18 [E-212] [parent: E-211] [T-076] H: Found literal mojibake (﻿) in the BOM stripping regular expression in 	ools/install-electron.js (lines 96 and 252) instead of the safe \uFEFF escape. This would fail to strip the BOM on systems with different encodings or fail to match altogether.
+- 01.08.26 00:19 [E-213] [parent: E-212] [T-076] RUN: BUILD -- Replaced the corrupted regex literals with \uFEFF.
+- 01.08.26 00:20 [E-214] [parent: E-213] [T-077] H: 
+ode tools/build-desktop.js --check failed because the wintage.user.js script was manually modified (Support developer badge) but the desktop artifacts were not rebuilt.
+- 01.08.26 00:21 [E-215] [parent: E-214] [T-077] RUN: BUILD -- Rebuilt the desktop artifacts to restore synchronization.

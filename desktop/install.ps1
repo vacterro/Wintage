@@ -49,6 +49,8 @@ $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script:Utf8NoBom) }
 function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllText($path, $text, $script:Utf8NoBom) }
 function Write-Utf8Lines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8NoBom) }
+$script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)
+function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8WithBom) }
 
 # Where each target keeps its extensions. Both are VS Code-family and read the
 # identical format, which is why one built extension serves them both.
@@ -181,7 +183,7 @@ function Invoke-TotalCmd {
                     if ($inColors -and $line.Trim() -match $keys) { continue }
                     $newLines += $line
                 }
-                Write-Utf8Lines $ini $newLines
+                Write-Utf8BomLines $ini $newLines
                 Say "$($appName): no backup found - stripped the colour keys from [Colors]/[ColorsDark] only." 'Yellow'
                 Say "  Colours you had set there before Wintage cannot be restored from here." 'Yellow'
             }
@@ -254,7 +256,7 @@ function Invoke-TotalCmd {
                 $finalLines += "InactiveTitleText=$titleInFg"
             }
         }
-        Write-Utf8Lines $ini $finalLines
+        Write-Utf8BomLines $ini $finalLines
         Say "$($appName): applied $PaletteSlug" 'Green'
     }
 }

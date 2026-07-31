@@ -12,8 +12,8 @@ goal_mode: true
 goal_waves: 1
 goal_tickets: 7
 transition_from: SHIP
-last_event: 209
-updated: 2026-07-31T20:49:26Z
+last_event: 215
+updated: 2026-07-31T21:13:42Z
 ---
 
 # Wintage РІР‚вЂќ five extra themes (goal wave 1)
@@ -65,5 +65,6 @@ semantic tokens never used as text colour (1.8:1 fails AA).
 
 Also open: local branch `perf-verify` still exists (squash-merged, so git calls it
 unmerged РІР‚вЂќ `-D` is destructive and needs the user's word).
+
 
 
