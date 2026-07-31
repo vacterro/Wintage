@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-066
-next_action: "PHASE SHIP T-066 [encoding, TC backup, GUI hardening, layout-thrash guard]"
+phase: DONE
+task: none
+next_action: "PHASE HUNT [T-065 and T-029 need the user; nothing else open]"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -11,9 +11,9 @@ saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
 goal_tickets: 7
-transition_from: REVIEW
-last_event: 200
-updated: 2026-07-31T15:04:00Z
+transition_from: SHIP
+last_event: 201
+updated: 2026-07-31T15:08:00Z
 ---
 
 # Wintage вЂ” five extra themes (goal wave 1)
