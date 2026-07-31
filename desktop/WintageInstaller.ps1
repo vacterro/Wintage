@@ -25,7 +25,11 @@ $script:packs = @{}
 function Load-Packs {
     $script:packs = @{}
     Get-ChildItem $themeDir -Filter '*.json' | ForEach-Object {
-        $p = Get-Content $_.FullName -Raw | ConvertFrom-Json
+        # -Raw + ConvertFrom-Json chokes on a BOM, and packs have carried one before
+        # (a PowerShell write elsewhere put it there). Reading as explicit UTF-8 and
+        # stripping any leftover mark keeps one stray byte from emptying the theme
+        # list with a parse error at startup.
+        $p = ([System.IO.File]::ReadAllText($_.FullName, (New-Object System.Text.UTF8Encoding($false)))) -replace '^﻿', '' | ConvertFrom-Json
         $script:packs[$p.slug] = $p
     }
 }
@@ -49,7 +53,17 @@ function Get-ActiveTokens {
     if ($script:current -eq '<custom>') { return $script:custom }
     $t = $script:packs[$script:current].tokens
     $h = @{}
-    foreach ($k in $TOKENS) { $h[$k] = $t.$k }
+    foreach ($k in $TOKENS) {
+        $v = $t.$k
+        # A pack written before a token existed (link was the 19th, added late) has no
+        # value for it, and $null reaches ColorTranslator::FromHtml, which throws and
+        # takes the whole window down on selection. Fall back to a token the pack is
+        # guaranteed to have rather than crashing on someone's older custom.json.
+        if (-not $v) {
+            $v = if ($k -eq 'link') { $t.borderHighlight } else { $t.textPrimary }
+        }
+        $h[$k] = $v
+    }
     $h
 }
 function C([string]$hex) { [System.Drawing.ColorTranslator]::FromHtml($hex) }

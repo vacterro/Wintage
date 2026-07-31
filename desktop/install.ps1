@@ -36,6 +36,20 @@ $backupRoot = Join-Path $here "backup/$stamp"
 
 function Say($msg, $colour = 'Gray') { Write-Host $msg -ForegroundColor $colour }
 
+# PowerShell 5.1 writes a BOM with `Set-Content -Encoding UTF8`, and `Get-Content`
+# falls back to the ANSI codepage on a file that has none. Both halves have already
+# bitten this project once: SAIPENVIEW's stylesheet came back with 30 mojibaked
+# em-dashes and a stray glyph before `:root` (E-159). The same pair of calls was
+# still writing five other targets, including Obsidian's appearance.json -- and a
+# BOM there is not cosmetic, because JSON.parse throws on it. Found one already on
+# disk in the parent vault.
+#
+# Every read/write of a file we did not generate goes through these two.
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script:Utf8NoBom) }
+function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllText($path, $text, $script:Utf8NoBom) }
+function Write-Utf8Lines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8NoBom) }
+
 # Where each target keeps its extensions. Both are VS Code-family and read the
 # identical format, which is why one built extension serves them both.
 $TARGETS = @{
@@ -138,17 +152,50 @@ function Invoke-TotalCmd {
         }
     }
 
+    # This is the only target whose config is a file the USER has been editing for
+    # years, and it was the only one with no backup. Its revert deleted every
+    # BackColor/ForeColor/... line in the whole file -- so a colour the user had set
+    # themselves before Wintage ever ran was destroyed, with nothing to restore it
+    # from, and a matching key in an unrelated section went with it. One backup,
+    # taken before the first write and never overwritten, turns that into an undo.
+    $iniBak = $ini + '.wintage.bak'
+
     if ($DoRevert) {
         if ($PSCmdlet.ShouldProcess($ini, 'Revert Wintage theme')) {
-            $lines = Get-Content $ini
-            $newLines = $lines | Where-Object { $_.Trim() -notmatch '^(BackColor|BackColor2|ForeColor|MarkColor|CursorColor|CursorText|ActiveTitle|ActiveTitleText|InactiveTitle|InactiveTitleText)=' }
-            Set-Content $ini $newLines -Encoding UTF8
-            Say "$($appName): removed Wintage theme" 'Green'
+            if (Test-Path $iniBak) {
+                Copy-Item $iniBak $ini -Force
+                Remove-Item $iniBak -Force
+                Say "$($appName): restored wincmd.ini from the pre-Wintage backup" 'Green'
+            }
+            else {
+                # No backup: this ini was themed by an older version that never made
+                # one. Strip only inside the colour sections, so a same-named key
+                # elsewhere in the file survives -- and say plainly that anything the
+                # user had set in those sections before is not recoverable here.
+                $lines = Get-Content $ini
+                $keys = '^(BackColor|BackColor2|ForeColor|MarkColor|CursorColor|CursorText|ActiveTitle|ActiveTitleText|InactiveTitle|InactiveTitleText)='
+                $newLines = @(); $inColors = $false
+                foreach ($line in $lines) {
+                    if ($line -match '^\[(Colors|ColorsDark)\]$') { $inColors = $true; $newLines += $line; continue }
+                    if ($line -match '^\[') { $inColors = $false }
+                    if ($inColors -and $line.Trim() -match $keys) { continue }
+                    $newLines += $line
+                }
+                Write-Utf8Lines $ini $newLines
+                Say "$($appName): no backup found - stripped the colour keys from [Colors]/[ColorsDark] only." 'Yellow'
+                Say "  Colours you had set there before Wintage cannot be restored from here." 'Yellow'
+            }
         }
         return
     }
 
     if ($PSCmdlet.ShouldProcess($ini, 'Apply Wintage theme')) {
+        # Once only: a second export would capture the ALREADY themed ini and destroy
+        # the one copy of the original. Same discipline as the MPC-HC .reg backup.
+        if (-not (Test-Path $iniBak)) {
+            Copy-Item $ini $iniBak -Force
+            Say "$($appName): backed up wincmd.ini -> $(Split-Path $iniBak -Leaf)" 'DarkGray'
+        }
         $jsonPath = Join-Path (Split-Path $PSScriptRoot -Parent) "themes\$PaletteSlug.json"
         if (-not (Test-Path $jsonPath)) { Say "$($appName): theme file not found ($PaletteSlug.json)" 'Red'; return }
         $t = (Get-Content $jsonPath -Raw | ConvertFrom-Json).tokens
@@ -207,7 +254,7 @@ function Invoke-TotalCmd {
                 $finalLines += "InactiveTitleText=$titleInFg"
             }
         }
-        Set-Content $ini $finalLines -Encoding UTF8
+        Write-Utf8Lines $ini $finalLines
         Say "$($appName): applied $PaletteSlug" 'Green'
     }
 }
@@ -296,7 +343,7 @@ function Invoke-WildRift {
     $pyTokens += "}"
     $code = Get-Content $bakFile -Raw
     $code = $code -replace '(?s)TOKENS\s*=\s*\{.*?\}', $pyTokens
-    Set-Content $pyFile $code -Encoding UTF8
+    Write-Utf8 $pyFile $code
     Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
 }
 
@@ -410,7 +457,7 @@ function Invoke-CodeNomad {
 
     if ($PSCmdlet.ShouldProcess($cnCss, 'Install Wintage theme')) {
         $css = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
-        Set-Content $cnCss $css -Encoding UTF8
+        Write-Utf8 $cnCss $css
         Say "CodeNomad: installed theme -> $cnCss" 'Green'
     }
 }
@@ -435,7 +482,7 @@ function Invoke-BetterDiscord {
     if ($PSCmdlet.ShouldProcess($bdCss, 'Install Wintage theme')) {
         $css = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
         $meta = "/**`n * @name Wintage ($PaletteSlug)`n * @author Wintage Installer`n * @version 1.0.0`n * @description Win95 Theme`n */`n`n"
-        Set-Content $bdCss ($meta + $css) -Encoding UTF8
+        Write-Utf8 $bdCss ($meta + $css)
         Say "BetterDiscord: installed theme -> $bdCss" 'Green'
     }
 }
@@ -447,7 +494,7 @@ function Get-ObsidianVaults {
     # gets its own copy, which is also why an app update cannot remove them.
     $cfg = Join-Path $env:APPDATA 'obsidian/obsidian.json'
     if (-not (Test-Path $cfg)) { return @() }
-    $j = Get-Content $cfg -Raw | ConvertFrom-Json
+    $j = (Read-Utf8 $cfg) | ConvertFrom-Json
     $out = @()
     foreach ($v in $j.vaults.PSObject.Properties) {
         if (Test-Path $v.Value.path) { $out += $v.Value.path }
@@ -507,9 +554,9 @@ function Invoke-Obsidian {
                 $safe = ($vault -replace '[^A-Za-z0-9]', '_')
                 $bak = Join-Path $bakDir "obsidian-appearance-$safe.json"
                 if (-not (Test-Path $bak)) { Copy-Item $appearance $bak -Force }
-                $ap = Get-Content $appearance -Raw | ConvertFrom-Json
+                $ap = (Read-Utf8 $appearance) | ConvertFrom-Json
                 $ap | Add-Member -NotePropertyName cssTheme -NotePropertyValue $activeName -Force
-                ($ap | ConvertTo-Json -Depth 10) | Set-Content $appearance -Encoding UTF8
+                Write-Utf8 $appearance ($ap | ConvertTo-Json -Depth 10)
             }
             Say "Obsidian: installed $count themes into $vault, active '$activeName'" 'Green'
             Say "  Reload the vault (Ctrl+R) or Settings > Appearance to see it." 'DarkGray'

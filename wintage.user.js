@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.20.0
+// @version      1.21.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -365,7 +365,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.20.0';
+  const W95_VERSION = '1.21.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -1425,13 +1425,24 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     // screenshot the user sent.
     //
     // Size is the discriminator, and it is a safe one: nothing that is an icon is
-    // 70% of the viewport in BOTH dimensions. Measured only when a url() is
-    // actually present, so the layout read costs nothing on the elements that
-    // make up the bulk of a page.
+    // 70% of the viewport in BOTH dimensions.
+    //
+    // But getBoundingClientRect FORCES LAYOUT, and this whole file exists in its
+    // current shape because layout thrash once burned 94% of the main thread
+    // (ADR-004, and the sweep-rate hot loop in ADR-006). "Only when a url() is
+    // present" is not a tight enough guard on its own: an icon-sprite-heavy page
+    // has hundreds of those. So the measurement is gated behind a pure DOM-shape
+    // test first -- a page-level backdrop is always near the top of the tree,
+    // never buried twelve divs deep -- which costs no layout at all and leaves a
+    // handful of candidates per page.
     if (bgImg && bgImg !== 'none' && /url\(/i.test(bgImg)) {
-      const r = el.getBoundingClientRect();
-      if (r.width > innerWidth * 0.7 && r.height > innerHeight * 0.7) {
-        w.push(el, 'background-image', 'none');
+      let depth = 0, p = el;
+      while (p && p !== document.body && p !== document.documentElement && depth < 5) { p = p.parentElement; depth++; }
+      if (depth < 5) {
+        const r = el.getBoundingClientRect();
+        if (r.width > innerWidth * 0.7 && r.height > innerHeight * 0.7) {
+          w.push(el, 'background-image', 'none');
+        }
       }
     }
 
