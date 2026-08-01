@@ -969,14 +969,18 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     div, span, section, article, aside, nav, header, footer, main,
     [class]:not(:root), [id]:not(:root), [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
 
-    /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
+        /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
        hovercards/tooltips/menus inside shadow roots render see-through and their
-       text overlaps the page underneath (the Reddit hovercard bug). Recolor only —
-       never force opacity/z-index/visibility. */
-    dialog, [popover], [role="menu"], [role="listbox"], [role="tooltip"], [role="dialog"], [role="alertdialog"],
+       text overlaps the page underneath (the Reddit hovercard bug). Recolor only -
+       never force opacity/z-index/visibility.
+       Specificity is bumped with :not(:root):not(.w) to beat [class]:not(:root). */
+    dialog:not(:root):not(.w), [popover]:not(:root):not(.w),
+    [role="menu"]:not(:root):not(.w), [role="listbox"]:not(:root):not(.w),
+    [role="tooltip"]:not(:root):not(.w), [role="dialog"]:not(:root):not(.w), [role="alertdialog"]:not(:root):not(.w),
     [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
     [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
-    [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard {
+    [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
+    [data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
       background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important; ${B_OUTER}
     }
 

@@ -595,16 +595,6 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
-    /* Claude Code UI: icon buttons and sidebar items should not look like bulky Win95 buttons until hovered. */
-    .cds-root button:not(:hover):not(:active),
-    .cds-root [role="button"]:not(:hover):not(:active),
-    .cds-root [class*="btn" i]:not(:hover):not(:active),
-    .cds-root [class*="button" i]:not(:hover):not(:active) {
-      background: transparent !important;
-      border-color: transparent !important;
-      box-shadow: none !important;
-    }
-
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #0B0B0B !important; color: #C4BA9F !important; border: 2px solid !important; border-color: #050505 #655E4A #655E4A #050505 !important; box-shadow: none !important; box-sizing: border-box !important; }
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
     textarea { min-height: 64px !important; resize: none !important; padding: 1px 3px !important; }

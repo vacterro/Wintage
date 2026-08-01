@@ -323,7 +323,7 @@ if (css) {
           .catch(err => stamp('wcofix FAILED: ' + (err && err.message)));
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         wc.insertCSS(payload, { cssOrigin: 'author' })
-          .then(() => stamp('injected ' + payload.length + ' bytes into ' + url))
+          .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })
           .catch(err => {
             stamp('FAILED: ' + (err && err.message));
             console.error('[wintage] insertCSS failed:', err && err.message);
