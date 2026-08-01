@@ -11,7 +11,10 @@
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** 6e18ec10ba9c362a8d9fc143d5fcb5884aba6b4c (project), 3fffb8a75a8930b4f39cc88a2b4af51112e40934 (wiki remote)
+- **source_head:** eeb25156495f9973f6a1171eba8876d96556e5d0 (project), 3fffb8a75a8930b4f39cc88a2b4af51112e40934 (wiki remote)
+  (authored at 6e18ec1; restamped to v1.24.0 at dad7f2a; re-verified at eeb2515
+  -- README drift since is screenshots + CRLF only, CHANGELOG gained the
+  [1.24.0] entry the _Footer already links, pages carry 1.24.0 stamps)
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
   Known-Behaviors, Development, _Sidebar, _Footer); source invariants = README.md
   structure, CHANGELOG.md current version 1.23.3, desktop/README.md target table
@@ -48,3 +51,9 @@
   it, what the desktop targets can and cannot reach, and how releases are made.
   Prepared by Core adopting saiwiki per RFC `qq` route; nothing was pushed and no
   main-project file was modified by the sub.
+
+  UPDATE (E-391, restamp): pages restamped to v1.24.0 after the v1.24.0 ship.
+  UPDATE (E-393, `qq` re-verify): source_head refreshed to eeb2515. No content
+  drift requiring a redraft -- README diff is screenshots + CRLF only, and the
+  CHANGELOG [1.24.0] entry is already linked from _Footer. Status stays ready;
+  the wiki-remote push remains the qqq step.

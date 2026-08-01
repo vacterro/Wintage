@@ -4,7 +4,7 @@
 
 - **status:** draft
 - **producer:** saitranslate
-- **source_head:** 71f98525c27c0a0bcef57e6baa8d74dd513b1f4a6 (project HEAD)
+- **source_head:** 71f9852cf9623553ef5dd16d1e702a5d08c93c24 (project HEAD)
   (drafted at 6e18ec1; re-verified at 71f9852 — README.md drift is screenshots
   only, which are omitted from translations by design, plus line-ending
   normalization; zero structural drift, payload remains faithful)
