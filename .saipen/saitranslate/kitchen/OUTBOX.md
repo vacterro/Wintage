@@ -4,7 +4,10 @@
 
 - **status:** draft
 - **producer:** saitranslate
-- **source_head:** 6e18ec10ba9c362a8d9fc143d5fcb5884aba6b4c (project HEAD)
+- **source_head:** 71f98525c27c0a0bcef57e6baa8d74dd513b1f4a6 (project HEAD)
+  (drafted at 6e18ec1; re-verified at 71f9852 — README.md drift is screenshots
+  only, which are omitted from translations by design, plus line-ending
+  normalization; zero structural drift, payload remains faithful)
 - **coverage:** real surfaces inventoried in kitchen/surface.md —
   docs: README.md (translated), desktop/README.md + browser-theme/README.txt
   (surfaces exist, EN only, translation pending the dedicated instance);
@@ -39,3 +42,9 @@
   These root copies are now the live integration; the kitchen copies here are
   the archived payload. A future collect must push/refresh the repo-root files,
   not these — do not re-inject from kitchen without a freshness re-check.
+
+  UPDATE (E-392, `ee` re-verify): source_head refreshed to 71f9852 (post
+  v1.24.0 ship). README.md diff since 6e18ec1 = new screenshot img tags
+  (omitted by design) + CRLF normalization, no heading/text/token/command
+  changes. Payload unchanged and still faithful; status stays draft until
+  T-102 completes the 29-language bundle.
