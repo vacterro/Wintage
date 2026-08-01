@@ -39,6 +39,9 @@
   file changes required. (3) Then run Core VERIFY -> REVIEW -> SHIP via `qqq`.
   (4) Do not touch the Claude transparency commits (69d3094..6e18ec1) — they are
   unpushed local work owned by another session.
+- **update:** pages restamped to v1.24.0 (2026-08-02) after the v1.24.0 ship --
+  Home.md current-version line and _Footer.md stamp, in both kitchen and the repo
+  wiki/ mirror (E-390). Kitchen remains canonical for the remote push.
 - **details:**
   The wiki had exactly one stub page (30 bytes). All eight pages are drafted from the
   current docs so the wiki and the repo agree about what Wintage is, how to install

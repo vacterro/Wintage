@@ -12,7 +12,7 @@ element communicates its purpose at a glance.
 
 ## Quick facts
 
-- **Current version:** 1.23.3 (2026-08-01)
+- **Current version:** 1.24.0 (2026-08-02)
 - **Palettes:** sixteen, switchable per user from the Tampermonkey menu
 - **Scope:** every site, plus desktop applications (see [Desktop](Desktop))
 - **License:** MIT
