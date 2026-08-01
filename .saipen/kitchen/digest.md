@@ -1,3 +1,3 @@
-done: v1.23.2 shipped and installed the Claude 1.24012.9 foreground repair.
-remaining: T-101 fixes proportional terminal font cells; T-065 remains parked under BLOCKED.
-awaiting: restart Claude safely for visual confirmation; T-065 still needs authenticated Studio DOM values.
+done: v1.24.0 shipped (791f3f6, tag pushed) -- Claude transparency fixes (5 commits) + README.ru/et/ded + wiki/ mirror + two new release gates; clipboard gate hardened for console-width wrap
+remaining: T-107 README language-switcher; T-102 29 translations; T-103 UI i18n loader
+awaiting: wiki-remote push (qqq); saitranslate handoff stays draft until T-102

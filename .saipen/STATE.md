@@ -1,7 +1,7 @@
 ---
 phase: DONE
 task: none
-next_action: "WAIT: user brake -- saiwiki handoff READY (run qqq to integrate+ship); saitranslate handoff DRAFT (29 languages T-102, UI loader T-103 pending; run ee again after the dedicated instance completes)"
+next_action: "WAIT: user brake -- v1.24.0 shipped (791f3f6, tag pushed); wiki-remote push pending (qqq); translations draft until T-102 completes 29 languages (T-107 language-switcher TODO)"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -10,8 +10,8 @@ schema_version: 2
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: false
 transition_from: PREPARE
-last_event: 389
-updated: 2026-08-01T21:45:30Z
+last_event: 390
+updated: 2026-08-01T22:11:30Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)
