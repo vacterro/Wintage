@@ -700,7 +700,21 @@ button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
 
-yt-icon-button, yt-button-shape, [class*="yt-spec-button-shape"] { background: transparent !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
+    /* Claude Code UI: icon buttons, sidebar items, and footer controls should not inherit solid Tailwind backgrounds
+       or look like bulky Win95 buttons until hovered. The :not(:hover):not(:active) pseudo-classes ensure they fall
+       back to the Wintage base button rules (which add the Win95 bevel and surfaceRaised background) when hovered. */
+    .cds-root a:not(:hover):not(:active),
+    .cds-root button:not(:hover):not(:active),
+    .cds-root [role="button"]:not(:hover):not(:active),
+    .cds-root [class*="btn" i]:not(:hover):not(:active),
+    .cds-root [class*="button" i]:not(:hover):not(:active),
+    .cds-root [class*="hover:bg-"]:not(:hover):not(:active) {
+      background: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+    }
+
+    yt-icon-button, yt-button-shape, [class*="yt-spec-button-shape"] { background: transparent !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
 yt-icon-button button, yt-button-shape button, .ytp-button, [class*="yt-spec-button-shape"] button, .ytd-searchbox button {
   ${B_OUTER}
   min-height: 0 !important; min-width: 0 !important; font-size: inherit !important; padding: 4px !important; margin: 0 !important;
@@ -981,16 +995,6 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
     button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
-
-    /* Claude Code UI: icon buttons and sidebar items should not look like bulky Win95 buttons until hovered. */
-    .cds-root button:not(:hover):not(:active),
-    .cds-root [role="button"]:not(:hover):not(:active),
-    .cds-root [class*="btn" i]:not(:hover):not(:active),
-    .cds-root [class*="button" i]:not(:hover):not(:active) {
-      background: transparent !important;
-      border-color: transparent !important;
-      box-shadow: none !important;
-    }
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK} box-sizing: border-box !important; }
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
