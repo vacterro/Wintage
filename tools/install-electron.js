@@ -88,6 +88,7 @@ if (has('revert')) {
     try { fs.unlinkSync(path.join(resources, 'wintage-shim.cjs')); } catch (e) {}
     try { fs.unlinkSync(path.join(resources, 'wintage.css')); } catch (e) {}
     try { fs.unlinkSync(path.join(resources, 'wintage-status.txt')); } catch (e) {}
+    try { fs.unlinkSync(path.join(resources, 'wintage-palette.txt')); } catch (e) {}
     console.log('install-electron: restored original ' + path.basename(asar) + ' from backup');
     process.exit(0);
   } else {
@@ -133,6 +134,7 @@ if (alreadyOurs) {
     shimCode = shimCode.replace("require(ASAR);", "require(path.join(ASAR, '" + original.main + "'));");
     fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
     fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
+    fs.writeFileSync(path.join(resources, 'wintage-palette.txt'), palette + '\n');
     try { fs.unlinkSync(path.join(resources, 'wintage-status.txt')); } catch (e) { }
     console.log('install-electron: repainted ' + asar + ' in-place to "' + palette + '"');
     console.log('  restart the app to see it');
@@ -223,8 +225,24 @@ if (inPlace) {
   // The shim keeps its handoff: it is the entry point now, so it must require the
   // real archive itself. (The previous version stripped that block because it
   // injected a require INTO index.pre.js instead -- see the note below.)
-  fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(resources, 'wintage-shim.cjs'));
+  //
+  // But it must NOT require the archive by directory, the way the relocation mode
+  // does. In this mode the archive's own package.json `main` is about to be
+  // rewritten to point back at this shim, so `require(ASAR)` would read that field
+  // and resolve to the shim itself -- already half-loaded and therefore an empty
+  // module -- and the application would simply never start, with no error. The
+  // original entry point is named explicitly to step over the field being patched.
+  // (The repaint path below has always done this; a FIRST install did not, so the
+  // bug was invisible until an app update forced a fresh install.)
+  let shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
+  shimCode = shimCode.replace("require(ASAR);", "require(path.join(ASAR, '" + original.main + "'));");
+  fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
   fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
+  // The relocation mode records the palette in the package.json it writes; this mode
+  // writes no package.json of its own, so it had nowhere to put it and the installer's
+  // listing reported an in-place install as "found, not themed" -- on the one target
+  // where the user most needed to know whether the patch had taken.
+  fs.writeFileSync(path.join(resources, 'wintage-palette.txt'), palette + '\n');
 
   // Patch `main` inside the archive's package.json, byte-length-identical.
   //

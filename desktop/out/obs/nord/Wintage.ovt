@@ -1,0 +1,110 @@
+@OBSThemeMeta {
+    name: 'Wintage Nord';
+    id: 'com.wintage.OBS';
+    extends: 'com.obsproject.Yami.Classic';
+    author: 'Wintage';
+    dark: 'true';
+}
+
+@OBSThemeVars {
+    --grey1: #88C0D0;
+    --grey2: #434B5D;
+    --grey3: #3F4758;
+    --grey4: #3B4252;
+    --grey5: #2E3440;
+    --grey6: #1D2129;
+    --grey7: #272C36;
+    --grey8: #232831;
+
+    --blue1: #88C0D0;
+    --blue2: #008080;
+    --blue3: #004C4C;
+    --red1: #DE8282;
+    --red2: #DE8282;
+    --red3: #7A2020;
+    --green3: #4A7A20;
+    --yellow3: #7A7A20;
+
+    --bg_window: #272C36;
+    --bg_base: #2E3440;
+    --bg_preview: #1D2129;
+    --primary: #3F4758;
+    --primary_light: #434B5D;
+    --primary_lighter: #88C0D0;
+    --primary_dark: #004C4C;
+    --primary_darker: #232831;
+    --warning: #7A7A20;
+    --danger: #7A2020;
+    --text: #D8DEE9;
+    --text_light: #A3A9B3;
+    --text_muted: #777C87;
+    --text_disabled: #777C87;
+    --text_inactive: #A3A9B3;
+
+    --border_color: #232831;
+    --border_radius: 0px;
+    --border_radius_small: 0px;
+    --border_radius_large: 0px;
+    --highlight_width: 1px;
+    --highlight_color: #88C0D0;
+    --border_highlight: #88C0D0;
+
+    --input_bg: #3B4252;
+    --input_bg_hover: #434B5D;
+    --input_bg_focus: #1D2129;
+    --list_item_bg_selected: #3F4758;
+    --list_item_bg_hover: #434B5D;
+    --input_border: #4C566A;
+    --input_border_hover: #566C7D;
+    --input_border_focus: #88C0D0;
+    --button_bg: #3F4758;
+    --button_bg_hover: #434B5D;
+    --button_bg_down: #3B4252;
+    --button_bg_disabled: #2E3440;
+    --button_border: #3F4758;
+    --button_border_hover: #566C7D;
+    --button_border_focus: #88C0D0;
+    --tab_bg: #3F4758;
+    --tab_bg_hover: #434B5D;
+    --tab_bg_down: #3B4252;
+    --tab_bg_disabled: #2E3440;
+    --tab_border: #4C566A;
+    --tab_border_hover: #566C7D;
+    --tab_border_focus: #88C0D0;
+    --tab_border_selected: #3F4758;
+    --scrollbar_handle: #3F4758;
+    --scrollbar_bg: #2E3440;
+    --scrollbar_hover: #434B5D;
+    --scrollbar_down: #3B4252;
+    --scrollbar_border: #232831;
+}
+
+QWidget {
+    font-family: Verdana;
+    font-size: 12px;
+}
+
+QPushButton,
+QToolButton {
+    border: 2px solid;
+    border-color: #566C7D #232831 #232831 #566C7D;
+    border-radius: 0px;
+}
+
+QPushButton:pressed,
+QPushButton:checked,
+QToolButton:pressed,
+QToolButton:checked {
+    border-color: #232831 #566C7D #566C7D #232831;
+}
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox {
+    border: 2px solid;
+    border-color: #232831 #566C7D #566C7D #232831;
+    border-radius: 0px;
+}

@@ -84,10 +84,10 @@ for (const name of ['GLOBAL_CSS', 'SHADOW_CSS']) {
 const REQUIRED_TOKENS = [
   'background', 'backgroundSoft',
   'surface', 'surfaceRaised', 'surfaceAlt',
-  'borderDark', 'borderHighlight', 'borderMuted',
+  'borderDark', 'borderHighlight', 'bevelLight', 'borderMuted',
   'textPrimary', 'textSecondary', 'textMuted',
   'accentTeal', 'accentTealDeep',
-  'success', 'warning', 'danger',
+  'success', 'warning', 'danger', 'dangerText',
   'selection', 'compareBack', 'link'
 ];
 

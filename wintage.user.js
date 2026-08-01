@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.21.1
+// @version      1.23.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -75,10 +75,10 @@
       tokens: {
         background: '#342012', backgroundSoft: '#3A2616',
         surface: '#4A341B', surfaceRaised: '#5A4324', surfaceAlt: '#634B2B',
-        borderDark: '#1C1208', borderHighlight: '#D3B57A', borderMuted: '#665033',
+        borderDark: '#1C1208', borderHighlight: '#D3B57A', bevelLight: '#826941', borderMuted: '#665033',
         textPrimary: '#E2CA95', textSecondary: '#C5AB6E', textMuted: '#95804C',
         accentTeal: '#008080', accentTealDeep: '#006060',
-        success: '#5B9630', warning: '#969630', danger: '#963030',
+        success: '#5B9630', warning: '#969630', danger: '#963030', dangerText: '#D37676',
         selection: '#5A4324', compareBack: '#24170C',
         link: '#D3B57A'
       }
@@ -88,10 +88,10 @@
       tokens: {
         background: '#29241D', backgroundSoft: '#2E2922',
         surface: '#3B362A', surfaceRaised: '#484436', surfaceAlt: '#514C3D',
-        borderDark: '#15130F', borderHighlight: '#D1A27C', borderMuted: '#555144',
+        borderDark: '#15130F', borderHighlight: '#D1A27C', bevelLight: '#75644F', borderMuted: '#555144',
         textPrimary: '#E0B997', textSecondary: '#C39870', textMuted: '#93704E',
         accentTeal: '#008080', accentTealDeep: '#006060',
-        success: '#5B9630', warning: '#969630', danger: '#963030',
+        success: '#5B9630', warning: '#969630', danger: '#963030', dangerText: '#D37575',
         selection: '#484436', compareBack: '#1C1914',
         link: '#D1A27C'
       }
@@ -101,10 +101,10 @@
       tokens: {
         background: '#1B1F2C', backgroundSoft: '#1F2431',
         surface: '#272B3E', surfaceRaised: '#31354D', surfaceAlt: '#393D55',
-        borderDark: '#0D0F17', borderHighlight: '#7AD0D3', borderMuted: '#404359',
+        borderDark: '#0D0F17', borderHighlight: '#7AD0D3', bevelLight: '#4B6678', borderMuted: '#404359',
         textPrimary: '#95DEE2', textSecondary: '#6EBFC5', textMuted: '#4C8F95',
         accentTeal: '#008080', accentTealDeep: '#006060',
-        success: '#5B9630', warning: '#969630', danger: '#963030',
+        success: '#5B9630', warning: '#969630', danger: '#963030', dangerText: '#D06D6D',
         selection: '#31354D', compareBack: '#12151E',
         link: '#7AD0D3'
       }
@@ -114,10 +114,10 @@
       tokens: {
         background: '#212325', backgroundSoft: '#26282A',
         surface: '#303235', surfaceRaised: '#3C3F42', surfaceAlt: '#44474A',
-        borderDark: '#111213', borderHighlight: '#A2A5AB', borderMuted: '#494C50',
+        borderDark: '#111213', borderHighlight: '#A2A5AB', bevelLight: '#5E6165', borderMuted: '#494C50',
         textPrimary: '#B8BABF', textSecondary: '#95989E', textMuted: '#6D6F74',
         accentTeal: '#008080', accentTealDeep: '#006060',
-        success: '#5B9630', warning: '#969630', danger: '#963030',
+        success: '#5B9630', warning: '#969630', danger: '#963030', dangerText: '#D27272',
         selection: '#3C3F42', compareBack: '#171819',
         link: '#A2A5AB'
       }
@@ -127,10 +127,10 @@
       tokens: {
         background: '#1B232B', backgroundSoft: '#202830',
         surface: '#28303D', surfaceRaised: '#333B4B', surfaceAlt: '#3A4354',
-        borderDark: '#0E1116', borderHighlight: '#89D37A', borderMuted: '#414958',
+        borderDark: '#0E1116', borderHighlight: '#89D37A', bevelLight: '#506B5F', borderMuted: '#414958',
         textPrimary: '#A0E295', textSecondary: '#7AC56E', textMuted: '#55954C',
         accentTeal: '#008080', accentTealDeep: '#006060',
-        success: '#5B9630', warning: '#969630', danger: '#963030',
+        success: '#5B9630', warning: '#969630', danger: '#963030', dangerText: '#D27272',
         selection: '#333B4B', compareBack: '#13181D',
         link: '#89D37A'
       }
@@ -140,10 +140,10 @@
       tokens: {
         background: '#1C242A', backgroundSoft: '#21282F',
         surface: '#29313C', surfaceRaised: '#343D4A', surfaceAlt: '#3C4552',
-        borderDark: '#0E1216', borderHighlight: '#9D86D1', borderMuted: '#424A57',
+        borderDark: '#0E1216', borderHighlight: '#9D86D1', bevelLight: '#575776', borderMuted: '#424A57',
         textPrimary: '#B099DE', textSecondary: '#9C84C8', textMuted: '#675091',
         accentTeal: '#008080', accentTealDeep: '#006060',
-        success: '#5B9630', warning: '#969630', danger: '#963030',
+        success: '#5B9630', warning: '#969630', danger: '#963030', dangerText: '#D27272',
         selection: '#343D4A', compareBack: '#13181D',
         link: '#9D86D1'
       }
@@ -153,10 +153,10 @@
       tokens: {
         background: '#1A1A1A', backgroundSoft: '#2C2C2C',
         surface: '#2B2B2B', surfaceRaised: '#343434', surfaceAlt: '#3A3A3A',
-        borderDark: '#0A0A0A', borderHighlight: '#839BB0', borderMuted: '#4D4D4D',
+        borderDark: '#0A0A0A', borderHighlight: '#839BB0', bevelLight: '#4E555B', borderMuted: '#4D4D4D',
         textPrimary: '#C0C0C0', textSecondary: '#949494', textMuted: '#656565',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#DB7575',
         selection: '#343434', compareBack: '#141414',
         link: '#839BB0'
       }
@@ -166,10 +166,10 @@
       tokens: {
         background: '#0F0F0F', backgroundSoft: '#1A1A1A',
         surface: '#2B2B2B', surfaceRaised: '#333333', surfaceAlt: '#393939',
-        borderDark: '#050505', borderHighlight: '#D6BE76', borderMuted: '#4A4A4A',
+        borderDark: '#050505', borderHighlight: '#D6BE76', bevelLight: '#655E4A', borderMuted: '#4A4A4A',
         textPrimary: '#C4BA9F', textSecondary: '#8E8774', textMuted: '#605C50',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#D45C5C',
         selection: '#333333', compareBack: '#0B0B0B',
         link: '#D6BE76'
       }
@@ -179,10 +179,10 @@
       tokens: {
         background: '#1A1810', backgroundSoft: '#232018',
         surface: '#332E22', surfaceRaised: '#3D372A', surfaceAlt: '#453D30',
-        borderDark: '#100E08', borderHighlight: '#F0D060', borderMuted: '#5A5040',
+        borderDark: '#100E08', borderHighlight: '#F0D060', bevelLight: '#75663D', borderMuted: '#5A5040',
         textPrimary: '#D4C89A', textSecondary: '#9C9371', textMuted: '#6E674E',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#D66464',
         selection: '#3D372A', compareBack: '#14120C',
         link: '#F0D060'
       }
@@ -192,10 +192,10 @@
       tokens: {
         background: '#181818', backgroundSoft: '#1B1B1B',
         surface: '#2B2B2B', surfaceRaised: '#343434', surfaceAlt: '#3A3A3A',
-        borderDark: '#0A0A0A', borderHighlight: '#738EA6', borderMuted: '#4D4D4D',
+        borderDark: '#0A0A0A', borderHighlight: '#738EA6', bevelLight: '#4A5258', borderMuted: '#4D4D4D',
         textPrimary: '#C0C0C0', textSecondary: '#8E8E8E', textMuted: '#646464',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#D45D5D',
         selection: '#343434', compareBack: '#121212',
         link: '#738EA6'
       }
@@ -205,10 +205,10 @@
       tokens: {
         background: '#C0C0C0', backgroundSoft: '#FFFFFF',
         surface: '#C0C0C0', surfaceRaised: '#D0D0D0', surfaceAlt: '#DCDCDC',
-        borderDark: '#808080', borderHighlight: '#F6F6F6', borderMuted: '#FFFFFF',
+        borderDark: '#808080', borderHighlight: '#F6F6F6', bevelLight: '#F6F6F6', borderMuted: '#FFFFFF',
         textPrimary: '#000000', textSecondary: '#3A3A3A', textMuted: '#6A6A6A',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#7A2020',
         selection: '#D0D0D0', compareBack: '#D0D0D0',
         link: '#5E7A7A'
       }
@@ -218,10 +218,10 @@
       tokens: {
         background: '#000000', backgroundSoft: '#000000',
         surface: '#0A0A0A', surfaceRaised: '#141414', surfaceAlt: '#1C1C1C',
-        borderDark: '#1A1A1A', borderHighlight: '#FFFFFF', borderMuted: '#333333',
+        borderDark: '#1A1A1A', borderHighlight: '#FFFFFF', bevelLight: '#5C5C5C', borderMuted: '#333333',
         textPrimary: '#A0A0A0', textSecondary: '#777777', textMuted: '#484848',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#CE4444',
         selection: '#141414', compareBack: '#000000',
         link: '#FFFFFF'
       }
@@ -231,10 +231,10 @@
       tokens: {
         background: '#21222C', backgroundSoft: '#282A36',
         surface: '#44475A', surfaceRaised: '#4C526D', surfaceAlt: '#525A7B',
-        borderDark: '#191A21', borderHighlight: '#BD93F9', borderMuted: '#6272A4',
+        borderDark: '#191A21', borderHighlight: '#BD93F9', bevelLight: '#706A9E', borderMuted: '#6272A4',
         textPrimary: '#F8F8F2', textSecondary: '#B8B8B7', textMuted: '#828285',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#DA7373',
         selection: '#4C526D', compareBack: '#191A21',
         link: '#BD93F9'
       }
@@ -244,10 +244,10 @@
       tokens: {
         background: '#272C36', backgroundSoft: '#2E3440',
         surface: '#3B4252', surfaceRaised: '#3F4758', surfaceAlt: '#434B5D',
-        borderDark: '#232831', borderHighlight: '#88C0D0', borderMuted: '#4C566A',
+        borderDark: '#232831', borderHighlight: '#88C0D0', bevelLight: '#566C7D', borderMuted: '#4C566A',
         textPrimary: '#D8DEE9', textSecondary: '#A3A9B3', textMuted: '#777C87',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#DE8282',
         selection: '#3F4758', compareBack: '#1D2129',
         link: '#88C0D0'
       }
@@ -257,10 +257,10 @@
       tokens: {
         background: '#002B36', backgroundSoft: '#073642',
         surface: '#073642', surfaceRaised: '#1B444F', surfaceAlt: '#2B4F59',
-        borderDark: '#001F27', borderHighlight: '#51A2DB', borderMuted: '#586E75',
+        borderDark: '#001F27', borderHighlight: '#51A2DB', bevelLight: '#36667D', borderMuted: '#586E75',
         textPrimary: '#93A1A1', textSecondary: '#8D9EA1', textMuted: '#426066',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#DD7D7D',
         selection: '#1B444F', compareBack: '#002029',
         link: '#51A2DB'
       }
@@ -270,10 +270,10 @@
       tokens: {
         background: '#1A1810', backgroundSoft: '#232018',
         surface: '#332E22', surfaceRaised: '#3D372A', surfaceAlt: '#453D30',
-        borderDark: '#100E08', borderHighlight: '#F0D060', borderMuted: '#5A5040',
+        borderDark: '#100E08', borderHighlight: '#F0D060', bevelLight: '#75663D', borderMuted: '#5A5040',
         textPrimary: '#D4C89A', textSecondary: '#9C9371', textMuted: '#6E674E',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
-        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020',
+        success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#D66464',
         selection: '#3D372A', compareBack: '#14120C',
         link: '#F0D060'
       }
@@ -365,7 +365,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.21.1';
+  const W95_VERSION = '1.23.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -378,8 +378,20 @@
   // also set a box-shadow we happened to lose the specificity fight over. UI.md
   // spells the correct form out literally, as a 4-value border-color shorthand
   // (top right bottom left), so that is what is used verbatim here.
-  const B_OUTER = `border: 2px solid !important; border-color: ${T.borderHighlight} ${T.borderDark} ${T.borderDark} ${T.borderHighlight} !important; box-shadow: none !important;`;
-  const B_INNER = `border: 2px solid !important; border-color: ${T.borderDark} ${T.borderHighlight} ${T.borderHighlight} ${T.borderDark} !important; box-shadow: none !important;`;
+  //
+  // The LIGHT edge is ${T.bevelLight}, not ${T.borderHighlight}. Both name a bevel
+  // in UI.md, but borderHighlight is also the link/accent colour — a saturated
+  // gold, teal or violet sitting several steps above the text it frames. Put on
+  // every panel, button, input, scrollbar and dialog edge at once, it stopped
+  // reading as depth and started reading as decoration: reported on Antigravity as
+  // the edges taking all the attention, and it is the same complaint Win95 itself
+  // answers by making the light edge a LIGHTNESS step off the surface (white on
+  // grey), never a hue. bevelLight is exactly that step -- one notch above
+  // surfaceAlt, the lightest surface in the palette, so it still reads as lit from
+  // the top-left against every background the theme paints, without competing with
+  // the text. A light palette keeps its near-white edge, which is the same rule.
+  const B_OUTER = `border: 2px solid !important; border-color: ${T.bevelLight} ${T.borderDark} ${T.borderDark} ${T.bevelLight} !important; box-shadow: none !important;`;
+  const B_INNER = `border: 2px solid !important; border-color: ${T.borderDark} ${T.bevelLight} ${T.bevelLight} ${T.borderDark} !important; box-shadow: none !important;`;
   const B_SUNK = B_INNER;
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -391,10 +403,10 @@
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: ${T.background}; --backgroundSoft: ${T.backgroundSoft};
   --surface: ${T.surface}; --surfaceRaised: ${T.surfaceRaised}; --surfaceAlt: ${T.surfaceAlt};
-  --borderDark: ${T.borderDark}; --borderHighlight: ${T.borderHighlight}; --borderMuted: ${T.borderMuted}; --link: ${T.link};
+  --borderDark: ${T.borderDark}; --borderHighlight: ${T.borderHighlight}; --bevelLight: ${T.bevelLight}; --borderMuted: ${T.borderMuted}; --link: ${T.link};
   --textPrimary: ${T.textPrimary}; --textSecondary: ${T.textSecondary}; --textMuted: ${T.textMuted};
   --accentTeal: ${T.accentTeal}; --accentTealDeep: ${T.accentTealDeep};
-  --success: ${T.success}; --warning: ${T.warning}; --danger: ${T.danger};
+  --success: ${T.success}; --warning: ${T.warning}; --danger: ${T.danger}; --dangerText: ${T.dangerText};
   --selection: ${T.selection}; --compareBack: ${T.compareBack};
   --radius: 0px; --radius-none: 0px; --radius-2xs: 0px; --radius-xs: 0px; --radius-sm: 0px;
   --radius-md: 0px; --radius-lg: 0px;  --radius-xl: 0px; --radius-2xl: 0px;
@@ -758,6 +770,15 @@ li[aria-selected="true"], [role="option"][aria-selected="true"],
 option { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; }
 hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important; background-color: transparent !important; color: ${T.borderMuted} !important; height: 0 !important; }
 
+/* CodeNomad exposes real session state on this small indicator. Keep that
+   semantic signal instead of letting the generic repainter flatten every dot
+   to the normal foreground colour. */
+.status-indicator.session-status.session-working > .status-dot { background-color: ${T.warning} !important; }
+.status-indicator.session-status.session-idle > .status-dot { background-color: ${T.success} !important; }
+.status-indicator.session-status.session-compacting > .status-dot { background-color: ${T.accentTeal} !important; }
+.status-indicator.session-status.session-permission > .status-dot,
+.status-indicator.session-status.session-retrying > .status-dot { background-color: ${T.danger} !important; }
+
 /* Status colours (--success/--warning/--danger) are deliberately NOT applied by
    class-name substring here. '[class*="error" i]' matches 'error-boundary',
    '[class*="valid" i]' matches 'validation-container' — both are large wrappers,
@@ -817,13 +838,28 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
 /* Scrollbars: the track's sunken look came from inset box-shadows, which the
    global zero-shadow rule removes — rebuilt out of 2px bevel borders so the
-   depth language is identical to every other control. */
-::-webkit-scrollbar { width: 16px !important; height: 16px !important; }
+   depth language is identical to every other control.
+
+   12px, not the Win95-authentic 16px, and that is a deliberate concession. The
+   moment ::-webkit-scrollbar is styled at all, Chromium stops drawing OVERLAY
+   scrollbars and draws classic ones, which occupy real layout width — so every
+   container the app wrote as scrollable grows a permanent gutter it never
+   budgeted for. On Antigravity that gutter was wide enough to eat the edge of the
+   Settings button. 12px keeps the thumb comfortably grabbable and gives four
+   pixels back to every scroll container in the application at once.
+
+   The stepper arrows are GONE (display: none), not restyled. They are the one
+   part of a Win95 scrollbar that is pure ornament on a machine with a wheel and a
+   trackpad, they cost 32px of track per scrollbar, and — worse — they render on
+   the JS-drawn shells below as two little bevelled squares even where there is
+   nothing to scroll, which is precisely the "decoration, not a control" the
+   report was about. */
+::-webkit-scrollbar { width: 12px !important; height: 12px !important; }
 ::-webkit-scrollbar-track { background: ${T.backgroundSoft} !important; ${B_INNER} }
 ::-webkit-scrollbar-thumb { background: ${T.surfaceRaised} !important; ${B_OUTER} }
 ::-webkit-scrollbar-thumb:active { background: ${T.surface} !important; ${B_INNER} }
 ::-webkit-scrollbar-corner { background: ${T.backgroundSoft} !important; }
-::-webkit-scrollbar-button { background: ${T.surfaceRaised} !important; ${B_OUTER} height: 16px !important; width: 16px !important; }
+::-webkit-scrollbar-button { display: none !important; width: 0 !important; height: 0 !important; }
 
 /* JS-DRAWN SCROLLBARS THAT ARE NOT SCROLLBARS YET.
    Monaco (VS Code, Antigravity, and every embedded editor on the web) does not use
@@ -1582,6 +1618,9 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       if (t === 'range' || t === 'color' || t === 'file') return true;
     }
     if (el.closest && el.closest('button')) return true;
+    // CSS above owns CodeNomad's native semantic state dot. Repainting it would
+    // erase the working/idle distinction after the first mutation batch.
+    try { if (el.matches && el.matches('.status-indicator.session-status > .status-dot')) return true; } catch (e) { }
     try { if (el.closest && el.closest(JS_SKIP_SELECTOR)) return true; } catch (e) { }
     return false;
   }

@@ -17,11 +17,18 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
+    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
     [string]$Target,
     [string]$Palette = 'goldendefault',
     [switch]$Revert,
     [switch]$Force,
+    [string]$CodeNomadPath = 'V:\___VAC\__P\__SOFT\___CODETOOLS\CodeNomad',
+    [string]$TotalCmdIni,
+    [string]$TotalCmd2Ini,
+    [string]$PortableBrowserRoot = 'V:\___VAC\__P',
+    [string]$BrowserStageRoot = (Join-Path $env:LOCALAPPDATA 'Wintage\browser-theme'),
+    [string]$BrowserCatalog,
+    [switch]$NoBrowserLaunch,
     [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\',
     [string]$SmartVacPath = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\',
     [string]$WildRiftPath = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\'
@@ -51,6 +58,15 @@ function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllTe
 function Write-Utf8Lines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8NoBom) }
 $script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)
 function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8WithBom) }
+
+function Convert-HexToBgr([string]$hex) {
+    $hex = $hex.Replace('#', '')
+    if ($hex.Length -eq 8) { $hex = $hex.Substring(0, 6) }
+    $r = [Convert]::ToInt32($hex.Substring(0, 2), 16)
+    $g = [Convert]::ToInt32($hex.Substring(2, 2), 16)
+    $b = [Convert]::ToInt32($hex.Substring(4, 2), 16)
+    ($b -shl 16) -bor ($g -shl 8) -bor $r
+}
 
 # Where each target keeps its extensions. Both are VS Code-family and read the
 # identical format, which is why one built extension serves them both.
@@ -95,6 +111,43 @@ function Get-ClaudeResources {
     Join-Path $app.FullName 'resources'
 }
 
+# CodeNomad ships as a PORTABLE folder: no installer, no registry key, no fixed
+# path. That is why it was originally themed by writing a stylesheet into
+# ~/.config/codenomad/ instead -- a location the app does read config from, but a
+# file it has no code to load. It was a 43 KB no-op, which is exactly what "still
+# not themed" meant. It is an ordinary Electron app (resources/app.asar,
+# "type": "module", hence the .cjs shim) and is themed like every other one.
+#
+# The running process is asked first because it is the only source that is right
+# on a machine nobody has told this script about; the rest is where a portable
+# folder tends to be dropped, with -CodeNomadPath as the explicit override.
+function Get-CodeNomadResources {
+    $proc = Get-Process CodeNomad -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1
+    if ($proc) {
+        $r = Join-Path (Split-Path $proc.Path -Parent) 'resources'
+        if (Test-ElectronApp $r) { return $r }
+    }
+    $candidates = @(
+        (Join-Path $CodeNomadPath 'resources'),
+        (Join-Path $env:LOCALAPPDATA 'Programs/CodeNomad/resources'),
+        (Join-Path $env:ProgramFiles 'CodeNomad/resources')
+    )
+    foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
+    return $null
+}
+
+# The dead stylesheet the old CodeNomad path left behind. Removed on both install
+# and revert, because leaving it there means the next person to look sees a themed
+# -looking config directory and re-learns the same wrong thing.
+function Remove-DeadCodeNomadCss {
+    $dead = Join-Path $env:USERPROFILE '.config/codenomad/custom.css'
+    if (-not (Test-Path $dead)) { return }
+    if ($PSCmdlet.ShouldProcess($dead, 'Remove the stylesheet CodeNomad never read')) {
+        Remove-Item $dead -Force
+        Say "CodeNomad: removed $dead - the app never read it (see the note in install.ps1)." 'DarkGray'
+    }
+}
+
 $ELECTRON = @{
     claude          = @{
         Name      = 'Claude (desktop app)'
@@ -112,6 +165,11 @@ $ELECTRON = @{
         Resources = Join-Path $env:LOCALAPPDATA 'Programs/Antigravity/resources'
         Note      = 'Electron. Separate program from the IDE, themed separately.'
     }
+    codenomad       = @{
+        Name      = 'CodeNomad'
+        Resources = (Get-CodeNomadResources)
+        Note      = 'Electron, portable. Pass -CodeNomadPath if it lives somewhere else.'
+    }
 }
 
 # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ MPC-HC (K-Lite) Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
@@ -121,6 +179,266 @@ $ELECTRON = @{
 # theme on and put the UI.md typography rules on the one surface MPC-HC does let a
 # user control -- the OSD. Saying that plainly beats claiming a coverage that does
 # not exist, which is why the report below names what is out of reach.
+$TERMINAL_DIRS = @(
+    (Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'),
+    (Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows Terminal')
+)
+$CONSOLE_FONT = 'Verdana'
+
+function Get-WindowsTerminalSettingsPaths {
+    @($TERMINAL_DIRS | Where-Object { Test-Path $_ } | ForEach-Object { Join-Path $_ 'settings.json' })
+}
+
+function Invoke-WindowsTerminal {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+    $settingsPaths = @(Get-WindowsTerminalSettingsPaths)
+    if (-not $settingsPaths.Count) { Say 'Windows Terminal: not installed on this machine - skipped.' 'DarkYellow'; return }
+    if (-not $node) { Say 'Windows Terminal: node is required to patch JSON-with-comments safely - skipped.' 'Yellow'; return }
+
+    $helper = Join-Path $root 'tools/install-terminal.js'
+    $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
+    foreach ($settings in $settingsPaths) {
+        $args = @($helper, '--settings', $settings)
+        if ($DoRevert) { $args += '--revert' } else { $args += @('--palette', $paletteFile) }
+        $action = if ($DoRevert) { 'Restore the pre-Wintage settings' } else { "Apply $PaletteSlug + $CONSOLE_FONT to every profile" }
+        if ($WhatIfPreference) { & node ($args + '--dry-run'); continue }
+        if ($PSCmdlet.ShouldProcess($settings, $action)) {
+            & node $args
+            if ($LASTEXITCODE -ne 0) { throw "Windows Terminal patch failed for $settings" }
+        }
+    }
+}
+
+$CONHOST_KEY = 'HKCU:\Console'
+$CONHOST_BACKUP = Join-Path $here 'backup/conhost-settings.json'
+
+function Get-ConhostKeys {
+    if (-not (Test-Path $CONHOST_KEY)) { return @() }
+    @((Get-Item $CONHOST_KEY)) + @(Get-ChildItem $CONHOST_KEY -ErrorAction SilentlyContinue)
+}
+
+function Invoke-Conhost {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+    $keys = @(Get-ConhostKeys)
+    if (-not $keys.Count) { Say 'Console Host: HKCU\Console not found - skipped.' 'DarkYellow'; return }
+
+    if ($DoRevert) {
+        if (-not (Test-Path $CONHOST_BACKUP)) { Say 'Console Host: no Wintage backup to restore from.' 'DarkYellow'; return }
+        if ($PSCmdlet.ShouldProcess($CONHOST_KEY, 'Restore pre-Wintage console colours and font')) {
+            # Windows PowerShell 5.1 returns a top-level JSON array as one
+            # Object[] pipeline item. Assign first, then enumerate it; wrapping
+            # the pipeline itself in @() produces a nested array.
+            $parsedSnapshot = Read-Utf8 $CONHOST_BACKUP | ConvertFrom-Json
+            $snapshot = @($parsedSnapshot)
+            foreach ($item in $snapshot) {
+                if (-not (Test-Path -LiteralPath $item.Path)) { continue }
+                if ($item.Existed) {
+                    New-ItemProperty -LiteralPath $item.Path -Name $item.Name -Value $item.Value -PropertyType $item.Kind -Force | Out-Null
+                } else {
+                    Remove-ItemProperty -LiteralPath $item.Path -Name $item.Name -ErrorAction SilentlyContinue
+                }
+            }
+            Remove-Item $CONHOST_BACKUP -Force
+            Say 'Console Host: restored pre-Wintage registry values.' 'Green'
+        }
+        return
+    }
+
+    $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
+    if (-not (Test-Path $paletteFile)) { Say "Console Host: theme file not found ($PaletteSlug.json)" 'Red'; return }
+    $t = (Read-Utf8 $paletteFile | ConvertFrom-Json).tokens
+    $values = [ordered]@{
+        FaceName      = @{ Value = $CONSOLE_FONT; Type = 'String' }
+        FontFamily    = @{ Value = 54; Type = 'DWord' }
+        FontWeight    = @{ Value = 400; Type = 'DWord' }
+        FontSize      = @{ Value = 1048576; Type = 'DWord' }
+        ScreenColors  = @{ Value = 15; Type = 'DWord' }
+        PopupColors   = @{ Value = 240; Type = 'DWord' }
+        CursorColor   = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
+        WindowAlpha   = @{ Value = 255; Type = 'DWord' }
+        ColorTable00  = @{ Value = (Convert-HexToBgr $t.background); Type = 'DWord' }
+        ColorTable01  = @{ Value = (Convert-HexToBgr $t.accentTealDeep); Type = 'DWord' }
+        ColorTable02  = @{ Value = (Convert-HexToBgr $t.success); Type = 'DWord' }
+        ColorTable03  = @{ Value = (Convert-HexToBgr $t.accentTeal); Type = 'DWord' }
+        ColorTable04  = @{ Value = (Convert-HexToBgr $t.danger); Type = 'DWord' }
+        ColorTable05  = @{ Value = (Convert-HexToBgr $t.surfaceAlt); Type = 'DWord' }
+        ColorTable06  = @{ Value = (Convert-HexToBgr $t.warning); Type = 'DWord' }
+        ColorTable07  = @{ Value = (Convert-HexToBgr $t.textSecondary); Type = 'DWord' }
+        ColorTable08  = @{ Value = (Convert-HexToBgr $t.borderMuted); Type = 'DWord' }
+        ColorTable09  = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
+        ColorTable10  = @{ Value = (Convert-HexToBgr $t.success); Type = 'DWord' }
+        ColorTable11  = @{ Value = (Convert-HexToBgr $t.accentTeal); Type = 'DWord' }
+        ColorTable12  = @{ Value = (Convert-HexToBgr $t.dangerText); Type = 'DWord' }
+        ColorTable13  = @{ Value = (Convert-HexToBgr $t.surfaceAlt); Type = 'DWord' }
+        ColorTable14  = @{ Value = (Convert-HexToBgr $t.textPrimary); Type = 'DWord' }
+        ColorTable15  = @{ Value = (Convert-HexToBgr $t.textPrimary); Type = 'DWord' }
+        WintagePalette = @{ Value = $PaletteSlug; Type = 'String' }
+    }
+
+    if ($PSCmdlet.ShouldProcess($CONHOST_KEY, "Apply $PaletteSlug + $CONSOLE_FONT to defaults and existing console profiles")) {
+        # Keep the first-seen value for every path/name pair. A console profile can
+        # appear after the first install (Git, a shortcut, another shell); repainting
+        # must extend the snapshot before touching that new key or Revert would know
+        # how to restore the old profiles but not the new one.
+        # Do not assign an `if` pipeline directly here: PowerShell unwraps a
+        # one-item result to PSObject (and an empty result to $null), so the
+        # later `+=` fails as soon as a second value is captured.
+        $snapshot = @()
+        if (Test-Path $CONHOST_BACKUP) {
+            $parsedSnapshot = Read-Utf8 $CONHOST_BACKUP | ConvertFrom-Json
+            $snapshot = @($parsedSnapshot)
+        }
+        $snapshotChanged = $false
+        foreach ($key in $keys) {
+            foreach ($name in $values.Keys) {
+                $known = @($snapshot | Where-Object { $_.Path -eq $key.PSPath -and $_.Name -eq $name }).Count -gt 0
+                if ($known) { continue }
+                $exists = $key.GetValueNames() -contains $name
+                $snapshot += [pscustomobject]@{
+                    Path = $key.PSPath
+                    Name = $name
+                    Existed = $exists
+                    Kind = if ($exists) { $key.GetValueKind($name).ToString() } else { $values[$name].Type }
+                    Value = if ($exists) { $key.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { $null }
+                }
+                $snapshotChanged = $true
+            }
+        }
+        if ($snapshotChanged) {
+            New-Item -ItemType Directory -Force -Path (Split-Path $CONHOST_BACKUP -Parent) | Out-Null
+            $backupTemp = $CONHOST_BACKUP + '.tmp'
+            Write-Utf8 $backupTemp ($snapshot | ConvertTo-Json -Depth 4)
+            Move-Item $backupTemp $CONHOST_BACKUP -Force
+        }
+        foreach ($key in $keys) {
+            foreach ($name in $values.Keys) {
+                New-ItemProperty -LiteralPath $key.PSPath -Name $name -Value $values[$name].Value -PropertyType $values[$name].Type -Force | Out-Null
+            }
+        }
+        Say "Console Host: applied $PaletteSlug + $CONSOLE_FONT to $($keys.Count) registry profile(s)." 'Green'
+        Say '  Restart cmd/PowerShell windows to replace the old proportional-font cells.' 'Yellow'
+    }
+}
+
+$WINDOWS_THEME_KEY = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes'
+$WINDOWS_THEMES_DIR = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Themes'
+$WINDOWS_THEME_MARKER = Join-Path $WINDOWS_THEMES_DIR '.wintage-windows-palette'
+$WINDOWS_DWM_KEY = 'HKCU:\Software\Microsoft\Windows\DWM'
+$WINDOWS_DWM_BACKUP = Join-Path $here 'backup/windows-dwm-settings.json'
+
+function Backup-WindowsInactiveAccent {
+    if (Test-Path $WINDOWS_DWM_BACKUP) { return }
+    $item = Get-Item $WINDOWS_DWM_KEY
+    $name = 'AccentColorInactive'
+    $existed = $item.GetValueNames() -contains $name
+    $snapshot = [ordered]@{
+        Name = $name
+        Existed = $existed
+        Kind = if ($existed) { $item.GetValueKind($name).ToString() } else { 'DWord' }
+        Value = if ($existed) { $item.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { $null }
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path $WINDOWS_DWM_BACKUP -Parent) | Out-Null
+    Write-Utf8 $WINDOWS_DWM_BACKUP ($snapshot | ConvertTo-Json)
+}
+
+function Restore-WindowsInactiveAccent {
+    if (-not (Test-Path $WINDOWS_DWM_BACKUP)) { return }
+    $snapshot = Read-Utf8 $WINDOWS_DWM_BACKUP | ConvertFrom-Json
+    if ($snapshot.Existed) {
+        New-ItemProperty -Path $WINDOWS_DWM_KEY -Name $snapshot.Name -Value $snapshot.Value -PropertyType $snapshot.Kind -Force | Out-Null
+    } else {
+        Remove-ItemProperty -Path $WINDOWS_DWM_KEY -Name $snapshot.Name -ErrorAction SilentlyContinue
+    }
+    Remove-Item $WINDOWS_DWM_BACKUP -Force
+}
+
+function Invoke-WindowsTheme {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+
+    if (-not $node) { Say 'Windows theme: node is required to preserve and merge the active .theme safely - skipped.' 'Yellow'; return }
+    $current = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+    $helper = Join-Path $root 'tools/install-windows-theme.js'
+    $built = Join-Path $out "windows/$PaletteSlug/Wintage.theme"
+    if (-not $DoRevert -and -not (Test-Path $built)) { throw "No Windows theme build for palette '$PaletteSlug'." }
+    if (-not $DoRevert -and (-not $current -or -not (Test-Path $current))) {
+        Say 'Windows theme: active .theme file was not found - skipped to avoid losing wallpaper/cursor settings.' 'Yellow'
+        return
+    }
+
+    $args = @($helper, '--themes-dir', $WINDOWS_THEMES_DIR)
+    if ($DoRevert) { $args += '--revert' }
+    else { $args += @('--theme', $built, '--current-theme', $current, '--palette', $PaletteSlug) }
+    $action = if ($DoRevert) { 'Restore the exact pre-Wintage Windows theme snapshot' } else { "Merge and activate Wintage $PaletteSlug, preserving wallpaper/sounds and selecting ___CURRENT___ cursors" }
+    if ($WhatIfPreference) { & node ($args + '--dry-run'); return }
+    if (-not $PSCmdlet.ShouldProcess($WINDOWS_THEMES_DIR, $action)) { return }
+
+    $helperOutput = @(& node $args)
+    if ($LASTEXITCODE -ne 0) { throw 'Windows theme preparation failed.' }
+    $payload = $helperOutput[-1] | ConvertFrom-Json
+
+    $expectedAccent = $null
+    if ($DoRevert) { Restore-WindowsInactiveAccent }
+    else {
+        Backup-WindowsInactiveAccent
+        $tokens = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json") | ConvertFrom-Json).tokens
+        $inactiveAccent = ([uint32](Convert-HexToBgr $tokens.surfaceRaised)) -bor [uint32]4278190080
+        $expectedAccent = $inactiveAccent
+        New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $inactiveAccent -PropertyType DWord -Force | Out-Null
+    }
+
+    # Microsoft documents ShellExecute as the supported installer path for .theme
+    # files. Show=0 asks the Personalization host to stay hidden while applying;
+    # Windows may ignore that hint, but the colours are selected immediately.
+    $shell = New-Object -ComObject Shell.Application
+    try { $shell.ShellExecute([string]$payload.activate, '', '', 'open', 0) }
+    finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
+    $activated = $false
+    for ($attempt = 0; $attempt -lt 50; $attempt++) {
+        Start-Sleep -Milliseconds 100
+        $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+        if ($now -and ([IO.Path]::GetFullPath($now) -eq [IO.Path]::GetFullPath([string]$payload.activate))) { $activated = $true; break }
+        if (-not $DoRevert) {
+            $dwmNow = Get-ItemProperty $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
+            $cursorNow = (Get-ItemProperty 'HKCU:\Control Panel\Cursors' -ErrorAction SilentlyContinue).'(default)'
+            if ([uint32]$dwmNow.AccentColor -eq $expectedAccent -and [uint32]$dwmNow.AccentColorInactive -eq $expectedAccent -and $cursorNow -eq '___CURRENT___') { $activated = $true; break }
+        }
+    }
+    if (-not $activated) {
+        # Windows 10 keeps a hidden SystemSettings process after some .theme
+        # activations. A second ShellExecute is then swallowed by that stale
+        # process: no error, no theme change. Close only after the documented path
+        # failed, retry once, and keep the retry hidden too.
+        Get-Process SystemSettings -ErrorAction SilentlyContinue | Stop-Process -Force
+        Start-Sleep -Milliseconds 250
+        Start-Process -FilePath ([string]$payload.activate) -WindowStyle Hidden
+        for ($attempt = 0; $attempt -lt 50; $attempt++) {
+            Start-Sleep -Milliseconds 100
+            $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+            if ($now -and ([IO.Path]::GetFullPath($now) -eq [IO.Path]::GetFullPath([string]$payload.activate))) { $activated = $true; break }
+            if (-not $DoRevert) {
+                $dwmNow = Get-ItemProperty $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
+                $cursorNow = (Get-ItemProperty 'HKCU:\Control Panel\Cursors' -ErrorAction SilentlyContinue).'(default)'
+                if ([uint32]$dwmNow.AccentColor -eq $expectedAccent -and [uint32]$dwmNow.AccentColorInactive -eq $expectedAccent -and $cursorNow -eq '___CURRENT___') { $activated = $true; break }
+            }
+        }
+    }
+    if (-not $activated) { Say 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts.' 'Yellow'; return }
+    foreach ($oldTheme in @($payload.cleanup)) {
+        if (-not $oldTheme) { continue }
+        $fullOld = [IO.Path]::GetFullPath([string]$oldTheme)
+        $safeParent = [IO.Path]::GetFullPath($WINDOWS_THEMES_DIR).TrimEnd('\')
+        $safeLeaf = Split-Path $fullOld -Leaf
+        if ((Split-Path $fullOld -Parent).TrimEnd('\') -eq $safeParent -and
+            $safeLeaf -match '^Wintage(?:-[0-9a-f]{10})?\.theme$' -and
+            $fullOld -ne [IO.Path]::GetFullPath([string]$payload.activate)) {
+            Remove-Item -LiteralPath $fullOld -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if ($DoRevert) { Say 'Windows: restored the saved pre-Wintage theme.' 'Green' }
+    else { Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green' }
+}
+
 $MPC_KEY = 'HKCU:\Software\MPC-HC\MPC-HC\Settings'
 $MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
 
@@ -129,15 +447,15 @@ function Invoke-TotalCmd {
     param([int]$Index, [switch]$DoRevert, [string]$PaletteSlug)
     $appName = if ($Index -eq 1) { 'Total Commander' } else { 'Total Commander (Local)' }
     $candidates = if ($Index -eq 1) {
-        @('V:\___VAC\__P\_TOTALCMD\wincmd.ini', (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
+        @($TotalCmdIni, 'V:\___VAC\__P\_TOTALCMD\wincmd.ini', (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
     } else {
-        @('V:\___VAC\__P\_TOTALCMD2\wincmd.ini', (Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini'))
+        @($TotalCmd2Ini, 'V:\___VAC\__P\_TOTALCMD2\wincmd.ini', (Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini'))
     }
-    $ini = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    $ini = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 
     if (-not $ini) { Say "$($appName): not installed (no wincmd.ini found)" 'DarkYellow'; return }
 
-    $lines = Get-Content $ini
+    $lines = (Read-Utf8 $ini) -split '\r?\n'
     $inColors = $false
     foreach ($line in $lines) {
         if ($line -match '^\[Colors\]$') { $inColors = $true; continue }
@@ -174,7 +492,7 @@ function Invoke-TotalCmd {
                 # one. Strip only inside the colour sections, so a same-named key
                 # elsewhere in the file survives -- and say plainly that anything the
                 # user had set in those sections before is not recoverable here.
-                $lines = Get-Content $ini
+                $lines = (Read-Utf8 $ini) -split '\r?\n'
                 $keys = '^(BackColor|BackColor2|ForeColor|MarkColor|CursorColor|CursorText|ActiveTitle|ActiveTitleText|InactiveTitle|InactiveTitleText)='
                 $newLines = @(); $inColors = $false
                 foreach ($line in $lines) {
@@ -200,28 +518,51 @@ function Invoke-TotalCmd {
         }
         $jsonPath = Join-Path (Split-Path $PSScriptRoot -Parent) "themes\$PaletteSlug.json"
         if (-not (Test-Path $jsonPath)) { Say "$($appName): theme file not found ($PaletteSlug.json)" 'Red'; return }
-        $t = (Get-Content $jsonPath -Raw | ConvertFrom-Json).tokens
-        
-        function HexToBgr([string]$hex) {
-            $hex = $hex.Replace('#', '')
-            if ($hex.Length -eq 8) { $hex = $hex.Substring(0, 6) }
-            $r = [Convert]::ToInt32($hex.Substring(0, 2), 16)
-            $g = [Convert]::ToInt32($hex.Substring(2, 2), 16)
-            $b = [Convert]::ToInt32($hex.Substring(4, 2), 16)
-            return ($b -shl 16) -bor ($g -shl 8) -bor $r
+        $t = (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens
+
+        $bg = Convert-HexToBgr $t.background
+        $fg = Convert-HexToBgr $t.textPrimary
+        $cursorBg = Convert-HexToBgr $t.selection
+        $cursorFg = Convert-HexToBgr $t.borderHighlight
+        $markFg = Convert-HexToBgr $t.danger
+        $titleBg = Convert-HexToBgr $t.surface
+        $titleFg = Convert-HexToBgr $t.textPrimary
+        $titleInBg = Convert-HexToBgr $t.backgroundSoft
+        $titleInFg = Convert-HexToBgr $t.textMuted
+        # A colour filter may point to a saved search as >Name. SearchFlags fields
+        # 4/5 carry its relative age and unit; -1/-1 means no valid relative date.
+        # Recolour only existing age filters. User expressions, ordering and every
+        # unrelated filter remain byte-for-byte in place.
+        $lines = (Read-Utf8 $ini) -split '\r?\n'
+        $searchFlags = @{}
+        foreach ($line in $lines) {
+            if ($line -match '^(.*)_SearchFlags=(.*)$') {
+                $searchFlags[$matches[1]] = $matches[2] -split '\|'
+            }
         }
+        $recentFilterIds = @()
+        foreach ($line in $lines) {
+            if ($line -notmatch '^ColorFilter(\d+)=(.*)$') { continue }
+            $filterId = $matches[1]
+            $filter = $matches[2].Trim()
+            $isRecent = $filter -match '(?i)(modified|changed|recent|newer)'
+            if (-not $isRecent -and $filter.StartsWith('>')) {
+                $savedSearch = $filter.Substring(1)
+                if ($searchFlags.ContainsKey($savedSearch)) {
+                    $parts = $searchFlags[$savedSearch]
+                    $age = 0
+                    $unit = 0
+                    $isRecent = $parts.Count -gt 5 -and
+                        [int]::TryParse($parts[4], [ref]$age) -and
+                        [int]::TryParse($parts[5], [ref]$unit) -and
+                        $age -ge 0 -and $unit -ge -1
+                }
+            }
+            if ($isRecent) { $recentFilterIds += $filterId }
+        }
+        $recentFilterIds = @($recentFilterIds | Sort-Object -Unique)
+        $recentFg = Convert-HexToBgr $t.link
 
-        $bg = HexToBgr $t.background
-        $fg = HexToBgr $t.textPrimary
-        $cursorBg = HexToBgr $t.selection
-        $cursorFg = HexToBgr $t.borderHighlight
-        $markFg = HexToBgr $t.danger
-        $titleBg = HexToBgr $t.surface
-        $titleFg = HexToBgr $t.textPrimary
-        $titleInBg = HexToBgr $t.backgroundSoft
-        $titleInFg = HexToBgr $t.textMuted
-
-        $lines = Get-Content $ini
         $newLines = @()
         $inColors = $false
         $colorsFound = $false
@@ -241,7 +582,18 @@ function Invoke-TotalCmd {
         if (-not $colorsDarkFound) { $newLines += '[ColorsDark]' }
         
         $finalLines = @()
+        $inColors = $false
         foreach ($line in $newLines) {
+            if ($line -match '^\[(Colors|ColorsDark)\]$') { $inColors = $true }
+            elseif ($line -match '^\[') { $inColors = $false }
+            if ($inColors -and $line -match '^ColorFilter(\d+)Color(Dark)?=') {
+                $filterId = $matches[1]
+                if ($filterId -in $recentFilterIds) {
+                    if ($matches[2]) { $finalLines += "ColorFilter$($filterId)ColorDark=$recentFg,$recentFg" }
+                    else { $finalLines += "ColorFilter$($filterId)Color=$recentFg" }
+                    continue
+                }
+            }
             $finalLines += $line
             if ($line -match '^\[Colors\]$' -or $line -match '^\[ColorsDark\]$') {
                 $finalLines += "BackColor=$bg"
@@ -257,7 +609,8 @@ function Invoke-TotalCmd {
             }
         }
         Write-Utf8BomLines $ini $finalLines
-        Say "$($appName): applied $PaletteSlug" 'Green'
+        $recentNote = if ($recentFilterIds.Count) { "; recent-file indicator themed ($($recentFilterIds.Count) filter(s))" } else { '; no existing recent-file filter found' }
+        Say "$($appName): applied $PaletteSlug$recentNote" 'Green'
     }
 }
 
@@ -271,14 +624,18 @@ function Invoke-SmartVac {
     
     if ($DoRevert) {
         if (Test-Path $bakFile) {
-            Copy-Item $bakFile $pyFile -Force
-            Remove-Item $bakFile -Force
-            Say "SMART VAC CLEANER: restored from backup" 'Green'
+            if ($PSCmdlet.ShouldProcess($pyFile, 'Restore SMART VAC CLEANER from backup')) {
+                Copy-Item $bakFile $pyFile -Force
+                Remove-Item $bakFile -Force
+                Say "SMART VAC CLEANER: restored from backup" 'Green'
+            }
         } else {
             Say "SMART VAC CLEANER: nothing to revert." 'DarkYellow'
         }
         return
     }
+
+    if (-not $PSCmdlet.ShouldProcess($pyFile, "Apply $PaletteSlug theme")) { return }
     
     if (-not (Test-Path $bakFile)) {
         Copy-Item $pyFile $bakFile -Force
@@ -292,7 +649,7 @@ function Invoke-SmartVac {
     $code = $code -replace '(?m)^WIN95_SURFACE\s*=\s*''[^'']+''', "WIN95_SURFACE      = '$($t.surface)'"
     $code = $code -replace '(?m)^WIN95_SURFACE_RAISED\s*=\s*''[^'']+''', "WIN95_SURFACE_RAISED = '$($t.surfaceRaised)'"
     $code = $code -replace '(?m)^WIN95_SURFACE_ALT\s*=\s*''[^'']+''', "WIN95_SURFACE_ALT  = '$($t.surfaceAlt)'"
-    $code = $code -replace '(?m)^WIN95_BEVEL_HI\s*=\s*''[^'']+''', "WIN95_BEVEL_HI     = '$($t.borderHighlight)'"
+    $code = $code -replace '(?m)^WIN95_BEVEL_HI\s*=\s*''[^'']+''', "WIN95_BEVEL_HI     = '$($t.bevelLight)'"
     $code = $code -replace '(?m)^WIN95_BEVEL_SH\s*=\s*''[^'']+''', "WIN95_BEVEL_SH     = '$($t.borderDark)'"
     $code = $code -replace '(?m)^WIN95_BORDER_MUTED\s*=\s*''[^'']+''', "WIN95_BORDER_MUTED = '$($t.borderMuted)'"
     $code = $code -replace '(?m)^WIN95_TEXT\s*=\s*''[^'']+''', "WIN95_TEXT         = '$($t.textPrimary)'"
@@ -324,14 +681,18 @@ function Invoke-WildRift {
     
     if ($DoRevert) {
         if (Test-Path $bakFile) {
-            Copy-Item $bakFile $pyFile -Force
-            Remove-Item $bakFile -Force
-            Say "WildRiftAssistant: restored from backup" 'Green'
+            if ($PSCmdlet.ShouldProcess($pyFile, 'Restore WildRiftAssistant from backup')) {
+                Copy-Item $bakFile $pyFile -Force
+                Remove-Item $bakFile -Force
+                Say "WildRiftAssistant: restored from backup" 'Green'
+            }
         } else {
             Say "WildRiftAssistant: nothing to revert." 'DarkYellow'
         }
         return
     }
+
+    if (-not $PSCmdlet.ShouldProcess($pyFile, "Apply $PaletteSlug theme")) { return }
     
     if (-not (Test-Path $bakFile)) {
         Copy-Item $pyFile $bakFile -Force
@@ -342,7 +703,7 @@ function Invoke-WildRift {
         $pyTokens += "    `"$($p.Name)`": `"$($p.Value)`",`r`n"
     }
     $pyTokens += "}"
-    $code = Get-Content $bakFile -Raw
+    $code = Read-Utf8 $bakFile
     $code = $code -replace '(?s)TOKENS\s*=\s*\{.*?\}', $pyTokens
     Write-Utf8 $pyFile $code
     Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
@@ -407,6 +768,33 @@ function Invoke-Saipenview {
                 $applied += $k
             } else { $missing += $k }
         }
+
+        # ─── ONE RED CANNOT DO BOTH JOBS ────────────────────────────────────
+        # SAIPENVIEW spends --danger two ways: as a FILL (.phase-BLOCKED, the error
+        # badge) where a dark red is right and the label on top is light, and as
+        # TEXT (.conf-badge.fail, .blocker, toast-error) where the same dark red on
+        # a dark surface measures 1.9:1 and is simply unreadable -- reported as the
+        # FAIL badges being illegible. Lightening --danger does not fix it, it moves
+        # the problem: the fills then wash out under their own light labels.
+        #
+        # So the split is made here, by PROPERTY rather than by selector. `color:`
+        # and `border-color:` are the roles that must be legible against a backdrop;
+        # `background:` is the one that must not be. That rule needs no list of
+        # selectors to maintain and keeps working when SAIPENVIEW adds rules of its
+        # own -- and it stays inside this patch's one law, that colours may change
+        # and geometry may not. Not a single selector, width or padding is touched.
+        #
+        # --dangerText is declared right after --danger rather than edited into
+        # SAIPENVIEW's source, so style.css.bak stays a byte-exact original and
+        # -Revert still restores the file the user actually had.
+        if ($t.dangerText) {
+            $text = [regex]::Replace($text, "(--danger\s*:\s*#[0-9A-Fa-f]{6}\s*;)", "`${1} --dangerText:$($t.dangerText);")
+            $text = [regex]::Replace($text, "(?<=(?:^|[;{]\s*|\s)color\s*:\s*)var\(--danger\)", "var(--dangerText)")
+            $text = [regex]::Replace($text, "(?<=border-color\s*:\s*)var\(--danger\)", "var(--dangerText)")
+            $applied += 'dangerText'
+            $missing = @($missing | Where-Object { $_ -ne 'dangerText' })
+        }
+
         Write-Utf8 $cssFile $text
 
         Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
@@ -416,49 +804,6 @@ function Invoke-Saipenview {
             Say "  not declared in SAIPENVIEW's :root, left alone: $($missing -join ', ')" 'DarkGray'
         }
         Say "  Reload the SAIPENVIEW window to see it." 'DarkGray'
-    }
-}
-
-function Invoke-CodeNomad {
-    param([switch]$DoRevert, [string]$PaletteSlug)
-    $svCss = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css'
-    $svBak = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'
-    $sv = if (Test-Path $SaipenviewPath) {
-        if (Test-Path $svBak) { 'themed' } else { 'found, not themed' }
-    } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
-
-    $smBak = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py.bak'
-    $sm = if (Test-Path $SmartVacPath) {
-        if (Test-Path $smBak) { 'themed' } else { 'found, not themed' }
-    } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'smartvac', 'SMART VAC CLEANER', $sm, '-')
-
-    $wrBak = Join-Path $WildRiftPath 'theme.py.bak'
-    $wr = if (Test-Path $WildRiftPath) {
-        if (Test-Path $wrBak) { 'themed' } else { 'found, not themed' }
-    } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'wildrift', 'WildRiftAssistant', $wr, '-')
-
-    $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
-    $cnCss = Join-Path $cnConfig 'custom.css'
-    
-    if (-not (Test-Path $cnConfig)) { Say "CodeNomad: not installed (no .config/codenomad)" 'DarkYellow'; return }
-
-    if ($DoRevert) {
-        if (Test-Path $cnCss) {
-            if ($PSCmdlet.ShouldProcess($cnCss, 'Remove Wintage theme')) {
-                Remove-Item $cnCss -Force
-                Say "CodeNomad: removed $cnCss" 'Green'
-            }
-        } else { Say "CodeNomad: nothing installed, nothing to revert." }
-        return
-    }
-
-    if ($PSCmdlet.ShouldProcess($cnCss, 'Install Wintage theme')) {
-        $css = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
-        Write-Utf8 $cnCss $css
-        Say "CodeNomad: installed theme -> $cnCss" 'Green'
     }
 }
 
@@ -564,6 +909,32 @@ function Invoke-Obsidian {
     }
 }
 
+$OBS_CONFIG = Join-Path $env:APPDATA 'obs-studio'
+$OBS_THEME_ID = 'com.wintage.OBS'
+
+function Invoke-Obs {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+
+    if (-not (Test-Path $OBS_CONFIG)) { Say 'OBS Studio: not installed (no obs-studio profile) - skipped.' 'DarkYellow'; return }
+    if (Get-Process obs64 -ErrorAction SilentlyContinue) {
+        Say 'OBS Studio: close OBS and Apply again so it cannot overwrite user.ini on exit.' 'Yellow'
+        return
+    }
+    if (-not $node) { Say 'OBS Studio: node is required to patch user.ini safely - skipped.' 'Yellow'; return }
+
+    $helper = Join-Path $root 'tools/install-obs.js'
+    $theme = Join-Path $out "obs/$PaletteSlug/Wintage.ovt"
+    if (-not $DoRevert -and -not (Test-Path $theme)) { throw "No OBS build for palette '$PaletteSlug'." }
+    $args = @($helper, '--config', $OBS_CONFIG)
+    if ($DoRevert) { $args += '--revert' } else { $args += @('--theme', $theme, '--palette', $PaletteSlug) }
+    $action = if ($DoRevert) { 'Restore previous OBS theme and selection' } else { "Install and activate Wintage $PaletteSlug" }
+    if ($WhatIfPreference) { & node ($args + '--dry-run'); return }
+    if ($PSCmdlet.ShouldProcess($OBS_CONFIG, $action)) {
+        & node $args
+        if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
+    }
+}
+
 function Invoke-MpcHc {
     param([switch]$DoRevert)
 
@@ -645,7 +1016,11 @@ if (-not $Target) {
 
     foreach ($k in $ELECTRON.Keys | Sort-Object) {
         $e = $ELECTRON[$k]
-        $pkg = Join-Path $e.Resources 'app/package.json'
+        # A resolver that found nothing hands back $null, and Join-Path THROWS on a
+        # null path rather than returning one -- so the whole listing died on the
+        # first machine that did not have one of these apps. An absent app must read
+        # as a row saying "not installed", never as a terminating error.
+        $pkg = if ($e.Resources) { Join-Path $e.Resources 'app/package.json' } else { $null }
         $blocked = $null
         if (Test-ElectronApp $e.Resources) {
             $exe = Get-ChildItem (Split-Path $e.Resources -Parent) -Filter '*.exe' -ErrorAction SilentlyContinue |
@@ -656,11 +1031,19 @@ if (-not $Target) {
                 if ($fuse -match 'NOT themeable') { $blocked = 'fused shut' }
             }
         }
+        # An IN-PLACE target writes no package.json of its own, so asking for one
+        # reported Claude as unthemed while it was in fact patched and running -- the
+        # exact question this column exists to answer, wrong on the one target that
+        # uses the other mode. Each mode is asked for its own evidence.
+        $palFile = if ($e.Resources) { Join-Path $e.Resources 'wintage-palette.txt' } else { $null }
+        $themed = if ($e.InPlace) { $palFile -and (Test-Path $palFile) } else { $pkg -and (Test-Path $pkg) }
         $state = if (-not (Test-ElectronApp $e.Resources)) { 'not installed' }
                  elseif ($blocked) { $blocked }
-                 elseif (Test-Path $pkg) { 'themed' }
+                 elseif ($themed) { 'themed' }
                  else { 'found, not themed' }
-        $pal = if (Test-Path $pkg) { (Get-Content $pkg -Raw | ConvertFrom-Json).wintagePalette } else { '-' }
+        $pal = if (-not $themed) { '-' }
+               elseif ($e.InPlace) { (Get-Content $palFile -Raw).Trim() }
+               else { (Get-Content $pkg -Raw | ConvertFrom-Json).wintagePalette }
         Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $k, $e.Name, $state, $pal)
     }
 
@@ -668,6 +1051,47 @@ if (-not $Target) {
         if ((Get-ItemProperty $MPC_KEY).OSDFont -eq 'Verdana') { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'mpchc', 'MPC-HC (K-Lite)', $mpc, 'n/a - colours are compiled in')
+
+    $windowsPal = if (Test-Path $WINDOWS_THEME_MARKER) { (Read-Utf8 $WINDOWS_THEME_MARKER).Trim() } else { $null }
+    $windows = if ($windowsPal) { 'themed' } else { 'found, not themed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'windows', 'Windows system theme', $windows, $(if ($windowsPal) { $windowsPal } else { '-' }))
+
+    $terminalPaths = @(Get-WindowsTerminalSettingsPaths)
+    $terminalMarkers = @($terminalPaths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ })
+    $terminal = if (-not $terminalPaths.Count) { 'not installed' }
+                elseif ($terminalMarkers.Count -eq $terminalPaths.Count) { 'themed' }
+                else { 'found, not themed' }
+    $terminalPal = if ($terminalMarkers.Count) {
+        (@($terminalMarkers | ForEach-Object { (Get-Content $_ -Raw).Trim() } | Sort-Object -Unique) -join '|')
+    } else { '-' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'terminal', "Windows Terminal ($($terminalPaths.Count) install(s))", $terminal, $terminalPal)
+
+    $conhostPalette = if (Test-Path $CONHOST_KEY) { (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette } else { $null }
+    $conhost = if (-not (Test-Path $CONHOST_KEY)) { 'not installed' }
+               elseif ($conhostPalette) { 'themed' }
+               else { 'found, not themed' }
+    $conhostPal = if ($conhostPalette) { $conhostPalette } else { '-' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'conhost', 'Console Host (cmd / PowerShell)', $conhost, $conhostPal)
+
+    $obsUser = Join-Path $OBS_CONFIG 'user.ini'
+    $obsTheme = Join-Path $OBS_CONFIG 'themes/Wintage.ovt'
+    $obsMarker = Join-Path $OBS_CONFIG '.wintage-obs-palette'
+    $obs = if (-not (Test-Path $OBS_CONFIG)) { 'not installed' }
+           elseif ((Test-Path $obsTheme) -and (Test-Path $obsMarker) -and
+                   (Test-Path $obsUser) -and ((Read-Utf8 $obsUser) -match "(?m)^\s*Theme=$([regex]::Escape($OBS_THEME_ID))\s*$")) { 'themed' }
+           else { 'found, not themed' }
+    $obsPal = if (Test-Path $obsMarker) { (Read-Utf8 $obsMarker).Trim() } else { '-' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obs', 'OBS Studio', $obs, $obsPal)
+
+    $browserTool = Join-Path $root 'tools/install-browsers.ps1'
+    $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-ListJson', '-PortableRoot', $PortableBrowserRoot, '-StageRoot', $BrowserStageRoot)
+    if ($BrowserCatalog) { $browserArgs += @('-Catalog', $BrowserCatalog) }
+    $browserInfo = (& powershell @browserArgs 2>$null | Out-String).Trim() | ConvertFrom-Json
+    $browserState = if (-not $browserInfo.ProfileCount) { 'not installed' }
+                    elseif ($browserInfo.ThemeLoadedCount -eq $browserInfo.ProfileCount) { 'themed' }
+                    else { 'found, not themed' }
+    $browserName = "Chromium browsers ($($browserInfo.ProfileCount)p/TM$($browserInfo.TampermonkeyCount))"
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'browsers', $browserName, $browserState, $browserInfo.Palette)
 
     Say ""
 
@@ -689,13 +1113,6 @@ if (-not $Target) {
         if (Test-Path $wrBak) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'wildrift', 'WildRiftAssistant', $wr, '-')
-
-    $cnConfig = Join-Path $env:USERPROFILE '.config/codenomad'
-    $cnCss = Join-Path $cnConfig 'custom.css'
-    $cn = if (Test-Path $cnConfig) {
-        if (Test-Path $cnCss) { 'themed' } else { 'found, not themed' }
-    } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'codenomad', 'CodeNomad', $cn, '-')
 
     $bdDir = Join-Path $env:APPDATA 'BetterDiscord/themes'
     $bdCss = Join-Path $bdDir 'wintage.theme.css'
@@ -728,7 +1145,7 @@ if (-not $Target) {
 
     Say "Palettes: $palettes" 'DarkGray'
     Say "  .\install.ps1 -Target freebuff -Palette klite     one app, one palette" 'Cyan'
-    Say "  .\install.ps1 -Target all -Palette golden         everything, one palette" 'Cyan'
+    Say "  .\install.ps1 -Target all -Palette goldendefault  everything, one palette" 'Cyan'
     Say "  .\install.ps1 -Target freebuff -Revert            undo one" 'Cyan'
     Say "Repainting an already-themed app works while it is running; a first install does not." 'DarkGray'
     return
@@ -752,7 +1169,7 @@ elseif (-not $Force) {
 # this list silently dropped five targets: codenomad, discord, totalcmd, totalcmd2
 # and obsidian were all reachable individually but were skipped by `-Target all`,
 # so "everything" quietly meant nine of fourteen.
-$SIMPLE = @('mpchc', 'saipenview', 'smartvac', 'wildrift', 'codenomad', 'discord', 'totalcmd', 'totalcmd2', 'obsidian')
+$SIMPLE = @('windows', 'browsers', 'mpchc', 'terminal', 'conhost', 'obs', 'saipenview', 'smartvac', 'wildrift', 'discord', 'totalcmd', 'totalcmd2', 'obsidian')
 
 # And this is the guard that stops it happening a third time: the parameter's own
 # ValidateSet is the definition of what a user may ask for, so anything in it that
@@ -771,11 +1188,25 @@ $names = if ($Target -eq 'all') { $known } else { @($Target) }
 
 foreach ($name in $names) {
 
+    if ($name -eq 'windows') { Invoke-WindowsTheme -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'browsers') {
+        $browserTool = Join-Path $root 'tools/install-browsers.ps1'
+        $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-Palette', $Palette, '-PortableRoot', $PortableBrowserRoot, '-StageRoot', $BrowserStageRoot)
+        if ($BrowserCatalog) { $browserArgs += @('-Catalog', $BrowserCatalog) }
+        if ($NoBrowserLaunch) { $browserArgs += '-NoLaunch' }
+        if ($Revert) { $browserArgs += '-Revert' }
+        if ($WhatIfPreference) { $browserArgs += '-WhatIf' }
+        & powershell @browserArgs
+        if ($LASTEXITCODE -ne 0) { throw 'Browser theme installer failed.' }
+        continue
+    }
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
+    if ($name -eq 'terminal') { Invoke-WindowsTerminal -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'conhost') { Invoke-Conhost -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'obs') { Invoke-Obs -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'saipenview') { Invoke-Saipenview -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'smartvac') { Invoke-SmartVac -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'wildrift') { Invoke-WildRift -DoRevert:$Revert -PaletteSlug $Palette; continue }
-    if ($name -eq 'codenomad') { Invoke-CodeNomad -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'discord') { Invoke-BetterDiscord -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd') { Invoke-TotalCmd -Index 1 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd2') { Invoke-TotalCmd -Index 2 -DoRevert:$Revert -PaletteSlug $Palette; continue }
@@ -784,6 +1215,7 @@ foreach ($name in $names) {
     # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Electron targets Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
     if ($ELECTRON.ContainsKey($name)) {
         $e = $ELECTRON[$name]
+        if ($name -eq 'codenomad') { Remove-DeadCodeNomadCss }
         if (-not (Test-ElectronApp $e.Resources)) {
             Say "$($e.Name): not installed on this machine - skipped." 'DarkYellow'
             continue
@@ -854,10 +1286,3 @@ foreach ($name in $names) {
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
     }
 }
-
-
-
-
-
-
-

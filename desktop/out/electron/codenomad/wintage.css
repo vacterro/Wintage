@@ -1,14 +1,14 @@
-/* Wintage CodeNomad - generated from wintage.user.js v1.21.1. Do not edit. */
+/* Wintage CodeNomad - generated from wintage.user.js v1.23.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #1C242A; --backgroundSoft: #21282F;
   --surface: #29313C; --surfaceRaised: #343D4A; --surfaceAlt: #3C4552;
-  --borderDark: #0E1216; --borderHighlight: #9D86D1; --borderMuted: #424A57; --link: #9D86D1;
+  --borderDark: #0E1216; --borderHighlight: #9D86D1; --bevelLight: #575776; --borderMuted: #424A57; --link: #9D86D1;
   --textPrimary: #B099DE; --textSecondary: #9C84C8; --textMuted: #675091;
   --accentTeal: #008080; --accentTealDeep: #006060;
-  --success: #5B9630; --warning: #969630; --danger: #963030;
+  --success: #5B9630; --warning: #969630; --danger: #963030; --dangerText: #D27272;
   --selection: #343D4A; --compareBack: #13181D;
   --radius: 0px; --radius-none: 0px; --radius-2xs: 0px; --radius-xs: 0px; --radius-sm: 0px;
   --radius-md: 0px; --radius-lg: 0px;  --radius-xl: 0px; --radius-2xl: 0px;
@@ -259,7 +259,7 @@ header, nav, [role="navigation"], [role="banner"],
 button, input[type="button"], input[type="submit"], input[type="reset"], .btn,
 [class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
   background-color: #343D4A !important; background-image: none !important; color: #B099DE !important;
-  border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+  border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
   cursor: pointer !important; font-family: Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif !important; font-size: 12px !important;
   box-sizing: border-box !important;
   /* UI.md button metrics + accessibility floor (primary targets >= 24px). Both
@@ -270,7 +270,7 @@ button, input[type="button"], input[type="submit"], input[type="reset"], .btn,
 button:active, input[type="button"]:active, input[type="submit"]:active, input[type="reset"]:active, .btn:active,
 [class~="button" i]:active, [class~="btn" i]:active, a[role="button"]:active, span[role="button"]:active, summary:active {
   background-color: #29313C !important;
-  border: 2px solid !important; border-color: #0E1216 #9D86D1 #9D86D1 #0E1216 !important; box-shadow: none !important;
+  border: 2px solid !important; border-color: #0E1216 #575776 #575776 #0E1216 !important; box-shadow: none !important;
   /* The ONE sanctioned movement in the entire theme (UI.md predictability §9):
      instant 1px physical feedback for a press the user themselves caused. */
   transform: translate(1px, 1px) !important;
@@ -284,7 +284,7 @@ button:disabled, input[type="button"]:disabled, input[type="submit"]:disabled, i
 button[aria-disabled="true"], [role="button"][aria-disabled="true"] {
   color: #675091 !important; background-color: #343D4A !important;
   cursor: not-allowed !important; opacity: 1 !important;
-  border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+  border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
 }
 
 /* Neutralize PAINT on button pseudo-elements (underlying squares/circles)
@@ -304,7 +304,7 @@ button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input
 
 yt-icon-button, yt-button-shape, [class*="yt-spec-button-shape"] { background: transparent !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
 yt-icon-button button, yt-button-shape button, .ytp-button, [class*="yt-spec-button-shape"] button, .ytd-searchbox button {
-  border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+  border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
   min-height: 0 !important; min-width: 0 !important; font-size: inherit !important; padding: 4px !important; margin: 0 !important;
 }
 .ytp-button { border: none !important; box-shadow: none !important; background: transparent !important; }
@@ -325,7 +325,7 @@ select {
 input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
 textarea, select {
   background-color: #13181D !important; background-image: none !important; color: #B099DE !important;
-  border: 2px solid !important; border-color: #0E1216 #9D86D1 #9D86D1 #0E1216 !important; box-shadow: none !important;
+  border: 2px solid !important; border-color: #0E1216 #575776 #575776 #0E1216 !important; box-shadow: none !important;
   box-sizing: border-box !important;
 }
 textarea { min-height: 64px !important; resize: none !important; padding: 1px 3px !important; }
@@ -361,16 +361,25 @@ td:not([class*="blob-" i]):not([class*="diff-" i]):not([class*="hunk" i]):not([c
 /* Table headers are RAISED (UI.md tables/lists) — same 2px bevel language as
    buttons, so a header cell reads as a pressable column control the way it did
    in Win95's list views. */
-th { background-color: #29313C !important; color: #B099DE !important; font-weight: 700 !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important; }
+th { background-color: #29313C !important; color: #B099DE !important; font-weight: 700 !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important; }
 /* Selected row: --selection with a sunken feel (UI.md). Kept distinct from the
    focus outline above, which the accessibility floor requires. */
 tr[aria-selected="true"] > td, tr[aria-selected="true"] > th, tr.selected > td,
 li[aria-selected="true"], [role="option"][aria-selected="true"],
 [role="row"][aria-selected="true"], [role="treeitem"][aria-selected="true"] {
-  background-color: #343D4A !important; color: #B099DE !important; border: 2px solid !important; border-color: #0E1216 #9D86D1 #9D86D1 #0E1216 !important; box-shadow: none !important;
+  background-color: #343D4A !important; color: #B099DE !important; border: 2px solid !important; border-color: #0E1216 #575776 #575776 #0E1216 !important; box-shadow: none !important;
 }
 option { background-color: #13181D !important; color: #B099DE !important; }
 hr { border: none !important; border-top: 2px solid #424A57 !important; background-color: transparent !important; color: #424A57 !important; height: 0 !important; }
+
+/* CodeNomad exposes real session state on this small indicator. Keep that
+   semantic signal instead of letting the generic repainter flatten every dot
+   to the normal foreground colour. */
+.status-indicator.session-status.session-working > .status-dot { background-color: #969630 !important; }
+.status-indicator.session-status.session-idle > .status-dot { background-color: #5B9630 !important; }
+.status-indicator.session-status.session-compacting > .status-dot { background-color: #008080 !important; }
+.status-indicator.session-status.session-permission > .status-dot,
+.status-indicator.session-status.session-retrying > .status-dot { background-color: #963030 !important; }
 
 /* Status colours (--success/--warning/--danger) are deliberately NOT applied by
    class-name substring here. '[class*="error" i]' matches 'error-boundary',
@@ -387,7 +396,7 @@ hr { border: none !important; border-top: 2px solid #424A57 !important; backgrou
 :root body button:hover, :root body input[type="button"]:hover, :root body input[type="submit"]:hover, :root body input[type="reset"]:hover, :root body .btn:hover,
 :root body [class~="button" i]:hover, :root body [class~="btn" i]:hover, :root body a[role="button"]:hover, :root body span[role="button"]:hover, :root body summary:hover {
   background-color: #3C4552 !important; color: #B099DE !important; filter: none !important;
-  border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+  border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
 }
 /* Underline on hover, not on every link: UI.md bans decoration without function,
    and underlining every nav item, card title and icon link on a modern page is
@@ -421,7 +430,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
      dialogs) — a floating panel is the most window-like thing on a web page, so
      it gets the full Win95 window edge instead of the old flat 1px outline. */
   background-color: #343D4A !important; background-image: none !important;
-  border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+  border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
 }
 [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
 [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
@@ -431,13 +440,28 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
 /* Scrollbars: the track's sunken look came from inset box-shadows, which the
    global zero-shadow rule removes — rebuilt out of 2px bevel borders so the
-   depth language is identical to every other control. */
-::-webkit-scrollbar { width: 16px !important; height: 16px !important; }
-::-webkit-scrollbar-track { background: #21282F !important; border: 2px solid !important; border-color: #0E1216 #9D86D1 #9D86D1 #0E1216 !important; box-shadow: none !important; }
-::-webkit-scrollbar-thumb { background: #343D4A !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important; }
-::-webkit-scrollbar-thumb:active { background: #29313C !important; border: 2px solid !important; border-color: #0E1216 #9D86D1 #9D86D1 #0E1216 !important; box-shadow: none !important; }
+   depth language is identical to every other control.
+
+   12px, not the Win95-authentic 16px, and that is a deliberate concession. The
+   moment ::-webkit-scrollbar is styled at all, Chromium stops drawing OVERLAY
+   scrollbars and draws classic ones, which occupy real layout width — so every
+   container the app wrote as scrollable grows a permanent gutter it never
+   budgeted for. On Antigravity that gutter was wide enough to eat the edge of the
+   Settings button. 12px keeps the thumb comfortably grabbable and gives four
+   pixels back to every scroll container in the application at once.
+
+   The stepper arrows are GONE (display: none), not restyled. They are the one
+   part of a Win95 scrollbar that is pure ornament on a machine with a wheel and a
+   trackpad, they cost 32px of track per scrollbar, and — worse — they render on
+   the JS-drawn shells below as two little bevelled squares even where there is
+   nothing to scroll, which is precisely the "decoration, not a control" the
+   report was about. */
+::-webkit-scrollbar { width: 12px !important; height: 12px !important; }
+::-webkit-scrollbar-track { background: #21282F !important; border: 2px solid !important; border-color: #0E1216 #575776 #575776 #0E1216 !important; box-shadow: none !important; }
+::-webkit-scrollbar-thumb { background: #343D4A !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important; }
+::-webkit-scrollbar-thumb:active { background: #29313C !important; border: 2px solid !important; border-color: #0E1216 #575776 #575776 #0E1216 !important; box-shadow: none !important; }
 ::-webkit-scrollbar-corner { background: #21282F !important; }
-::-webkit-scrollbar-button { background: #343D4A !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important; height: 16px !important; width: 16px !important; }
+::-webkit-scrollbar-button { display: none !important; width: 0 !important; height: 0 !important; }
 
 /* JS-DRAWN SCROLLBARS THAT ARE NOT SCROLLBARS YET.
    Monaco (VS Code, Antigravity, and every embedded editor on the web) does not use
@@ -518,26 +542,26 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
     [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
     [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard {
-      background-color: #343D4A !important; background-image: none !important; color: #B099DE !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+      background-color: #343D4A !important; background-image: none !important; color: #B099DE !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
     }
 
     button, input[type="button"], input[type="submit"], input[type="reset"], shreddit-button, .btn,
     [class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
-      background-color: #343D4A !important; color: #B099DE !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+      background-color: #343D4A !important; color: #B099DE !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
       cursor: pointer !important; font-family: Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif !important; box-sizing: border-box !important;
       padding: 2px 6px !important; min-width: 24px !important; min-height: 20px !important;
     }
-    button:active, shreddit-button:active, .btn:active, [class~="button" i]:active, [class~="btn" i]:active, summary:active { background-color: #29313C !important; border: 2px solid !important; border-color: #0E1216 #9D86D1 #9D86D1 #0E1216 !important; box-shadow: none !important; transform: translate(1px, 1px) !important; }
+    button:active, shreddit-button:active, .btn:active, [class~="button" i]:active, [class~="btn" i]:active, summary:active { background-color: #29313C !important; border: 2px solid !important; border-color: #0E1216 #575776 #575776 #0E1216 !important; box-shadow: none !important; transform: translate(1px, 1px) !important; }
     /* Disabled: label colour only, bevel and surface stay (UI.md bans opacity here) */
     button:disabled, shreddit-button:disabled, button[aria-disabled="true"], [role="button"][aria-disabled="true"] {
-      color: #675091 !important; background-color: #343D4A !important; opacity: 1 !important; cursor: not-allowed !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important;
+      color: #675091 !important; background-color: #343D4A !important; opacity: 1 !important; cursor: not-allowed !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
     }
 
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
     button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
-    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #13181D !important; color: #B099DE !important; border: 2px solid !important; border-color: #0E1216 #9D86D1 #9D86D1 #0E1216 !important; box-shadow: none !important; box-sizing: border-box !important; }
+    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #13181D !important; color: #B099DE !important; border: 2px solid !important; border-color: #0E1216 #575776 #575776 #0E1216 !important; box-shadow: none !important; box-sizing: border-box !important; }
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
     textarea { min-height: 64px !important; resize: none !important; padding: 1px 3px !important; }
     /* appearance:auto not forced here either — see GLOBAL_CSS checkbox note */
@@ -547,11 +571,11 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     summary:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
       outline: 1px dotted #B099DE !important; outline-offset: -4px !important;
     }
-    th { background-color: #29313C !important; color: #B099DE !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important; }
+    th { background-color: #29313C !important; color: #B099DE !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important; }
     ::selection { background-color: #343D4A !important; color: #B099DE !important; }
 
     /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
-    button:hover, shreddit-button:hover, .btn:hover { background-color: #3C4552 !important; border: 2px solid !important; border-color: #9D86D1 #0E1216 #0E1216 #9D86D1 !important; box-shadow: none !important; }
+    button:hover, shreddit-button:hover, .btn:hover { background-color: #3C4552 !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important; }
     a, a:link { color: #9D86D1 !important; text-decoration: none !important; }
     a:visited { color: #9C84C8 !important; }
     a:hover { text-decoration: underline !important; background-color: transparent !important; }

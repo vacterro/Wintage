@@ -1,0 +1,75 @@
+; Wintage Claude Code -- generated. Do not edit.
+
+[Theme]
+DisplayName=Wintage Claude Code
+
+[Control Panel\Desktop]
+Pattern=
+
+[Control Panel\Cursors]
+AppStarting=%SystemRoot%\___CURRENT___\6_aero_working.ani
+Arrow=%SystemRoot%\___CURRENT___\1_aero_arrow.cur
+Crosshair=%SystemRoot%\___CURRENT___\precise.cur
+Hand=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Help=%SystemRoot%\___CURRENT___\3_aero_helpsel.cur
+IBeam=%SystemRoot%\___CURRENT___\text.cur
+No=%SystemRoot%\___CURRENT___\5_aero_unavail.cur
+NWPen=%SystemRoot%\___CURRENT___\aero_pen.cur
+SizeAll=%SystemRoot%\___CURRENT___\aero_move.cur
+SizeNESW=%SystemRoot%\___CURRENT___\aero_nesw.cur
+SizeNS=%SystemRoot%\___CURRENT___\aero_ns.cur
+SizeNWSE=%SystemRoot%\___CURRENT___\aero_nwse.cur
+SizeWE=%SystemRoot%\___CURRENT___\aero_ew.cur
+UpArrow=%SystemRoot%\___CURRENT___\aero_up.cur
+Wait=%SystemRoot%\___CURRENT___\2_aero_busy.ani
+DefaultValue=___CURRENT___
+Link=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Pin=%SystemRoot%\___CURRENT___\aero_pin.cur
+Person=%SystemRoot%\___CURRENT___\aero_person.cur
+
+[VisualStyles]
+Path=%SystemRoot%\resources\themes\Aero\Aero.msstyles
+ColorStyle=NormalColor
+Size=NormalSize
+AutoColorization=0
+ColorizationColor=0xFF484436
+Transparency=0
+SystemMode=Dark
+AppMode=Dark
+VisualStyleVersion=10
+
+[Control Panel\Colors]
+Scrollbar=81 76 61
+Background=41 36 29
+ActiveTitle=72 68 54
+InactiveTitle=72 68 54
+Menu=59 54 42
+Window=46 41 34
+WindowFrame=21 19 15
+MenuText=224 185 151
+WindowText=224 185 151
+TitleText=224 185 151
+ActiveBorder=72 68 54
+InactiveBorder=72 68 54
+AppWorkspace=41 36 29
+Hilight=72 68 54
+HilightText=224 185 151
+ButtonFace=59 54 42
+ButtonShadow=21 19 15
+GrayText=147 112 78
+ButtonText=224 185 151
+InactiveTitleText=195 152 112
+ButtonHilight=117 100 79
+ButtonDkShadow=21 19 15
+ButtonLight=81 76 61
+InfoText=224 185 151
+InfoWindow=46 41 34
+ButtonAlternateFace=41 36 29
+HotTrackingColor=209 162 124
+GradientActiveTitle=72 68 54
+GradientInactiveTitle=72 68 54
+MenuHilight=72 68 54
+MenuBar=59 54 42
+
+[MasterThemeSelector]
+MTSM=DABJDKT

@@ -16,3 +16,6 @@ Cached Theme.pak
 /test.js
 /test_stale.js
 /test_fbd.ps1
+
+# SAIPEN verification scratch stays local; durable results live in LOG/BOARD.
+.saipen/kitchen/T-*-verify.*

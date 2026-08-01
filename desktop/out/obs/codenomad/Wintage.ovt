@@ -1,0 +1,110 @@
+@OBSThemeMeta {
+    name: 'Wintage CodeNomad';
+    id: 'com.wintage.OBS';
+    extends: 'com.obsproject.Yami.Classic';
+    author: 'Wintage';
+    dark: 'true';
+}
+
+@OBSThemeVars {
+    --grey1: #9D86D1;
+    --grey2: #3C4552;
+    --grey3: #343D4A;
+    --grey4: #29313C;
+    --grey5: #21282F;
+    --grey6: #13181D;
+    --grey7: #1C242A;
+    --grey8: #0E1216;
+
+    --blue1: #9D86D1;
+    --blue2: #008080;
+    --blue3: #006060;
+    --red1: #D27272;
+    --red2: #D27272;
+    --red3: #963030;
+    --green3: #5B9630;
+    --yellow3: #969630;
+
+    --bg_window: #1C242A;
+    --bg_base: #21282F;
+    --bg_preview: #13181D;
+    --primary: #343D4A;
+    --primary_light: #3C4552;
+    --primary_lighter: #9D86D1;
+    --primary_dark: #006060;
+    --primary_darker: #0E1216;
+    --warning: #969630;
+    --danger: #963030;
+    --text: #B099DE;
+    --text_light: #9C84C8;
+    --text_muted: #675091;
+    --text_disabled: #675091;
+    --text_inactive: #9C84C8;
+
+    --border_color: #0E1216;
+    --border_radius: 0px;
+    --border_radius_small: 0px;
+    --border_radius_large: 0px;
+    --highlight_width: 1px;
+    --highlight_color: #9D86D1;
+    --border_highlight: #9D86D1;
+
+    --input_bg: #29313C;
+    --input_bg_hover: #3C4552;
+    --input_bg_focus: #13181D;
+    --list_item_bg_selected: #343D4A;
+    --list_item_bg_hover: #3C4552;
+    --input_border: #424A57;
+    --input_border_hover: #575776;
+    --input_border_focus: #9D86D1;
+    --button_bg: #343D4A;
+    --button_bg_hover: #3C4552;
+    --button_bg_down: #29313C;
+    --button_bg_disabled: #21282F;
+    --button_border: #343D4A;
+    --button_border_hover: #575776;
+    --button_border_focus: #9D86D1;
+    --tab_bg: #343D4A;
+    --tab_bg_hover: #3C4552;
+    --tab_bg_down: #29313C;
+    --tab_bg_disabled: #21282F;
+    --tab_border: #424A57;
+    --tab_border_hover: #575776;
+    --tab_border_focus: #9D86D1;
+    --tab_border_selected: #343D4A;
+    --scrollbar_handle: #343D4A;
+    --scrollbar_bg: #21282F;
+    --scrollbar_hover: #3C4552;
+    --scrollbar_down: #29313C;
+    --scrollbar_border: #0E1216;
+}
+
+QWidget {
+    font-family: Verdana;
+    font-size: 12px;
+}
+
+QPushButton,
+QToolButton {
+    border: 2px solid;
+    border-color: #575776 #0E1216 #0E1216 #575776;
+    border-radius: 0px;
+}
+
+QPushButton:pressed,
+QPushButton:checked,
+QToolButton:pressed,
+QToolButton:checked {
+    border-color: #0E1216 #575776 #575776 #0E1216;
+}
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox {
+    border: 2px solid;
+    border-color: #0E1216 #575776 #575776 #0E1216;
+    border-radius: 0px;
+}

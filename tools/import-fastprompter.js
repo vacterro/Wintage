@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Imports FastPrompter's theme list into Wintage theme packs.
 //
-// FastPrompter describes a theme with nine colours; Wintage needs eighteen tokens.
+// FastPrompter describes a theme with nine colours; Wintage needs twenty-one tokens.
 // The gap is not filled by inventing colours — every derived token is a blend of two
 // the theme already declares, so an imported palette still reads as itself. What is
 // NOT taken from FastPrompter: the semantic trio and the teal accent. Those stay at
@@ -55,6 +55,49 @@ const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow
 const lum = h => { const c = rgb(h); return 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]); };
 const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
 
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  if (s === 0) { const v = l * 255; return [v, v, v]; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = t => {
+    t = (t + 1) % 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [channel(h + 1 / 3) * 255, channel(h) * 255, channel(h - 1 / 3) * 255];
+}
+
+// Status-fill red is intentionally dark; text using the same token fails AA.
+// Preserve its hue/saturation and move only lightness until text clears 4.5:1.
+function dangerTextFor(colour, backdrop) {
+  if (ratio(colour, backdrop) >= 4.5) return colour;
+  const [h, s, start] = rgbToHsl(...rgb(colour));
+  let low = start, high = 1;
+  for (let i = 0; i < 32; i++) {
+    const mid = (low + high) / 2;
+    const candidate = hex(...hslToRgb(h, s, mid));
+    if (ratio(candidate, backdrop) >= 4.52) high = mid;
+    else low = mid;
+  }
+  return hex(...hslToRgb(h, s, high));
+}
+
 // Lift toward whichever end of the scale the backdrop is NOT, so a light theme's
 // text gets darker rather than brighter. Blending toward black/white keeps the hue
 // instead of washing it out, which a naive HSL lightness change does not.
@@ -89,12 +132,14 @@ function toPack(name, raw) {
     surfaceAlt: blend(raw.btn_bg, raw.border_light, 0.45),
     borderDark: raw.border_dark,
     borderHighlight: raw.accent,
+    bevelLight: null,
     borderMuted: raw.border_light,
     textPrimary: raw.text_main,
     textSecondary: blend(raw.text_main, darker, 0.30),
     textMuted: blend(raw.text_main, darker, 0.55)
   };
   Object.assign(tokens, FIXED);
+  tokens.dangerText = null;
   tokens.selection = tokens.surfaceRaised;
   tokens.compareBack = blend(darker, lum(darker) > 0.18 ? '#FFFFFF' : '#000000', 0.25);
 
@@ -111,6 +156,10 @@ function toPack(name, raw) {
     tokens[k] = liftToAA(tokens[k], backdrop, k, slug);
   }
   tokens.borderHighlight = light ? blend(tokens.surface, '#FFFFFF', 0.85) : tokens.link;
+  tokens.bevelLight = light
+    ? tokens.borderHighlight
+    : blend(tokens.surfaceAlt, tokens.borderHighlight, 0.28);
+  tokens.dangerText = dangerTextFor(tokens.danger, backdrop);
 
   // Uppercase everywhere: check-css.js and apply-themes.js both compare hex as
   // written, and a mixed-case table looks like two different colours in a diff.

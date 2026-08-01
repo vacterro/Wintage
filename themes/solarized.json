@@ -11,6 +11,7 @@
     "surfaceAlt": "#2B4F59",
     "borderDark": "#001F27",
     "borderHighlight": "#51A2DB",
+    "bevelLight": "#36667D",
     "borderMuted": "#586E75",
     "textPrimary": "#93A1A1",
     "textSecondary": "#8D9EA1",
@@ -20,6 +21,7 @@
     "success": "#4A7A20",
     "warning": "#7A7A20",
     "danger": "#7A2020",
+    "dangerText": "#DD7D7D",
     "selection": "#1B444F",
     "compareBack": "#002029",
     "link": "#51A2DB"

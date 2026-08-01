@@ -29,12 +29,22 @@ function Load-Packs {
         # (a PowerShell write elsewhere put it there). Reading as explicit UTF-8 and
         # stripping any leftover mark keeps one stray byte from emptying the theme
         # list with a parse error at startup.
-        $p = ([System.IO.File]::ReadAllText($_.FullName, (New-Object System.Text.UTF8Encoding($false)))) -replace '^﻿', '' | ConvertFrom-Json
+        # \uFEFF, not a literal mark pasted into the pattern -- the literal form is
+        # itself encoding-dependent and had already arrived mojibaked once (T-076,
+        # same bug in install-electron.js), matching nothing and letting the BOM
+        # through to ConvertFrom-Json, which throws and empties the theme list.
+        $p = ([System.IO.File]::ReadAllText($_.FullName, (New-Object System.Text.UTF8Encoding($false)))) -replace '^\uFEFF', '' | ConvertFrom-Json
         $script:packs[$p.slug] = $p
     }
 }
 Load-Packs
-$script:current = if ($script:packs.ContainsKey('golden')) { 'golden' } else { ($script:packs.Keys | Select-Object -First 1) }
+# goldendefault, matching install.ps1's own -Palette default. Two defaults that
+# disagree means the GUI and the terminal install different themes from the same
+# "just press go", which is the kind of difference nobody notices until they are
+# comparing two machines.
+$script:current = if ($script:packs.ContainsKey('goldendefault')) { 'goldendefault' }
+                  elseif ($script:packs.ContainsKey('golden')) { 'golden' }
+                  else { ($script:packs.Keys | Select-Object -First 1) }
 # The custom palette is a working copy, seeded from whatever is selected, so
 # "Custom" always starts from something that already looks right instead of black.
 $script:custom = $null
@@ -42,10 +52,10 @@ $script:custom = $null
 $TOKENS = @(
     'background', 'backgroundSoft',
     'surface', 'surfaceRaised', 'surfaceAlt',
-    'borderDark', 'borderHighlight', 'borderMuted',
+    'borderDark', 'borderHighlight', 'bevelLight', 'borderMuted',
     'textPrimary', 'textSecondary', 'textMuted',
     'accentTeal', 'accentTealDeep',
-    'success', 'warning', 'danger',
+    'success', 'warning', 'danger', 'dangerText',
     'selection', 'compareBack', 'link'
 )
 
@@ -60,7 +70,12 @@ function Get-ActiveTokens {
         # takes the whole window down on selection. Fall back to a token the pack is
         # guaranteed to have rather than crashing on someone's older custom.json.
         if (-not $v) {
-            $v = if ($k -eq 'link') { $t.borderHighlight } else { $t.textPrimary }
+            # Each late-added token falls back to what it REPLACED, not to a generic
+            # stand-in: bevelLight took over the bevel edge from borderHighlight, so an
+            # older pack keeps the look it had instead of drawing its edges in body text.
+            $v = if ($k -eq 'link' -or $k -eq 'bevelLight') { $t.borderHighlight }
+                 elseif ($k -eq 'dangerText') { $t.danger }
+                 else { $t.textPrimary }
         }
         $h[$k] = $v
     }
@@ -104,49 +119,129 @@ $form.FormBorderStyle = 'FixedSingle'
 $form.MaximizeBox = $false
 $form.StartPosition = 'CenterScreen'
 $form.Font = $FONT
+$form.AutoScroll = $true
+$work = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+if ($form.Width -gt $work.Width -or $form.Height -gt $work.Height) {
+    $form.Size = New-Object Drawing.Size ([Math]::Min(880, $work.Width)), ([Math]::Min(620, $work.Height))
+}
 
 # Theme list ------------------------------------------------------------------
 $lblThemes = New-Object Windows.Forms.Label
 $lblThemes.Text = 'THEME'; $lblThemes.Location = '12,10'; $lblThemes.Size = '200,16'; $lblThemes.Font = $FONTB
 $lstThemes = New-Object Windows.Forms.ListBox
-$lstThemes.Location = '12,28'; $lstThemes.Size = '200,300'
+$lstThemes.Location = '12,28'; $lstThemes.Size = '200,210'
 $lstThemes.BorderStyle = 'FixedSingle'
 $lstThemes.DrawMode = 'OwnerDrawFixed'
 $lstThemes.ItemHeight = 18
 $lstThemes.IntegralHeight = $false
 
 # Targets ---------------------------------------------------------------------
-$lblTargets = New-Object Windows.Forms.Label
-$lblTargets.Text = 'APPLY TO'; $lblTargets.Location = '12,338'; $lblTargets.Size = '200,16'; $lblTargets.Font = $FONTB
-$clbTargets = New-Object Windows.Forms.CheckedListBox
-$clbTargets.Location = '12,356'; $clbTargets.Size = '200,146'
-$clbTargets.BorderStyle = 'FixedSingle'
-$clbTargets.CheckOnClick = $true
-$clbTargets.IntegralHeight = $false
+# Personal source/portable apps are a different maintenance surface from common
+# installed software. Two real lists keep that distinction visible and keyboard-
+# reachable; fake separator rows inside one checklist would be selectable noise.
+$MY_APP_KEYS = @('codenomad', 'saipenview', 'smartvac', 'wildrift')
+$lblMyApps = New-Object Windows.Forms.Label
+$lblMyApps.Text = 'MY APPS'; $lblMyApps.Location = '12,248'; $lblMyApps.Size = '200,16'; $lblMyApps.Font = $FONTB
+$clbMyApps = New-Object Windows.Forms.CheckedListBox
+$clbMyApps.Location = '12,266'; $clbMyApps.Size = '200,78'
+$clbMyApps.BorderStyle = 'FixedSingle'; $clbMyApps.CheckOnClick = $true; $clbMyApps.IntegralHeight = $false
 
+$lblPopularApps = New-Object Windows.Forms.Label
+$lblPopularApps.Text = 'POPULAR APPS'; $lblPopularApps.Location = '12,352'; $lblPopularApps.Size = '200,16'; $lblPopularApps.Font = $FONTB
+$clbPopularApps = New-Object Windows.Forms.CheckedListBox
+$clbPopularApps.Location = '12,370'; $clbPopularApps.Size = '200,132'
+$clbPopularApps.BorderStyle = 'FixedSingle'; $clbPopularApps.CheckOnClick = $true; $clbPopularApps.IntegralHeight = $false
+$TARGET_LISTS = @($clbMyApps, $clbPopularApps)
+
+# ─── REMEMBERED FOLDERS FOR THE SOURCE-TREE TARGETS ─────────────────────────
+# Three targets patch a source file in a checkout, so only the user knows where it
+# is. Asking was correct; asking EVERY TIME was not -- the answer does not change
+# between runs, and re-picking the same folder to tick the same box is the kind of
+# friction that makes someone stop using the installer.
+#
+# Stored under %APPDATA%, deliberately NOT beside the script: the repo is a git
+# checkout that gets pulled, moved and re-cloned, and a per-machine preference has
+# no business in it (nor in .gitignore, where it would be one more thing to
+# remember). A remembered folder that no longer exists is dropped on load rather
+# than trusted, so a moved checkout asks once more instead of silently patching
+# nothing.
+#
+# Right-click a target to change its folder -- that is the whole escape hatch, and
+# it is why the dialog no longer opens on tick.
+$PATH_TARGETS = @('saipenview', 'smartvac', 'wildrift')
+$PATH_DEFAULTS = @{
+    'saipenview' = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\'
+    'smartvac'   = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\'
+    'wildrift'   = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\'
+}
+$script:pathsFile = Join-Path $env:APPDATA 'Wintage\paths.json'
 $script:customPaths = @{}
-$clbTargets.Add_ItemCheck({
-    param($sender, $e)
-    if ($e.NewValue -eq 'Checked') {
-        $item = $clbTargets.Items[$e.Index]
-        $key = ($item -split '\s+')[0]
-        if ($key -in @('saipenview', 'smartvac', 'wildrift')) {
-            $defaults = @{
-                'saipenview' = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\'
-                'smartvac' = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\'
-                'wildrift' = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\'
-            }
-            $dlg = New-Object Windows.Forms.FolderBrowserDialog
-            $dlg.Description = "Select folder for $key"
-            $dlg.SelectedPath = if ($script:customPaths.ContainsKey($key)) { $script:customPaths[$key] } else { $defaults[$key] }
-            if ($dlg.ShowDialog() -eq 'OK') {
-                $script:customPaths[$key] = $dlg.SelectedPath
-            } else {
-                $e.NewValue = 'Unchecked'
-            }
+
+function Load-CustomPaths {
+    $script:customPaths = @{}
+    if (-not (Test-Path $script:pathsFile)) { return }
+    try {
+        $saved = ([System.IO.File]::ReadAllText($script:pathsFile, (New-Object System.Text.UTF8Encoding($false)))) -replace '^\uFEFF', '' | ConvertFrom-Json
+        foreach ($k in $PATH_TARGETS) {
+            $v = $saved.$k
+            if ($v -and (Test-Path $v)) { $script:customPaths[$k] = $v }
         }
     }
-})
+    catch {
+        # A corrupt preferences file must never be the reason the installer will not
+        # open. Forget it and ask again.
+    }
+}
+
+function Save-CustomPaths {
+    try {
+        $dir = Split-Path $script:pathsFile -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        $o = [ordered]@{}
+        foreach ($k in $PATH_TARGETS) { if ($script:customPaths.ContainsKey($k)) { $o[$k] = $script:customPaths[$k] } }
+        [System.IO.File]::WriteAllText($script:pathsFile, ($o | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))
+    }
+    catch { }
+}
+
+# $true if a folder is now known for this target, $false if the user backed out.
+function Ask-CustomPath([string]$key) {
+    $dlg = New-Object Windows.Forms.FolderBrowserDialog
+    $dlg.Description = "Select folder for $key"
+    $dlg.SelectedPath = if ($script:customPaths.ContainsKey($key)) { $script:customPaths[$key] } else { $PATH_DEFAULTS[$key] }
+    if ($dlg.ShowDialog() -ne 'OK') { return $false }
+    $script:customPaths[$key] = $dlg.SelectedPath
+    Save-CustomPaths
+    return $true
+}
+
+Load-CustomPaths
+
+$onTargetCheck = {
+    param($sender, $e)
+    if ($e.NewValue -ne 'Checked') { return }
+    $key = ($sender.Items[$e.Index] -split '\s+')[0]
+    if ($key -notin $PATH_TARGETS) { return }
+    if ($script:customPaths.ContainsKey($key)) { return }
+    if (-not (Ask-CustomPath $key)) { $e.NewValue = 'Unchecked' }
+}
+$clbMyApps.Add_ItemCheck($onTargetCheck)
+$clbPopularApps.Add_ItemCheck($onTargetCheck)
+
+# Right-click = change the remembered folder. Placed on MouseDown rather than a
+# context menu because the row itself is the target and a one-item menu would be
+# ceremony; the log line is what confirms it took.
+$onTargetMouseDown = {
+    param($sender, $e)
+    if ($e.Button -ne [Windows.Forms.MouseButtons]::Right) { return }
+    $i = $sender.IndexFromPoint($e.Location)
+    if ($i -lt 0) { return }
+    $key = ($sender.Items[$i] -split '\s+')[0]
+    if ($key -notin $PATH_TARGETS) { return }
+    if (Ask-CustomPath $key) { Say-Log ("{0}: folder set to {1}" -f $key, $script:customPaths[$key]) }
+}
+$clbMyApps.Add_MouseDown($onTargetMouseDown)
+$clbPopularApps.Add_MouseDown($onTargetMouseDown)
 
 $btnSelectAll = New-Object Windows.Forms.Button
 $btnSelectAll.Text = 'ALL'; $btnSelectAll.Location = '12,508'; $btnSelectAll.Size = '96,24'; $btnSelectAll.Font = $FONT
@@ -198,8 +293,11 @@ $log.BorderStyle = 'FixedSingle'
 $status = New-Object Windows.Forms.Label
 $status.Location = '12,546'; $status.Size = '840,26'
 
-$form.Controls.AddRange(@($lblThemes, $lstThemes, $lblTargets, $clbTargets, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
+$form.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
         $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $log, $status))
+$lstThemes.TabIndex = 0; $clbMyApps.TabIndex = 1; $clbPopularApps.TabIndex = 2
+$btnSelectAll.TabIndex = 3; $btnSelectNone.TabIndex = 4; $btnApply.TabIndex = 5
+$btnSave.TabIndex = 6; $btnDelCustom.TabIndex = 7; $btnRevert.TabIndex = 8; $log.TabIndex = 9
 
 # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ TARGET DISCOVERY Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 # Read from install.ps1's own listing rather than duplicated here: one source of
@@ -207,24 +305,41 @@ $form.Controls.AddRange(@($lblThemes, $lstThemes, $lblTargets, $clbTargets, $btn
 # without a second edit.
 $script:targets = @()
 function Load-Targets {
-    $clbTargets.Items.Clear()
+    foreach ($list in $TARGET_LISTS) { $list.Items.Clear() }
     $script:targets = @()
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'install.ps1') 2>&1
     foreach ($line in $out) {
         if ($line -match '^\s{2}(\S+)\s{2,}(.+?)\s{2,}(not installed|themed|found, not themed|fused shut)\s{2,}(.+)$') {
             $t = [pscustomobject]@{ Key = $Matches[1]; Name = $Matches[2].Trim(); State = $Matches[3]; Palette = $Matches[4].Trim() }
             if ($t.Key -eq 'target') { continue }
-            $script:targets += $t
+            $list = if ($t.Key -in $MY_APP_KEYS) { $clbMyApps } else { $clbPopularApps }
             $label = '{0,-16} {1}' -f $t.Key, $t.State
-            [void]$clbTargets.Items.Add($label)
-            $i = $clbTargets.Items.Count - 1
-            # Pre-check what is installable and already themed; leave the rest alone
-            # so Apply never silently touches something the user did not ask for.
-            if ($t.State -eq 'themed' -and $t.Key -notin @('saipenview', 'smartvac', 'wildrift')) { $clbTargets.SetItemChecked($i, $true) }
+            [void]$list.Items.Add($label)
+            $i = $list.Items.Count - 1
+            $t | Add-Member -NotePropertyName List -NotePropertyValue $list
+            $t | Add-Member -NotePropertyName ItemIndex -NotePropertyValue $i
+            $script:targets += $t
+            # Everything that CAN be themed starts ticked -- the overwhelmingly common
+            # intent is "put this palette on all of it", and unticking two rows is less
+            # work than ticking eleven. An app that is absent or fused shut is never
+            # ticked, because Apply would only print a refusal for it.
+            #
+            # The three source-tree targets are ticked only when their folder is already
+            # remembered: ticking them otherwise would fire the folder dialog from
+            # startup, three times, before the window is even usable.
+            $selectable = $t.State -ne 'not installed' -and $t.State -ne 'fused shut'
+            if ($selectable -and $t.Key -in $PATH_TARGETS) { $selectable = $script:customPaths.ContainsKey($t.Key) }
+            if ($selectable) { $list.SetItemChecked($i, $true) }
         }
     }
-    [void]$clbTargets.Items.Add('userscript      (Tampermonkey)')
-    $clbTargets.SetItemChecked($clbTargets.Items.Count - 1, $true)
+}
+
+function Get-CheckedTargetItems {
+    $items = @()
+    foreach ($list in $TARGET_LISTS) {
+        foreach ($i in $list.CheckedIndices) { $items += $list.Items[$i] }
+    }
+    $items
 }
 
 # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ RENDERING Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
@@ -414,7 +529,7 @@ function Delete-Custom {
         & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
         & node (Join-Path $root 'tools/build-desktop.js') | Out-Null
         Load-Packs
-        $script:current = 'golden'
+        $script:current = 'goldendefault'
         $lstThemes.SelectedItem = $script:packs[$script:current].label
     } else {
         Say-Log "no custom theme to delete"
@@ -433,16 +548,10 @@ $btnApply.Add_Click({
         $btnApply.Enabled = $false
         try {
             $slug = if ($script:current -eq '<custom>') { Save-Custom; 'custom' } else { $script:current }
-            $checked = @()
-            foreach ($i in $clbTargets.CheckedIndices) { $checked += $clbTargets.Items[$i] }
+            $checked = @(Get-CheckedTargetItems)
             if (-not $checked) { Say-Log 'nothing selected'; return }
             foreach ($item in $checked) {
                 $key = ($item -split '\s+')[0]
-                if ($key -eq 'userscript') {
-                    & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
-                    Say-Log 'userscript: themes written (pick it from the Tampermonkey menu)'
-                    continue
-                }
                 $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Palette", $slug)
                 if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
                 if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
@@ -459,23 +568,21 @@ $btnApply.Add_Click({
     })
 
 $btnSelectAll.Add_Click({
-        for ($i = 0; $i -lt $script:targets.Count; $i++) {
-            $state = $script:targets[$i].State
+        foreach ($target in $script:targets) {
+            $state = $target.State
             if ($state -eq 'not installed' -or $state -eq 'fused shut') { continue }
-            $clbTargets.SetItemChecked($i, $true)
-        }
-        if ($clbTargets.Items.Count -gt $script:targets.Count) {
-            $clbTargets.SetItemChecked($clbTargets.Items.Count - 1, $true)
+            $target.List.SetItemChecked($target.ItemIndex, $true)
         }
     })
 $btnSelectNone.Add_Click({
-        for ($i = 0; $i -lt $clbTargets.Items.Count; $i++) { $clbTargets.SetItemChecked($i, $false) }
+        foreach ($list in $TARGET_LISTS) {
+            for ($i = 0; $i -lt $list.Items.Count; $i++) { $list.SetItemChecked($i, $false) }
+        }
     })
 
 $btnRevert.Add_Click({
-        foreach ($i in $clbTargets.CheckedIndices) {
-            $key = (($clbTargets.Items[$i]) -split '\s+')[0]
-            if ($key -eq 'userscript') { continue }
+        foreach ($item in @(Get-CheckedTargetItems)) {
+            $key = (($item) -split '\s+')[0]
             $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Revert")
             if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
             if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
@@ -512,10 +619,10 @@ function Skin-Self {
     if (-not $t) { return }
     $form.BackColor = C $t.background
     $form.ForeColor = C $t.textPrimary
-    foreach ($c in @($lblThemes, $lblTargets, $lblPreview, $lblTokens, $lblInfo, $status)) {
+    foreach ($c in @($lblThemes, $lblMyApps, $lblPopularApps, $lblPreview, $lblTokens, $lblInfo, $status)) {
         $c.BackColor = C $t.background; $c.ForeColor = C $t.textPrimary
     }
-    foreach ($c in @($lstThemes, $clbTargets, $log)) {
+    foreach ($c in @($lstThemes, $clbMyApps, $clbPopularApps, $log)) {
         $c.BackColor = C $t.compareBack; $c.ForeColor = C $t.textPrimary
     }
     foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnSelectAll, $btnSelectNone)) {
@@ -527,7 +634,12 @@ function Skin-Self {
 }
 
 Load-Targets
-foreach ($p in ($script:packs.Values | Sort-Object { $_.order }, { $_.slug })) { [void]$lstThemes.Items.Add($p.label) }
+# The startup palette also owns the first row. Selecting Golden Default while
+# leaving Dark Golden above it looked like a stale default even though Apply used
+# the right value.
+foreach ($p in ($script:packs.Values | Sort-Object @{ Expression = { if ($_.slug -eq $script:current) { 0 } else { 1 } } }, { $_.order }, { $_.slug })) {
+    [void]$lstThemes.Items.Add($p.label)
+}
 [void]$lstThemes.Items.Add('Custom')
 $lstThemes.SelectedItem = $script:packs[$script:current].label
 Refresh-Swatches
@@ -536,5 +648,10 @@ Skin-Self
 $lstThemes.Add_SelectedIndexChanged({ Skin-Self })
 $status.Text = 'Pick a theme, tick the targets, press APPLY. Editing any colour forks it into Custom.'
 
-[void]$form.ShowDialog()
+# The folder is asked for once and remembered, so the way to CHANGE it has to be
+# discoverable somewhere. A tooltip rather than a longer label: the label is 200px
+# wide with the preview panel right beside it, and a clipped hint is no hint.
+$tip = New-Object Windows.Forms.ToolTip
+$tip.SetToolTip($clbMyApps, "Right-click saipenview / smartvac / wildrift to change its folder." + [Environment]::NewLine + "Asked once, then remembered in $($script:pathsFile).")
 
+[void]$form.ShowDialog()

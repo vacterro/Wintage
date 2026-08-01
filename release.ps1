@@ -23,6 +23,11 @@ switch ($Bump) {
     'patch' { $pat++ }
 }
 $new = "$maj.$min.$pat"
+$changelog = Join-Path $PSScriptRoot 'CHANGELOG.md'
+if (-not (Test-Path -LiteralPath $changelog) -or
+    [System.IO.File]::ReadAllText($changelog, $utf8) -notmatch "(?m)^## \[$([regex]::Escape($new))\]") {
+    throw "CHANGELOG.md needs a ## [$new] entry before release"
+}
 $content = $content -replace '(// @version\s+)\d+\.\d+\.\d+', "`${1}$new"
 # The file carries the version TWICE: the @version header Tampermonkey reads, and
 # const W95_VERSION, which is stamped onto every injected <style> so a console can
@@ -88,6 +93,12 @@ if ($LASTEXITCODE -ne 0) { throw "Theme block is out of date with themes/*.json 
 node (Join-Path $PSScriptRoot 'tools/test-theme-packs.js')
 if ($LASTEXITCODE -ne 0) { throw "Theme pack test failed - release aborted, version line already bumped, fix and rerun" }
 
+# Desktop target dispatch, PowerShell parsing and -WhatIf isolation live in the
+# repository suite. A release that skips it can still mutate an app during a dry
+# run -- exactly the regression this gate now pins.
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests/Run-Tests.ps1')
+if ($LASTEXITCODE -ne 0) { throw "Repository tests failed - release aborted, version line already bumped, fix and rerun" }
+
 # git writes "LF will be replaced by CRLF" to STDERR, and PowerShell 5.1 turns any
 # native-command stderr line into a NativeCommandError -- which, even under
 # ErrorActionPreference='Continue', still aborts the script the moment the whole
@@ -110,4 +121,6 @@ function Git-Safe {
 if ((Git-Safe add -A) -ne 0) { throw "git add failed" }
 if ((Git-Safe commit -m "v${new}: $Message") -ne 0) { throw "git commit failed (nothing to commit, or a hook rejected it)" }
 if ((Git-Safe push origin main) -ne 0) { throw "git push failed - commit is local; fix the remote and 'git push' by hand" }
+if ((Git-Safe tag -a "v$new" -m "Wintage v$new") -ne 0) { throw "git tag failed - branch is already pushed" }
+if ((Git-Safe push origin "refs/tags/v${new}:refs/tags/v${new}") -ne 0) { throw "git tag push failed - branch and local tag already exist" }
 Write-Host "Released Wintage v$new - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green

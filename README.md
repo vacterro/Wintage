@@ -11,6 +11,8 @@ _Users shouldn't have to guess whether something is a button, a label, a card, o
 
 _Every element communicates its purpose at a glance, reducing cognitive load and making the web feel like a precise instrument again instead of a collection of decorative bubbles._
 
+[Changelog](CHANGELOG.md)
+
 ## Install
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
@@ -21,12 +23,17 @@ _Every element communicates its purpose at a glance, reducing cognitive load and
 
 - **Automatic:** the script carries `@updateURL`/`@downloadURL` pointing at this repo, so Tampermonkey picks up new versions on its regular update checks.
 - **Manual refresh:** Tampermonkey → **Utilities → Check for userscript updates**, or just click the install link again — it replaces the old version in place, no uninstall needed.
+- **Missing theme rows means an old script:** the menu is generated from the
+  embedded theme registry and the release test requires exactly one menu row for
+  every embedded palette. If the menu is shorter than the palette list below,
+  click **Install Wintage** again and confirm **Update** in Tampermonkey.
 
-## Fifteen palettes, and a switch
+## Sixteen palettes, and a switch
 
 Wintage is no longer one palette. Six are UI.md's own structure rotated to another
-hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, NomadCode) and
-nine are imported from [FastPrompter](https://github.com/vacterro) (Default, Golden
+hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, NomadCode),
+Custom can be edited and saved from the desktop installer, and nine are imported
+from [FastPrompter](https://github.com/vacterro) (Default, Golden
 Vintage, Golden Default, Vintage Dark, Vintage Classic, Dark 2 OLED, Dracula, Nord,
 Solarized Dark). Every one of them clears WCAG AA on the three tokens that carry
 text -- the build gate refuses a palette that does not.
@@ -48,8 +55,9 @@ The same palettes install into desktop applications -- VS Code and Antigravity a
 colour themes, Electron apps (Freebuff, the Antigravity agent app) through a shim
 that injects the very stylesheet this userscript uses. There is a small GUI for it:
 
-Double-click **`Wintage Installer.cmd`** in the repo root. (It is a thin launcher for
-`desktop\WintageInstaller.ps1`, which you can still run directly.)
+Double-click **`Wintage Installer.vbs`** in the repo root. It opens the GUI without
+a console window. The legacy `.cmd` launcher forwards to the same hidden host;
+`desktop\WintageInstaller.ps1` can still be run directly for diagnostics.
 
 What each target can and cannot reach -- including the two apps that are fused shut
 or have their colours compiled in -- is written down in
@@ -86,9 +94,13 @@ or have their colours compiled in -- is written down in
 | Muted | `#7A6838` | placeholders, disabled |
 | Accent | `#9DD9F9` | links, focus |
 
-## Bonus: matching browser theme
+## Matching browser theme
 
-The [`browser-theme/`](browser-theme/) folder contains a Chromium theme (Cent Browser / Chrome / Edge / Brave) built from the same palette, so the browser chrome matches the pages. Install: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the `browser-theme` folder.
+The desktop installer's `browsers` target detects installed and portable Chromium
+profiles, reports Tampermonkey coverage, stages the selected browser theme, and
+opens the correct install/update pages for every profile. Chromium requires one
+**Developer mode → Load unpacked** confirmation per profile; the installer copies
+the stable theme path to the clipboard. Later palette changes reuse that path.
 
 ## Known behaviors
 

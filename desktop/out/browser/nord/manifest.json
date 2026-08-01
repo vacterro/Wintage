@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.21.1",
+  "version": "1.23.0",
   "name": "Wintage Nord",
   "description": "Wintage Nord for the browser chrome. Companion to the Wintage userscript.",
   "theme": {

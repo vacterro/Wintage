@@ -1,0 +1,75 @@
+; Wintage Nord -- generated. Do not edit.
+
+[Theme]
+DisplayName=Wintage Nord
+
+[Control Panel\Desktop]
+Pattern=
+
+[Control Panel\Cursors]
+AppStarting=%SystemRoot%\___CURRENT___\6_aero_working.ani
+Arrow=%SystemRoot%\___CURRENT___\1_aero_arrow.cur
+Crosshair=%SystemRoot%\___CURRENT___\precise.cur
+Hand=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Help=%SystemRoot%\___CURRENT___\3_aero_helpsel.cur
+IBeam=%SystemRoot%\___CURRENT___\text.cur
+No=%SystemRoot%\___CURRENT___\5_aero_unavail.cur
+NWPen=%SystemRoot%\___CURRENT___\aero_pen.cur
+SizeAll=%SystemRoot%\___CURRENT___\aero_move.cur
+SizeNESW=%SystemRoot%\___CURRENT___\aero_nesw.cur
+SizeNS=%SystemRoot%\___CURRENT___\aero_ns.cur
+SizeNWSE=%SystemRoot%\___CURRENT___\aero_nwse.cur
+SizeWE=%SystemRoot%\___CURRENT___\aero_ew.cur
+UpArrow=%SystemRoot%\___CURRENT___\aero_up.cur
+Wait=%SystemRoot%\___CURRENT___\2_aero_busy.ani
+DefaultValue=___CURRENT___
+Link=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Pin=%SystemRoot%\___CURRENT___\aero_pin.cur
+Person=%SystemRoot%\___CURRENT___\aero_person.cur
+
+[VisualStyles]
+Path=%SystemRoot%\resources\themes\Aero\Aero.msstyles
+ColorStyle=NormalColor
+Size=NormalSize
+AutoColorization=0
+ColorizationColor=0xFF3F4758
+Transparency=0
+SystemMode=Dark
+AppMode=Dark
+VisualStyleVersion=10
+
+[Control Panel\Colors]
+Scrollbar=67 75 93
+Background=39 44 54
+ActiveTitle=63 71 88
+InactiveTitle=63 71 88
+Menu=59 66 82
+Window=46 52 64
+WindowFrame=35 40 49
+MenuText=216 222 233
+WindowText=216 222 233
+TitleText=216 222 233
+ActiveBorder=63 71 88
+InactiveBorder=63 71 88
+AppWorkspace=39 44 54
+Hilight=63 71 88
+HilightText=216 222 233
+ButtonFace=59 66 82
+ButtonShadow=35 40 49
+GrayText=119 124 135
+ButtonText=216 222 233
+InactiveTitleText=163 169 179
+ButtonHilight=86 108 125
+ButtonDkShadow=35 40 49
+ButtonLight=67 75 93
+InfoText=216 222 233
+InfoWindow=46 52 64
+ButtonAlternateFace=39 44 54
+HotTrackingColor=136 192 208
+GradientActiveTitle=63 71 88
+GradientInactiveTitle=63 71 88
+MenuHilight=63 71 88
+MenuBar=59 66 82
+
+[MasterThemeSelector]
+MTSM=DABJDKT

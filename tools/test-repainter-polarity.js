@@ -117,5 +117,13 @@ check('no `const darkBg = 0.008` left in the code', /darkBg\s*=\s*0\.008/.test(c
 check('color-scheme follows the theme', /color-scheme: \$\{DARK \? 'dark' : 'light'\}/.test(src), true);
 check('data-w95-dark follows the theme', /data-w95-dark', DARK \? '1' : '0'/.test(src), true);
 
+// 6. CodeNomad's native session status must survive the generic repaint pass.
+// The exact selectors keep the exception local to CodeNomad's own DOM contract.
+check('CodeNomad working uses warning token', /\.session-status\.session-working > \.status-dot \{ background-color: \$\{T\.warning\} !important; \}/.test(src), true);
+check('CodeNomad idle uses success token', /\.session-status\.session-idle > \.status-dot \{ background-color: \$\{T\.success\} !important; \}/.test(src), true);
+check('CodeNomad compacting uses accent token', /\.session-status\.session-compacting > \.status-dot \{ background-color: \$\{T\.accentTeal\} !important; \}/.test(src), true);
+check('CodeNomad permission and retrying use danger token', /\.session-status\.session-permission > \.status-dot,[\s\S]*?\.session-status\.session-retrying > \.status-dot \{ background-color: \$\{T\.danger\} !important; \}/.test(src), true);
+check('CodeNomad status dot is excluded from JS repaint', /el\.matches\('\.status-indicator\.session-status > \.status-dot'\)/.test(src), true);
+
 console.log(bad ? '\n' + bad + ' failure(s)' : '\nrepainter polarity test PASS');
 process.exit(bad ? 1 : 0);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Derives a UI.md-conformant palette from the golden one.
 //
-// UI.md's palette is not eighteen colours, it is a STRUCTURE: a near-black ground,
+// UI.md's palette is not twenty-one colours, it is a STRUCTURE: a near-black ground,
 // three surface steps a few percent apart, a highlight around 56% lightness that
 // doubles as the bevel edge and the link, a text ladder at roughly 9.4 / 6.3 / 3.3
 // to one, and desaturated semantic colours that never carry text. Hand-picking a
@@ -116,6 +116,28 @@ function relLum(r, g, b) {
 }
 function ratio(a, b) { return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
 
+function blendHex(a, b, amount) {
+  const A = hexToRgb(a), B = hexToRgb(b);
+  return rgbToHex(
+    A[0] + (B[0] - A[0]) * amount,
+    A[1] + (B[1] - A[1]) * amount,
+    A[2] + (B[2] - A[2]) * amount
+  );
+}
+
+function dangerTextFor(colour, backdrop) {
+  const bgLum = relLum(...hexToRgb(backdrop));
+  if (ratio(relLum(...hexToRgb(colour)), bgLum) >= 4.5) return colour;
+  const [h, s, start] = rgbToHsl(...hexToRgb(colour));
+  let low = start, high = 1;
+  for (let i = 0; i < 32; i++) {
+    const mid = (low + high) / 2;
+    if (ratio(relLum(...hslToRgb(h, s, mid)), bgLum) >= 4.52) high = mid;
+    else low = mid;
+  }
+  return rgbToHex(...hslToRgb(h, s, high));
+}
+
 // Rotating a hue does not preserve contrast: at golden's lightness a violet is far
 // darker than an amber, so NomadCode's indigo came out at 4.02:1 while the amber it
 // was derived from sits at 7.28:1. Structure is the thing being preserved, and a
@@ -146,6 +168,14 @@ function derive(slug, spec) {
   const bgLum = relLum(...softRgb);
 
   for (const [name, hex] of Object.entries(golden.tokens)) {
+    if (name === 'bevelLight') {
+      tokens[name] = blendHex(tokens.surfaceAlt, tokens.borderHighlight, 0.28);
+      continue;
+    }
+    if (name === 'dangerText') {
+      tokens[name] = dangerTextFor(tokens.danger, tokens.backgroundSoft);
+      continue;
+    }
     if (FIXED.includes(name)) { tokens[name] = hex; continue; }
     const [h, s, l] = rgbToHsl(...hexToRgb(hex));
     // Preserve each token's OFFSET from golden's base hue, so the internal

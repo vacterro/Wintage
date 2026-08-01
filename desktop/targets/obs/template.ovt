@@ -1,0 +1,110 @@
+@OBSThemeMeta {
+    name: 'Wintage ${label}';
+    id: 'com.wintage.OBS';
+    extends: 'com.obsproject.Yami.Classic';
+    author: 'Wintage';
+    dark: 'true';
+}
+
+@OBSThemeVars {
+    --grey1: ${borderHighlight};
+    --grey2: ${surfaceAlt};
+    --grey3: ${surfaceRaised};
+    --grey4: ${surface};
+    --grey5: ${backgroundSoft};
+    --grey6: ${compareBack};
+    --grey7: ${background};
+    --grey8: ${borderDark};
+
+    --blue1: ${link};
+    --blue2: ${accentTeal};
+    --blue3: ${accentTealDeep};
+    --red1: ${dangerText};
+    --red2: ${dangerText};
+    --red3: ${danger};
+    --green3: ${success};
+    --yellow3: ${warning};
+
+    --bg_window: ${background};
+    --bg_base: ${backgroundSoft};
+    --bg_preview: ${compareBack};
+    --primary: ${selection};
+    --primary_light: ${surfaceAlt};
+    --primary_lighter: ${link};
+    --primary_dark: ${accentTealDeep};
+    --primary_darker: ${borderDark};
+    --warning: ${warning};
+    --danger: ${danger};
+    --text: ${textPrimary};
+    --text_light: ${textSecondary};
+    --text_muted: ${textMuted};
+    --text_disabled: ${textMuted};
+    --text_inactive: ${textSecondary};
+
+    --border_color: ${borderDark};
+    --border_radius: 0px;
+    --border_radius_small: 0px;
+    --border_radius_large: 0px;
+    --highlight_width: 1px;
+    --highlight_color: ${link};
+    --border_highlight: ${link};
+
+    --input_bg: ${surface};
+    --input_bg_hover: ${surfaceAlt};
+    --input_bg_focus: ${compareBack};
+    --list_item_bg_selected: ${selection};
+    --list_item_bg_hover: ${surfaceAlt};
+    --input_border: ${borderMuted};
+    --input_border_hover: ${bevelLight};
+    --input_border_focus: ${link};
+    --button_bg: ${surfaceRaised};
+    --button_bg_hover: ${surfaceAlt};
+    --button_bg_down: ${surface};
+    --button_bg_disabled: ${backgroundSoft};
+    --button_border: ${surfaceRaised};
+    --button_border_hover: ${bevelLight};
+    --button_border_focus: ${link};
+    --tab_bg: ${surfaceRaised};
+    --tab_bg_hover: ${surfaceAlt};
+    --tab_bg_down: ${surface};
+    --tab_bg_disabled: ${backgroundSoft};
+    --tab_border: ${borderMuted};
+    --tab_border_hover: ${bevelLight};
+    --tab_border_focus: ${link};
+    --tab_border_selected: ${selection};
+    --scrollbar_handle: ${surfaceRaised};
+    --scrollbar_bg: ${backgroundSoft};
+    --scrollbar_hover: ${surfaceAlt};
+    --scrollbar_down: ${surface};
+    --scrollbar_border: ${borderDark};
+}
+
+QWidget {
+    font-family: Verdana;
+    font-size: 12px;
+}
+
+QPushButton,
+QToolButton {
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+}
+
+QPushButton:pressed,
+QPushButton:checked,
+QToolButton:pressed,
+QToolButton:checked {
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+}
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox {
+    border: 2px solid;
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    border-radius: 0px;
+}

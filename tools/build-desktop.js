@@ -89,7 +89,7 @@ function buildVscode(packs) {
   emit(path.join(outDir, 'package.json'), JSON.stringify({
     name: 'wintage-themes',
     displayName: 'Wintage вЂ” Win95 Vintage Themes',
-    description: 'Dark Golden Windows 95 aesthetic, and five palettes derived from it. Generated from the Wintage theme packs.',
+    description: 'Sixteen switchable Windows 95 palettes generated from the Wintage theme packs.',
     // One version number for the whole project, taken from the userscript header
     // rather than kept separately вЂ” two version fields drift, and the second one
     // is always the one nobody remembers to bump.
@@ -208,6 +208,42 @@ function buildObsidian(packs) {
   }
 }
 
+// ─── TARGET: OBS Studio ─────────────────────────────────────────────────────
+// OBS 30.2+ composes .ovt variants over a maintained base theme. Extending Yami
+// Classic keeps new OBS widgets covered while Wintage owns the palette, Verdana,
+// square corners and bevel states. One stable ID lets repainting replace the file
+// in place instead of leaving a dead dropdown entry per palette.
+function buildObs(packs) {
+  const template = fs.readFileSync(path.join(DESKTOP, 'targets', 'obs', 'template.ovt'), 'utf8');
+  for (const pack of packs) {
+    const theme = fill(template, pack.tokens, { label: pack.label, __file: 'obs/template.ovt' });
+    const left = /\$\{/.exec(theme);
+    if (left) throw new Error('unresolved placeholder in obs ' + pack.slug + ' near: ' + theme.slice(left.index, left.index + 60));
+    emit(path.join(OUT, 'obs', pack.slug, 'Wintage.ovt'), theme);
+  }
+}
+
+// ─── TARGET: Windows system theme ───────────────────────────────────────────
+// The generated file owns only Windows' colour/mode sections. At install time it
+// is merged over the user's active .theme, preserving wallpaper, sounds and desktop
+// icons while selecting the user's ___CURRENT___ cursor scheme. Microsoft documents .theme as INI and these sections as
+// the supported colour/visual-style surface; no private msstyles is replaced.
+function buildWindows(packs) {
+  const template = fs.readFileSync(path.join(DESKTOP, 'targets', 'windows', 'template.theme'), 'utf8');
+  const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(' ');
+  for (const pack of packs) {
+    const context = { label: pack.label, __file: 'windows/template.theme' };
+    for (const [name, value] of Object.entries(pack.tokens)) {
+      context[name + 'Rgb'] = rgb(value);
+      context[name + 'Hex'] = value.slice(1).toUpperCase();
+    }
+    const theme = fill(template, pack.tokens, context);
+    const left = /\$\{/.exec(theme);
+    if (left) throw new Error('unresolved placeholder in windows ' + pack.slug + ' near: ' + theme.slice(left.index, left.index + 60));
+    emit(path.join(OUT, 'windows', pack.slug, 'Wintage.theme'), theme);
+  }
+}
+
 // Renaming or removing a palette used to leave its output behind forever: the
 // emit() path only ever writes, so desktop/out/<target>/nomadcode survived the
 // rename to codenomad and would have been installed as a ghost theme. Prune any
@@ -215,7 +251,7 @@ function buildObsidian(packs) {
 // reflects themes/ exactly.
 function prune(packs) {
   const live = new Set(packs.map(p => p.slug));
-  for (const target of ['electron', 'browser', 'obsidian']) {
+  for (const target of ['electron', 'browser', 'obsidian', 'obs', 'windows']) {
     const dir = path.join(OUT, target);
     if (!fs.existsSync(dir)) continue;
     for (const slug of fs.readdirSync(dir)) {
@@ -233,6 +269,8 @@ buildVscode(packs);
 buildElectron(packs);
 buildBrowser(packs);
 buildObsidian(packs);
+buildObs(packs);
+buildWindows(packs);
 prune(packs);
 
 if (stale) { console.error('\n' + stale + ' output(s) out of date вЂ” run `node tools/build-desktop.js`'); process.exit(1); }

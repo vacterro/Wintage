@@ -34,10 +34,10 @@ const END = '  // ─── END THEME PACKS ────────────
 const REQUIRED_TOKENS = [
   'background', 'backgroundSoft',
   'surface', 'surfaceRaised', 'surfaceAlt',
-  'borderDark', 'borderHighlight', 'borderMuted',
+  'borderDark', 'borderHighlight', 'bevelLight', 'borderMuted',
   'textPrimary', 'textSecondary', 'textMuted',
   'accentTeal', 'accentTealDeep',
-  'success', 'warning', 'danger',
+  'success', 'warning', 'danger', 'dangerText',
   'selection', 'compareBack', 'link'
 ];
 
@@ -80,10 +80,10 @@ function render(themes) {
     const lines = [
       ['background', 'backgroundSoft'],
       ['surface', 'surfaceRaised', 'surfaceAlt'],
-      ['borderDark', 'borderHighlight', 'borderMuted'],
+      ['borderDark', 'borderHighlight', 'bevelLight', 'borderMuted'],
       ['textPrimary', 'textSecondary', 'textMuted'],
       ['accentTeal', 'accentTealDeep'],
-      ['success', 'warning', 'danger'],
+      ['success', 'warning', 'danger', 'dangerText'],
       ['selection', 'compareBack'],
       ['link']
     ];

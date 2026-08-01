@@ -1,14 +1,14 @@
-/* Wintage Vintage Classic - generated from wintage.user.js v1.21.1. Do not edit. */
+/* Wintage Vintage Classic - generated from wintage.user.js v1.23.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
   /* UI.md token block, verbatim names — the single source of colour truth. */
   --background: #C0C0C0; --backgroundSoft: #FFFFFF;
   --surface: #C0C0C0; --surfaceRaised: #D0D0D0; --surfaceAlt: #DCDCDC;
-  --borderDark: #808080; --borderHighlight: #F6F6F6; --borderMuted: #FFFFFF; --link: #5E7A7A;
+  --borderDark: #808080; --borderHighlight: #F6F6F6; --bevelLight: #F6F6F6; --borderMuted: #FFFFFF; --link: #5E7A7A;
   --textPrimary: #000000; --textSecondary: #3A3A3A; --textMuted: #6A6A6A;
   --accentTeal: #008080; --accentTealDeep: #004C4C;
-  --success: #4A7A20; --warning: #7A7A20; --danger: #7A2020;
+  --success: #4A7A20; --warning: #7A7A20; --danger: #7A2020; --dangerText: #7A2020;
   --selection: #D0D0D0; --compareBack: #D0D0D0;
   --radius: 0px; --radius-none: 0px; --radius-2xs: 0px; --radius-xs: 0px; --radius-sm: 0px;
   --radius-md: 0px; --radius-lg: 0px;  --radius-xl: 0px; --radius-2xl: 0px;
@@ -372,6 +372,15 @@ li[aria-selected="true"], [role="option"][aria-selected="true"],
 option { background-color: #D0D0D0 !important; color: #000000 !important; }
 hr { border: none !important; border-top: 2px solid #FFFFFF !important; background-color: transparent !important; color: #FFFFFF !important; height: 0 !important; }
 
+/* CodeNomad exposes real session state on this small indicator. Keep that
+   semantic signal instead of letting the generic repainter flatten every dot
+   to the normal foreground colour. */
+.status-indicator.session-status.session-working > .status-dot { background-color: #7A7A20 !important; }
+.status-indicator.session-status.session-idle > .status-dot { background-color: #4A7A20 !important; }
+.status-indicator.session-status.session-compacting > .status-dot { background-color: #008080 !important; }
+.status-indicator.session-status.session-permission > .status-dot,
+.status-indicator.session-status.session-retrying > .status-dot { background-color: #7A2020 !important; }
+
 /* Status colours (--success/--warning/--danger) are deliberately NOT applied by
    class-name substring here. '[class*="error" i]' matches 'error-boundary',
    '[class*="valid" i]' matches 'validation-container' — both are large wrappers,
@@ -431,13 +440,28 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 
 /* Scrollbars: the track's sunken look came from inset box-shadows, which the
    global zero-shadow rule removes — rebuilt out of 2px bevel borders so the
-   depth language is identical to every other control. */
-::-webkit-scrollbar { width: 16px !important; height: 16px !important; }
+   depth language is identical to every other control.
+
+   12px, not the Win95-authentic 16px, and that is a deliberate concession. The
+   moment ::-webkit-scrollbar is styled at all, Chromium stops drawing OVERLAY
+   scrollbars and draws classic ones, which occupy real layout width — so every
+   container the app wrote as scrollable grows a permanent gutter it never
+   budgeted for. On Antigravity that gutter was wide enough to eat the edge of the
+   Settings button. 12px keeps the thumb comfortably grabbable and gives four
+   pixels back to every scroll container in the application at once.
+
+   The stepper arrows are GONE (display: none), not restyled. They are the one
+   part of a Win95 scrollbar that is pure ornament on a machine with a wheel and a
+   trackpad, they cost 32px of track per scrollbar, and — worse — they render on
+   the JS-drawn shells below as two little bevelled squares even where there is
+   nothing to scroll, which is precisely the "decoration, not a control" the
+   report was about. */
+::-webkit-scrollbar { width: 12px !important; height: 12px !important; }
 ::-webkit-scrollbar-track { background: #FFFFFF !important; border: 2px solid !important; border-color: #808080 #F6F6F6 #F6F6F6 #808080 !important; box-shadow: none !important; }
 ::-webkit-scrollbar-thumb { background: #D0D0D0 !important; border: 2px solid !important; border-color: #F6F6F6 #808080 #808080 #F6F6F6 !important; box-shadow: none !important; }
 ::-webkit-scrollbar-thumb:active { background: #C0C0C0 !important; border: 2px solid !important; border-color: #808080 #F6F6F6 #F6F6F6 #808080 !important; box-shadow: none !important; }
 ::-webkit-scrollbar-corner { background: #FFFFFF !important; }
-::-webkit-scrollbar-button { background: #D0D0D0 !important; border: 2px solid !important; border-color: #F6F6F6 #808080 #808080 #F6F6F6 !important; box-shadow: none !important; height: 16px !important; width: 16px !important; }
+::-webkit-scrollbar-button { display: none !important; width: 0 !important; height: 0 !important; }
 
 /* JS-DRAWN SCROLLBARS THAT ARE NOT SCROLLBARS YET.
    Monaco (VS Code, Antigravity, and every embedded editor on the web) does not use
