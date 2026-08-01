@@ -302,18 +302,42 @@ button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
 
-    /* Claude Code UI: icon buttons, sidebar items, and footer controls should not inherit solid Tailwind backgrounds
-       or look like bulky Win95 buttons until hovered. The :not(:hover):not(:active) pseudo-classes ensure they fall
-       back to the Wintage base button rules (which add the Win95 bevel and surfaceRaised background) when hovered. */
+
+
+        /* Claude Code UI: icon buttons, sidebar items, and footer controls should not inherit solid Tailwind backgrounds
+       or look like bulky Win95 buttons until hovered. */
     .cds-root a:not(:hover):not(:active),
     .cds-root button:not(:hover):not(:active),
     .cds-root [role="button"]:not(:hover):not(:active),
     .cds-root [class*="btn" i]:not(:hover):not(:active),
     .cds-root [class*="button" i]:not(:hover):not(:active),
-    .cds-root [class*="hover:bg-"]:not(:hover):not(:active) {
+    .cds-root [class*="hover:bg-" i]:not(:hover):not(:active) {
       background: transparent !important;
       border-color: transparent !important;
       box-shadow: none !important;
+    }
+
+    /* Claude Code: give .cds-root a solid surface and re-solidify floating panels.
+       Only the ROOT gets a bg; descendants keep transparent unless they are a
+       known floating surface pattern. This avoids the "inherit everything" crash. */
+    .cds-root:not(:root):not(.w) {
+      background-color: #1C242A !important;
+      color: #B099DE !important;
+    }
+    .cds-root [data-radix-popper-content-wrapper] > *,
+    .cds-root [data-radix-portal] > *,
+    .cds-root [data-floating-ui-portal] > *,
+    .cds-root [data-state="open"][role],
+    .cds-root [class*="popover" i],
+    .cds-root [class*="dropdown" i]:not(button),
+    .cds-root [class*="modal" i],
+    .cds-root [class*="overlay" i]:not([class*="backdrop"]),
+    .cds-root [class*="drawer" i],
+    .cds-root [class*="panel" i],
+    .cds-root [class*="sidebar" i],
+    .cds-root [class*="sheet" i] {
+      background-color: #21282F !important;
+      color: #B099DE !important;
     }
 
     yt-icon-button, yt-button-shape, [class*="yt-spec-button-shape"] { background: transparent !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
@@ -568,14 +592,18 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     div, span, section, article, aside, nav, header, footer, main,
     [class]:not(:root), [id]:not(:root), [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
 
-    /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
+        /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
        hovercards/tooltips/menus inside shadow roots render see-through and their
-       text overlaps the page underneath (the Reddit hovercard bug). Recolor only —
-       never force opacity/z-index/visibility. */
-    dialog, [popover], [role="menu"], [role="listbox"], [role="tooltip"], [role="dialog"], [role="alertdialog"],
+       text overlaps the page underneath (the Reddit hovercard bug). Recolor only -
+       never force opacity/z-index/visibility.
+       Specificity is bumped with :not(:root):not(.w) to beat [class]:not(:root). */
+    dialog:not(:root):not(.w), [popover]:not(:root):not(.w),
+    [role="menu"]:not(:root):not(.w), [role="listbox"]:not(:root):not(.w),
+    [role="tooltip"]:not(:root):not(.w), [role="dialog"]:not(:root):not(.w), [role="alertdialog"]:not(:root):not(.w),
     [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
     [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
-    [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard {
+    [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
+    [data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
       background-color: #343D4A !important; background-image: none !important; color: #B099DE !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
     }
 

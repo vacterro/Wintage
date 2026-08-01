@@ -700,18 +700,42 @@ button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
 
-    /* Claude Code UI: icon buttons, sidebar items, and footer controls should not inherit solid Tailwind backgrounds
-       or look like bulky Win95 buttons until hovered. The :not(:hover):not(:active) pseudo-classes ensure they fall
-       back to the Wintage base button rules (which add the Win95 bevel and surfaceRaised background) when hovered. */
+
+
+        /* Claude Code UI: icon buttons, sidebar items, and footer controls should not inherit solid Tailwind backgrounds
+       or look like bulky Win95 buttons until hovered. */
     .cds-root a:not(:hover):not(:active),
     .cds-root button:not(:hover):not(:active),
     .cds-root [role="button"]:not(:hover):not(:active),
     .cds-root [class*="btn" i]:not(:hover):not(:active),
     .cds-root [class*="button" i]:not(:hover):not(:active),
-    .cds-root [class*="hover:bg-"]:not(:hover):not(:active) {
+    .cds-root [class*="hover:bg-" i]:not(:hover):not(:active) {
       background: transparent !important;
       border-color: transparent !important;
       box-shadow: none !important;
+    }
+
+    /* Claude Code: give .cds-root a solid surface and re-solidify floating panels.
+       Only the ROOT gets a bg; descendants keep transparent unless they are a
+       known floating surface pattern. This avoids the "inherit everything" crash. */
+    .cds-root:not(:root):not(.w) {
+      background-color: ${T.background} !important;
+      color: ${T.textPrimary} !important;
+    }
+    .cds-root [data-radix-popper-content-wrapper] > *,
+    .cds-root [data-radix-portal] > *,
+    .cds-root [data-floating-ui-portal] > *,
+    .cds-root [data-state="open"][role],
+    .cds-root [class*="popover" i],
+    .cds-root [class*="dropdown" i]:not(button),
+    .cds-root [class*="modal" i],
+    .cds-root [class*="overlay" i]:not([class*="backdrop"]),
+    .cds-root [class*="drawer" i],
+    .cds-root [class*="panel" i],
+    .cds-root [class*="sidebar" i],
+    .cds-root [class*="sheet" i] {
+      background-color: ${T.backgroundSoft} !important;
+      color: ${T.textPrimary} !important;
     }
 
     yt-icon-button, yt-button-shape, [class*="yt-spec-button-shape"] { background: transparent !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
