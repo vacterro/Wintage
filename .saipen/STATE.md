@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-094
-next_action: RUN: .\release.ps1 -Message "desktop, browser, terminal and theme installer expansion" -Bump minor
+task: T-099
+next_action: RUN: .\release.ps1 -Message "report installer persistence failures honestly" -Bump patch
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -10,10 +10,10 @@ schema_version: 2
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
-goal_tickets: 6
+goal_tickets: 7
 transition_from: REVIEW
-last_event: 333
-updated: 2026-08-01T17:06:47Z
+last_event: 348
+updated: 2026-08-01T17:13:04Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)

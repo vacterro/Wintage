@@ -201,7 +201,13 @@ function Save-CustomPaths {
         foreach ($k in $PATH_TARGETS) { if ($script:customPaths.ContainsKey($k)) { $o[$k] = $script:customPaths[$k] } }
         [System.IO.File]::WriteAllText($script:pathsFile, ($o | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))
     }
-    catch { }
+    catch {
+        $message = "could not save paths.json: $($_.Exception.Message)"
+        if (Get-Command Say-Log -CommandType Function -ErrorAction SilentlyContinue) { Say-Log $message }
+        else { Write-Warning $message }
+        return $false
+    }
+    return $true
 }
 
 # $true if a folder is now known for this target, $false if the user backed out.

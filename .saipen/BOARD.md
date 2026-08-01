@@ -7,6 +7,8 @@
 
 
 ## DONE
+- [x] T-099 Report clipboard and custom-path persistence failures honestly instead of emitting false success or swallowing them | verify: focused failure injection plus PowerShell parsers and repository gates PASS -- E-345, E-347
+- [x] T-029 Live Tampermonkey 5.5.0 verification passed: early/late Shadow DOM themed on two origins and theme storage persisted goldendefault->dracula across them | verify: positive live gate PASS, both shadow paths disabled makes it FAIL; Custom restored and v1.23.0 shipped -- E-339
 - [x] T-094 Verify the complete current change set, fix confirmed defects, and ship only attributable work | verify: release/repo gates, focused+red round-trips, 16x21 generated matrix, parsers, conformance and live -WhatIf isolation PASS -- E-291..E-293, E-308, E-330..E-332
 - [x] T-098 Detect installed and portable Chromium browser profiles, report Tampermonkey, stage the selected browser theme, and open the real install/update flow | verify: isolated discovery/TM/stage/WhatIf/revert fixture, grouped UI, parsers, aggregate gates, safe-path review and live 5-profile readback PASS -- E-318..E-326
 - [x] T-097 Total Commander existing relative-age filters use the active palette link colour without altering expressions, order or non-age filters; deployed to both copies | verify: apply/revert fixture incl. ColorDark mirror + deliberate non-age/invalid-age controls, parsers, aggregate gates and live readback PASS -- E-313..E-317
@@ -103,5 +105,4 @@ ode tools/build-desktop.js --check passes -- E-214, E-215
 - [x] T-016 Enforce UI.md invariants from JS where CSS loses to site !important; palette clamp for control subtrees; close dark-surface gaps; palette idempotence | verify: 3 popular sites all zero violations, zero drift across two settling windows
 
 ## BLOCKED
-- [ ] T-029 Live Tampermonkey 5.5.0 verification passed: early/late Shadow DOM themed on two origins and theme storage persisted goldendefault->dracula across them | blocker: SHIP cannot decide whether the unattributed deletion of themes/custom.json plus five generated Custom files is intentional; no commit/tag/push made | verify: positive live gate PASS, both shadow paths disabled makes it FAIL
 - [ ] T-065 YouTube Studio analytics bars disappear under the theme. Exact class plus computed background-color/background-image is required before a narrow fix | blocker: analytics DOM requires the user's authenticated Studio; running Cent/Brave expose no CDP, and launching/copying the live profile would disturb or duplicate private session data | verify: bars visible again on the analytics table

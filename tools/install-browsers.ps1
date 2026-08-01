@@ -6,7 +6,8 @@ param(
     [string]$PortableRoot = 'V:\___VAC\__P',
     [string]$StageRoot = (Join-Path $env:LOCALAPPDATA 'Wintage\browser-theme'),
     [string]$Catalog,
-    [switch]$NoLaunch
+    [switch]$NoLaunch,
+    [scriptblock]$ClipboardWriter = { param([string]$Value) Set-Clipboard -Value $Value }
 )
 
 $ErrorActionPreference = 'Stop'
@@ -203,8 +204,14 @@ if ($WhatIfPreference) {
     exit 0
 }
 
+$clipboardCopied = $false
 if (-not $NoLaunch) {
-    try { Set-Clipboard -Value $StageRoot } catch { }
+    try {
+        & $ClipboardWriter $StageRoot
+        $clipboardCopied = $true
+    } catch {
+        Write-Warning "Browser theme staged at $StageRoot, but the path could not be copied to the clipboard: $($_.Exception.Message)"
+    }
     foreach ($profile in $before.Profiles) {
         $urls = @('chrome://extensions')
         if ($profile.Tampermonkey) { $urls += $userscriptUrl }
@@ -217,6 +224,8 @@ if (-not $NoLaunch) {
 
 $finish = if ($NoLaunch) {
     "Chromium browsers: staged $Palette; $($before.ProfileCount) profile(s), Tampermonkey in $($before.TampermonkeyCount); browser launch suppressed."
+} elseif (-not $clipboardCopied) {
+    "Chromium browsers: staged $Palette; $($before.ProfileCount) profile(s), Tampermonkey in $($before.TampermonkeyCount). Theme path: $StageRoot; Load unpacked once and confirm userscript Install/Update."
 } else {
     "Chromium browsers: staged $Palette; $($before.ProfileCount) profile(s), Tampermonkey in $($before.TampermonkeyCount). Theme path copied to clipboard; Load unpacked once and confirm userscript Install/Update."
 }

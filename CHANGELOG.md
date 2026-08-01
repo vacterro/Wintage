@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.23.1] - 2026-08-01
+
+- Report clipboard failures with the usable browser-theme path instead of claiming it was copied.
+- Surface installer path-preference write failures instead of silently forgetting them.
+
 ## [1.23.0] - 2026-08-01
 
 - Added immediate Windows theme installation with muted active/inactive captions and the `___CURRENT___` cursor scheme.

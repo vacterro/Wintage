@@ -210,6 +210,15 @@ try {
     Assert-True ($summary.ThemeLoadedCount -eq 1) 'browser discovery recognises its stable unpacked-theme path'
     Assert-True ($summary.Palette -eq 'goldendefault') 'browser listing reports the staged palette'
 
+    $clipboardStage = Join-Path $browserRoot 'clipboard-stage'
+    $clipboardCommand = "& '$browserTool' -Palette goldendefault -Catalog '$catalog' -StageRoot '$clipboardStage' -ClipboardWriter { param(`$Value) throw 'clipboard denied' } 3>&1 2>&1"
+    $clipboardOutput = (& powershell -NoProfile -ExecutionPolicy Bypass -Command $clipboardCommand | Out-String)
+    Assert-True ($LASTEXITCODE -eq 0) 'browser clipboard-failure fixture exits successfully'
+    Assert-True ($clipboardOutput -match 'path could not be copied') 'browser reports clipboard failure'
+    Assert-True ($clipboardOutput -match [regex]::Escape($clipboardStage)) 'browser prints the usable stage path after clipboard failure'
+    Assert-True ($clipboardOutput -notmatch 'copied to clipboard') 'browser does not claim clipboard success after failure'
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $browserTool -Catalog $catalog -StageRoot $clipboardStage -NoLaunch -Revert *> $null
+
     & powershell -NoProfile -ExecutionPolicy Bypass -File $browserTool -Palette goldendefault -Catalog $catalog -StageRoot $whatIfStage -NoLaunch -WhatIf *> $null
     Assert-True ($LASTEXITCODE -eq 0) 'browser fixture -WhatIf exits successfully'
     Assert-True (-not (Test-Path $whatIfStage)) 'browser -WhatIf stages nothing'
@@ -221,6 +230,10 @@ try {
 } finally {
     if (Test-Path $browserRoot) { Remove-Item $browserRoot -Recurse -Force }
 }
+
+$guiSource = [System.IO.File]::ReadAllText("$root\desktop\WintageInstaller.ps1")
+Assert-True ($guiSource -match 'could not save paths\.json') 'GUI reports custom-path persistence failures'
+Assert-True ($guiSource -notmatch 'function Save-CustomPaths[\s\S]*?catch\s*\{\s*\}') 'GUI custom-path save no longer swallows errors'
 
 Write-Host "
 ======================="

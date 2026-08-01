@@ -43,3 +43,18 @@
 - 01.08.26 17:03 [E-331] [parent: E-330] [T-094] DEC: goal_tickets 5->6
 - 01.08.26 17:06 [E-332] [parent: E-331] [T-094] RUN: REVIEW -> PASS final diff, release metadata, exact-tag publish path and scratch exclusion; no P0/P1.
 - 01.08.26 17:06 [E-333] [parent: E-332] [T-094] DEC: SHIP
+- 01.08.26 17:07 [E-334] [parent: E-333] [T-094] RUN: ship v1.23.0 -> pushed a8e7856
+- 01.08.26 17:08 [E-335] [parent: E-334] [T-094] RUN: DONE -> ticket complete
+- 01.08.26 17:08 [E-336] [parent: E-335] DEC: enter HUNT at shipped a8e7856; no workable TODO remains.
+- 01.08.26 17:09 [E-337] [parent: E-336] RUN: HUNT six signals: tests PASS; refs, symmetry and shipped commit verified; no stale markers.
+- 01.08.26 17:09 [E-338] [parent: E-337] H: empty catches falsely claim clipboard success and silently lose custom-path persistence errors.
+- 01.08.26 17:09 [E-339] [parent: E-338] [T-029] DEC: Custom restored and v1.23.0 shipped; obsolete blocker cleared, ticket DONE.
+- 01.08.26 17:09 [E-340] [parent: E-339] RUN: removed four stale T-090..T-093 kitchen verification scripts; durable evidence remains in LOG.
+- 01.08.26 17:09 [E-341] [parent: E-340] [T-099] DEC: HUNT finding ticketed and claimed; enter SCOUT.
+- 01.08.26 17:10 [E-342] [parent: E-341] [T-099] RUN: SCOUT -- return explicit clipboard result; surface path-save errors through existing GUI log.
+- 01.08.26 17:12 [E-343] [parent: E-342] [T-099] RUN: BUILD added explicit clipboard result, usable fallback path, GUI persistence warning and red fixture.
+- 01.08.26 17:12 [E-344] [parent: E-343] [T-099] DEC: enter VERIFY with forced clipboard failure and empty-catch guards.
+- 01.08.26 17:12 [E-345] [parent: E-344] [T-099] RUN: VERIFY -> PASS forced failure, no false success, GUI guard, parsers, repo and generation gates; conf: high.
+- 01.08.26 17:12 [E-346] [parent: E-345] [T-099] DEC: goal_tickets 6->7
+- 01.08.26 17:13 [E-347] [parent: E-346] [T-099] RUN: REVIEW -> PASS two error paths, failure fixture and patch release metadata; no P0/P1.
+- 01.08.26 17:13 [E-348] [parent: E-347] [T-099] DEC: SHIP

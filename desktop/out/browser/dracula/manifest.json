@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.23.0",
+  "version": "1.23.1",
   "name": "Wintage Dracula",
   "description": "Wintage Dracula for the browser chrome. Companion to the Wintage userscript.",
   "theme": {
