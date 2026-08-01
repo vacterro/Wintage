@@ -532,7 +532,27 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     iframe[src*="outbrain.com" i] {
       background-color: #073642 !important;
     }
-    div, span, section, article, aside, nav, header, footer, main, [class], [id], [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
+    /* 🚨 :not(:root) IS LOAD-BEARING, DO NOT DROP IT 🚨
+       Inside a shadow tree an attribute selector can never match the document root,
+       so this guard costs nothing there — but this stylesheet does not only live in
+       shadow trees. tools/build-desktop.js CONCATENATES GLOBAL_CSS + SHADOW_CSS into
+       the single sheet the Electron shim injects into a whole document, and there
+       [class] matches <html class="dark"> like any other element. The root then gets
+       color: inherit with nothing above it to inherit from, so it computes to the
+       INITIAL value — black — and every descendant inherits that same black through
+       this very rule. background-color: transparent does the same to the root's
+       background.
+       That is what made Claude unreadable: black text on the themed brown, immune
+       even to an inline important because the sheet is injected at user origin
+       there. Proved live over CDP: removing the class attribute from <html> turned
+       the whole transcript from rgb(0,0,0) to rgb(212,200,154) and restoring it put
+       the black back. Apps whose <html> carries no class (the Electron shell,
+       about:blank) were untouched, which is exactly why it read as a Claude-specific
+       mystery for eight rounds. :root is never a thing to hand inherit to.
+       (No backticks in this comment: it sits inside a template literal and one would
+       end it. node --check caught that too, on the very same edit.) */
+    div, span, section, article, aside, nav, header, footer, main,
+    [class]:not(:root), [id]:not(:root), [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
 
     /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
        hovercards/tooltips/menus inside shadow roots render see-through and their
@@ -560,6 +580,16 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
     button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
     button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
+
+    /* Claude Code UI: icon buttons and sidebar items should not look like bulky Win95 buttons until hovered. */
+    .cds-root button:not(:hover):not(:active),
+    .cds-root [role="button"]:not(:hover):not(:active),
+    .cds-root [class*="btn" i]:not(:hover):not(:active),
+    .cds-root [class*="button" i]:not(:hover):not(:active) {
+      background: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+    }
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #002029 !important; color: #93A1A1 !important; border: 2px solid !important; border-color: #001F27 #36667D #36667D #001F27 !important; box-shadow: none !important; box-sizing: border-box !important; }
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
