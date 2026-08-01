@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.23.3] - 2026-08-01
+
+- Replace proportional Verdana in Windows Terminal and classic conhost with Consolas 12 so glyphs fit the fixed terminal cell grid.
+
 ## [1.23.2] - 2026-08-01
 
 - Restore readable palette foregrounds in Claude Desktop 1.24012.9 while leaving SVG and icon glyphs untouched.

@@ -184,7 +184,11 @@ $TERMINAL_DIRS = @(
     (Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState'),
     (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows Terminal')
 )
-$CONSOLE_FONT = 'Verdana'
+# Terminal renderers lay text on a fixed cell grid. Verdana is proportional:
+# forcing it made conhost keep fixed cells while drawing variable-width glyphs,
+# so letters visibly collided. Consolas is bundled with Windows, monospace and
+# already approved by conhost's TrueTypeFont registry.
+$CONSOLE_FONT = 'Consolas'
 
 function Get-WindowsTerminalSettingsPaths {
     @($TERMINAL_DIRS | Where-Object { Test-Path $_ } | ForEach-Object { Join-Path $_ 'settings.json' })

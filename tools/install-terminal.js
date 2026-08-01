@@ -22,7 +22,10 @@ if (!settingsPath || (!revert && !palettePath)) {
 const backupPath = `${settingsPath}.wintage.bak`;
 const createdPath = `${settingsPath}.wintage-created`;
 const markerPath = `${settingsPath}.wintage-palette`;
-const TERMINAL_FONT = 'Verdana';
+// Windows Terminal is cell-based: proportional Verdana overlaps neighbouring
+// cells. Consolas preserves the requested compact sans-like look without lying
+// to the renderer about glyph width.
+const TERMINAL_FONT = 'Consolas';
 
 function stripJsonComments(source) {
   let out = '';

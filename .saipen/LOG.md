@@ -76,3 +76,14 @@
 - 01.08.26 17:39 [E-364] [parent: E-363] [T-100] RUN: build -> added required 1.23.2 changelog entry; retry delta is release metadata now present.
 - 01.08.26 17:40 [E-365] [parent: E-364] [T-100] RUN: VERIFY -> PASS required gates after 1.23.2 metadata edit; conf: high.
 - 01.08.26 17:40 [E-366] [parent: E-365] [T-100] DEC: SHIP; final metadata/code review clear, no P0/P1.
+- 01.08.26 17:41 [E-367] [parent: E-366] [T-100] RUN: ship v1.23.2 -> pushed 407c247
+- 01.08.26 17:41 [E-368] [parent: E-367] [T-100] RUN: DONE -> ticket complete
+- 01.08.26 17:42 [E-369] [parent: E-368] [T-101] DEC: claim terminal font-cell regression; enter SCOUT.
+- 01.08.26 17:43 [E-370] [parent: E-369] [T-101] RUN: SCOUT -- Verdana is proportional; use installed console-approved Consolas, preserve 16px cells and exact settings backups.
+- 01.08.26 17:44 [E-371] [parent: E-370] [T-101] H: first fixture run failed by expanding $CONSOLE_FONT in regex; retry delta is single-quoted literal regex.
+- 01.08.26 17:46 [E-372] [parent: E-371] [T-101] RUN: build -> Consolas 12 for both hosts, byte-exact Terminal fixture, live 7-profile apply and backed-up legacy alias cleanup.
+- 01.08.26 17:47 [E-373] [parent: E-372] [T-101] RUN: VERIFY -> PASS deliberate red, round-trip, parsers, repo and live 7/7 registry readback; conf: high.
+- 01.08.26 17:48 [E-374] [parent: E-373] [T-101] H: REVIEW product diff clear; 1.23.3 changelog absent, return BUILD for release metadata.
+- 01.08.26 17:48 [E-375] [parent: E-374] [T-101] RUN: build -> added 1.23.3 changelog and removed deliberate-red scratch artifact.
+- 01.08.26 17:49 [E-376] [parent: E-375] [T-101] RUN: VERIFY -> PASS terminal/parser/generation/repo gates after metadata edit; conf: high.
+- 01.08.26 17:49 [E-377] [parent: E-376] [T-101] DEC: SHIP; final font, backup, registry and release diff clear, no P0/P1.

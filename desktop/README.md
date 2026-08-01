@@ -57,7 +57,7 @@ in use.
 |---|---|---|
 | `windows` | user `.theme`: dark system/app mode, accent and classic colour roles | yes — installed in your local Windows Themes folder |
 | `browsers` | detects installed + portable Chromium profiles, stages the selected chrome theme and opens browser-owned Tampermonkey/theme confirmation pages | yes after one **Load unpacked** per profile |
-| `terminal` | Windows Terminal scheme + all-profile defaults, Verdana 12 aliased | yes — settings are in your profile |
+| `terminal` | Windows Terminal scheme + all-profile defaults, Consolas 12 aliased | yes — settings are in your profile |
 | `conhost` | `HKCU\Console` defaults + every existing cmd/PowerShell profile | yes — exact touched-value snapshot |
 | `obs` | OBS 30.2+ `.ovt` variant + active `user.ini` theme ID | yes — it lives in your profile |
 | `antigravity`, `vscode` | colour-theme extension in `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — it lives in your profile |
@@ -74,14 +74,14 @@ in use.
 
 `terminal` writes a `Wintage` colour scheme into every detected stable, Preview,
 or unpackaged Windows Terminal settings file and selects it through
-`profiles.defaults`, together with Verdana 12 and aliased text. The original file
+`profiles.defaults`, together with console-safe Consolas 12 and aliased text. The original file
 is kept byte-for-byte beside it and `-Revert` restores it.
 
 `conhost` covers classic `cmd.exe`, Windows PowerShell, Git CMD/Bash console
 profiles, and other existing `HKCU\Console` children. It writes the palette's full
 16-colour table to both the root defaults and every existing override, then restores
-only the values it touched. It applies Verdana there too, so both terminal hosts
-follow the same Vintage typography.
+only the values it touched. It applies Consolas there too, because proportional
+Verdana collides inside the fixed-width cell grid used by both terminal hosts.
 
 ### Browsers and Tampermonkey
 

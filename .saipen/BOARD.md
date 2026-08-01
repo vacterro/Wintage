@@ -2,13 +2,13 @@
 
 ## DOING
 
-- [/] T-100 Restore readable palette foreground in Claude 1.24012.9 without recolouring SVG/icon glyphs | needs: [] | owner: claude-opus-5 | claim_time: 2026-08-01T17:38:00Z | verify: deliberate-red and green shim gate, generated artifacts, repo harness and installed-payload readback PASS
+- [/] T-101 Replace unsupported proportional Verdana in Windows Terminal/conhost with a readable installed monospace fallback; clean the Wintage Verdana console registration safely | needs: [] | owner: claude-opus-5 | claim_time: 2026-08-01T17:49:00Z | verify: terminal apply/revert bytes, deliberate proportional-font red, parsers, repo gates and live 7-profile registry readback PASS
 
 ## TODO
 
-- [ ] T-101 Replace unsupported proportional Verdana in Windows Terminal/conhost with a readable installed monospace fallback; clean the Wintage Verdana console registration safely | needs: []
 
 ## DONE
+- [x] T-100 Restore readable palette foreground in Claude 1.24012.9 without recolouring SVG/icon glyphs | verify: deliberate-red and green shim gate, generated artifacts, repo harness and installed-payload readback PASS -- E-361, E-365
 - [x] T-099 Report clipboard and custom-path persistence failures honestly instead of emitting false success or swallowing them | verify: focused failure injection plus PowerShell parsers and repository gates PASS -- E-345, E-347
 - [x] T-029 Live Tampermonkey 5.5.0 verification passed: early/late Shadow DOM themed on two origins and theme storage persisted goldendefault->dracula across them | verify: positive live gate PASS, both shadow paths disabled makes it FAIL; Custom restored and v1.23.0 shipped -- E-339
 - [x] T-094 Verify the complete current change set, fix confirmed defects, and ship only attributable work | verify: release/repo gates, focused+red round-trips, 16x21 generated matrix, parsers, conformance and live -WhatIf isolation PASS -- E-291..E-293, E-308, E-330..E-332

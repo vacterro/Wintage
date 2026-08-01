@@ -116,6 +116,36 @@ try {
 }
 
 Write-Host "
+--- Testing Terminal Font and Round Trip ---" -ForegroundColor Cyan
+$terminalRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-terminal-" + [guid]::NewGuid().ToString('N'))
+try {
+    New-Item -ItemType Directory -Path $terminalRoot -Force | Out-Null
+    $terminalSettings = Join-Path $terminalRoot 'settings.json'
+    $terminalOriginal = "{`r`n  // preserve this comment on revert`r`n  `"profiles`": { `"defaults`": { `"font`": { `"face`": `"Verdana`", `"size`": 11 } } },`r`n}`r`n"
+    [System.IO.File]::WriteAllText($terminalSettings, $terminalOriginal, (New-Object System.Text.UTF8Encoding($false)))
+    $terminalBefore = [System.IO.File]::ReadAllBytes($terminalSettings)
+
+    & node "$root\tools\install-terminal.js" --settings $terminalSettings --palette "$root\themes\goldendefault.json" 2>&1 | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) 'terminal fixture apply exits successfully'
+    $terminalApplied = Get-Content $terminalSettings -Raw | ConvertFrom-Json
+    Assert-True ($terminalApplied.profiles.defaults.font.face -eq 'Consolas') 'terminal uses a fixed-width console-safe font'
+    Assert-True ($terminalApplied.profiles.defaults.font.size -eq 12) 'terminal keeps the Vintage 12px font size'
+    Assert-True ($terminalApplied.profiles.defaults.antialiasingMode -eq 'aliased') 'terminal keeps aliased rendering'
+    Assert-True (Test-Path ($terminalSettings + '.wintage.bak')) 'terminal fixture creates one exact backup'
+
+    & node "$root\tools\install-terminal.js" --settings $terminalSettings --revert 2>&1 | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) 'terminal fixture revert exits successfully'
+    $terminalAfter = [System.IO.File]::ReadAllBytes($terminalSettings)
+    Assert-True (-not (Compare-Object $terminalBefore $terminalAfter)) 'terminal revert restores settings byte-for-byte'
+    Assert-True (-not (Test-Path ($terminalSettings + '.wintage.bak'))) 'terminal revert consumes its backup'
+
+    Assert-True ($installCode -match '\$CONSOLE_FONT\s*=\s*''Consolas''') 'conhost uses the same fixed-width console-safe font'
+    Assert-True ($installCode -notmatch '\$CONSOLE_FONT\s*=\s*''Verdana''') 'conhost no longer forces proportional Verdana'
+} finally {
+    if (Test-Path $terminalRoot) { Remove-Item $terminalRoot -Recurse -Force }
+}
+
+Write-Host "
 --- Testing Total Commander Recent-File Indicator ---" -ForegroundColor Cyan
 $tcRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-totalcmd-" + [guid]::NewGuid().ToString('N'))
 try {
