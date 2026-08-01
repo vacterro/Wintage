@@ -2,9 +2,11 @@
 
 ## DOING
 
+- [/] T-100 Restore readable palette foreground in Claude 1.24012.9 without recolouring SVG/icon glyphs | needs: [] | owner: claude-opus-5 | claim_time: 2026-08-01T17:38:00Z | verify: deliberate-red and green shim gate, generated artifacts, repo harness and installed-payload readback PASS
 
 ## TODO
 
+- [ ] T-101 Replace unsupported proportional Verdana in Windows Terminal/conhost with a readable installed monospace fallback; clean the Wintage Verdana console registration safely | needs: []
 
 ## DONE
 - [x] T-099 Report clipboard and custom-path persistence failures honestly instead of emitting false success or swallowing them | verify: focused failure injection plus PowerShell parsers and repository gates PASS -- E-345, E-347

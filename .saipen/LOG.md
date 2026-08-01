@@ -58,3 +58,21 @@
 - 01.08.26 17:12 [E-346] [parent: E-345] [T-099] DEC: goal_tickets 6->7
 - 01.08.26 17:13 [E-347] [parent: E-346] [T-099] RUN: REVIEW -> PASS two error paths, failure fixture and patch release metadata; no P0/P1.
 - 01.08.26 17:13 [E-348] [parent: E-347] [T-099] DEC: SHIP
+- 01.08.26 17:13 [E-349] [parent: E-348] [T-099] RUN: ship v1.23.1 -> pushed f08fd10
+- 01.08.26 17:14 [E-350] [parent: E-349] [T-099] RUN: DONE -> ticket complete
+- 01.08.26 17:14 [E-351] [parent: E-350] DEC: enter HUNT at shipped f08fd10; no workable TODO remains.
+- 01.08.26 17:14 [E-352] [parent: E-351] RUN: hunt -> clean @f08fd10
+- 01.08.26 17:14 [E-353] [parent: E-352] DEC: add -> mature, goal_mode false
+- 01.08.26 17:31 [E-354] [parent: E-353] DEC: enter HUNT; user reported Claude foreground and proportional console-font regressions.
+- 01.08.26 17:31 [E-355] [parent: E-354] [T-100] H: ticketed Claude foreground regression; terminal font-cell regression follows as T-101.
+- 01.08.26 17:31 [E-356] [parent: E-355] [T-100] RUN: SCOUT -- add Claude-only cascade repair in shared Electron shim; leave browser/global CSS untouched.
+- 01.08.26 17:33 [E-357] [parent: E-356] [T-100] RUN: build -> Claude-only inherited foreground/text-fill repair, regression gate, rebuilt and installed payload.
+- 01.08.26 17:34 [E-358] [parent: E-357] [T-100] RUN: VERIFY -> PASS deliberate red, shim/CSS/build/repo gates and installed payload; visual after safe restart; conf: high.
+- 01.08.26 17:35 [E-359] [parent: E-358] [T-100] H: REVIEW found whitespace before :not turned exclusions into a descendant selector; return BUILD.
+- 01.08.26 17:36 [E-360] [parent: E-359] [T-100] RUN: build -> exclusions joined to the same compound; gate now rejects whitespace-induced descendant selectors.
+- 01.08.26 17:37 [E-361] [parent: E-360] [T-100] RUN: VERIFY -> PASS green/red shim, CSS/build/repo and installed-payload gates after review fix; conf: high.
+- 01.08.26 17:38 [E-362] [parent: E-361] [T-100] DEC: SHIP after selector-compound fix; review pass 2 clear, no P0/P1.
+- 01.08.26 17:39 [E-363] [parent: E-362] [T-100] H: SHIP preflight missing CHANGELOG 1.23.2; return BUILD, product code untouched.
+- 01.08.26 17:39 [E-364] [parent: E-363] [T-100] RUN: build -> added required 1.23.2 changelog entry; retry delta is release metadata now present.
+- 01.08.26 17:40 [E-365] [parent: E-364] [T-100] RUN: VERIFY -> PASS required gates after 1.23.2 metadata edit; conf: high.
+- 01.08.26 17:40 [E-366] [parent: E-365] [T-100] DEC: SHIP; final metadata/code review clear, no P0/P1.

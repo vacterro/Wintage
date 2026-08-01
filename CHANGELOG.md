@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.23.2] - 2026-08-01
+
+- Restore readable palette foregrounds in Claude Desktop 1.24012.9 while leaving SVG and icon glyphs untouched.
+
 ## [1.23.1] - 2026-08-01
 
 - Report clipboard failures with the usable browser-theme path instead of claiming it was copied.

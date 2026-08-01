@@ -64,6 +64,12 @@ if ($LASTEXITCODE -ne 0) { throw "Theme switch test failed - release aborted, ve
 node (Join-Path $PSScriptRoot 'tools/test-repainter-polarity.js')
 if ($LASTEXITCODE -ne 0) { throw "Repainter polarity test failed - release aborted, version line already bumped, fix and rerun" }
 
+# Electron targets share one shim, but Claude alone carries a foreground repair
+# for its nested Epitaxy view. Pin both halves: Claude receives it, every other
+# Electron app keeps the common stylesheet byte-for-byte.
+node (Join-Path $PSScriptRoot 'tools/test-electron-shim.js')
+if ($LASTEXITCODE -ne 0) { throw "Electron shim regression test failed - release aborted, version line already bumped, fix and rerun" }
+
 # The palettes live in themes/*.json and are generated INTO the script, so a
 # release must never ship a script whose block drifted from the packs. --check
 # only reports; regenerating is a deliberate act, not something a release does

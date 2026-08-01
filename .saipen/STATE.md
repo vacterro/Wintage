@@ -1,19 +1,17 @@
 ---
 phase: SHIP
-task: T-099
-next_action: RUN: .\release.ps1 -Message "report installer persistence failures honestly" -Bump patch
+task: T-100
+next_action: RUN: .\release.ps1 -Message "restore Claude foreground readability" -Bump patch
 blocker: none
 agent: claude-opus-5
 mode: full
 saipen_version: 7
 schema_version: 2
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
-goal_mode: true
-goal_waves: 1
-goal_tickets: 7
+goal_mode: false
 transition_from: REVIEW
-last_event: 348
-updated: 2026-08-01T17:13:04Z
+last_event: 366
+updated: 2026-08-01T17:40:01Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)

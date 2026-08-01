@@ -38,6 +38,26 @@ const T_SURFACE = token('surface');
 const T_TEXT = token('textPrimary');
 const T_BACKGROUND = token('background');
 
+// Claude 1.24012.9 started assigning an explicit near-black `color` to most
+// layout wrappers. An important colour inherited from html/body still loses to
+// any declaration made directly on a child, so the palette kept painting the
+// surfaces and bevels while the ordinary labels became black-on-brown.
+//
+// Keep this repair Claude-only. The shared stylesheet also serves FreeBuff,
+// CodeNomad and browser pages, where flattening every explicit text colour would
+// erase useful semantic states. `inherit` walks Claude's wrappers back to the
+// palette while retaining the stronger existing rules for links, controls and
+// disabled text. The text-fill reset covers WebKit utility classes; SVG and the
+// usual icon-font carriers stay outside it so glyphs do not turn into letters.
+const CLAUDE_VIEW = /(?:^https:\/\/claude\.ai\/epitaxy(?:[/?#]|$)|\/\.vite\/renderer\/main_window\/index\.html(?:[?#]|$))/i;
+const CLAUDE_FOREGROUND_CSS = `
+body :where(div, span, p, section, article, aside, main, nav, header, footer,
+  ul, ol, li, dl, dt, dd, h1, h2, h3, h4, h5, h6, label, small, strong, em,
+  b, time, code, pre, kbd, samp, input, textarea, select, option, button):not(svg):not(svg *):not([aria-hidden="true"]):not([class*="icon" i]):not([class*="glyph" i]):not([class*="symbol" i]) {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}`;
+
 // ─── SCROLLBAR GUTTERS ───────────────────────────────────────────────────────
 // Styling ::-webkit-scrollbar turns Chromium's OVERLAY scrollbars into classic
 // ones. Overlay scrollbars are invisible until you scroll, so app authors write
@@ -301,8 +321,9 @@ if (css) {
         wc.executeJavaScript(WCO_FIX, true)
           .then(r => stamp('wcofix: ' + r))
           .catch(err => stamp('wcofix FAILED: ' + (err && err.message)));
-        wc.insertCSS(css, { cssOrigin: 'author' })
-          .then(() => stamp('injected ' + css.length + ' bytes into ' + url))
+        const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
+        wc.insertCSS(payload, { cssOrigin: 'author' })
+          .then(() => stamp('injected ' + payload.length + ' bytes into ' + url))
           .catch(err => {
             stamp('FAILED: ' + (err && err.message));
             console.error('[wintage] insertCSS failed:', err && err.message);
