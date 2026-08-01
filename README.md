@@ -119,8 +119,9 @@ Edit `wintage.user.js`, then run:
 It bumps the `@version` patch number, commits, and pushes — Tampermonkey clients pick the update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases.
 
 <img width="1440" height="860" alt="2026-07-29_180529" src="https://github.com/user-attachments/assets/7888e96f-f854-4b68-bd82-58f76b85f630" />
+<img width="641" height="1080" alt="2026-08-01_230328" src="https://github.com/user-attachments/assets/2a33c723-eaee-4f49-b4e7-2d24e6bc599e" />
 <img width="874" height="903" alt="2026-07-29_180545" src="https://github.com/user-attachments/assets/0fc63c83-b314-4c95-96ab-ac5cdd7c3d53" />
-<img width="839" height="960" alt="2026-07-29_180556" src="https://github.com/user-attachments/assets/6ebf5e5e-32a5-41cf-97f0-25726ceeea85" />
+<img width="640" height="1080" alt="2026-08-01_230203" src="https://github.com/user-attachments/assets/db03a09c-dd8b-4423-b927-e8d87e7d0b4e" />
 <img width="746" height="1080" alt="2026-07-29_180639" src="https://github.com/user-attachments/assets/840ef269-6259-4c84-a1b6-8fd44f390aad" />
 <img width="900" height="663" alt="2026-07-29_180652" src="https://github.com/user-attachments/assets/4f38b63a-860c-468a-843f-6982c5287a7b" />
 
