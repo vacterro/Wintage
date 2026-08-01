@@ -99,6 +99,18 @@ if ($LASTEXITCODE -ne 0) { throw "Theme block is out of date with themes/*.json 
 node (Join-Path $PSScriptRoot 'tools/test-theme-packs.js')
 if ($LASTEXITCODE -ne 0) { throw "Theme pack test failed - release aborted, version line already bumped, fix and rerun" }
 
+# Every string the shim hands to executeJavaScript must be valid JavaScript, and
+# node --check cannot see inside template literals -- the same blind spot
+# check-css.js exists for, on the CSS side. Pin that the shipped payloads parse.
+node (Join-Path $PSScriptRoot 'tools/test-shim-payloads.js')
+if ($LASTEXITCODE -ne 0) { throw "Shim payload test failed - release aborted, version line already bumped, fix and rerun" }
+
+# The console font is named in TWO places (conhost registry vs Windows Terminal
+# settings.json). A machine with both installed must not render its two terminals
+# in different faces. Pin that they agree and are not proportional Verdana.
+node (Join-Path $PSScriptRoot 'tools/test-terminal-font.js')
+if ($LASTEXITCODE -ne 0) { throw "Terminal font test failed - release aborted, version line already bumped, fix and rerun" }
+
 # Desktop target dispatch, PowerShell parsing and -WhatIf isolation live in the
 # repository suite. A release that skips it can still mutate an app during a dry
 # run -- exactly the regression this gate now pins.

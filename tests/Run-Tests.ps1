@@ -243,10 +243,17 @@ try {
     $clipboardStage = Join-Path $browserRoot 'clipboard-stage'
     $clipboardCommand = "& '$browserTool' -Palette goldendefault -Catalog '$catalog' -StageRoot '$clipboardStage' -ClipboardWriter { param(`$Value) throw 'clipboard denied' } 3>&1 2>&1"
     $clipboardOutput = (& powershell -NoProfile -ExecutionPolicy Bypass -Command $clipboardCommand | Out-String)
+    # Out-String wraps captured warnings at the console width, so a 120-column
+    # host splits the sentence across a newline AND re-prefixes the continuation
+    # with "WARNING: " mid-phrase ('path could\nWARNING:  not be copied'). Strip
+    # the prefixes and flatten whitespace before matching: the gate tests WHAT
+    # the tool reports, not line layout, and it still fails if the tool stops
+    # reporting the failure at all.
+    $clipboardOutputFlat = ($clipboardOutput -replace '(?m)^WARNING:\s*', '') -replace '\s+', ' '
     Assert-True ($LASTEXITCODE -eq 0) 'browser clipboard-failure fixture exits successfully'
-    Assert-True ($clipboardOutput -match 'path could not be copied') 'browser reports clipboard failure'
-    Assert-True ($clipboardOutput -match [regex]::Escape($clipboardStage)) 'browser prints the usable stage path after clipboard failure'
-    Assert-True ($clipboardOutput -notmatch 'copied to clipboard') 'browser does not claim clipboard success after failure'
+    Assert-True ($clipboardOutputFlat -match 'path could not be copied') 'browser reports clipboard failure'
+    Assert-True ($clipboardOutputFlat -match [regex]::Escape($clipboardStage)) 'browser prints the usable stage path after clipboard failure'
+    Assert-True ($clipboardOutputFlat -notmatch 'copied to clipboard') 'browser does not claim clipboard success after failure'
     & powershell -NoProfile -ExecutionPolicy Bypass -File $browserTool -Catalog $catalog -StageRoot $clipboardStage -NoLaunch -Revert *> $null
 
     & powershell -NoProfile -ExecutionPolicy Bypass -File $browserTool -Palette goldendefault -Catalog $catalog -StageRoot $whatIfStage -NoLaunch -WhatIf *> $null

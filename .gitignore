@@ -19,3 +19,21 @@ Cached Theme.pak
 
 # SAIPEN verification scratch stays local; durable results live in LOG/BOARD.
 .saipen/kitchen/T-*-verify.*
+
+# throwaway probes from the Claude transparency debugging session (superseded)
+/fix.js
+/fix-claude-final.js
+/inspect.js
+/check-port.js
+/patch-resolidify.js
+
+# node scaffolding is scratch here -- the tools run on plain node, no deps
+node_modules/
+package.json
+package-lock.json
+
+# FreeBuff desktop app's own local data
+.freebuff/
+
+# one-off SAIPEN recovery repair script
+.saipen/kitchen/repair-log-qq.py

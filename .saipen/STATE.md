@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-101
-next_action: RUN: .\release.ps1 -Message "fix terminal font cell overlap" -Bump patch
+phase: DONE
+task: none
+next_action: "WAIT: user brake -- saiwiki handoff READY (run qqq to integrate+ship); saitranslate handoff DRAFT (29 languages T-102, UI loader T-103 pending; run ee again after the dedicated instance completes)"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -9,9 +9,9 @@ saipen_version: 7
 schema_version: 2
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: false
-transition_from: REVIEW
-last_event: 377
-updated: 2026-08-01T17:49:01Z
+transition_from: PREPARE
+last_event: 389
+updated: 2026-08-01T21:45:30Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)
@@ -46,7 +46,7 @@ Left needing the user's eyes: CodeNomad after restart, and the Antigravity resty
 
 # Previous wave — five extra themes (goal wave 1)
 
-Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, NomadCode РІР‚вЂќ
+Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, NomadCode —
 five palettes alongside the existing Dark Golden, switchable at runtime.
 
 T-017..T-026 on BOARD. Infrastructure first (registry, switch, palette-independent
@@ -56,7 +56,7 @@ Open question, not blocking T-017/T-018/T-019: FreeBuff and NomadCode have no
 public palette I can trace. Golden, Claude Code, Antigravity and K-Lite/MPC-HC do.
 If the user has a screenshot or a source file for those two, it beats guessing.
 
-## Previous wave РІР‚вЂќ UI.md conformance (v1.4.0 .. v1.4.7)
+## Previous wave — UI.md conformance (v1.4.0 .. v1.4.7)
 
 T-006..T-012 BUILT + VERIFIED as v1.4.0. Reasoning + deviations in
 KNOWLEDGE/ADR-003.md; perf history in ADR-002.md; animation history in ADR-001.md.
@@ -74,8 +74,8 @@ Measured live, en.wikipedia.org WWII, 16921 elements:
 
 Two bugs were caught only by live measurement, both now guarded:
 
-1. **Specificity.** The base type selector's six `:not([class*="РІР‚В¦" i])` matches
-   score (0,6,4), so `h1 { font-size: 16px !important }` at (0,0,1) LOST РІР‚вЂќ every
+1. **Specificity.** The base type selector's six `:not([class*="..." i])` matches
+   score (0,6,4), so `h1 { font-size: 16px !important }` at (0,0,1) LOST — every
    heading silently flattened to 12px. Exceptions are now carved out of the base
    selector (disjoint, no specificity race); the `font-weight` pair had the same
    bug, fixed with a `:root`/`:host` prefix.
@@ -92,4 +92,4 @@ or `box-sizing`; no `body{overflow-x:hidden}`; no class-name-based status colour
 semantic tokens never used as text colour (1.8:1 fails AA).
 
 Also open: local branch `perf-verify` still exists (squash-merged, so git calls it
-unmerged РІР‚вЂќ `-D` is destructive and needs the user's word).
+unmerged — `-D` is destructive and needs the user's word).

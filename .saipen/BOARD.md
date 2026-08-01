@@ -2,12 +2,19 @@
 
 ## DOING
 
-- [/] T-101 Replace unsupported proportional Verdana in Windows Terminal/conhost with a readable installed monospace fallback; clean the Wintage Verdana console registration safely | needs: [] | owner: claude-opus-5 | claim_time: 2026-08-01T17:49:00Z | verify: terminal apply/revert bytes, deliberate proportional-font red, parsers, repo gates and live 7-profile registry readback PASS
 
 ## TODO
+- [ ] T-107 Add a language-switcher bar to root README.md linking README.ru.md / README.et.md / README.ded.md | verify: all three links resolve, bar renders on GitHub
 
+## TODO2_PLACEHOLDER
+- [ ] T-102 Dedicated saitranslate instance: translate the Wintage README (and, when bundled, desktop/README.md + browser-theme/README.txt) into the 29 subSaipen languages (Japanese, Ukrainian, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Swedish, Danish, Finnish, Norwegian, Chinese, Korean, Thai, Vietnamese, Arabic, Hebrew, Turkish, Hindi, Indonesian, Greek, Czech, Romanian, Hungarian, Bulgarian, Slovak, Croatian); Core share EN/RU/ET/Дед already built in .saipen/saitranslate/kitchen/ | verify: 29 locales present, OUTBOX flips to status: ready
+- [ ] T-103 WintageInstaller.ps1 / install.ps1 / wintage.user.js have real user-visible strings but no i18n loader; adding an i18n loader is a real feature before UI-string translation becomes real — no fabricated JSON bundle | verify: loader reads locales; UI strings resolve per language
 
 ## DONE
+- [x] T-106 Claude Desktop transparency/hot-reload fix series (69d3094..6e18ec1, 5 commits, previously unticketed) | verify: release gates green (check-css, theme-switch, repainter-polarity, electron-shim, theme-packs, build-desktop, test-shim-payloads, test-terminal-font, Run-Tests) -- shipped v1.24.0
+- [x] T-104 README.ru/et/ded injected from .saipen/saitranslate/kitchen/ to repo root, UTF-8 clean, tokens/links/fences preserved | verify: E-388 PASS, reviewer green -- shipped v1.24.0
+- [x] T-105 saiwiki 8 pages injected to repo wiki/ with .md-adapted links, UTF-8 clean, hex tokens + version stamp preserved | verify: E-389 PASS, reviewer green; wiki-remote push stays with qqq -- shipped v1.24.0
+- [x] T-101 Replace unsupported proportional Verdana in Windows Terminal/conhost with a readable installed monospace fallback; clean the Wintage Verdana console registration safely | verify: terminal apply/revert bytes, deliberate proportional-font red, parsers, repo gates and live 7-profile registry readback PASS -- shipped v1.23.3 (7b79fd6), E-373/E-376 VERIFY PASS
 - [x] T-100 Restore readable palette foreground in Claude 1.24012.9 without recolouring SVG/icon glyphs | verify: deliberate-red and green shim gate, generated artifacts, repo harness and installed-payload readback PASS -- E-361, E-365
 - [x] T-099 Report clipboard and custom-path persistence failures honestly instead of emitting false success or swallowing them | verify: focused failure injection plus PowerShell parsers and repository gates PASS -- E-345, E-347
 - [x] T-029 Live Tampermonkey 5.5.0 verification passed: early/late Shadow DOM themed on two origins and theme storage persisted goldendefault->dracula across them | verify: positive live gate PASS, both shadow paths disabled makes it FAIL; Custom restored and v1.23.0 shipped -- E-339
