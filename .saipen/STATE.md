@@ -8,9 +8,11 @@ mode: full
 saipen_version: 7
 schema_version: 2
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
-goal_mode: false
+goal_mode: true
+goal_waves: 1
+goal_tickets: 0
 transition_from: BUILD
-last_event: 407
+last_event: 411
 updated: 2026-08-02T13:20:00Z
 ---
 

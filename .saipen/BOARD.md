@@ -5,6 +5,10 @@
 
 
 ## TODO
+- [ ] T-113 One machine-level manifest of what is actually installed (%APPDATA%\Wintage\installed.json): per target the palette, the resolved path, the app version it was patched against, the payload version and a timestamp; written on every successful apply, entry removed on revert | verify: apply/revert round-trip leaves the manifest exactly as it found it; a -WhatIf run writes nothing
+- [ ] T-114 `install.ps1 -Reapply`: read the manifest, rediscover each recorded target's CURRENT path, and re-apply the recorded palette wherever the payload is missing or older than the repo's. No arguments, idempotent, honours -WhatIf | verify: run twice -- second run reports "nothing to do" and touches no file
+- [ ] T-115 Simulated-update fixture, the gate the other two are worthless without: copy a themed Electron target, rename its app-<version> folder and strip the patch the way a real update does, then assert -Reapply finds it, re-patches it, and the result is byte-identical to a fresh install | verify: the gate FAILs when -Reapply's rediscovery is disabled, naming the target it lost
+- [ ] T-116 Make the loss visible without being asked: opt-in logon task that runs -Reapply quietly and only speaks when it re-applied something or could not (fuses flipped, app running, archive moved). Registered and removed from the installer GUI, never silently | verify: task registers, runs, and unregisters; a fuse-blocked target reports the reason instead of failing silently
 - [ ] T-107 Add a language-switcher bar to root README.md linking README.ru.md / README.et.md / README.ded.md | verify: all three links resolve, bar renders on GitHub
 
 ## TODO2_PLACEHOLDER
