@@ -143,7 +143,7 @@ body { background-color: #2C2C2C !important; color: #C0C0C0 !important; margin: 
 
 /* 🚨 VERDANA 100% FORCED EVERYWHERE — inputs/textareas included 🚨
    Only true icon-font carriers are excluded (glyphs would turn into letters). */
-*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
   font-family: Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif !important;
   -webkit-font-smoothing: none !important;
   -moz-osx-font-smoothing: unset !important;
@@ -179,7 +179,7 @@ input, textarea, select, option, button, code, pre, kbd, samp, tt,
    rejected for the status colours above: '[class*="meta" i]' also matches a
    '.pagemeta' wrapper full of body copy, and shrinking that to 10px is worse
    than leaving it at 12px. */
-*:not(svg):not(path):not(i):not(html):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+*:not(svg):not(path):not(i):not(html):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
   font-size: 12px !important;
   line-height: 1.2 !important;
 }
@@ -297,7 +297,29 @@ button::before, button::after, .btn::before, .btn::after,
 }
 
 button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
-.btn *, [class~="button" i] *, [class~="btn" i] *, a[role="button"] *, span[role="button"] * {
+/* 🚨 A STATUS INDICATOR IS NOT BUTTON DECORATION 🚨
+   The wipe above exists so a button reads as ONE control instead of a pile of
+   nested boxes, and it is right about wrappers. It is wrong about the small
+   coloured dot a button uses to report state, whose entire meaning IS its
+   background — done, running, waiting. Claude Code puts exactly such a dot inside
+   a button and the wipe left an empty hole where the status had been. Confirmed
+   from the engine rather than guessed: CSS.getMatchedStylesForNode on that dot
+   lists .status-dot[data-kind="running"] with background hsl(var(--text-400))
+   losing to this rule's background-color transparent.
+   The exclusions are EXPRESSED AS :not() ON THE WIPE ITSELF, not as a re-colouring
+   rule after it. Undoing it later cannot work: from user origin (which is how the
+   Electron shim injects into Claude) revert rolls back to the USER-AGENT origin,
+   not to the app's, so the dot would have come back transparent and looked fixed
+   in the CSS while staying broken on screen. Not matching is the only thing that
+   lets the app's own colour through — and it is also what keeps the OTHER states
+   right without guessing what any of them are called. */
+button:not(.ytp-button) *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class~="button" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class~="btn" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+span[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+a[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
+.btn *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
@@ -520,124 +542,46 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 .monaco-scrollable-element > .scrollbar.invisible { visibility: hidden !important; }
 .monaco-scrollable-element > .scrollbar > .slider { background-color: #343434 !important; }
 
-    /* Height-only 1ms transition + near-zero animation (see GLOBAL_CSS motion
-       note): transitionend/animationend keep firing for collapse + rc-motion
-       state machines, without touching top/left/width/transform. */
-    /* animation-fill-mode: forwards for the same snapback reason as the global
-       layer -- a shadow tree reveals its content the same way a light one does. */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; animation-fill-mode: forwards !important; }
-    /* Zero shadow / zero blur, same as the global layer (UI.md law 2). Shadow
-       roots are where modern component libraries keep their elevation, so
-       skipping this here would leave every web-component card floating while the
-       rest of the page is flat. */
-    *, *::before, *::after { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-    *:not(img):not(svg):not(video):not(canvas):not(picture):not(image), *::before, *::after { filter: none !important; }
-    /* Type ladder, same five steps and the same disjoint-selector trick as the
-       global layer (see the specificity note there — layering the exceptions on
-       top instead silently flattens every heading to 12px). */
-    *:not(svg):not(path):not(i):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
-      font-size: 12px !important; line-height: 1.2 !important;
-    }
-    h1 { font-size: 16px !important; line-height: 1.2 !important; }
-    h2, h3, h4, h5, h6 { font-size: 14px !important; line-height: 1.2 !important; }
-    small, sub, sup, figcaption { font-size: 10px !important; line-height: 1.2 !important; }
-    *:not(svg):not(path) { font-weight: 400 !important; font-style: normal !important; }
-    /* ':host X' matches X inside this shadow tree and scores (0,1,1), beating the
-       (0,0,2) base rule above — the same specificity fix the global layer makes
-       with ':root'. A bare 'b' here would lose and nothing would be bold. */
-    :host b, :host strong, :host th, :host h1, :host h2, :host h3, :host h4, :host h5, :host h6,
-    :host summary, :host legend, :host label, :host button, :host shreddit-button, :host [role="button"],
-    :host .btn, :host [class~="button" i], :host [class~="btn" i] { font-weight: 700 !important; }
-    :host i, :host em, :host cite, :host var, :host dfn, :host q, :host blockquote { font-style: italic !important; }
-    /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
-    *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
-    *:hover::before, *:hover::after {
-      transition-property: background-color, background-image, background-position, box-shadow, filter, backdrop-filter, color, border-color, outline-color, text-decoration-color, text-shadow !important;
-      transition-duration: 99999s !important;
-      transition-delay: 0s !important;
-      transition-timing-function: step-end !important;
-    }
-    *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
-      font-family: Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif !important; -webkit-font-smoothing: none !important; -moz-osx-font-smoothing: unset !important; font-smooth: never !important; text-rendering: optimizeSpeed !important;
-    }
-    input, textarea, select, option, button, code, pre, kbd, samp, tt, [class*="code" i], [class*="mono" i] { font-family: Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif !important; }
-    :host { --radius: 0px; --shreddit-border-radius: 0px; --md-sys-shape-corner-full: 0px; background-color: transparent !important; background-image: none !important; color: #C0C0C0 !important; }
-    /* Ad-iframe load-flash fix, scoped to known ad hosts only — see GLOBAL_CSS note (unconditional would break transparent widget overlays) */
-    iframe[src*="doubleclick.net" i], iframe[src*="googlesyndication.com" i],
-    iframe[src*="google.com/ads" i], iframe[id*="google_ads_iframe" i],
-    iframe[id*="gpt_unit" i], iframe[src*="adservice.google" i],
-    iframe[src*="amazon-adsystem.com" i], iframe[src*="taboola.com" i],
-    iframe[src*="outbrain.com" i] {
-      background-color: #2C2C2C !important;
-    }
-    /* 🚨 :not(:root) IS LOAD-BEARING, DO NOT DROP IT 🚨
-       Inside a shadow tree an attribute selector can never match the document root,
-       so this guard costs nothing there — but this stylesheet does not only live in
-       shadow trees. tools/build-desktop.js CONCATENATES GLOBAL_CSS + SHADOW_CSS into
-       the single sheet the Electron shim injects into a whole document, and there
-       [class] matches <html class="dark"> like any other element. The root then gets
-       color: inherit with nothing above it to inherit from, so it computes to the
-       INITIAL value — black — and every descendant inherits that same black through
-       this very rule. background-color: transparent does the same to the root's
-       background.
-       That is what made Claude unreadable: black text on the themed brown, immune
-       even to an inline important because the sheet is injected at user origin
-       there. Proved live over CDP: removing the class attribute from <html> turned
-       the whole transcript from rgb(0,0,0) to rgb(212,200,154) and restoring it put
-       the black back. Apps whose <html> carries no class (the Electron shell,
-       about:blank) were untouched, which is exactly why it read as a Claude-specific
-       mystery for eight rounds. :root is never a thing to hand inherit to.
-       (No backticks in this comment: it sits inside a template literal and one would
-       end it. node --check caught that too, on the very same edit.) */
-    div, span, section, article, aside, nav, header, footer, main,
-    [class]:not(:root), [id]:not(:root), [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
+/* 🚨 SURFACE FLATTENING — LIGHT DOM 🚨
+   This pair used to live only in SHADOW_CSS and reached these apps by being
+   concatenated into the document sheet, which was a mistake for a different reason
+   (see tools/build-desktop.js). The concatenation is gone; the rules are wanted, so
+   they are stated HERE, where a document stylesheet is what they were always going
+   to be, and with the guards a document needs and a shadow tree does not.
+   Removing them wholesale was itself a regression: CodeNomad and Antigravity lost
+   the flattening that makes an app read as one surface instead of a stack of
+   vendor greys.
+   Three guards, each paid for: :not(:root) keeps the document root out of it — an
+   inherit handed to the root computes to black and drags the whole page down with
+   it. The state-marker exclusions keep a status dot's background, which is the only
+   thing carrying its meaning. And the floating surfaces are re-solidified straight
+   after, or menus and tooltips render see-through with the text behind them showing
+   through. */
+div:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+span:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+section:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+article:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+aside:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+nav:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+header:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+footer:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[id]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="group"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="toolbar"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="region"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="presentation"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="none"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
+  background-color: transparent !important; background-image: none !important; color: inherit !important;
+}
+dialog:not(:root), [popover]:not(:root),
+[role="menu"]:not(:root), [role="listbox"]:not(:root),
+[role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
+[class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
+[class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
+[class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
+[data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
+  background-color: #343434 !important; background-image: none !important; color: #C0C0C0 !important; border: 2px solid !important; border-color: #4E555B #0A0A0A #0A0A0A #4E555B !important; box-shadow: none !important;
+}
 
-        /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
-       hovercards/tooltips/menus inside shadow roots render see-through and their
-       text overlaps the page underneath (the Reddit hovercard bug). Recolor only -
-       never force opacity/z-index/visibility.
-       Specificity is bumped with :not(:root):not(.w) to beat [class]:not(:root). */
-    dialog:not(:root):not(.w), [popover]:not(:root):not(.w),
-    [role="menu"]:not(:root):not(.w), [role="listbox"]:not(:root):not(.w),
-    [role="tooltip"]:not(:root):not(.w), [role="dialog"]:not(:root):not(.w), [role="alertdialog"]:not(:root):not(.w),
-    [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
-    [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
-    [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
-    [data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
-      background-color: #343434 !important; background-image: none !important; color: #C0C0C0 !important; border: 2px solid !important; border-color: #4E555B #0A0A0A #0A0A0A #4E555B !important; box-shadow: none !important;
-    }
-
-    button, input[type="button"], input[type="submit"], input[type="reset"], shreddit-button, .btn,
-    [class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
-      background-color: #343434 !important; color: #C0C0C0 !important; border: 2px solid !important; border-color: #4E555B #0A0A0A #0A0A0A #4E555B !important; box-shadow: none !important;
-      cursor: pointer !important; font-family: Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif !important; box-sizing: border-box !important;
-      padding: 2px 6px !important; min-width: 24px !important; min-height: 20px !important;
-    }
-    button:active, shreddit-button:active, .btn:active, [class~="button" i]:active, [class~="btn" i]:active, summary:active { background-color: #2B2B2B !important; border: 2px solid !important; border-color: #0A0A0A #4E555B #4E555B #0A0A0A !important; box-shadow: none !important; transform: translate(1px, 1px) !important; }
-    /* Disabled: label colour only, bevel and surface stay (UI.md bans opacity here) */
-    button:disabled, shreddit-button:disabled, button[aria-disabled="true"], [role="button"][aria-disabled="true"] {
-      color: #656565 !important; background-color: #343434 !important; opacity: 1 !important; cursor: not-allowed !important; border: 2px solid !important; border-color: #4E555B #0A0A0A #0A0A0A #4E555B !important; box-shadow: none !important;
-    }
-
-    /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
-    button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
-    button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
-
-    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: #141414 !important; color: #C0C0C0 !important; border: 2px solid !important; border-color: #0A0A0A #4E555B #4E555B #0A0A0A !important; box-shadow: none !important; box-sizing: border-box !important; }
-    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
-    textarea { min-height: 64px !important; resize: none !important; padding: 1px 3px !important; }
-    /* appearance:auto not forced here either — see GLOBAL_CSS checkbox note */
-    input[type="checkbox"], input[type="radio"] { accent-color: #839BB0 !important; background-image: none !important; }
-    input::placeholder, textarea::placeholder { color: #656565 !important; }
-    input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible,
-    summary:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
-      outline: 1px dotted #C0C0C0 !important; outline-offset: -4px !important;
-    }
-    th { background-color: #2B2B2B !important; color: #C0C0C0 !important; border: 2px solid !important; border-color: #4E555B #0A0A0A #0A0A0A #4E555B !important; box-shadow: none !important; }
-    ::selection { background-color: #343434 !important; color: #C0C0C0 !important; }
-
-    /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
-    button:hover, shreddit-button:hover, .btn:hover { background-color: #3A3A3A !important; border: 2px solid !important; border-color: #4E555B #0A0A0A #0A0A0A #4E555B !important; box-shadow: none !important; }
-    a, a:link { color: #839BB0 !important; text-decoration: none !important; }
-    a:visited { color: #949494 !important; }
-    a:hover { text-decoration: underline !important; background-color: transparent !important; }

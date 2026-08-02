@@ -131,7 +131,10 @@ function buildElectron(packs) {
   };
 
   const globalCss = literal('GLOBAL_CSS');
-  const shadowCss = literal('SHADOW_CSS');
+  // Still extracted, and deliberately so: literal() throws if the declaration is
+  // gone, which keeps this build honest about the userscript it is reading. It is
+  // just no longer concatenated into the document sheet -- see the note below.
+  literal('SHADOW_CSS');
   const bevels = {
     B_OUTER: constLiteral('B_OUTER'),
     B_INNER: constLiteral('B_INNER'),
@@ -150,7 +153,26 @@ function buildElectron(packs) {
       })
       .replace(/\$\{DARK \? '(\w+)' : '(\w+)'\}/g, '$1');
     // Two passes: the bevel constants themselves contain ${T.x}.
-    const css = resolve(resolve(globalCss)) + '\n' + resolve(resolve(shadowCss));
+    // GLOBAL_CSS ONLY. SHADOW_CSS used to be concatenated on here, and that was a
+    // straight mistake: the shim delivers this through insertCSS, which produces a
+    // DOCUMENT stylesheet, and a document stylesheet cannot reach inside a shadow
+    // root at all. So every SHADOW_CSS rule shipped here was incapable of doing the
+    // job it was written for, and could only ever match light-DOM elements it was
+    // never designed for -- with no guard, because inside a shadow tree the cases it
+    // would need to guard against do not exist.
+    //
+    // Both of the bugs that cost this project a long debugging session came from
+    // exactly that. Its `[class] { color: inherit }` matched <html class="…"> and
+    // handed the document root an inherit with nothing above it, computing to black
+    // and dragging every descendant down with it. Its `background-color:
+    // transparent` on the same selector wiped the background off floating panels, so
+    // menus and popovers rendered see-through with the text behind them showing
+    // straight through. Neither could happen in the shadow tree it was written for.
+    //
+    // The userscript still injects SHADOW_CSS where it belongs -- into shadow roots,
+    // one at a time. That path is unaffected; this one just stops pretending it is
+    // the same thing.
+    const css = resolve(resolve(globalCss));
     const left = /\$\{/.exec(css);
     if (left) throw new Error('unresolved placeholder in ' + pack.slug + ' css near: ' + css.slice(left.index, left.index + 60));
     emit(path.join(OUT, 'electron', pack.slug, 'wintage.css'),

@@ -9,8 +9,10 @@
 //
 // The shim once carried five of these payloads; the Claude probe/root-paint/
 // contrast trio was reverted (6e18ec1, "revert inherit-all, use targeted floating
-// surface selectors only") in favour of a single stylesheet append, so the JS
-// payloads are SCROLL_FIX and WCO_FIX. CLAUDE_FOREGROUND_CSS is a stylesheet the
+// surface selectors only") in favour of a single stylesheet append. "Targeted
+// selectors" is precisely what then missed Claude's popovers twice, which is why
+// FLOAT_FIX joined SCROLL_FIX and WCO_FIX: three executed JS payloads.
+// CLAUDE_FOREGROUND_CSS is a stylesheet the
 // shim hands to insertCSS, not executeJavaScript, so it is checked as CSS: the
 // declaration must exist and be referenced, and its literal must balance braces.
 //
@@ -44,7 +46,7 @@ const T_BACKGROUND = '#1A1810';
 const T_TEXT = '#D4C89A';
 const T_SURFACE = '#332E22';
 
-for (const name of ['SCROLL_FIX', 'WCO_FIX']) {
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX']) {
   try {
     const produced = eval('`' + literalAfter('const ' + name + ' = `') + '`');
     new vm.Script(produced);
@@ -53,6 +55,31 @@ for (const name of ['SCROLL_FIX', 'WCO_FIX']) {
     check(false, name + ': ' + e.message);
   }
 }
+
+// A payload that parses but is never handed to a renderer is dead code that reads
+// like a shipped fix -- exactly how the theme spent two reports believing floating
+// surfaces were covered. Each executed payload must be wired into the injector.
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX']) {
+  check(src.indexOf('executeJavaScript(' + name) > 0, name + ' is wired into the injector');
+}
+
+// FLOAT_FIX exists because the CSS re-solidify list is name-based and missed the
+// same app twice. Its whole value is that it decides by MEASUREMENT, so this gate
+// pins the four measurements down: delete any one of them and the block degrades
+// back into something that only looks like it covers popovers. Names are checked
+// for too -- a "fix" that reintroduces role="menu" or [class*="popup"] here has
+// quietly become the list it replaced.
+const floatSrc = literalAfter('const FLOAT_FIX = `');
+for (const [needle, what] of [
+  ['cs.position', 'out of flow (position)'],
+  ['cs.zIndex', 'deliberately stacked (z-index)'],
+  ['document.body', 'portalled (mounted at the top of the tree)'],
+  ['getBoundingClientRect', 'big enough to read (measured rect)']
+]) {
+  check(floatSrc.indexOf(needle) > 0, 'FLOAT_FIX still tests ' + what);
+}
+check(!/role\s*=\s*"?menu|class\*=|data-radix|floating-ui-portal/i.test(floatSrc),
+  'FLOAT_FIX has not regressed into matching component names');
 
 // CLAUDE_FOREGROUND_CSS is a stylesheet appended via insertCSS on Claude's
 // renderer, never executed. It must exist, be referenced by the injector, and be

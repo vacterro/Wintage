@@ -1,6 +1,7 @@
 # BOARD
 
 ## DOING
+- [ ] T-112 Transparent popovers returned in Claude Desktop: the re-solidify list is name-based and Claude's panels carry none of its markers. Replaced with a measured test (out of flow + explicit z-index + portalled + big enough to read) in the shim's new FLOAT_FIX and in the userscript's repainter, so no app rename can drop a panel off it | verify: user restarts Claude/Antigravity/CodeNomad -- popovers, menus and the Effort panel are opaque, and no status colour, icon or editor widget lost its own paint
 
 
 ## TODO
@@ -11,6 +12,10 @@
 - [ ] T-103 WintageInstaller.ps1 / install.ps1 / wintage.user.js have real user-visible strings but no i18n loader; adding an i18n loader is a real feature before UI-string translation becomes real — no fabricated JSON bundle | verify: loader reads locales; UI strings resolve per language
 
 ## DONE
+- [x] T-109 The "squares" across Claude, Antigravity and CodeNomad were icon-font tofu, not broken indicators: [data-cds="Icon"] carries an inline font-family of an icon font, and this theme's blanket Verdana rule excluded only six carriers, none of them these apps'. Chain extended (data-cds Icon, codicon, lucide, octicon, remixicon, phosphor, iconify, feather, data-icon) and gated | verify: gate FAILs when the guard is deleted, naming the marker -- E-401, E-402, E-403
+- [x] T-110 Removing SHADOW_CSS from the Electron build was right about the mechanism but took light-DOM surface flattening with it, which CodeNomad and Antigravity depended on. The flattening pair now lives in GLOBAL_CSS with the three guards a document needs: :not(:root), state-marker exclusions, and the floating-surface re-solidify | verify: all six gates PASS, 16 palettes rebuilt -- E-404
+- [x] T-111 tools/inspect-electron.js -- reads a live themed app over CDP (targets / rules / eval); `rules` prints the cascade with origin like the DevTools Styles pane. The tool that ended an eight-round guessing loop, kept in the repo instead of a scratch dir | verify: named the winning rule on .status-dot and on body -- E-405
+- [x] T-108 Status-dot background was erased by the button-descendant wipe. Exclusions written as :not() ON the wipe, because from user origin `revert` rolls back to the user-agent origin, not the app's -- an undo rule would have looked fixed and stayed broken | verify: engine named both sides before and after -- E-398, E-399
 - [x] T-106 Claude Desktop transparency/hot-reload fix series (69d3094..6e18ec1, 5 commits, previously unticketed) | verify: release gates green (check-css, theme-switch, repainter-polarity, electron-shim, theme-packs, build-desktop, test-shim-payloads, test-terminal-font, Run-Tests) -- shipped v1.24.0
 - [x] T-104 README.ru/et/ded injected from .saipen/saitranslate/kitchen/ to repo root, UTF-8 clean, tokens/links/fences preserved | verify: E-388 PASS, reviewer green -- shipped v1.24.0
 - [x] T-105 saiwiki 8 pages injected to repo wiki/ with .md-adapted links, UTF-8 clean, hex tokens + version stamp preserved | verify: E-389 PASS, reviewer green; wiki-remote push stays with qqq -- shipped v1.24.0

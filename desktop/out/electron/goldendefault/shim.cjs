@@ -163,6 +163,132 @@ const SCROLL_FIX = `(() => {
   return "scroll fix installed";
 })()`;
 
+// ─── FLOATING SURFACES ARE MEASURED, NOT NAMED ───────────────────────────────
+// The stylesheet flattens surfaces so an app reads as one window instead of a
+// stack of vendor greys, and then re-solidifies the panels that must stay opaque
+// -- menus, tooltips, popovers -- off a list of NAMES: role="menu",
+// [class*="popup" i], [class*="dropdown" i], the radix and floating-ui portal
+// attributes. That list has now missed the same app twice. Claude Desktop's
+// popovers carry none of those markers, so the wipe reaches them and the text
+// behind reads straight through the panel.
+//
+// The list cannot be finished by adding more names to it, and that is the whole
+// point of this block. Every entry on it is one library's vocabulary; an app that
+// renames a component, swaps its popover library, or ships its own design system
+// -- which all three agent shells targeted here do -- drops off the list at its
+// next release, silently. Nothing errors. The theme just quietly gets a hole in
+// it, and the person who finds it is the user.
+//
+// So the test is what a popover IS rather than what it is called, in terms the
+// layout engine can answer and an app rename cannot change:
+//   1. out of flow            position: fixed | absolute
+//   2. deliberately stacked   an explicit z-index, not auto
+//   3. portalled              laid out against the viewport or the document,
+//                             not against the thing that opened it
+//   4. big enough to read     and not the full-viewport scrim or the zero-size
+//                             wrapper that HOSTS the panel
+// All four must hold. Each one alone is common and harmless; together they
+// describe a panel floating over the app and nothing else. Colours are written as
+// var() rather than resolved hex so a palette switch repaints these with
+// everything else, and so this file stays palette-independent -- it is copied
+// byte-identical into all sixteen packs.
+const FLOAT_FIX = `(() => {
+  if (window.__wintageFloatFix) return "already running";
+  window.__wintageFloatFix = true;
+
+  const MARK = "data-w95-float";
+
+  const solidify = el => {
+    const s = el.style;
+    s.setProperty("background-color", "var(--surfaceRaised)", "important");
+    s.setProperty("background-image", "none", "important");
+    s.setProperty("color", "var(--textPrimary)", "important");
+    s.setProperty("border-width", "2px", "important");
+    s.setProperty("border-style", "solid", "important");
+    s.setProperty("border-color", "var(--bevelLight) var(--borderDark) var(--borderDark) var(--bevelLight)", "important");
+    s.setProperty("box-shadow", "none", "important");
+    el.setAttribute(MARK, "1");
+  };
+
+  const fixOne = el => {
+    let cs;
+    try { cs = getComputedStyle(el); } catch (e) { return; }
+    if (cs.position !== "fixed" && cs.position !== "absolute") return;
+    // An explicit stacking order is what separates a panel from the hundreds of
+    // absolutely-positioned adornments on a page -- carets, focus rings, badges,
+    // an editor's decoration layers. Those leave z-index auto.
+    if (!cs.zIndex || cs.zIndex === "auto") return;
+    // A click-through layer is a scrim or a measurement probe, never a panel.
+    if (cs.pointerEvents === "none" || cs.visibility === "hidden" || cs.display === "none") return;
+
+    // Portalled: mounted at the top of the tree rather than where it is used.
+    // A fixed element is laid out against the viewport by definition; an absolute
+    // one has to be checked, and offsetParent is the direct answer -- an editor's
+    // own suggest widget resolves to the editor and is deliberately left alone,
+    // because the app already draws it correctly and it is not what broke.
+    const p = el.parentElement;
+    const portalled = cs.position === "fixed" ||
+      p === document.body ||
+      (p && p.parentElement === document.body) ||
+      el.offsetParent === document.body ||
+      el.offsetParent === null;
+    if (!portalled) return;
+
+    const r = el.getBoundingClientRect();
+    // Zero-size means the panel is closed or this is the wrapper that hosts it.
+    // Neither is paintable, and the wrapper must stay transparent or it blacks out
+    // a viewport-sized rectangle over the app.
+    if (r.width < 40 || r.height < 24) { el.removeAttribute(MARK); return; }
+    if (r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) return;
+    if (!el.childElementCount && !(el.textContent || "").trim()) return;
+
+    if (!el.hasAttribute(MARK)) solidify(el);
+  };
+
+  const fixTree = root => {
+    if (!root.querySelectorAll) return;
+    // Only out-of-flow elements can qualify, but there is no selector for that, so
+    // the cheap filter is the one the DOM can answer: a panel is either portalled
+    // to the top of the tree or it is not a panel. Scanning body's own descendants
+    // wholesale is what the userscript's repainter exists for; here the point is to
+    // stay cheap enough to run on every mutation batch.
+    for (const el of root.querySelectorAll("*")) fixOne(el);
+  };
+
+  fixTree(document);
+  let passes = 0;
+  const settle = () => { if (++passes < 3) { fixTree(document); setTimeout(settle, 600); } };
+  setTimeout(settle, 600);
+
+  let queued = false;
+  const mutations = [];
+  new MutationObserver(records => {
+    mutations.push(...records);
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      const recs = mutations.splice(0, mutations.length);
+      for (const r of recs) {
+        if (r.type === "childList") {
+          for (const node of r.addedNodes) {
+            if (node.nodeType === 1) { fixOne(node); fixTree(node); }
+          }
+        } else if (r.type === "attributes") {
+          // A popover is usually mounted closed and then opened by a class or
+          // style flip, so the element that matters was already in the tree when
+          // it measured zero. Re-measuring on its own attribute change is the only
+          // thing that catches it, and it is why the mark is re-decided rather
+          // than latched on first sight.
+          if (r.target.nodeType === 1) fixOne(r.target);
+        }
+      }
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden", "open", "data-state", "aria-hidden", "aria-expanded"] });
+
+  return "float fix installed";
+})()`;
+
 // ─── NATIVE CAPTION BUTTONS SITTING ON TOP OF THE APP'S OWN CONTROLS ─────────
 // Antigravity is a frameless window with Electron's titleBarOverlay: minimise,
 // maximise and close are drawn by Chromium ON TOP of the page, in a strip the
@@ -250,6 +376,28 @@ const WCO_FIX = `(() => {
 // Pointing getAppPath() back at the archive restores exactly what an unpatched
 // launch would report. The real value is kept for anything that wants the shim's
 // own directory.
+// ─── OPT-IN DEBUG PORT ──────────────────────────────────────────────────────
+// Themed apps are the hardest thing here to diagnose: the only feedback is a
+// screenshot and a restart, which turns every hypothesis into a round trip paid
+// for by the user. A debug port replaces that with reading the live document --
+// which is how the black-text bug was finally pinned, by asking Blink directly
+// which rule won on <body> instead of guessing for eight rounds.
+//
+// OFF unless a file called `wintage-debug.port` sits next to this shim, holding
+// the port number. Deliberate, greppable, and revoked by deleting the file. Never
+// on for an ordinary install: a debugging port left open on someone's machine is
+// not a detail to leave to memory. Loopback only.
+try {
+  const portFile = path.join(__dirname, 'wintage-debug.port');
+  if (fs.existsSync(portFile)) {
+    const port = (fs.readFileSync(portFile, 'utf8').trim() || '9222').replace(/[^0-9]/g, '') || '9222';
+    const { app } = require('electron');
+    app.commandLine.appendSwitch('remote-debugging-port', port);
+    app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+    console.error('[wintage] DEBUG PORT ' + port + ' enabled by ' + portFile + ' - delete that file to turn it off');
+  }
+} catch (e) { }
+
 try {
   const { app } = require('electron');
   const realGetAppPath = app.getAppPath.bind(app);
@@ -321,6 +469,9 @@ if (css) {
         wc.executeJavaScript(WCO_FIX, true)
           .then(r => stamp('wcofix: ' + r))
           .catch(err => stamp('wcofix FAILED: ' + (err && err.message)));
+        wc.executeJavaScript(FLOAT_FIX, true)
+          .then(r => stamp('floatfix: ' + r))
+          .catch(err => stamp('floatfix FAILED: ' + (err && err.message)));
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         wc.insertCSS(payload, { cssOrigin: 'author' })
           .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })

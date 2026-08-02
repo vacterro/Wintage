@@ -541,7 +541,7 @@ body { background-color: ${T.backgroundSoft} !important; color: ${T.textPrimary}
 
 /* 🚨 VERDANA 100% FORCED EVERYWHERE — inputs/textareas included 🚨
    Only true icon-font carriers are excluded (glyphs would turn into letters). */
-*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
   font-family: ${FONT} !important;
   -webkit-font-smoothing: none !important;
   -moz-osx-font-smoothing: unset !important;
@@ -577,7 +577,7 @@ input, textarea, select, option, button, code, pre, kbd, samp, tt,
    rejected for the status colours above: '[class*="meta" i]' also matches a
    '.pagemeta' wrapper full of body copy, and shrinking that to 10px is worse
    than leaving it at 12px. */
-*:not(svg):not(path):not(i):not(html):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+*:not(svg):not(path):not(i):not(html):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
   font-size: 12px !important;
   line-height: 1.2 !important;
 }
@@ -695,7 +695,29 @@ button::before, button::after, .btn::before, .btn::after,
 }
 
 button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
-.btn *, [class~="button" i] *, [class~="btn" i] *, a[role="button"] *, span[role="button"] * {
+/* 🚨 A STATUS INDICATOR IS NOT BUTTON DECORATION 🚨
+   The wipe above exists so a button reads as ONE control instead of a pile of
+   nested boxes, and it is right about wrappers. It is wrong about the small
+   coloured dot a button uses to report state, whose entire meaning IS its
+   background — done, running, waiting. Claude Code puts exactly such a dot inside
+   a button and the wipe left an empty hole where the status had been. Confirmed
+   from the engine rather than guessed: CSS.getMatchedStylesForNode on that dot
+   lists .status-dot[data-kind="running"] with background hsl(var(--text-400))
+   losing to this rule's background-color transparent.
+   The exclusions are EXPRESSED AS :not() ON THE WIPE ITSELF, not as a re-colouring
+   rule after it. Undoing it later cannot work: from user origin (which is how the
+   Electron shim injects into Claude) revert rolls back to the USER-AGENT origin,
+   not to the app's, so the dot would have come back transparent and looked fixed
+   in the CSS while staying broken on screen. Not matching is the only thing that
+   lets the app's own colour through — and it is also what keeps the OTHER states
+   right without guessing what any of them are called. */
+button:not(.ytp-button) *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class~="button" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class~="btn" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+span[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+a[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
+.btn *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
@@ -917,6 +939,50 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
 }
 .monaco-scrollable-element > .scrollbar.invisible { visibility: hidden !important; }
 .monaco-scrollable-element > .scrollbar > .slider { background-color: ${T.surfaceRaised} !important; }
+
+/* 🚨 SURFACE FLATTENING — LIGHT DOM 🚨
+   This pair used to live only in SHADOW_CSS and reached these apps by being
+   concatenated into the document sheet, which was a mistake for a different reason
+   (see tools/build-desktop.js). The concatenation is gone; the rules are wanted, so
+   they are stated HERE, where a document stylesheet is what they were always going
+   to be, and with the guards a document needs and a shadow tree does not.
+   Removing them wholesale was itself a regression: CodeNomad and Antigravity lost
+   the flattening that makes an app read as one surface instead of a stack of
+   vendor greys.
+   Three guards, each paid for: :not(:root) keeps the document root out of it — an
+   inherit handed to the root computes to black and drags the whole page down with
+   it. The state-marker exclusions keep a status dot's background, which is the only
+   thing carrying its meaning. And the floating surfaces are re-solidified straight
+   after, or menus and tooltips render see-through with the text behind them showing
+   through. */
+div:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+span:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+section:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+article:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+aside:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+nav:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+header:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+footer:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[id]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="group"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="toolbar"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="region"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="presentation"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[role="none"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
+  background-color: transparent !important; background-image: none !important; color: inherit !important;
+}
+dialog:not(:root), [popover]:not(:root),
+[role="menu"]:not(:root), [role="listbox"]:not(:root),
+[role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
+[class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
+[class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
+[class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
+[data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
+  background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important; ${B_OUTER}
+}
+
 `;
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
@@ -936,7 +1002,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
     /* Type ladder, same five steps and the same disjoint-selector trick as the
        global layer (see the specificity note there — layering the exceptions on
        top instead silently flattens every heading to 12px). */
-    *:not(svg):not(path):not(i):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+    *:not(svg):not(path):not(i):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
       font-size: 12px !important; line-height: 1.2 !important;
     }
     h1 { font-size: 16px !important; line-height: 1.2 !important; }
@@ -958,7 +1024,7 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
       transition-delay: 0s !important;
       transition-timing-function: step-end !important;
     }
-    *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]) {
+    *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
       font-family: ${FONT} !important; -webkit-font-smoothing: none !important; -moz-osx-font-smoothing: unset !important; font-smooth: never !important; text-rendering: optimizeSpeed !important;
     }
     input, textarea, select, option, button, code, pre, kbd, samp, tt, [class*="code" i], [class*="mono" i] { font-family: ${FONT} !important; }
@@ -1540,6 +1606,60 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
         const r = el.getBoundingClientRect();
         if (r.width > innerWidth * 0.7 && r.height > innerHeight * 0.7) {
           w.push(el, 'background-image', 'none');
+        }
+      }
+    }
+
+    // 🚨 FLOATING SURFACES ARE MEASURED, NOT NAMED 🚨
+    // GLOBAL_CSS re-solidifies popovers off a list of NAMES -- role="menu",
+    // [class*="popup" i], [class*="dropdown" i], the radix and floating-ui portal
+    // attributes -- because the surface-flattening wipe above would otherwise leave
+    // them see-through with the page behind them showing through. That list has
+    // missed the same app twice now (E-381, E-407): Claude's popovers carry none of
+    // those markers.
+    //
+    // Adding more names does not fix a name list, it postpones it. Every entry is
+    // one library's vocabulary, and an app that renames a component or swaps its
+    // popover library drops off the list at its next release with nothing to show
+    // for it -- no error, no failing gate, just a hole in the theme that the user
+    // finds. So the test below asks what a popover IS, in terms the layout engine
+    // answers and a rename cannot change: out of flow, deliberately stacked,
+    // portalled to the top of the tree instead of laid out where it is used, and
+    // big enough to read. All four, or it is not a panel. The same four are applied
+    // to Electron apps by the shim's FLOAT_FIX, which is the only place they can be
+    // applied there -- that path ships CSS with no repainter behind it.
+    if (cs.position === 'fixed' || cs.position === 'absolute') {
+      // Free checks first, all off the computed style already read above. An
+      // explicit stacking order is what separates a panel from the hundreds of
+      // absolutely-positioned adornments on a page (carets, focus rings, badges),
+      // which leave z-index auto; pointer-events:none means a scrim, never a panel.
+      if (cs.zIndex && cs.zIndex !== 'auto' && cs.pointerEvents !== 'none' && cs.visibility !== 'hidden') {
+        const parentEl = el.parentElement;
+        // Layout reads start here, and only for the handful of elements that got
+        // this far -- the ordering is the ADR-004/ADR-006 discipline, same as the
+        // page-backdrop test above. A fixed element is laid out against the
+        // viewport by definition, so it needs no offsetParent read at all.
+        const portalled = cs.position === 'fixed' ||
+          parentEl === document.body ||
+          (parentEl && parentEl.parentElement === document.body) ||
+          el.offsetParent === document.body;
+        if (portalled) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 40 || r.height < 24) {
+            // Closed, or the zero-size wrapper that HOSTS the panel. Retried rather
+            // than remembered: a popover is mounted closed and opened later, and a
+            // latched decision would be made while it measured nothing.
+            el.removeAttribute('data-w95-done');
+          } else if (!(r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) &&
+                     (el.childElementCount > 0 || (el.textContent || '').trim())) {
+            w.push(el, 'background-color', T.surfaceRaised,
+              el, 'background-image', 'none',
+              el, 'color', T.textPrimary,
+              el, 'border-width', '2px',
+              el, 'border-style', 'solid',
+              el, 'border-color', T.bevelLight + ' ' + T.borderDark + ' ' + T.borderDark + ' ' + T.bevelLight,
+              el, 'box-shadow', 'none');
+          }
         }
       }
     }

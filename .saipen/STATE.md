@@ -1,7 +1,7 @@
 ---
-phase: DONE
-task: none
-next_action: "WAIT: blocked -- saipen ship has no verified work to ship (v1.24.0 already shipped/tagged 791f3f6; tree clean, in sync; T-107/T-102/T-103 TODO, T-065 BLOCKED; wiki-remote push is the qqq route)"
+phase: VERIFY
+task: T-112
+next_action: "WAIT: restart Claude/Antigravity/CodeNomad and confirm -- popovers opaque, and nothing else lost its colour"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -9,9 +9,9 @@ saipen_version: 7
 schema_version: 2
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: false
-transition_from: PREPARE
-last_event: 394
-updated: 2026-08-01T23:05:30Z
+transition_from: BUILD
+last_event: 407
+updated: 2026-08-02T13:20:00Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)

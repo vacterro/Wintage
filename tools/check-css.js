@@ -68,6 +68,31 @@ for (const name of ['GLOBAL_CSS', 'SHADOW_CSS']) {
     fail(name + ': hardcoded colour ' + h + ' — use a ${T.token} interpolation, a literal cannot follow the theme');
   }
 
+  // A BLANKET font rule must exclude icon-font carriers, or every icon in the
+  // application becomes a tofu box. Reported three times across three apps before
+  // anyone read the inline style and saw font-family: var(--font-anthropicons) --
+  // the glyph simply has no counterpart in Verdana. The failure looks like a
+  // missing feature rather than a CSS bug, which is why it needs a gate: nothing
+  // errors, the icons just quietly turn into squares.
+  // NOTE: do NOT split this text on '}' to find rules. The declarations here read
+  // `font-family: ${FONT}`, so a split on '}' cuts through the interpolation itself
+  // and every chunk comes back without a complete declaration in it — which is
+  // exactly how the first version of this check reported a clean pass on a file
+  // with the guard deliberately deleted. Walk back from each declaration instead.
+  for (const m of css.matchAll(/font-family:\s*(?:\$\{FONT\}|Verdana_m1)/g)) {
+    const open = css.lastIndexOf('{', m.index);
+    if (open < 0) continue;
+    const prev = Math.max(css.lastIndexOf('}', open), css.lastIndexOf('*/', open), css.lastIndexOf(';', open));
+    const sel = css.slice(prev + 1, open).trim();
+    if (!/^\*/.test(sel)) continue;               // only the universal ones are dangerous
+    for (const marker of ['[class*="icon" i]', '[class*="codicon" i]', '[data-cds="Icon"]']) {
+      if (!sel.includes(':not(' + marker + ')')) {
+        fail(name + ': a universal font-family rule does not exclude ' + marker +
+          ' — icons rendered with an icon font will turn into empty squares');
+      }
+    }
+  }
+
   // Braces must balance, or a dropped rule silently swallows the next ones.
   const opens = (bare.match(/{/g) || []).length, closes = (bare.match(/}/g) || []).length;
   if (opens !== closes) fail(name + ': ' + opens + ' `{` vs ' + closes + ' `}`');
@@ -186,8 +211,40 @@ function checkVersion() {
   } else if (!failures) console.log('version: PASS (' + header[1] + ' in both places)');
 }
 
+// The surface-flattening wipe in GLOBAL_CSS makes every panel transparent and then
+// hands back the ones that must stay opaque through a list of component NAMES.
+// That list missed Claude's popovers twice (E-381, E-407), and it will miss the
+// next app the same way: an app that renames a component or swaps its popover
+// library drops off it at its next release, silently -- nothing errors, the theme
+// just develops a hole and the user finds it. The repainter therefore carries a
+// MEASURED test alongside the names, and this gate keeps it measured. Losing any
+// one of the four checks leaves a block that still reads like it covers popovers.
+function checkFloatingSurfaces() {
+  if (!/background-color:\s*transparent\s*!important/.test(src)) return; // no wipe, no duty
+  const i = src.indexOf('FLOATING SURFACES ARE MEASURED, NOT NAMED');
+  if (i < 0) {
+    return fail('the repainter has no measured floating-surface test -- with the ' +
+      'transparency wipe in place, any popover the CSS name list does not know ' +
+      'renders see-through with the page showing through it');
+  }
+  const block = src.slice(i, i + 3000);
+  for (const [needle, what] of [
+    ['cs.position', 'out of flow (position)'],
+    ['cs.zIndex', 'deliberately stacked (z-index)'],
+    ['document.body', 'portalled (mounted at the top of the tree)'],
+    ['getBoundingClientRect', 'big enough to read (measured rect)']
+  ]) {
+    if (block.indexOf(needle) < 0) {
+      fail('the measured floating-surface test no longer checks ' + what +
+        ' -- it decides by name again for that half of the rule');
+    }
+  }
+  if (!failures) console.log('floating surfaces: PASS (measured, not named)');
+}
+
 checkThemes();
 checkVersion();
+checkFloatingSurfaces();
 
 if (failures) { console.error('\n' + failures + ' failure(s)'); process.exit(1); }
 console.log('CSS check PASS');

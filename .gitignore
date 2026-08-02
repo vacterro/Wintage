@@ -37,3 +37,6 @@ package-lock.json
 
 # one-off SAIPEN recovery repair script
 .saipen/kitchen/repair-log-qq.py
+
+# Timestamped installer backups written next to the script by a live run.
+*.bak-*

@@ -641,12 +641,10 @@ function Invoke-SmartVac {
 
     if (-not $PSCmdlet.ShouldProcess($pyFile, "Apply $PaletteSlug theme")) { return }
     
-    if (-not (Test-Path $bakFile)) {
-        Copy-Item $pyFile $bakFile -Force
-    }
+    Copy-Item $pyFile $bakFile -Force
     $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw | ConvertFrom-Json
     $t = $json.tokens
-    $code = Read-Utf8 $bakFile
+    $code = Read-Utf8 $pyFile
     
     $code = $code -replace '(?m)^WIN95_BG\s*=\s*''[^'']+''', "WIN95_BG           = '$($t.background)'"
     $code = $code -replace '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+''', "WIN95_BG_SOFT      = '$($t.backgroundSoft)'"
@@ -664,6 +662,7 @@ function Invoke-SmartVac {
     $code = $code -replace '(?m)^WIN95_GOLD_DIM\s*=\s*''[^'']+''', "WIN95_GOLD_DIM     = '$($t.textSecondary)'"
     $code = $code -replace '(?m)^WIN95_GOLD_DARK\s*=\s*''[^'']+''', "WIN95_GOLD_DARK    = '$($t.textMuted)'"
     $code = $code -replace '(?m)^WIN95_RED\s*=\s*''[^'']+''', "WIN95_RED          = '$($t.danger)'"
+    $code = $code -replace '(?m)^WIN95_DANGER\s*=\s*''[^'']+''', "WIN95_DANGER       = '$($t.danger)'"
     $code = $code -replace '(?m)^WIN95_GREEN\s*=\s*''[^'']+''', "WIN95_GREEN        = '$($t.success)'"
     $code = $code -replace '(?m)^WIN95_BUTTON\s*=\s*''[^'']+''', "WIN95_BUTTON       = '$($t.surfaceRaised)'"
     $code = $code -replace '(?m)^WIN95_BUTTON_HOVER\s*=\s*''[^'']+''', "WIN95_BUTTON_HOVER = '$($t.surfaceAlt)'"
