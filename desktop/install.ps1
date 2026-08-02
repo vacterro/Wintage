@@ -712,6 +712,22 @@ function Invoke-WildRift {
     Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
 }
 
+function Get-CssShape {
+    # A stylesheet reduced to everything this patch is NOT allowed to touch, so
+    # two files can be compared for "same stylesheet, different colours".
+    #
+    # Removed: every #rrggbb literal (the token rewrite), the --dangerText
+    # declaration this function's caller inserts, and the var(--dangerText)
+    # substitutions it makes. Whitespace is collapsed last so a CRLF/LF or
+    # re-indent difference does not read as a content change.
+    param([string]$Text)
+    $t = $Text -replace '#[0-9A-Fa-f]{6}', '#'
+    $t = $t -replace '\s*--dangerText\s*:\s*#\s*;', ''
+    $t = $t -replace 'var\(--dangerText\)', 'var(--danger)'
+    $t = $t -replace '\s+', ' '
+    return $t.Trim()
+}
+
 function Invoke-Saipenview {
     param([switch]$DoRevert, [string]$PaletteSlug)
     if (-not (Test-Path $SaipenviewPath)) { Say "SAIPENVIEW: not found at $SaipenviewPath" 'DarkYellow'; return }
@@ -735,7 +751,31 @@ function Invoke-Saipenview {
     if (-not (Test-Path $cssFile)) { Say "SAIPENVIEW: CSS file not found ($cssFile)" 'DarkYellow'; return }
     
     if ($PSCmdlet.ShouldProcess($cssFile, "Recolour :root tokens to $PaletteSlug")) {
-        if (-not (Test-Path $bakFile)) {
+        # ─── THE BACKUP GOES STALE, AND A STALE BACKUP IS A TIME MACHINE ─────
+        # Everything below recolours from $bakFile, never from the live file, so
+        # a half-applied run cannot compound. That is right -- but only while the
+        # backup is the SAME stylesheet as the live file, differing in colours.
+        #
+        # It stops being that the moment SAIPENVIEW ships new CSS. The backup is
+        # taken once and never refreshed, so every later run rewrote style.css to
+        # `<old snapshot> + new colours`, silently deleting whatever rules had
+        # landed since -- the --dangerText token, the .conf-list collapse rule,
+        # the whole Agent Panel block, the .bmac-btn rule. SAIPENVIEW logged it
+        # three times as CSS that "regenerates itself" to a byte-identical file
+        # matching no commit in its history (its T-135/T-137). It matched no
+        # commit because it was assembled here.
+        #
+        # So: compare the SHAPE of the two files -- everything except the colour
+        # values this patch is allowed to change -- and re-take the backup when
+        # they differ. The old one is kept beside it rather than dropped, since
+        # it is the only copy of a pre-theme file if the user ever had one.
+        if (Test-Path $bakFile) {
+            if ((Get-CssShape (Read-Utf8 $bakFile)) -ne (Get-CssShape (Read-Utf8 $cssFile))) {
+                Copy-Item $bakFile "$bakFile.stale" -Force
+                Copy-Item $cssFile $bakFile -Force
+                Say "SAIPENVIEW: style.css has changed since the backup was taken - backup refreshed (previous kept as style.css.bak.stale)" 'DarkYellow'
+            }
+        } else {
             Copy-Item $cssFile $bakFile -Force
         }
 

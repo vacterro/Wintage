@@ -40,3 +40,6 @@ package-lock.json
 
 # Timestamped installer backups written next to the script by a live run.
 *.bak-*
+
+# Throwaway idle-CPU harness (tools/ gets the keeper version).
+scratch-idle*
