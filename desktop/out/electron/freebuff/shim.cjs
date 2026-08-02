@@ -327,6 +327,98 @@ const FLOAT_FIX = `(() => {
   return "float fix installed";
 })()`;
 
+// ─── SCROLLING UP MUST MEAN SCROLLING UP ─────────────────────────────────────
+// Reported as: read something in the middle of a long conversation, and the view
+// snaps back down, repeatedly, until you drag the scrollbar by hand.
+//
+// Recorded on the live application before a line of this was written, with a
+// stack captured on every programmatic scroll. The theme is not the mover, and
+// that was worth proving rather than assuming -- the scroller carried zero inline
+// writes from this shim, no scrollbar-width, no overflow-y, no bevel. What the
+// recorder caught is the application pinning itself to the bottom:
+//
+//   t+0    scrollTo   from 4400 -> {top: 5896, behavior: "smooth"}   scrollToBottom
+//   t+75   scrollTop  from 2600 -> 5896                              ResizeObserver
+//
+// The reader was at 2600, some 3300px from the bottom. Every chunk that streams in
+// resizes the content, the resize observer re-pins, and the reader loses their
+// place. A theme has no business rewriting an application's behaviour, so the rule
+// here is as narrow as the evidence: keep the intent the USER expressed.
+//
+// The discriminator is transient activation, and it is exact. Clicking a
+// "jump to latest" button leaves navigator.userActivation.isActive true; a
+// ResizeObserver callback firing because a token arrived does not. So a
+// programmatic scroll TO THE BOTTOM, aimed at a scroller the reader has
+// deliberately left, with no user gesture behind it, is dropped. Everything else
+// -- their own wheel, their own drag, their own click on the button, the app's
+// pinning while they ARE at the bottom -- is untouched, and the moment they come
+// back to the bottom the app is free to pin again.
+const SCROLL_INTENT_FIX = `(() => {
+  if (window.__wintageScrollIntent) return "already running";
+  window.__wintageScrollIntent = true;
+
+  // How close to the bottom still counts as "at the bottom". A couple of lines,
+  // not a screenful: this decides when the app is allowed to pin again.
+  const AT_BOTTOM = 64;
+  // How far away counts as "deliberately reading something else". Well past any
+  // rounding, sub-pixel or bevel noise.
+  const AWAY = 200;
+
+  const AWAY_FLAG = "__wintageReaderAway";
+  const proto = Element.prototype;
+  const desc = Object.getOwnPropertyDescriptor(proto, "scrollTop");
+  const rawScrollTo = proto.scrollTo;
+
+  const range = el => el.scrollHeight - el.clientHeight;
+  const distance = el => range(el) - desc.get.call(el);
+  const gesture = () => {
+    try { return !!(navigator.userActivation && navigator.userActivation.isActive); }
+    catch (e) { return true; }        // cannot tell -> never block
+  };
+
+  // Only ever say yes when everything is known. Anything unmeasurable falls
+  // through to "allow", because a theme dropping a scroll it did not understand
+  // is a far worse failure than a scroll it should have dropped.
+  const shouldDrop = (el, targetTop) => {
+    if (!el || !el[AWAY_FLAG]) return false;
+    const r = range(el);
+    if (r < 400) return false;                     // nothing worth losing your place in
+    if (r - targetTop > AT_BOTTOM) return false;   // not aimed at the bottom
+    if (gesture()) return false;                   // the reader asked for it
+    return true;
+  };
+
+  Object.defineProperty(proto, "scrollTop", {
+    configurable: true,
+    get() { return desc.get.call(this); },
+    set(v) {
+      if (shouldDrop(this, Number(v))) return;
+      return desc.set.call(this, v);
+    }
+  });
+
+  proto.scrollTo = function (...args) {
+    const opt = args[0];
+    const top = opt && typeof opt === "object" ? opt.top : args[1];
+    if (typeof top === "number" && shouldDrop(this, top)) return;
+    return rawScrollTo.apply(this, args);
+  };
+
+  // The reader's own scrolling is what sets and clears the flag. A scroll event
+  // fires for programmatic scrolls too, which is why the flag is derived from
+  // POSITION rather than from "an event happened": at the bottom, the app may
+  // pin; away from it, it may not. That holds no matter who moved it last.
+  addEventListener("scroll", ev => {
+    const el = ev.target;
+    if (!el || el.nodeType !== 1 || range(el) < 400) return;
+    const d = distance(el);
+    if (d <= AT_BOTTOM) el[AWAY_FLAG] = false;
+    else if (d >= AWAY) el[AWAY_FLAG] = true;
+  }, { capture: true, passive: true });
+
+  return "scroll intent fix installed";
+})()`;
+
 // ─── A BAR THAT REPORTS A VALUE IS DATA, NOT DECORATION ──────────────────────
 // Same family as the status dot, one step further out. A usage bar, a context
 // meter, a quota strip -- the number they carry is not in the text next to them,
@@ -618,6 +710,9 @@ if (css) {
         wc.executeJavaScript(PROGRESS_FIX, true)
           .then(r => stamp('progressfix: ' + r))
           .catch(err => stamp('progressfix FAILED: ' + (err && err.message)));
+        wc.executeJavaScript(SCROLL_INTENT_FIX, true)
+          .then(r => stamp('scrollintent: ' + r))
+          .catch(err => stamp('scrollintent FAILED: ' + (err && err.message)));
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         wc.insertCSS(payload, { cssOrigin: 'author' })
           .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })

@@ -46,7 +46,7 @@ const T_BACKGROUND = '#1A1810';
 const T_TEXT = '#D4C89A';
 const T_SURFACE = '#332E22';
 
-for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'PROGRESS_FIX']) {
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'PROGRESS_FIX', 'SCROLL_INTENT_FIX']) {
   try {
     const produced = eval('`' + literalAfter('const ' + name + ' = `') + '`');
     new vm.Script(produced);
@@ -59,7 +59,7 @@ for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'PROGRESS_FIX']) {
 // A payload that parses but is never handed to a renderer is dead code that reads
 // like a shipped fix -- exactly how the theme spent two reports believing floating
 // surfaces were covered. Each executed payload must be wired into the injector.
-for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'PROGRESS_FIX']) {
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'PROGRESS_FIX', 'SCROLL_INTENT_FIX']) {
   check(src.indexOf('executeJavaScript(' + name) > 0, name + ' is wired into the injector');
 }
 
@@ -96,6 +96,24 @@ for (const [needle, what] of [
 }
 check(!/role\s*=\s*"?progressbar|class\*=|meter/i.test(barSrc),
   'PROGRESS_FIX has not regressed into matching component names');
+
+// SCROLL_INTENT_FIX changes an application's BEHAVIOUR, which is further than a
+// theme normally goes, so its narrowness is the thing worth pinning. It may only
+// drop a scroll that is (a) aimed at the bottom, (b) on a scroller the reader has
+// deliberately left, and (c) not backed by a user gesture. Lose the gesture check
+// and it starts eating the reader's own "jump to latest" click; lose the distance
+// checks and it fights the app on every pin.
+const intentSrc = literalAfter('const SCROLL_INTENT_FIX = `');
+for (const [needle, what] of [
+  ['userActivation', 'that a real user gesture is always allowed through'],
+  ['AT_BOTTOM', 'that only bottom-aimed scrolls are candidates'],
+  ['AWAY_FLAG', 'that the reader must have deliberately scrolled away'],
+  ['scrollHeight - el.clientHeight', 'that the scroller is measured, not assumed']
+]) {
+  check(intentSrc.indexOf(needle) > 0, 'SCROLL_INTENT_FIX still requires ' + what);
+}
+check(/return false;/.test(intentSrc) && intentSrc.indexOf('catch (e) { return true; }') > 0,
+  'SCROLL_INTENT_FIX fails open -- an unmeasurable case allows the scroll');
 
 // CLAUDE_FOREGROUND_CSS is a stylesheet appended via insertCSS on Claude's
 // renderer, never executed. It must exist, be referenced by the injector, and be
