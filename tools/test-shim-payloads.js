@@ -46,7 +46,7 @@ const T_BACKGROUND = '#1A1810';
 const T_TEXT = '#D4C89A';
 const T_SURFACE = '#332E22';
 
-for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX']) {
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'PROGRESS_FIX']) {
   try {
     const produced = eval('`' + literalAfter('const ' + name + ' = `') + '`');
     new vm.Script(produced);
@@ -59,7 +59,7 @@ for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX']) {
 // A payload that parses but is never handed to a renderer is dead code that reads
 // like a shipped fix -- exactly how the theme spent two reports believing floating
 // surfaces were covered. Each executed payload must be wired into the injector.
-for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX']) {
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'PROGRESS_FIX']) {
   check(src.indexOf('executeJavaScript(' + name) > 0, name + ' is wired into the injector');
 }
 
@@ -80,6 +80,22 @@ for (const [needle, what] of [
 }
 check(!/role\s*=\s*"?menu|class\*=|data-radix|floating-ui-portal/i.test(floatSrc),
   'FLOAT_FIX has not regressed into matching component names');
+
+// PROGRESS_FIX restores the one thing a usage bar is drawn for -- the proportion
+// between fill and track -- which surface flattening erases by painting both the
+// same colour. It finds the fill by the only thing an app cannot stop doing:
+// computing a live width inline. Pin that, and pin that it stays name-free.
+const barSrc = literalAfter('const PROGRESS_FIX = `');
+for (const [needle, what] of [
+  ['width:', 'a fill sized by an inline percentage width'],
+  ['scaleX', 'a fill sized by a scaleX transform'],
+  ['matrix', 'a fill whose scaleX arrives as a computed matrix'],
+  ['getBoundingClientRect', 'that a track is short and wide (measured)']
+]) {
+  check(barSrc.indexOf(needle) > 0, 'PROGRESS_FIX still detects ' + what);
+}
+check(!/role\s*=\s*"?progressbar|class\*=|meter/i.test(barSrc),
+  'PROGRESS_FIX has not regressed into matching component names');
 
 // CLAUDE_FOREGROUND_CSS is a stylesheet appended via insertCSS on Claude's
 // renderer, never executed. It must exist, be referenced by the injector, and be

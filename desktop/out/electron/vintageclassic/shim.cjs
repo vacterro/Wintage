@@ -327,6 +327,111 @@ const FLOAT_FIX = `(() => {
   return "float fix installed";
 })()`;
 
+// ─── A BAR THAT REPORTS A VALUE IS DATA, NOT DECORATION ──────────────────────
+// Same family as the status dot, one step further out. A usage bar, a context
+// meter, a quota strip -- the number they carry is not in the text next to them,
+// it is in HOW MUCH OF THE TRACK IS FILLED. The stylesheet flattens surfaces so
+// an app reads as one window, and in doing so it paints the fill and the track
+// the same colour: the bar survives as a rectangle and loses the only thing it
+// was drawn for. Reported as "the strip that shows how full it is is now solid".
+//
+// The state exclusions cannot catch these. They key on role="progressbar" and
+// friends, and a fill is almost never marked -- it is an unmarked div inside a
+// track, and the app renames both every redesign. What it CANNOT stop doing is
+// computing the fill inline: the width is a live value, so it lands in a style
+// attribute as a percentage or a scaleX, every time, in every framework. That is
+// the signal, it is structural, and it costs nothing to read.
+//
+// So: a short wide box holding a child sized by a percentage is a track holding a
+// fill. The track is sunk to a recessed surface, the fill is painted in the
+// palette's accent, and the proportion between them is readable again. Nothing is
+// matched by name; a bar that stops being computed inline stops being a bar.
+const PROGRESS_FIX = `(() => {
+  if (window.__wintageProgressFix) return "already running";
+  window.__wintageProgressFix = true;
+
+  const MARK = "data-w95-bar";
+  const PCT = /(^|[^-\\w])width:\\s*[\\d.]+%/i;
+
+  const looksLikeFill = el => {
+    const style = el.getAttribute("style") || "";
+    if (PCT.test(style) || /scaleX\\(/i.test(style)) return true;
+    const tr = getComputedStyle(el).transform;
+    // matrix(a, ...) with a != 1 is a scaleX in disguise, which is how the
+    // smoother implementations animate a fill.
+    const m = /^matrix\\(([\\d.-]+),/.exec(tr);
+    return !!m && Math.abs(parseFloat(m[1]) - 1) > 0.001;
+  };
+
+  const fixTrack = track => {
+    const tr = track.getBoundingClientRect();
+    // A track is short, wide, and not the page. Everything taller than a line of
+    // text is a layout box that happens to hold a percentage-sized child.
+    if (tr.height < 2 || tr.height > 24 || tr.width < 40) return false;
+    let painted = false;
+    for (const fill of track.children) {
+      if (!looksLikeFill(fill)) continue;
+      const fr = fill.getBoundingClientRect();
+      if (fr.width < 1 || fr.height < 1) continue;
+      fill.style.setProperty("background-color", "var(--link)", "important");
+      fill.style.setProperty("background-image", "none", "important");
+      fill.style.setProperty("border-radius", "0", "important");
+      fill.setAttribute(MARK, "fill");
+      painted = true;
+    }
+    if (!painted) return false;
+    // Win95 draws a progress track sunken, so the fill reads as sitting IN it.
+    track.style.setProperty("background-color", "var(--surface)", "important");
+    track.style.setProperty("background-image", "none", "important");
+    track.style.setProperty("border-width", "2px", "important");
+    track.style.setProperty("border-style", "solid", "important");
+    track.style.setProperty("border-color", "var(--borderDark) var(--bevelLight) var(--bevelLight) var(--borderDark)", "important");
+    track.style.setProperty("box-sizing", "border-box", "important");
+    track.setAttribute(MARK, "track");
+    return true;
+  };
+
+  const scan = root => {
+    if (!root.querySelectorAll) return;
+    for (const el of root.querySelectorAll("*")) {
+      if (el.children.length) fixTrack(el);
+    }
+  };
+
+  scan(document);
+  let passes = 0;
+  const settle = () => { if (++passes < 3) { scan(document); setTimeout(settle, 600); } };
+  setTimeout(settle, 600);
+
+  let queued = false;
+  const pending = [];
+  new MutationObserver(records => {
+    pending.push(...records);
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      const recs = pending.splice(0, pending.length);
+      for (const r of recs) {
+        if (r.type === "attributes") {
+          // The fill's own style attribute changing IS the value changing, so the
+          // parent is re-read rather than trusted to have been done once.
+          const p = r.target.parentElement;
+          if (p) fixTrack(p);
+        } else {
+          for (const node of r.addedNodes) {
+            if (node.nodeType !== 1) continue;
+            if (node.parentElement) fixTrack(node.parentElement);
+            scan(node);
+          }
+        }
+      }
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "aria-valuenow"] });
+
+  return "progress fix installed";
+})()`;
+
 // ─── NATIVE CAPTION BUTTONS SITTING ON TOP OF THE APP'S OWN CONTROLS ─────────
 // Antigravity is a frameless window with Electron's titleBarOverlay: minimise,
 // maximise and close are drawn by Chromium ON TOP of the page, in a strip the
@@ -510,6 +615,9 @@ if (css) {
         wc.executeJavaScript(FLOAT_FIX, true)
           .then(r => stamp('floatfix: ' + r))
           .catch(err => stamp('floatfix FAILED: ' + (err && err.message)));
+        wc.executeJavaScript(PROGRESS_FIX, true)
+          .then(r => stamp('progressfix: ' + r))
+          .catch(err => stamp('progressfix FAILED: ' + (err && err.message)));
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         wc.insertCSS(payload, { cssOrigin: 'author' })
           .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })
