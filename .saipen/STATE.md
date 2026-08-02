@@ -1,7 +1,7 @@
 ---
 phase: VERIFY
 task: T-112
-next_action: "WAIT: restart Claude/Antigravity/CodeNomad and confirm -- popovers opaque, and nothing else lost its colour"
+next_action: "WAIT: restart Claude/Antigravity/CodeNomad and confirm -- Settings/popovers opaque AND the running/waiting/done dot has its colour back"
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -12,8 +12,8 @@ goal_mode: true
 goal_waves: 1
 goal_tickets: 0
 transition_from: BUILD
-last_event: 414
-updated: 2026-08-02T15:15:00Z
+last_event: 418
+updated: 2026-08-02T18:10:00Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)

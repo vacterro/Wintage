@@ -296,8 +296,18 @@ button::before, button::after, .btn::before, .btn::after,
   background: transparent !important; box-shadow: none !important; filter: none !important; border: none !important;
 }
 
-button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
 /* 🚨 A STATUS INDICATOR IS NOT BUTTON DECORATION 🚨
+   This rule's selector list began with a bare, UNGUARDED
+   "button:not(.ytp-button) *," line for one release: when the exclusions below
+   were added, the old selector was left above them with its trailing comma, so it
+   stayed in the same list and kept matching everything the guards were written to
+   spare. The dot was wiped by the very rule the guards were bolted onto, the
+   guarded copies below never got a chance to not-match, and the CSS read as
+   fixed. Verified on the live app while it was in that state: span.status-dot
+   with data-kind="running", 6x6, background-color rgba(0, 0, 0, 0).
+   A guard is only a guard if EVERY selector in the list carries it -- one
+   unguarded sibling in a comma list defeats all of them, silently.
+   tools/check-css.js now fails on exactly that shape.
    The wipe above exists so a button reads as ONE control instead of a pile of
    nested boxes, and it is right about wrappers. It is wrong about the small
    coloured dot a button uses to report state, whose entire meaning IS its
@@ -318,7 +328,6 @@ button:not(.ytp-button) *:not([class*="status" i]):not([class*="indicator" i]):n
 [class~="btn" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 span[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 a[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
 .btn *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
   border: none !important; text-shadow: none !important; color: inherit !important;

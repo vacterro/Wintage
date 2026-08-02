@@ -93,6 +93,33 @@ for (const name of ['GLOBAL_CSS', 'SHADOW_CSS']) {
     }
   }
 
+  // A GUARD IS ONLY A GUARD IF EVERY SELECTOR IN THE LIST CARRIES IT.
+  // The wipe that makes a button read as one control must not reach the small
+  // coloured dot a button uses to report state -- running, waiting, done -- whose
+  // entire meaning IS its background. The exclusions for that were added as
+  // :not() on the wipe, correctly, and then defeated for a release by one bare
+  // `button:not(.ytp-button) *,` left above them in the same comma list. One
+  // unguarded sibling matches everything its guarded twin was written to spare,
+  // and nothing about the CSS looks wrong: the guards are right there, in the
+  // file, doing nothing. Measured on the live app while it was in that state:
+  // span.status-dot[data-kind="running"], 6x6, background-color rgba(0,0,0,0).
+  // So the check is structural -- find any rule that wipes a background on
+  // descendants of a control, and require EVERY descendant selector in it to
+  // carry the state exclusions.
+  const STATE_GUARD = ':not([data-kind])';
+  for (const m of bare.matchAll(/([^{}]+)\{([^{}]*background-color:\s*transparent[^{}]*)\}/g)) {
+    const selectors = m[1].split(',').map(s => s.trim()).filter(Boolean);
+    const controlDescendant = /(^|\s)(button|\.btn|\[class~="(button|btn)" i\]|\w+\[role="button"\])\b[^,]*\s\*/;
+    for (const sel of selectors) {
+      if (!controlDescendant.test(sel)) continue;
+      if (!sel.includes(STATE_GUARD)) {
+        fail(name + ': `' + sel.slice(0, 60) + '` wipes backgrounds on control descendants without ' +
+          STATE_GUARD + ' — one unguarded selector in the list erases every status ' +
+          'colour the guarded ones in the same rule were written to protect');
+      }
+    }
+  }
+
   // Braces must balance, or a dropped rule silently swallows the next ones.
   const opens = (bare.match(/{/g) || []).length, closes = (bare.match(/}/g) || []).length;
   if (opens !== closes) fail(name + ': ' + opens + ' `{` vs ' + closes + ' `}`');

@@ -694,8 +694,18 @@ button::before, button::after, .btn::before, .btn::after,
   background: transparent !important; box-shadow: none !important; filter: none !important; border: none !important;
 }
 
-button:not(.ytp-button) *, input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
 /* 🚨 A STATUS INDICATOR IS NOT BUTTON DECORATION 🚨
+   This rule's selector list began with a bare, UNGUARDED
+   "button:not(.ytp-button) *," line for one release: when the exclusions below
+   were added, the old selector was left above them with its trailing comma, so it
+   stayed in the same list and kept matching everything the guards were written to
+   spare. The dot was wiped by the very rule the guards were bolted onto, the
+   guarded copies below never got a chance to not-match, and the CSS read as
+   fixed. Verified on the live app while it was in that state: span.status-dot
+   with data-kind="running", 6x6, background-color rgba(0, 0, 0, 0).
+   A guard is only a guard if EVERY selector in the list carries it -- one
+   unguarded sibling in a comma list defeats all of them, silently.
+   tools/check-css.js now fails on exactly that shape.
    The wipe above exists so a button reads as ONE control instead of a pile of
    nested boxes, and it is right about wrappers. It is wrong about the small
    coloured dot a button uses to report state, whose entire meaning IS its
@@ -716,7 +726,6 @@ button:not(.ytp-button) *:not([class*="status" i]):not([class*="indicator" i]):n
 [class~="btn" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 span[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 a[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-input[type="button"] *, input[type="submit"] *, input[type="reset"] *,
 .btn *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
   border: none !important; text-shadow: none !important; color: inherit !important;
@@ -1088,7 +1097,10 @@ dialog:not(:root), [popover]:not(:root),
 
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
     button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
-    button * { background-color: transparent !important; box-shadow: none !important; border: none !important; }
+    /* Same exclusions as the light-DOM wipe, for the same reason: a shadow tree is
+       not a place where status dots stop existing, and a web component that puts
+       one inside a button is the ordinary case, not an exotic one. */
+    button *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) { background-color: transparent !important; box-shadow: none !important; border: none !important; }
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK} box-sizing: border-box !important; }
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
@@ -1653,10 +1665,21 @@ dialog:not(:root), [popover]:not(:root),
           // ancestors, it is an adornment inside its own card and inheriting the
           // surface is correct. Anything foreign under it means it covers content
           // it does not own, which is what floating means.
+          // STATE COLOURS ARE NOT REPAINTED, AND THAT IS MEASURED TOO. The
+          // working/waiting/done indicators carry their whole meaning in a
+          // background colour, which is why the wipe already excludes them. That
+          // exclusion is what lets this be a measurement instead of a second name
+          // list: after the wipe, a surface that needs solidifying is transparent
+          // BY DEFINITION, so anything still holding a colour is holding it on
+          // purpose. A condition, not an early return -- an element that keeps its
+          // own colour still needs the rest of process(): contrast, borders, radius.
+          const ownBg = parseRGB(cs.backgroundColor);
           const cx = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
           const cy = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
           let stack = null;
-          try { stack = document.elementsFromPoint(cx, cy); } catch (e) { }
+          if (!(ownBg && ownBg.a > 0.08)) {
+            try { stack = document.elementsFromPoint(cx, cy); } catch (e) { }
+          }
           const at = stack ? stack.indexOf(el) : -1;
           for (let k = at + 1; at >= 0 && k < stack.length; k++) {
             const under = stack[k];

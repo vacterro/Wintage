@@ -243,6 +243,24 @@ const FLOAT_FIX = `(() => {
     if (!el.childElementCount && !(el.textContent || "").trim()) return;
     if (el.hasAttribute(MARK)) return;
 
+    // STATE COLOURS ARE NOT REPAINTED, AND THIS IS MEASURED TOO.
+    // The working/waiting/done indicators -- blue while running, amber when the
+    // agent wants the user, grey when finished -- carry their whole meaning in a
+    // background colour, which is why the stylesheet's transparency wipe already
+    // excludes them. That exclusion is what makes this test possible without
+    // naming anything: after the wipe, a panel that needs solidifying is
+    // transparent BY DEFINITION, and anything still holding its own colour is
+    // holding it on purpose. So a non-transparent background is the app saying
+    // "this colour is load-bearing", and the correct move is to leave it alone.
+    // Cheaper and stricter than re-listing status/indicator/dot markers here, and
+    // it cannot go stale when an app renames its indicator.
+    const own = cs.backgroundColor;
+    if (own && own !== "transparent") {
+      const m = /^rgba?\(([^)]+)\)/.exec(own);
+      const a = m ? parseFloat(m[1].split(",")[3]) : 1;
+      if (!(a >= 0) || a > 0.08) return;
+    }
+
     // THE hit test. Everything above this line is cheap and admits far too much;
     // this is the line that decides. Read the paint stack at the element's own
     // centre: if what lies under it is nothing but its own ancestors, it is an
