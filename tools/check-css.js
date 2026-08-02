@@ -227,12 +227,15 @@ function checkFloatingSurfaces() {
       'transparency wipe in place, any popover the CSS name list does not know ' +
       'renders see-through with the page showing through it');
   }
-  const block = src.slice(i, i + 3000);
+  // Wide enough to reach the hit test at the end of the block. It was 3000 and
+  // the block outgrew it, which reported the two measurements at the bottom as
+  // missing -- a gate lying in the safe direction is still a gate lying.
+  const block = src.slice(i, i + 6000);
   for (const [needle, what] of [
     ['cs.position', 'out of flow (position)'],
-    ['cs.zIndex', 'deliberately stacked (z-index)'],
-    ['document.body', 'portalled (mounted at the top of the tree)'],
-    ['getBoundingClientRect', 'big enough to read (measured rect)']
+    ['getBoundingClientRect', 'big enough to read (measured rect)'],
+    ['elementsFromPoint', 'actually floating (hit test at its own centre)'],
+    ['under.contains(el)', 'that the hit test ignores its own ancestors']
   ]) {
     if (block.indexOf(needle) < 0) {
       fail('the measured floating-surface test no longer checks ' + what +

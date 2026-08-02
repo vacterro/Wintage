@@ -72,9 +72,9 @@ for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX']) {
 const floatSrc = literalAfter('const FLOAT_FIX = `');
 for (const [needle, what] of [
   ['cs.position', 'out of flow (position)'],
-  ['cs.zIndex', 'deliberately stacked (z-index)'],
-  ['document.body', 'portalled (mounted at the top of the tree)'],
-  ['getBoundingClientRect', 'big enough to read (measured rect)']
+  ['getBoundingClientRect', 'big enough to read (measured rect)'],
+  ['elementsFromPoint', 'actually floating (hit test at its own centre)'],
+  ['.contains(el)', 'that the hit test ignores its own ancestors']
 ]) {
   check(floatSrc.indexOf(needle) > 0, 'FLOAT_FIX still tests ' + what);
 }

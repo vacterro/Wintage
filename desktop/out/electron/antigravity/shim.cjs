@@ -182,16 +182,27 @@ const SCROLL_FIX = `(() => {
 // So the test is what a popover IS rather than what it is called, in terms the
 // layout engine can answer and an app rename cannot change:
 //   1. out of flow            position: fixed | absolute
-//   2. deliberately stacked   an explicit z-index, not auto
-//   3. portalled              laid out against the viewport or the document,
-//                             not against the thing that opened it
-//   4. big enough to read     and not the full-viewport scrim or the zero-size
+//   2. big enough to read     and not the full-viewport scrim, nor the zero-size
 //                             wrapper that HOSTS the panel
-// All four must hold. Each one alone is common and harmless; together they
-// describe a panel floating over the app and nothing else. Colours are written as
-// var() rather than resolved hex so a palette switch repaints these with
-// everything else, and so this file stays palette-independent -- it is copied
-// byte-identical into all sixteen packs.
+//   3. actually floating      at its own centre, the paint stack UNDER it holds
+//                             something that is not one of its ancestors
+// Both size tests and the hit test must hold. Colours are written as var() rather
+// than resolved hex so a palette switch repaints these with everything else, and
+// so this file stays palette-independent -- it is copied byte-identical into all
+// sixteen packs.
+//
+// Rule 3 replaced an earlier "has an explicit z-index, not auto" test, and the
+// swap is the whole reason this works now. That test sounded right and was wrong
+// on the first app it met: Claude's Settings panel is `role="dialog"`,
+// `position: fixed`, 606x720 over a 638x1079 window -- and `z-index: auto`. It
+// stacks by paint order, not by a number, which is ordinary and extremely common.
+// Requiring a number is requiring a habit, and a habit is just another name in
+// disguise. What cannot be opted out of is the hit test: an element that is
+// painted over content it does not own IS floating, however it got there, and an
+// absolutely-positioned adornment inside its own card is not -- everything under
+// that one is its own ancestor. Measured live against this app: of ~1500
+// elements, 1332 rejected as in-flow, 116 as too small, 5 as viewport-sized, and
+// exactly 3 marked -- the Settings dialog, an open popover, and the caption strip.
 const FLOAT_FIX = `(() => {
   if (window.__wintageFloatFix) return "already running";
   window.__wintageFloatFix = true;
@@ -207,6 +218,9 @@ const FLOAT_FIX = `(() => {
     s.setProperty("border-style", "solid", "important");
     s.setProperty("border-color", "var(--bevelLight) var(--borderDark) var(--borderDark) var(--bevelLight)", "important");
     s.setProperty("box-shadow", "none", "important");
+    // The 2px bevel is added to an element the app already sized, so the box model
+    // has to absorb it rather than grow by 4px in each axis.
+    s.setProperty("box-sizing", "border-box", "important");
     el.setAttribute(MARK, "1");
   };
 
@@ -214,35 +228,41 @@ const FLOAT_FIX = `(() => {
     let cs;
     try { cs = getComputedStyle(el); } catch (e) { return; }
     if (cs.position !== "fixed" && cs.position !== "absolute") return;
-    // An explicit stacking order is what separates a panel from the hundreds of
-    // absolutely-positioned adornments on a page -- carets, focus rings, badges,
-    // an editor's decoration layers. Those leave z-index auto.
-    if (!cs.zIndex || cs.zIndex === "auto") return;
+    if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") return;
     // A click-through layer is a scrim or a measurement probe, never a panel.
-    if (cs.pointerEvents === "none" || cs.visibility === "hidden" || cs.display === "none") return;
-
-    // Portalled: mounted at the top of the tree rather than where it is used.
-    // A fixed element is laid out against the viewport by definition; an absolute
-    // one has to be checked, and offsetParent is the direct answer -- an editor's
-    // own suggest widget resolves to the editor and is deliberately left alone,
-    // because the app already draws it correctly and it is not what broke.
-    const p = el.parentElement;
-    const portalled = cs.position === "fixed" ||
-      p === document.body ||
-      (p && p.parentElement === document.body) ||
-      el.offsetParent === document.body ||
-      el.offsetParent === null;
-    if (!portalled) return;
+    if (cs.pointerEvents === "none") return;
 
     const r = el.getBoundingClientRect();
     // Zero-size means the panel is closed or this is the wrapper that hosts it.
     // Neither is paintable, and the wrapper must stay transparent or it blacks out
-    // a viewport-sized rectangle over the app.
+    // a viewport-sized rectangle over the app. Re-decided rather than latched: a
+    // popover is mounted closed, so a decision made while it measured nothing
+    // would be the only decision ever made about it.
     if (r.width < 40 || r.height < 24) { el.removeAttribute(MARK); return; }
     if (r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) return;
     if (!el.childElementCount && !(el.textContent || "").trim()) return;
+    if (el.hasAttribute(MARK)) return;
 
-    if (!el.hasAttribute(MARK)) solidify(el);
+    // THE hit test. Everything above this line is cheap and admits far too much;
+    // this is the line that decides. Read the paint stack at the element's own
+    // centre: if what lies under it is nothing but its own ancestors, it is an
+    // adornment sitting inside its own card -- an icon, a focus ring, a corner
+    // badge -- and the app is right to have it inherit the surface. If something
+    // foreign is under it, it is covering content it does not own, which is the
+    // definition of floating and the reason it has to be opaque.
+    const cx = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
+    const cy = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
+    let stack;
+    try { stack = document.elementsFromPoint(cx, cy); } catch (e) { return; }
+    const i = stack.indexOf(el);
+    if (i < 0) return;                                   // covered by something else
+    for (let k = i + 1; k < stack.length; k++) {
+      const under = stack[k];
+      if (under === document.body || under === document.documentElement) continue;
+      if (under.contains(el)) continue;                  // its own ancestor
+      solidify(el);
+      return;
+    }
   };
 
   const fixTree = root => {

@@ -1623,42 +1623,55 @@ dialog:not(:root), [popover]:not(:root),
     // popover library drops off the list at its next release with nothing to show
     // for it -- no error, no failing gate, just a hole in the theme that the user
     // finds. So the test below asks what a popover IS, in terms the layout engine
-    // answers and a rename cannot change: out of flow, deliberately stacked,
-    // portalled to the top of the tree instead of laid out where it is used, and
-    // big enough to read. All four, or it is not a panel. The same four are applied
-    // to Electron apps by the shim's FLOAT_FIX, which is the only place they can be
-    // applied there -- that path ships CSS with no repainter behind it.
+    // answers and a rename cannot change: out of flow, big enough to read, and
+    // actually covering content it does not own. The same test runs in Electron
+    // apps as the shim's FLOAT_FIX, which is the only place it can run there --
+    // that path ships CSS with no repainter behind it.
+    //
+    // The last of the three replaced an "explicit z-index, not auto" test that
+    // shipped in the first pass and was wrong on the first app it met: Claude's
+    // Settings panel is role="dialog", position: fixed, 606x720 over a 638x1079
+    // window, and z-index: auto. It stacks by paint order, which is ordinary.
+    // Requiring a number was requiring a habit, and a habit is a name in disguise.
     if (cs.position === 'fixed' || cs.position === 'absolute') {
-      // Free checks first, all off the computed style already read above. An
-      // explicit stacking order is what separates a panel from the hundreds of
-      // absolutely-positioned adornments on a page (carets, focus rings, badges),
-      // which leave z-index auto; pointer-events:none means a scrim, never a panel.
-      if (cs.zIndex && cs.zIndex !== 'auto' && cs.pointerEvents !== 'none' && cs.visibility !== 'hidden') {
-        const parentEl = el.parentElement;
+      // Free checks first, all off the computed style already read above.
+      // pointer-events:none means a scrim or a measurement probe, never a panel.
+      if (cs.pointerEvents !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0') {
         // Layout reads start here, and only for the handful of elements that got
         // this far -- the ordering is the ADR-004/ADR-006 discipline, same as the
-        // page-backdrop test above. A fixed element is laid out against the
-        // viewport by definition, so it needs no offsetParent read at all.
-        const portalled = cs.position === 'fixed' ||
-          parentEl === document.body ||
-          (parentEl && parentEl.parentElement === document.body) ||
-          el.offsetParent === document.body;
-        if (portalled) {
-          const r = el.getBoundingClientRect();
-          if (r.width < 40 || r.height < 24) {
-            // Closed, or the zero-size wrapper that HOSTS the panel. Retried rather
-            // than remembered: a popover is mounted closed and opened later, and a
-            // latched decision would be made while it measured nothing.
-            el.removeAttribute('data-w95-done');
-          } else if (!(r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) &&
-                     (el.childElementCount > 0 || (el.textContent || '').trim())) {
+        // page-backdrop test above.
+        const r = el.getBoundingClientRect();
+        if (r.width < 40 || r.height < 24) {
+          // Closed, or the zero-size wrapper that HOSTS the panel. Retried rather
+          // than remembered: a popover is mounted closed and opened later, and a
+          // latched decision would be made while it measured nothing.
+          el.removeAttribute('data-w95-done');
+        } else if (!(r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) &&
+                   (el.childElementCount > 0 || (el.textContent || '').trim())) {
+          // The hit test decides. Everything above admits far too much: if the
+          // paint stack under this element's own centre holds nothing but its own
+          // ancestors, it is an adornment inside its own card and inheriting the
+          // surface is correct. Anything foreign under it means it covers content
+          // it does not own, which is what floating means.
+          const cx = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
+          const cy = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
+          let stack = null;
+          try { stack = document.elementsFromPoint(cx, cy); } catch (e) { }
+          const at = stack ? stack.indexOf(el) : -1;
+          for (let k = at + 1; at >= 0 && k < stack.length; k++) {
+            const under = stack[k];
+            if (under === document.body || under === document.documentElement) continue;
+            if (under.contains(el)) continue;
             w.push(el, 'background-color', T.surfaceRaised,
               el, 'background-image', 'none',
               el, 'color', T.textPrimary,
               el, 'border-width', '2px',
               el, 'border-style', 'solid',
               el, 'border-color', T.bevelLight + ' ' + T.borderDark + ' ' + T.borderDark + ' ' + T.bevelLight,
-              el, 'box-shadow', 'none');
+              el, 'box-shadow', 'none',
+              // The bevel is added to a box the site already sized; absorb it.
+              el, 'box-sizing', 'border-box');
+            break;
           }
         }
       }
