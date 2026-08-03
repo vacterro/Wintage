@@ -90,7 +90,9 @@ for (const [needle, what] of [
   ['width:', 'a fill sized by an inline percentage width'],
   ['scaleX', 'a fill sized by a scaleX transform'],
   ['matrix', 'a fill whose scaleX arrives as a computed matrix'],
-  ['getBoundingClientRect', 'that a track is short and wide (measured)']
+  ['getBoundingClientRect', 'that a track is short and wide (measured)'],
+  ['looksLikeFillByShape', 'a fill by SHAPE -- leading edge, full height, shorter than the track'],
+  ['tr.width - 2', 'that a full-width child is not a gauge and tells nothing']
 ]) {
   check(barSrc.indexOf(needle) > 0, 'PROGRESS_FIX still detects ' + what);
 }

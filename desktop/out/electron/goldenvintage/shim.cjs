@@ -455,6 +455,23 @@ const PROGRESS_FIX = `(() => {
     return !!m && Math.abs(parseFloat(m[1]) - 1) > 0.001;
   };
 
+  // GEOMETRY IS THE REAL SIGNAL, and the inline-style tests above are only a
+  // fast path to it. Reported after the first version shipped: the fill was
+  // visible and the TRACK was not, so there was nothing to measure 51% against.
+  // The reason is that the fill's width did not arrive inline at all -- plenty of
+  // implementations put it in a class, an SVG rect, or a clip. What none of them
+  // can avoid is the shape: a fill starts at the track's leading edge, is as tall
+  // as the track, and is SHORTER than it. That is what "partly full" looks like
+  // to the layout engine, and it holds however the width was computed.
+  const looksLikeFillByShape = (track, tr, el) => {
+    const r = el.getBoundingClientRect();
+    if (r.height < tr.height * 0.6) return false;        // not the full height of the well
+    if (Math.abs(r.left - tr.left) > 3) return false;    // does not start at the leading edge
+    if (r.width < 1) return false;
+    if (r.width > tr.width - 2) return false;            // full width tells nothing; not a gauge
+    return true;
+  };
+
   const fixTrack = track => {
     const tr = track.getBoundingClientRect();
     // A track is short, wide, and not the page. Everything taller than a line of
@@ -462,7 +479,7 @@ const PROGRESS_FIX = `(() => {
     if (tr.height < 2 || tr.height > 24 || tr.width < 40) return false;
     let painted = false;
     for (const fill of track.children) {
-      if (!looksLikeFill(fill)) continue;
+      if (!looksLikeFill(fill) && !looksLikeFillByShape(track, tr, fill)) continue;
       const fr = fill.getBoundingClientRect();
       if (fr.width < 1 || fr.height < 1) continue;
       fill.style.setProperty("background-color", "var(--link)", "important");
