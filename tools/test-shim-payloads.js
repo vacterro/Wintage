@@ -85,6 +85,7 @@ check(!/role\s*=\s*"?menu|class\*=|data-radix|floating-ui-portal/i.test(floatSrc
 // background makes an invisible modal that eats every click -- which is exactly
 // how CodeNomad's tabs stopped responding. It must be dimmed, never solidified.
 for (const [needle, what] of [
+  ['recheck', 'a bounded re-measure, because a panel animates in and is not its final size when born'],
   ['scrim', 'that a viewport-covering backdrop is marked, not merely skipped'],
   ['color-mix', 'that the dim is built from the palette so it follows a theme switch'],
   ['0.45', 'a plain rgba fallback for engines without color-mix']

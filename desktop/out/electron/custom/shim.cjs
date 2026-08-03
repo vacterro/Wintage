@@ -228,7 +228,8 @@ const FLOAT_FIX = `(() => {
     let cs;
     try { cs = getComputedStyle(el); } catch (e) { return; }
     if (cs.position !== "fixed" && cs.position !== "absolute") return;
-    if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") return;
+    // Refused for a reason time can change: it may be mid-entry. Ask again later.
+    if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") { recheck(el); return; }
     // A click-through layer is a scrim or a measurement probe, never a panel.
     if (cs.pointerEvents === "none") return;
 
@@ -238,7 +239,7 @@ const FLOAT_FIX = `(() => {
     // a viewport-sized rectangle over the app. Re-decided rather than latched: a
     // popover is mounted closed, so a decision made while it measured nothing
     // would be the only decision ever made about it.
-    if (r.width < 40 || r.height < 24) { el.removeAttribute(MARK); return; }
+    if (r.width < 40 || r.height < 24) { el.removeAttribute(MARK); recheck(el); return; }
     // COVERS THE WHOLE VIEWPORT: not a panel, but not nothing either.
     // This used to be a plain return, and the guard is still right about what it
     // was written for -- painting a full-screen layer opaque blacks out the
@@ -308,6 +309,27 @@ const FLOAT_FIX = `(() => {
       solidify(el);
       return;
     }
+  };
+
+  // A PANEL IS NOT ITS FINAL SIZE WHEN IT IS BORN.
+  // Reported as "sometimes it is see-through", and intermittent is the tell. A
+  // dialog is mounted and then animated in: at the moment the mutation arrives it
+  // can still measure zero, or sit at opacity 0, or carry an entering transform.
+  // fixOne correctly refuses to paint that -- and if nothing else ever touches the
+  // element, nothing ever asks again, so the one measurement that decided its
+  // whole appearance was taken before it had one.
+  //
+  // So a candidate that was refused for a reason that TIME CAN CHANGE is asked
+  // again, twice, and then never: once on the next frame, once after the animation
+  // budget. Bounded per element by a counter, so this can never become a loop --
+  // an element that is genuinely closed simply fails all three and is dropped.
+  const RETRIES = new WeakMap();
+  const recheck = el => {
+    const n = RETRIES.get(el) || 0;
+    if (n >= 2) return;
+    RETRIES.set(el, n + 1);
+    requestAnimationFrame(() => requestAnimationFrame(() => fixOne(el)));
+    setTimeout(() => fixOne(el), 260);
   };
 
   const fixTree = root => {
