@@ -420,6 +420,16 @@ const SCROLL_INTENT_FIX = `(() => {
 
   const range = el => el.scrollHeight - el.clientHeight;
   const distance = el => range(el) - desc.get.call(el);
+  // Called from inside an observer callback? Then this is the application
+  // reacting, not a person acting. Reading a stack is not free, which is why it
+  // happens only after every cheap test has already said "bottom-aimed scroll on
+  // a scroller the reader left" -- a handful of times per session, not per frame.
+  const reactive = () => {
+    let st = "";
+    try { st = new Error().stack || ""; } catch (e) { return false; }
+    return /ResizeObserver|MutationObserver|IntersectionObserver/.test(st);
+  };
+
   const gesture = () => {
     try { return !!(navigator.userActivation && navigator.userActivation.isActive); }
     catch (e) { return true; }        // cannot tell -> never block
@@ -433,6 +443,16 @@ const SCROLL_INTENT_FIX = `(() => {
     const r = range(el);
     if (r < 400) return false;                     // nothing worth losing your place in
     if (r - targetTop > AT_BOTTOM) return false;   // not aimed at the bottom
+    // WHO IS CALLING beats WHEN THEY LAST CLICKED.
+    // The first version trusted transient activation alone, and it leaked: the
+    // flag stays true for about five seconds after ANY click, so pressing send and
+    // then scrolling up left the auto-scroll allowed for exactly the window in
+    // which it happens. The recorder that diagnosed this printed the real
+    // discriminator verbatim -- the re-pin arrives from
+    // "at Object.current <- ResizeObserver.<anonymous>". An observer callback is
+    // the application reacting to its own content growing; it is never the reader
+    // asking for anything, whatever they clicked five seconds ago.
+    if (reactive()) return true;
     if (gesture()) return false;                   // the reader asked for it
     return true;
   };

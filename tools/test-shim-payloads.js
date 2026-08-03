@@ -111,6 +111,7 @@ check(src.indexOf('executeJavaScript(PROGRESS_FIX') < 0,
 // checks and it fights the app on every pin.
 const intentSrc = literalAfter('const SCROLL_INTENT_FIX = `');
 for (const [needle, what] of [
+  ['ResizeObserver', 'that a re-pin arriving from an observer callback is the app, not the reader'],
   ['userActivation', 'that a real user gesture is always allowed through'],
   ['AT_BOTTOM', 'that only bottom-aimed scrolls are candidates'],
   ['AWAY_FLAG', 'that the reader must have deliberately scrolled away'],

@@ -2,7 +2,7 @@
   "name": "wintage-themes",
   "displayName": "Wintage вЂ” Win95 Vintage Themes",
   "description": "Sixteen switchable Windows 95 palettes generated from the Wintage theme packs.",
-  "version": "1.25.0",
+  "version": "1.26.0",
   "publisher": "vacterro",
   "engines": {
     "vscode": "^1.60.0"

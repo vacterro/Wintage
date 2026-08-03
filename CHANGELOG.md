@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.26.0] - 2026-08-03
+
+- Floating surfaces are decided by measurement rather than a list of component names. The deciding test is a hit test at the panel's own centre: if what lies under it is only its own ancestors it is an adornment, and anything foreign under it means it covers content it does not own. An earlier "must carry an explicit z-index" rule was wrong on the first application it met -- Claude's Settings dialog is `position: fixed` with `z-index: auto`.
+- A viewport-covering backdrop that takes pointer events is dimmed instead of skipped. Erasing its background left an invisible modal that ate every click, which is how CodeNomad's tabs stopped responding.
+- Panels are re-measured twice, bounded, after being refused for a reason time can change. A dialog animates in and is not its final size at the instant it is mounted, which is why they were see-through only sometimes.
+- Status colours are alive again application-wide. The button-descendant wipe's selector list still opened with an unguarded `button:not(.ytp-button) *,` above the exclusions written for it, in the same comma list, and one unguarded sibling defeats every guarded one. The same shape is now guarded in `SHADOW_CSS`, and `tools/check-css.js` fails on it.
+- Idle CPU: `injectLate()` was appending a second complete copy of `GLOBAL_CSS` -- 44 KB parsed and matched twice on every page. Being last in the cascade is a position, not a copy, so the existing sheet is moved instead. Style recalculation on a 3200-element harness dropped from 48ms to 20ms. The floating-surface pass also stopped marking small out-of-flow elements permanently dirty, which had cost a forced layout each, forever.
+- Scrolling up means scrolling up: a programmatic scroll aimed at the bottom is dropped when the reader has deliberately scrolled away and no user gesture is behind the call. It fails open -- anything unmeasurable is allowed through.
+- Withdrawn after measuring what it hit: the gauge painter marked 234 elements by shape and 111 by inline width, repainting ordinary controls as solid blocks. The problem stays open; nothing paints again until a real gauge is read live.
+- New: `tools/inspect-electron.js` reads a live themed Electron app over CDP (targets / rules / eval) -- the tool behind every diagnosis above.
+
 ## [1.24.0] - 2026-08-01
 
 - Claude Desktop: buttons transparent by default; the foreground repair moved to targeted floating-surface selectors (the earlier inherit-all approach was reverted); re-solidify specificity bumped to beat the transparency wipe, with Radix UI selectors added; live CSS hot-reloading for Electron targets (tools/watch-claude.ps1).

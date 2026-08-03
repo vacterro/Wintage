@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.25.0",
+  "version": "1.26.0",
   "name": "Wintage CodeNomad",
   "description": "Wintage CodeNomad for the browser chrome. Companion to the Wintage userscript.",
   "theme": {
