@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.24.0
+// @version      1.25.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -50,6 +50,22 @@
   // NOT solved with @noframes — that would leave every embed unthemed.
   let IS_TOP = true;
   try { IS_TOP = window.top === window.self; } catch (e) { IS_TOP = false; }
+
+  // ─── PERFORMANCE SAFETY MODE ────────────────────────────────────────────────
+  // Long-lived AI chats are unusually hostile to a universal DOM repainter:
+  // React continuously mutates class/style attributes, message trees become very
+  // large, and a single getComputedStyle() pass can invalidate/recalculate style
+  // across the whole conversation. The CSS layer already supplies the visual
+  // theme; the JavaScript repainter is only a corrective second layer.
+  //
+  // On known high-churn chat SPAs we therefore run CSS-only from the first byte:
+  // no document-wide MutationObserver, no full-DOM sweeps, no CSSOM hover surgery.
+  // Shadow roots are still styled at creation time by attachShadow interception.
+  // This is the hard guarantee that an idle long chat cannot keep reheating the
+  // CPU merely because the site twitches a class or inline style in the background.
+  const HOST = (location.hostname || '').toLowerCase();
+  const HIGH_CHURN_HOST = /(^|\.)(chatgpt\.com|chat\.openai\.com|claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
+  const CSS_ONLY_MODE = HIGH_CHURN_HOST;
 
   // ─── UI.md TOKENS — THE COMPLETE PALETTE, NOTHING OUTSIDE IT ────────────────
   // UI.md iron law 5: "Every visible color must trace back to the palette."
@@ -353,7 +369,7 @@
         location.reload();
       });
     }
-    GM_registerMenuCommand('🤍 Support developer', function() {
+    GM_registerMenuCommand('🤍 Support developer', function () {
       window.open('https://buymeacoffee.com/vacuum34', '_blank');
     });
   }
@@ -365,7 +381,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.24.0';
+  const W95_VERSION = '1.25.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -493,6 +509,12 @@
   transition-delay: 0s !important;
   animation-duration: 0.001s !important;
   animation-delay: 0s !important;
+  /* CRITICAL CPU GUARD: duration alone is not enough. An infinite animation at
+     1ms still remains an infinite animation, and pseudo-element animations
+     cannot be paused by process(el) because ::before/::after are not Elements.
+     Clamp every animation to one iteration so spinners, shimmer skeletons and
+     hidden pseudo-elements complete once instead of being evaluated forever. */
+  animation-iteration-count: 1 !important;
   /* 🚨 SNAPBACK — this line is why reuters.com rendered a blank page 🚨
      The comment above used to argue snapback "only affects already-broken
      sites". That was wrong, and Reuters is the proof: header drawn, article
@@ -512,24 +534,13 @@
 }
 html { scroll-behavior: auto !important; }
 
-/* 🚨 HOVER-HIGHLIGHT KILLER — CSS FREEZE LAYER (v29.1) 🚨
-   Sites' own :hover paints (white flashbang rows, gray tint blocks) are killed
-   two ways: (1) JS surgery strips paint props from every readable :hover rule;
-   (2) this rule covers unreadable cross-origin sheets — while an element is
-   hovered, any paint-property change rides a 99999s step-end transition, so it
-   visually never happens; on unhover the global 0.001s duration snaps it back
-   instantly. Functional hover behavior (display/visibility/opacity/transform
-   for dropdown menus) is deliberately NOT in the property list, so hover-opened
-   menus keep working. Our own themed controls are excluded so buttons/links
-   keep their instant bevel feedback, and :active/:focus are excluded so click
-   feedback on focusable elements is never frozen. */
-:root body *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not([role="button"]):not(:active):not(:focus),
-:root body *:hover::before, :root body *:hover::after {
-  transition-property: background-color, background-image, background-position, box-shadow, filter, backdrop-filter, color, border-color, outline-color, text-decoration-color, text-shadow !important;
-  transition-duration: 99999s !important;
-  transition-delay: 0s !important;
-  transition-timing-function: step-end !important;
-}
+/* 🚨 NO 99999s HOVER TRANSITIONS 🚨
+   The previous cross-origin fallback kept paint-property transitions alive for
+   99,999 seconds on every hovered element and pseudo-element. On a deep React
+   tree, :hover matches the whole ancestor chain; every small paint change could
+   therefore leave another long-lived transition object behind. Readable hover
+   rules are still stripped by stripHoverSheets(). Unreadable cross-origin hover
+   paint is now tolerated rather than buying a permanent compositor tax. */
 
 /* The page's own photo backdrop goes at the root too. The repainter handles the
    full-bleed DIVs sites use for this (see the page-sized backdrop rule there),
@@ -1001,7 +1012,7 @@ dialog:not(:root), [popover]:not(:root),
        state machines, without touching top/left/width/transform. */
     /* animation-fill-mode: forwards for the same snapback reason as the global
        layer -- a shadow tree reveals its content the same way a light one does. */
-    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; animation-fill-mode: forwards !important; }
+    * { border-radius: 0 !important; transition-property: height, max-height, min-height !important; transition-duration: 0.001s !important; transition-delay: 0s !important; animation-duration: 0.001s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; animation-fill-mode: forwards !important; }
     /* Zero shadow / zero blur, same as the global layer (UI.md law 2). Shadow
        roots are where modern component libraries keep their elevation, so
        skipping this here would leave every web-component card floating while the
@@ -1025,14 +1036,9 @@ dialog:not(:root), [popover]:not(:root),
     :host summary, :host legend, :host label, :host button, :host shreddit-button, :host [role="button"],
     :host .btn, :host [class~="button" i], :host [class~="btn" i] { font-weight: 700 !important; }
     :host i, :host em, :host cite, :host var, :host dfn, :host q, :host blockquote { font-style: italic !important; }
-    /* Hover-highlight freeze, same as the global layer (see GLOBAL_CSS). */
-    *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not(shreddit-button):not([role="button"]):not(:active):not(:focus),
-    *:hover::before, *:hover::after {
-      transition-property: background-color, background-image, background-position, box-shadow, filter, backdrop-filter, color, border-color, outline-color, text-decoration-color, text-shadow !important;
-      transition-duration: 99999s !important;
-      transition-delay: 0s !important;
-      transition-timing-function: step-end !important;
-    }
+    /* No 99,999-second hover freeze here either. Shadow-tree pseudo-elements
+       are exactly where shimmer loaders and decorative hover layers tend to live,
+       so keeping permanent transitions here is especially expensive. */
     *:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
       font-family: ${FONT} !important; -webkit-font-smoothing: none !important; -moz-osx-font-smoothing: unset !important; font-smooth: never !important; text-rendering: optimizeSpeed !important;
     }
@@ -1353,13 +1359,15 @@ dialog:not(:root), [popover]:not(:root),
     piercedRoots.add(host.shadowRoot);
     try {
       injectStyle(host.shadowRoot, 'shadow', SHADOW_CSS);
-      shadowObserver.observe(host.shadowRoot, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class', 'bgcolor', 'background', 'style']
-      });
-      stylesDirty = true;
+      if (!CSS_ONLY_MODE) {
+        shadowObserver.observe(host.shadowRoot, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'bgcolor', 'background', 'style']
+        });
+        stylesDirty = true;
+      }
     } catch (e) { }
   }
 
@@ -1675,7 +1683,7 @@ dialog:not(:root), [popover]:not(:root),
       // and it is exactly the thrash ADR-004/ADR-006 exist to prevent.
       // A panel always has children, and childElementCount costs nothing.
       if (el.childElementCount > 0 &&
-          cs.pointerEvents !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0') {
+        cs.pointerEvents !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0') {
         // Layout reads start here, and only for the handful of elements that got
         // this far -- the ordering is the ADR-004/ADR-006 discipline, same as the
         // page-backdrop test above.
@@ -1891,11 +1899,66 @@ dialog:not(:root), [popover]:not(:root),
   let pendingMuts = [];
   const attrCooldown = new WeakMap(); // element -> last attribute-triggered process time
 
+  // Generic circuit breaker for sites not on the known-host list. A universal
+  // userscript cannot predict every future SPA, so it must fail cold rather than
+  // turn a new framework's mutation storm into a space heater. Once tripped, the
+  // CSS theme remains active but all JavaScript repaint work stops for this page.
+  const MUTATION_WINDOW_MS = 2000;
+  const MUTATION_RECORD_LIMIT = 1200;
+  const MUTATION_WORK_LIMIT_MS = 180;
+  const ADDED_NODE_BUDGET = 500;
+  let mutationWindowStart = performance.now();
+  let mutationRecords = 0;
+  let mutationWorkMs = 0;
+  let repainterSuspended = CSS_ONLY_MODE;
+
+  function resetMutationWindow(now) {
+    mutationWindowStart = now;
+    mutationRecords = 0;
+    mutationWorkMs = 0;
+  }
+
+  function suspendRepainter(reason) {
+    if (repainterSuspended) return;
+    repainterSuspended = true;
+    try { mainObserver.disconnect(); } catch (e) { }
+    try { shadowObserver.disconnect(); } catch (e) { }
+    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+    if (sweepTimer) { clearTimeout(sweepTimer); sweepTimer = null; sweepPlannedAt = 0; }
+    pendingMuts.length = 0;
+    forcePassesOwed = 0;
+    try {
+      document.documentElement.setAttribute('data-w95-perf', 'css-only');
+      document.documentElement.setAttribute('data-w95-perf-reason', reason);
+    } catch (e) { }
+  }
+
+  function noteMutationPressure(records) {
+    const now = performance.now();
+    if (now - mutationWindowStart >= MUTATION_WINDOW_MS) resetMutationWindow(now);
+    mutationRecords += records;
+    if (mutationRecords > MUTATION_RECORD_LIMIT || mutationWorkMs > MUTATION_WORK_LIMIT_MS) {
+      suspendRepainter(mutationRecords > MUTATION_RECORD_LIMIT ? 'mutation-rate' : 'mutation-work');
+      return true;
+    }
+    return false;
+  }
+
+  function addWorkPressure(ms, reason) {
+    const now = performance.now();
+    if (now - mutationWindowStart >= MUTATION_WINDOW_MS) resetMutationWindow(now);
+    mutationWorkMs += ms;
+    if (mutationWorkMs > MUTATION_WORK_LIMIT_MS) suspendRepainter(reason);
+  }
+
   function onMutations(mutations) {
+    if (repainterSuspended || noteMutationPressure(mutations.length)) return;
     for (let i = 0; i < mutations.length; i++) pendingMuts.push(mutations[i]);
     if (debounceTimer) return;
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
+      if (repainterSuspended) { pendingMuts.length = 0; return; }
+      const workStarted = performance.now();
       const batch = pendingMuts;
       pendingMuts = [];
       const w = [];
@@ -1962,6 +2025,8 @@ dialog:not(:root), [popover]:not(:root),
       // this batch; walking up parentNode is O(depth), never O(batch²).
       if (added.length) {
         const inBatch = new Set(added);
+        let addedProcessed = 0;
+        let addedTruncated = false;
         for (const node of added) {
           let covered = false;
           for (let p = node.parentNode; p; p = p.parentNode) {
@@ -1972,27 +2037,32 @@ dialog:not(:root), [popover]:not(:root),
           if (covered || !node.isConnected) continue;
           node.removeAttribute && node.removeAttribute('data-w95-done');
           process(node, false, w);
+          addedProcessed++;
           const kids = node.getElementsByTagName('*');
           for (let i = 0; i < kids.length; i++) {
+            if (addedProcessed >= ADDED_NODE_BUDGET) { addedTruncated = true; break; }
             kids[i].removeAttribute && kids[i].removeAttribute('data-w95-done');
             process(kids[i], false, w);
+            addedProcessed++;
           }
+          if (addedProcessed >= ADDED_NODE_BUDGET) { addedTruncated = true; break; }
         }
         // Only stylesheet-bearing additions need a force re-verify. Plain DOM
         // churn is already processed inline above and does not justify another
         // full sweep.
-        if (styleishAdded) {
-          stylesDirty = true;
+        if (styleishAdded || addedTruncated) {
+          stylesDirty = stylesDirty || styleishAdded;
           requestForceSweep();
         }
       }
       flushWrites(w);
+      addWorkPressure(performance.now() - workStarted, 'mutation-work');
     }, 60);
   }
   const mainObserver = new MutationObserver(onMutations);
   const shadowObserver = new MutationObserver(onMutations);
 
-  if (document.documentElement) {
+  if (!CSS_ONLY_MODE && document.documentElement) {
     mainObserver.observe(document.documentElement, {
       childList: true,
       subtree: true,
@@ -2044,7 +2114,7 @@ dialog:not(:root), [popover]:not(:root),
   let sweepPlannedAt = 0;
 
   function scheduleSweep(delay) {
-    if (document.hidden) return;
+    if (repainterSuspended || document.hidden) return;
     const now = Date.now();
     // Never sooner than MIN_SWEEP_GAP after the last sweep finished.
     const earliest = lastSweepEnd + MIN_SWEEP_GAP - now;
@@ -2075,11 +2145,14 @@ dialog:not(:root), [popover]:not(:root),
   // spotting a changed sheet), so an immediate schedule here is a direct
   // sweep-calls-sweep loop.
   function requestForceSweep() {
-    if (forcePassesOwed < 8) forcePassesOwed++;
+    if (repainterSuspended) return;
+    if (forcePassesOwed < 2) forcePassesOwed++;
     scheduleSweep(1500);
   }
 
   function runSweeper(force) {
+    if (repainterSuspended) return;
+    const sweepStarted = performance.now();
     // Prune shadow roots whose hosts left the DOM (SPA navigations) — keeping
     // them leaks memory and bloats every sweep on long sessions.
     piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) piercedRoots.delete(root); } catch (e) { } });
@@ -2110,6 +2183,7 @@ dialog:not(:root), [popover]:not(:root),
       } catch (e) { }
     });
     flushWrites(w);
+    addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
   }
 
   // Elements processed before the site's CSS finished loading bake in unstyled
@@ -2120,19 +2194,31 @@ dialog:not(:root), [popover]:not(:root),
   // The write-if-changed guard in setImp keeps repeat passes cheap.
   function startSweeping() {
     injectLate();
+    if (CSS_ONLY_MODE) {
+      try {
+        document.documentElement.setAttribute('data-w95-perf', 'css-only');
+        document.documentElement.setAttribute('data-w95-perf-reason', 'known-high-churn-host');
+      } catch (e) { }
+      // One final cascade-order correction after late app CSS arrives. No DOM
+      // scan, no observer, no repeating timer.
+      window.addEventListener('load', injectLate, { once: true });
+      return;
+    }
     // The boot pass measured ONE 716ms long task on a 16921-element page, right
     // when the site's own init scripts are competing for the main thread — the
     // "have to reload a couple of times before it comes up" symptom. The
     // read/write split above is what actually shrinks it; deferring the second
     // pass past load keeps it out of the critical window as well.
-    runSweeper(true);
-    setTimeout(() => { stylesDirty = true; runSweeper(true); }, 1000);
+    // CSS already paints immediately. Corrective JS work is deferred and
+    // floor-limited instead of blocking DOMContentLoaded with a full traversal.
+    requestForceSweep();
+    setTimeout(() => { stylesDirty = true; requestForceSweep(); }, 1500);
 
     if (!IS_TOP) {
       // Sub-frame: bounded settling passes, then nothing. The MutationObserver
       // stays live, so a late-loading embed still gets themed — that path is
       // event-driven and costs zero while idle.
-      setTimeout(() => { stylesDirty = true; runSweeper(true); }, 3000);
+      setTimeout(() => { stylesDirty = true; requestForceSweep(); }, 3000);
       return;
     }
 
@@ -2146,11 +2232,14 @@ dialog:not(:root), [popover]:not(:root),
     // most once per tab switch, so it cannot form a loop.
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        runSweeper(true);
-        lastSweepEnd = Date.now();
+        // A tab switch must not synchronously walk a 20,000-node conversation.
+        // Repaint later through the same rate-limited lane as every other cause.
+        stylesDirty = true;
+        requestForceSweep();
       } else if (sweepTimer) {
         clearTimeout(sweepTimer);
         sweepTimer = null;
+        sweepPlannedAt = 0;
       }
     });
 

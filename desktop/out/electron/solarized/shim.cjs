@@ -468,127 +468,30 @@ const SCROLL_INTENT_FIX = `(() => {
   return "scroll intent fix installed";
 })()`;
 
-// ─── A BAR THAT REPORTS A VALUE IS DATA, NOT DECORATION ──────────────────────
-// Same family as the status dot, one step further out. A usage bar, a context
-// meter, a quota strip -- the number they carry is not in the text next to them,
-// it is in HOW MUCH OF THE TRACK IS FILLED. The stylesheet flattens surfaces so
-// an app reads as one window, and in doing so it paints the fill and the track
-// the same colour: the bar survives as a rectangle and loses the only thing it
-// was drawn for. Reported as "the strip that shows how full it is is now solid".
+// ─── A BAR THAT REPORTS A VALUE: TRIED, MEASURED, WITHDRAWN ──────────────────
+// The problem is real and stays on the board. A usage or quota bar carries its
+// number in the PROPORTION between fill and track, surface flattening paints both
+// the same colour, and the bar survives as a rectangle that reports nothing.
 //
-// The state exclusions cannot catch these. They key on role="progressbar" and
-// friends, and a fill is almost never marked -- it is an unmarked div inside a
-// track, and the app renames both every redesign. What it CANNOT stop doing is
-// computing the fill inline: the width is a live value, so it lands in a style
-// attribute as a percentage or a scaleX, every time, in every framework. That is
-// the signal, it is structural, and it costs nothing to read.
+// Two detections were tried, and both were withdrawn after counting what they
+// actually hit in a live Claude window:
 //
-// So: a short wide box holding a child sized by a percentage is a track holding a
-// fill. The track is sunk to a recessed surface, the fill is painted in the
-// palette's accent, and the proportion between them is readable again. Nothing is
-// matched by name; a bar that stops being computed inline stops being a bar.
-const PROGRESS_FIX = `(() => {
-  if (window.__wintageProgressFix) return "already running";
-  window.__wintageProgressFix = true;
-
-  const MARK = "data-w95-bar";
-  const PCT = /(^|[^-\\w])width:\\s*[\\d.]+%/i;
-
-  const looksLikeFill = el => {
-    const style = el.getAttribute("style") || "";
-    if (PCT.test(style) || /scaleX\\(/i.test(style)) return true;
-    const tr = getComputedStyle(el).transform;
-    // matrix(a, ...) with a != 1 is a scaleX in disguise, which is how the
-    // smoother implementations animate a fill.
-    const m = /^matrix\\(([\\d.-]+),/.exec(tr);
-    return !!m && Math.abs(parseFloat(m[1]) - 1) > 0.001;
-  };
-
-  // GEOMETRY IS THE REAL SIGNAL, and the inline-style tests above are only a
-  // fast path to it. Reported after the first version shipped: the fill was
-  // visible and the TRACK was not, so there was nothing to measure 51% against.
-  // The reason is that the fill's width did not arrive inline at all -- plenty of
-  // implementations put it in a class, an SVG rect, or a clip. What none of them
-  // can avoid is the shape: a fill starts at the track's leading edge, is as tall
-  // as the track, and is SHORTER than it. That is what "partly full" looks like
-  // to the layout engine, and it holds however the width was computed.
-  const looksLikeFillByShape = (track, tr, el) => {
-    const r = el.getBoundingClientRect();
-    if (r.height < tr.height * 0.6) return false;        // not the full height of the well
-    if (Math.abs(r.left - tr.left) > 3) return false;    // does not start at the leading edge
-    if (r.width < 1) return false;
-    if (r.width > tr.width - 2) return false;            // full width tells nothing; not a gauge
-    return true;
-  };
-
-  const fixTrack = track => {
-    const tr = track.getBoundingClientRect();
-    // A track is short, wide, and not the page. Everything taller than a line of
-    // text is a layout box that happens to hold a percentage-sized child.
-    if (tr.height < 2 || tr.height > 24 || tr.width < 40) return false;
-    let painted = false;
-    for (const fill of track.children) {
-      if (!looksLikeFill(fill) && !looksLikeFillByShape(track, tr, fill)) continue;
-      const fr = fill.getBoundingClientRect();
-      if (fr.width < 1 || fr.height < 1) continue;
-      fill.style.setProperty("background-color", "var(--link)", "important");
-      fill.style.setProperty("background-image", "none", "important");
-      fill.style.setProperty("border-radius", "0", "important");
-      fill.setAttribute(MARK, "fill");
-      painted = true;
-    }
-    if (!painted) return false;
-    // Win95 draws a progress track sunken, so the fill reads as sitting IN it.
-    track.style.setProperty("background-color", "var(--surface)", "important");
-    track.style.setProperty("background-image", "none", "important");
-    track.style.setProperty("border-width", "2px", "important");
-    track.style.setProperty("border-style", "solid", "important");
-    track.style.setProperty("border-color", "var(--borderDark) var(--bevelLight) var(--bevelLight) var(--borderDark)", "important");
-    track.style.setProperty("box-sizing", "border-box", "important");
-    track.setAttribute(MARK, "track");
-    return true;
-  };
-
-  const scan = root => {
-    if (!root.querySelectorAll) return;
-    for (const el of root.querySelectorAll("*")) {
-      if (el.children.length) fixTrack(el);
-    }
-  };
-
-  scan(document);
-  let passes = 0;
-  const settle = () => { if (++passes < 3) { scan(document); setTimeout(settle, 600); } };
-  setTimeout(settle, 600);
-
-  let queued = false;
-  const pending = [];
-  new MutationObserver(records => {
-    pending.push(...records);
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      const recs = pending.splice(0, pending.length);
-      for (const r of recs) {
-        if (r.type === "attributes") {
-          // The fill's own style attribute changing IS the value changing, so the
-          // parent is re-read rather than trusted to have been done once.
-          const p = r.target.parentElement;
-          if (p) fixTrack(p);
-        } else {
-          for (const node of r.addedNodes) {
-            if (node.nodeType !== 1) continue;
-            if (node.parentElement) fixTrack(node.parentElement);
-            scan(node);
-          }
-        }
-      }
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "aria-valuenow"] });
-
-  return "progress fix installed";
-})()`;
+//   by shape   -- a child starting at the track's leading edge, as tall as the
+//                 track and shorter than it ...................... 234 elements
+//   by inline  -- a child whose width is computed inline as a percentage,
+//                 or by a scaleX transform ....................... 111 elements
+//
+// Neither is a gauge detector. The first describes every button, tab and toolbar
+// row ever written; the second describes ordinary layout, because a width of 60%
+// in a style attribute is how half the web sizes a column. Extra guards -- carries
+// no text, holds at most three children -- moved the counts and not the verdict.
+//
+// What those numbers settle is which way to fail. A gauge that is drawn but hard
+// to read is a cosmetic complaint; a hundred controls repainted as solid golden
+// blocks is an application nobody can work in, and that is what shipped, briefly.
+// So nothing is painted here until a real gauge is read over CDP and a signal is
+// found that a control cannot also satisfy. Guessing it from a screenshot has cost
+// two rounds already.
 
 // ─── NATIVE CAPTION BUTTONS SITTING ON TOP OF THE APP'S OWN CONTROLS ─────────
 // Antigravity is a frameless window with Electron's titleBarOverlay: minimise,
@@ -773,9 +676,6 @@ if (css) {
         wc.executeJavaScript(FLOAT_FIX, true)
           .then(r => stamp('floatfix: ' + r))
           .catch(err => stamp('floatfix FAILED: ' + (err && err.message)));
-        wc.executeJavaScript(PROGRESS_FIX, true)
-          .then(r => stamp('progressfix: ' + r))
-          .catch(err => stamp('progressfix FAILED: ' + (err && err.message)));
         wc.executeJavaScript(SCROLL_INTENT_FIX, true)
           .then(r => stamp('scrollintent: ' + r))
           .catch(err => stamp('scrollintent FAILED: ' + (err && err.message)));

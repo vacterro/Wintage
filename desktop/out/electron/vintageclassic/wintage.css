@@ -1,4 +1,4 @@
-/* Wintage Vintage Classic - generated from wintage.user.js v1.24.0. Do not edit. */
+/* Wintage Vintage Classic - generated from wintage.user.js v1.25.0. Do not edit. */
 
 :root {
   color-scheme: dark !important;
@@ -95,6 +95,12 @@
   transition-delay: 0s !important;
   animation-duration: 0.001s !important;
   animation-delay: 0s !important;
+  /* CRITICAL CPU GUARD: duration alone is not enough. An infinite animation at
+     1ms still remains an infinite animation, and pseudo-element animations
+     cannot be paused by process(el) because ::before/::after are not Elements.
+     Clamp every animation to one iteration so spinners, shimmer skeletons and
+     hidden pseudo-elements complete once instead of being evaluated forever. */
+  animation-iteration-count: 1 !important;
   /* 🚨 SNAPBACK — this line is why reuters.com rendered a blank page 🚨
      The comment above used to argue snapback "only affects already-broken
      sites". That was wrong, and Reuters is the proof: header drawn, article
@@ -114,24 +120,13 @@
 }
 html { scroll-behavior: auto !important; }
 
-/* 🚨 HOVER-HIGHLIGHT KILLER — CSS FREEZE LAYER (v29.1) 🚨
-   Sites' own :hover paints (white flashbang rows, gray tint blocks) are killed
-   two ways: (1) JS surgery strips paint props from every readable :hover rule;
-   (2) this rule covers unreadable cross-origin sheets — while an element is
-   hovered, any paint-property change rides a 99999s step-end transition, so it
-   visually never happens; on unhover the global 0.001s duration snaps it back
-   instantly. Functional hover behavior (display/visibility/opacity/transform
-   for dropdown menus) is deliberately NOT in the property list, so hover-opened
-   menus keep working. Our own themed controls are excluded so buttons/links
-   keep their instant bevel feedback, and :active/:focus are excluded so click
-   feedback on focusable elements is never frozen. */
-:root body *:hover:not(button):not(a):not(input):not(select):not(textarea):not(summary):not(.btn):not([class~="button" i]):not([class~="btn" i]):not([role="button"]):not(:active):not(:focus),
-:root body *:hover::before, :root body *:hover::after {
-  transition-property: background-color, background-image, background-position, box-shadow, filter, backdrop-filter, color, border-color, outline-color, text-decoration-color, text-shadow !important;
-  transition-duration: 99999s !important;
-  transition-delay: 0s !important;
-  transition-timing-function: step-end !important;
-}
+/* 🚨 NO 99999s HOVER TRANSITIONS 🚨
+   The previous cross-origin fallback kept paint-property transitions alive for
+   99,999 seconds on every hovered element and pseudo-element. On a deep React
+   tree, :hover matches the whole ancestor chain; every small paint change could
+   therefore leave another long-lived transition object behind. Readable hover
+   rules are still stripped by stripHoverSheets(). Unreadable cross-origin hover
+   paint is now tolerated rather than buying a permanent compositor tax. */
 
 /* The page's own photo backdrop goes at the root too. The repainter handles the
    full-bleed DIVs sites use for this (see the page-sized backdrop rule there),
