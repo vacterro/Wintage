@@ -239,7 +239,34 @@ const FLOAT_FIX = `(() => {
     // popover is mounted closed, so a decision made while it measured nothing
     // would be the only decision ever made about it.
     if (r.width < 40 || r.height < 24) { el.removeAttribute(MARK); return; }
-    if (r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) return;
+    // COVERS THE WHOLE VIEWPORT: not a panel, but not nothing either.
+    // This used to be a plain return, and the guard is still right about what it
+    // was written for -- painting a full-screen layer opaque blacks out the
+    // application. What it got wrong is treating "do not solidify" as "do not
+    // touch", and that cost a user their app: CodeNomad's tabs stopped responding
+    // because the application had a modal open -- div.fixed inset-0 bg-black/50
+    // z-50, pointer-events auto -- and the flattening wipe had erased the dim it
+    // announces itself with. An invisible modal still eats every click. Read off
+    // the live app with elementsFromPoint at a tab's centre, which returned that
+    // layer rather than the tab.
+    //
+    // A backdrop that TAKES POINTER EVENTS is a claim on the whole window, and the
+    // reader has to be able to see it. So it gets the dim back -- translucent, so
+    // the app stays legible underneath, which is also what the app itself asked
+    // for. Everything unmeasurable is left alone: no pointer events (a decorative
+    // gradient layer, a drag-and-drop helper) or no explicit stacking order and it
+    // is not a modal backdrop, it is scenery.
+    if (r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) {
+      if (cs.zIndex && cs.zIndex !== "auto" && !el.hasAttribute(MARK)) {
+        el.style.setProperty("background-color", "rgba(0, 0, 0, 0.45)", "important");
+        // Preferred when the engine has it: the dim is made from the palette's own
+        // background rather than a hardcoded black, so it follows a theme switch.
+        el.style.setProperty("background-color", "color-mix(in srgb, var(--background) 55%, transparent)", "important");
+        el.style.setProperty("background-image", "none", "important");
+        el.setAttribute(MARK, "scrim");
+      }
+      return;
+    }
     if (!el.childElementCount && !(el.textContent || "").trim()) return;
     if (el.hasAttribute(MARK)) return;
 

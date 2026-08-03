@@ -1687,8 +1687,19 @@ dialog:not(:root), [popover]:not(:root),
         // the element back through here already measuring its real size. Marking
         // it dirty on every pass instead bought exactly nothing and cost a
         // forced layout per element per sweep, forever.
-        if (r.width >= 40 && r.height >= 24 &&
-            !(r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92)) {
+        // Covers the whole viewport: never solidified, that would black out the
+        // page -- but never ignored either. A backdrop that TAKES POINTER EVENTS
+        // owns the window, and the wipe erases the dim it announces itself with.
+        // An invisible modal still eats every click, which is how CodeNomad's tabs
+        // stopped responding. Give the dim back, translucent, so the page stays
+        // legible under it. No pointer events or no explicit stacking order means
+        // scenery rather than a modal, and scenery is left alone.
+        if (r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) {
+          if (cs.zIndex && cs.zIndex !== 'auto') {
+            w.push(el, 'background-color', 'color-mix(in srgb, ' + T.background + ' 55%, transparent)',
+              el, 'background-image', 'none');
+          }
+        } else if (r.width >= 40 && r.height >= 24) {
           // The hit test decides. Everything above admits far too much: if the
           // paint stack under this element's own centre holds nothing but its own
           // ancestors, it is an adornment inside its own card and inheriting the

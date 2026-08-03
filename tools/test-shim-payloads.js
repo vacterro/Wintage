@@ -81,6 +81,19 @@ for (const [needle, what] of [
 check(!/role\s*=\s*"?menu|class\*=|data-radix|floating-ui-portal/i.test(floatSrc),
   'FLOAT_FIX has not regressed into matching component names');
 
+// A backdrop that takes pointer events owns the whole window, and erasing its
+// background makes an invisible modal that eats every click -- which is exactly
+// how CodeNomad's tabs stopped responding. It must be dimmed, never solidified.
+for (const [needle, what] of [
+  ['scrim', 'that a viewport-covering backdrop is marked, not merely skipped'],
+  ['color-mix', 'that the dim is built from the palette so it follows a theme switch'],
+  ['0.45', 'a plain rgba fallback for engines without color-mix']
+]) {
+  check(floatSrc.indexOf(needle) > 0, 'FLOAT_FIX still restores ' + what);
+}
+check(!/setProperty\("background-color", "var\(--surfaceRaised\)"[^]{0,400}scrim/.test(floatSrc),
+  'FLOAT_FIX never makes a full-screen backdrop opaque');
+
 // PROGRESS_FIX restores the one thing a usage bar is drawn for -- the proportion
 // between fill and track -- which surface flattening erases by painting both the
 // same colour. It finds the fill by the only thing an app cannot stop doing:
