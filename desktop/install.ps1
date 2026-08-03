@@ -1280,7 +1280,31 @@ foreach ($name in $names) {
         if ($PSCmdlet.ShouldProcess($e.Resources, $action)) {
             & node $nodeArgs --palette $Palette
             if ($LASTEXITCODE -ne 0) { Say "$($e.Name): FAILED - see the message above." 'Red' }
-            else { Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray' }
+            else {
+                # FreeBuff ships its own ad network (renderer + orchestrator routes).
+                # The shim themes it; this cuts the ads out of the bundle and routes.
+                # A custom completion sound is a per-machine preference written by
+                # the GUI (WintageInstaller.ps1 -> %APPDATA%\Wintage\freebuff-sound.txt):
+                # if one is set, hand it to the same patch run so the ads and the
+                # sound are applied together. The patch keeps the stock file as
+                # chime-*.mp3.bak and --revert restores it.
+                if ($name -eq 'freebuff') {
+                    $adPatch = Join-Path $root 'desktop/patch-freebuff-ads.js'
+                    if (Test-Path $adPatch) {
+                        if ($PSCmdlet.ShouldProcess($e.Resources, 'Cut FreeBuff ads')) {
+                            $patchArgs = @()
+                            $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
+                            if (Test-Path $soundPref) {
+                                $wav = (Get-Content $soundPref -Raw).Trim()
+                                if ($wav -and (Test-Path $wav)) { $patchArgs = @('--sound', $wav) }
+                            }
+                            & node $adPatch @patchArgs
+                            if ($LASTEXITCODE -ne 0) { Say 'FreeBuff ads: FAILED - bundle strings may have changed; run patch-freebuff-ads.js --scan to see what this build carries, then update the strings.' 'Red' }
+                        }
+                    }
+                }
+                Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray'
+            }
         }
         continue
     }

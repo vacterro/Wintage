@@ -46,7 +46,7 @@ const T_BACKGROUND = '#1A1810';
 const T_TEXT = '#D4C89A';
 const T_SURFACE = '#332E22';
 
-for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'SCROLL_INTENT_FIX']) {
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'SCROLL_INTENT_FIX', 'AD_BLOCK']) {
   try {
     const produced = eval('`' + literalAfter('const ' + name + ' = `') + '`');
     new vm.Script(produced);
@@ -59,7 +59,7 @@ for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'SCROLL_INTENT_FIX']) 
 // A payload that parses but is never handed to a renderer is dead code that reads
 // like a shipped fix -- exactly how the theme spent two reports believing floating
 // surfaces were covered. Each executed payload must be wired into the injector.
-for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'SCROLL_INTENT_FIX']) {
+for (const name of ['SCROLL_FIX', 'WCO_FIX', 'FLOAT_FIX', 'SCROLL_INTENT_FIX', 'AD_BLOCK']) {
   check(src.indexOf('executeJavaScript(' + name) > 0, name + ' is wired into the injector');
 }
 
@@ -102,6 +102,25 @@ check(!/setProperty\("background-color", "var\(--surfaceRaised\)"[^]{0,400}scrim
 // Reinstating it needs a signal read off a real gauge, not another screenshot.
 check(src.indexOf('executeJavaScript(PROGRESS_FIX') < 0,
   'PROGRESS_FIX stays out of the injector until a gauge is measured live');
+
+// AD_BLOCK shipped broken and silent: its regexes were written with single
+// backslashes inside a template literal, so \/ collapsed to / and the emitted
+// line read `const AD_PATH = //api/ad/(...)` -- a comment. The payload died at
+// parse on every launch and the only trace was one line in a status file. Parsing
+// it here is what makes that impossible to repeat, but the regex must also still
+// MEAN what it says after interpolation.
+// Checked on the INTERPOLATED text, not the source. Counting backslashes in the
+// source is the same mistake one level up -- what matters is the regex the
+// renderer ends up with, so build it and look at that.
+const adProduced = eval('`' + literalAfter('const AD_BLOCK = `') + '`');
+// Anchored, because the explanatory comment above the declaration quotes the
+// broken form verbatim and an unanchored match reads the comment instead.
+const adPathLine = adProduced.split('\n').filter(l => /^\s*const AD_PATH =/.test(l))[0] || '';
+check(adPathLine.includes('/\\/api\\/ad\\/'),
+  'AD_BLOCK emits a real regex, not a comment (its backslashes survive the template literal)');
+check(/\/api\/ad\/(slot|impression|click)\b/.test('/api/ad/slot'),
+  'the emitted ad-path pattern still matches a real ad request');
+
 
 // SCROLL_INTENT_FIX changes an application's BEHAVIOUR, which is further than a
 // theme normally goes, so its narrowness is the thing worth pinning. It may only

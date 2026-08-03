@@ -70,6 +70,91 @@ in use.
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` keys; existing recent-file filters use the palette link colour | yes — it is your ini |
 | `smartvac`, `wildrift` | token table rewritten in the app's own source | no — a source file; re-run after a pull |
 
+### FreeBuff ad removal
+
+FreeBuff (the AI assistant desktop app) ships its own ad network: the renderer
+bundle (`resources/orchestrator/ui/assets/index-*.js`) renders a `sponsored-ad`
+card and a thread banner, and the orchestrator (`resources/orchestrator/orchestrator.js`)
+exposes `/api/ad/slot|impression|click` routes that call the remote ad auction.
+The shim only themes the app; it does not touch those files.
+
+`desktop/patch-freebuff-ads.js` cuts the ads out byte-level:
+
+- renderer: the ad card/banner call sites become `null`, and the `adSlot` /
+  `adImpression` / `adClick` API client methods become no-ops — nothing renders,
+  and no `/api/ad/*` request ever leaves the renderer;
+- orchestrator: all three `/api/ad/*` routes stop calling the ad network, and the
+  live-turn inline ad request (`maybeRequestAd`) is short-circuited.
+
+The bundle filename embeds a build hash, so the patch discovers the current
+bundle from `index.html` instead of shipping a version-locked payload — that is
+what makes it survive updates. Originals are backed up to
+`_orig-backup-<timestamp>/` in the install dir; `--revert` restores the newest.
+
+**Future versions are handled at two independent layers:**
+
+1. **Byte patch with regex fallbacks.** Every target has an exact string for the
+   current build *and* a regular-expression fallback anchored on what a minifier
+   cannot rename — the `/api/ad/*` path literals, the `case"ad":` protocol
+   discriminator, the `sponsored-ad` class, and the `variant:"banner"` /
+   `variant:"card"` placements. The orchestrator is not minified (readable names
+   like `maybeRequestAd` and `app.ads.slotAd`), so its exact strings hold for a
+   long time; the renderer bundle is minified, so its regex fallbacks take over
+   the moment the next build renames its identifiers.
+2. **Shim-level block (`targets/electron/shim.cjs`).** Independent of the bundle
+   entirely: any fetch/XHR to a `/api/ad/` URL is rejected inside the page, and
+   any element whose class contains `sponsored-ad` is hidden the moment it
+   appears. Even a brand-new bundle this script has not learned yet cannot
+   surface an ad.
+
+```powershell
+node .\desktop\patch-freebuff-ads.js           # patch (backs up first)
+node .\desktop\patch-freebuff-ads.js --sound "C:\...\my.mp3"   # patch + custom completion sound (wav/mp3/ogg/flac/m4a/aac)
+node .\desktop\patch-freebuff-ads.js --scan    # what ad markers does THIS build carry?
+node .\desktop\patch-freebuff-ads.js --verify
+node .\desktop\patch-freebuff-ads.js --revert
+```
+
+It runs automatically as part of `install.ps1 -Target freebuff`, and must be
+re-run after every FreeBuff update (updates restore the stock files). If a build
+changes shape, the script names the target that no longer matched — run `--scan`
+to see what the new build still carries and refresh the strings there.
+
+**FreeBuff completion sound.** The renderer plays `chime-<hash>.mp3` when a turn
+finishes. The patch finds it the same way it finds the bundle (the name embeds a
+build hash), so `--sound <file>` installs your own audio (wav/mp3/ogg/flac/m4a/
+aac) over it and keeps the stock file as `chime-*.mp3.bak`; `--revert` restores
+it. `--verify` reports which one is live.
+
+### FreeBuff sound button (GUI)
+
+`WintageInstaller.ps1` has a small **FB SOUND** button under the APPLY / REVERT
+stack. It only stores a *preference*; `install.ps1 -Target freebuff` reads the
+same file and hands it to the patch as `--sound`, so the ads and the sound are
+applied in one run:
+
+- **Left-click** — pick an audio file (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac)
+  and hear it played back immediately: PCM WAV through System.Media.SoundPlayer,
+  every other format through a WPF MediaPlayer (Media Foundation, async, so the
+  window never freezes). The choice is remembered in
+  `%APPDATA%\Wintage\freebuff-sound.txt` (per-machine, outside the git checkout,
+  exactly like the remembered source-tree folders).
+- **Right-click** — clear the preference back to FreeBuff's stock chime (also
+  stops any preview that is still playing).
+- **COPY** — copies the chosen audio into the repo itself
+  (`sounds\freebuff.<ext>`, keeping the source extension) and repoints the
+  preference at that copy, so the sound survives the original file being
+  deleted or moved. Enabled only while a custom sound is set; re-copying simply
+  overwrites the repo copy. The `sounds/` folder is plain git-trackable
+  content, so committing it makes the sound survive re-clones too.
+
+Only recognized audio containers are previewed — the header is sniffed first, so
+a non-audio pick is announced instead of silently playing nothing.
+
+The button reads `ON` while a custom sound is set; hovering it shows the path.
+Apply the `freebuff` target afterwards (tick FreeBuff + APPLY, or run
+`install.ps1 -Target freebuff` from a terminal) for it to take effect.
+
 ### Terminals
 
 `terminal` writes a `Wintage` colour scheme into every detected stable, Preview,

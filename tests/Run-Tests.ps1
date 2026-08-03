@@ -45,7 +45,13 @@ if (-not $validateSetMatch.Success) {
     $validateTargets = $validateTokens -split "," | Where-Object { $_ -ne 'all' } | Sort-Object
     
     # Extract $TARGETS keys (handles quoted or unquoted keys)
-    $targetsMatches = [regex]::Matches($installCode, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@{?
+    # CRLF-tolerant, and written on ONE line on purpose. The previous form
+    # embedded a LITERAL newline in the pattern, so it matched only while the
+    # working copy used LF -- the moment install.ps1 was checked out with CRLF the
+    # ELECTRON keys stopped being found and this gate went red on code it had no
+    # complaint about. Same failure the Save-CustomPaths check had: a gate that
+    # goes red for reasons unrelated to what it tests gets ignored, then trusted.
+    $targetsMatches = [regex]::Matches($installCode, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{\s*?
 \s+(Dir|Name)")
     $hashTargets = @()
     foreach ($m in $targetsMatches) { $hashTargets += $m.Groups[1].Value }
@@ -270,7 +276,17 @@ try {
 
 $guiSource = [System.IO.File]::ReadAllText("$root\desktop\WintageInstaller.ps1")
 Assert-True ($guiSource -match 'could not save paths\.json') 'GUI reports custom-path persistence failures'
-Assert-True ($guiSource -notmatch 'function Save-CustomPaths[\s\S]*?catch\s*\{\s*\}') 'GUI custom-path save no longer swallows errors'
+# Bounded to the function's OWN body. The previous form was
+#   'function Save-CustomPaths[\s\S]*?catch\s*\{\s*\}'
+# which is non-greedy and therefore reaches the first empty catch ANYWHERE below
+# the declaration -- so an unrelated `catch { }` on a media player's Stop/Dispose
+# call, added much later in the file, failed a test about paths.json. A gate that
+# goes red for code it does not cover teaches people to ignore it.
+$saveStart = $guiSource.IndexOf('function Save-CustomPaths')
+Assert-True ($saveStart -ge 0) 'GUI still defines Save-CustomPaths'
+$saveEnd = $guiSource.IndexOf("`n}", $saveStart)
+$saveBody = if ($saveStart -ge 0 -and $saveEnd -gt $saveStart) { $guiSource.Substring($saveStart, $saveEnd - $saveStart) } else { '' }
+Assert-True ($saveBody -notmatch 'catch\s*\{\s*\}') 'GUI custom-path save no longer swallows errors'
 
 Write-Host "
 ======================="

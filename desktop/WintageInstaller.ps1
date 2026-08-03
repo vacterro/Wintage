@@ -13,6 +13,20 @@
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName PresentationCore
+# WPF MediaPlayer (System.Windows.Media) is used as the fallback preview player
+# for everything that is not a PCM WAV. It rides on Media Foundation, so it
+# decodes whatever the machine has codecs for (MP3/AAC/M4A/FLAC/OGG on Win10+;
+# WMA is deliberately not accepted - the installed file is played by Chromium,
+# which cannot decode WMA at all). PresentationCore is part of the desktop .NET
+# Framework, present on
+# every WinPS 5.1 install, so this Add-Type is safe where System.Media was not.
+# NOTE: System.Media.SoundPlayer is NOT Add-Typed here on purpose. The type
+# resolves because System.Media.dll is part of WinPS 5.1's default-loaded
+# assembly set, and `Add-Type -AssemblyName System.Media` has failed on some 5.1
+# installs -- under this script's $ErrorActionPreference = 'Stop' that failure
+# would abort the whole window before it opens. Keep this script WinPS-only:
+# pwsh does not load System.Media by default and the type would not resolve.
 [System.Windows.Forms.Application]::EnableVisualStyles() | Out-Null
 
 $ErrorActionPreference = 'Stop'
@@ -276,23 +290,259 @@ $lblInfo = New-Object Windows.Forms.Label
 $lblInfo.Location = '640,28'; $lblInfo.Size = '212,300'; $lblInfo.Font = $FONT
 
 $btnApply = New-Object Windows.Forms.Button
-$btnApply.Text = 'APPLY'; $btnApply.Location = '640,356'; $btnApply.Size = '212,34'; $btnApply.Font = $FONTB
+$btnApply.Text = 'APPLY'; $btnApply.Location = '640,330'; $btnApply.Size = '212,34'; $btnApply.Font = $FONTB
 $btnApply.FlatStyle = 'Flat'; $btnApply.FlatAppearance.BorderSize = 0
 
 $btnSave = New-Object Windows.Forms.Button
-$btnSave.Text = 'SAVE'; $btnSave.Location = '640,396'; $btnSave.Size = '104,26'
+$btnSave.Text = 'SAVE'; $btnSave.Location = '640,370'; $btnSave.Size = '104,26'
 $btnSave.FlatStyle = 'Flat'; $btnSave.FlatAppearance.BorderSize = 0
 
 $btnDelCustom = New-Object Windows.Forms.Button
-$btnDelCustom.Text = 'DEL CUSTOM'; $btnDelCustom.Location = '748,396'; $btnDelCustom.Size = '104,26'
+$btnDelCustom.Text = 'DEL CUSTOM'; $btnDelCustom.Location = '748,370'; $btnDelCustom.Size = '104,26'
 $btnDelCustom.FlatStyle = 'Flat'; $btnDelCustom.FlatAppearance.BorderSize = 0
 
 $btnRevert = New-Object Windows.Forms.Button
-$btnRevert.Text = 'REVERT SELECTED TARGETS'; $btnRevert.Location = '640,428'; $btnRevert.Size = '212,26'
+$btnRevert.Text = 'REVERT SELECTED TARGETS'; $btnRevert.Location = '640,402'; $btnRevert.Size = '212,26'
 $btnRevert.FlatStyle = 'Flat'; $btnRevert.FlatAppearance.BorderSize = 0
 
+# ─── FREEBUFF COMPLETION SOUND ───────────────────────────────────────────────
+# The GUI only stores the PREFERENCE; install.ps1 -Target freebuff reads the same
+# file and hands it to patch-freebuff-ads.js --sound, so the ads and the sound are
+# applied in one run. Stored under %APPDATA%, deliberately NOT in the git checkout
+# -- a per-machine wav path has no business in a repo that gets pulled and
+# re-cloned, exactly like the remembered source-tree folders above.
+#
+# Left-click picks an audio file (OpenFileDialog) and plays a preview of it,
+# right-click clears it back to stock. COPY saves the file itself into the repo
+# (sounds\freebuff.<ext>) and points the preference at that copy -- a picked path
+# dies the moment the file is deleted; the repo copy outlives the original.
+$script:fbSoundFile = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
+$script:fbSoundPath = $null
+# One script-scoped player (a SoundPlayer for PCM WAV, a WPF MediaPlayer for
+# everything else), so picking a new sound stops whatever is still playing
+# instead of layering previews on top of each other.
+$script:fbSoundPlayer = $null
+# Set by the MediaPlayer's async MediaFailed event so the non-WAV preview path
+# can still tell "playing" from "could not decode" - Play() itself never throws.
+$script:fbPreviewFailed = $false
+
+function Stop-FbSoundPreview {
+    if ($script:fbSoundPlayer) {
+        if ($script:fbSoundPlayer -is [System.Media.SoundPlayer]) {
+            try { $script:fbSoundPlayer.Stop() } catch { }
+            try { $script:fbSoundPlayer.Dispose() } catch { }
+        }
+        else {
+            try { $script:fbSoundPlayer.Stop() } catch { }
+            try { $script:fbSoundPlayer.Close() } catch { }
+        }
+        $script:fbSoundPlayer = $null
+    }
+}
+function Get-FbAudioKind([string]$path) {
+    # Sniffs the first bytes and returns a known audio container name, or $null
+    # when the file is not a recognizable audio format. Byte-exact (-ceq) on the
+    # magic, mirroring the patch script's own sniff, so GUI and installer agree
+    # on what counts as playable. Kept short on purpose: only enough to say
+    # "this is audio" - decoding is left to the player below.
+    try {
+        $fs = [System.IO.File]::OpenRead($path)
+        try {
+            $head = New-Object byte[] 12
+            $n = $fs.Read($head, 0, 12)
+            if ($n -lt 4) { return $null }
+            $ascii = [System.Text.Encoding]::ASCII.GetString($head, 0, $n)
+            if ($n -ge 12 -and $ascii.Substring(0,4) -ceq 'RIFF' -and $ascii.Substring(8,4) -ceq 'WAVE') { return 'wav' }
+            if ($ascii.Substring(0,3) -ceq 'ID3') { return 'mp3' }
+            if ($n -ge 2 -and $head[0] -eq 0xFF -and ($head[1] -band 0xE0) -eq 0xE0) { return 'mp3' }
+            if ($ascii.Substring(0,4) -ceq 'OggS') { return 'ogg' }
+            if ($ascii.Substring(0,4) -ceq 'fLaC') { return 'flac' }
+            if ($n -ge 8 -and $ascii.Substring(4,4) -ceq 'ftyp') { return 'm4a' }
+            return $null
+        }
+        finally { $fs.Dispose() }
+    }
+    catch { return $null }
+}
+function Play-FbSoundPreview([string]$path) {
+    # $true  - preview started; $false - not playable: nothing was started,
+    #          caller must not save it
+    Stop-FbSoundPreview
+    if (-not $path -or -not (Test-Path $path)) { return $false }
+    $name = [System.IO.Path]::GetFileName($path)
+    $kind = Get-FbAudioKind $path
+    if (-not $kind) {
+        Say-Log "preview skipped: $name is not a recognized audio file (WAV/MP3/OGG/FLAC/M4A/AAC)"
+        return $false
+    }
+    # SoundPlayer only decodes PCM WAV - the lightweight path for the classic
+    # case. It throws on anything it cannot decode (ADPCM, mp3-in-wav, ...);
+    # those and every other container fall through to the WPF MediaPlayer,
+    # which decodes whatever Media Foundation codecs the machine has.
+    if ($kind -ceq 'wav') {
+        $p = $null
+        try {
+            $p = New-Object System.Media.SoundPlayer $path
+            $p.Load()
+            $p.Play()   # async - the GUI thread is never blocked
+            $script:fbSoundPlayer = $p
+            Say-Log "preview: $name"
+            return $true
+        }
+        catch {
+            try { if ($p) { $p.Dispose() } } catch { }
+            $script:fbSoundPlayer = $null
+            # not PCM after all - fall through to the WPF MediaPlayer
+        }
+    }
+    try {
+        $mp = New-Object System.Windows.Media.MediaPlayer
+        $script:fbPreviewFailed = $false
+        $mp.Add_MediaFailed({ $script:fbPreviewFailed = $true })
+        $mp.Open((New-Object System.Uri $path))
+        # Open() is asynchronous and MediaPlayer reports decode failures through
+        # the MediaFailed event, never through an exception from Play(). Pump
+        # the message queue until the media is open (HasAudio) or failed, so the
+        # playability gate below is real for non-WAV too - not just a guess.
+        $deadline = (Get-Date).AddSeconds(3)
+        while (-not $mp.HasAudio -and -not $script:fbPreviewFailed -and (Get-Date) -lt $deadline) {
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 25
+        }
+        if ($script:fbPreviewFailed -or -not $mp.HasAudio) {
+            try { $mp.Close() } catch { }
+            Say-Log "preview failed: $name could not be decoded"
+            return $false
+        }
+        $mp.Play()   # async - never blocks the GUI thread
+        $script:fbSoundPlayer = $mp
+        Say-Log "preview: $name"
+        return $true
+    }
+    catch {
+        Say-Log "preview failed: $($_.Exception.Message)"
+        return $false
+    }
+}
+function Load-FbSound {
+    $script:fbSoundPath = $null
+    if (-not (Test-Path $script:fbSoundFile)) { return }
+    try {
+        $p = (Get-Content $script:fbSoundFile -Raw).Trim()
+        if ($p -and (Test-Path $p)) { $script:fbSoundPath = $p }
+    } catch { }
+}
+function Save-FbSound {
+    try {
+        $dir = Split-Path $script:fbSoundFile -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        if ($script:fbSoundPath) {
+            [System.IO.File]::WriteAllText($script:fbSoundFile, $script:fbSoundPath, (New-Object System.Text.UTF8Encoding $false))
+        }
+        elseif (Test-Path $script:fbSoundFile) { Remove-Item $script:fbSoundFile -Force }
+    }
+    catch {
+        $message = "could not save freebuff-sound.txt: $($_.Exception.Message)"
+        if (Get-Command Say-Log -CommandType Function -ErrorAction SilentlyContinue) { Say-Log $message }
+        else { Write-Warning $message }
+    }
+}
+function Update-FbSoundButton {
+    if ($script:fbSoundPath) {
+        $btnFbSound.Text = 'FB SOUND: ON'
+        $btnFbSoundTip.SetToolTip($btnFbSound, "FreeBuff completion sound:`n$($script:fbSoundPath)`nLeft-click to change, right-click to clear. COPY stores it inside the repo so it survives deleting the original.")
+        $btnFbSoundCopy.Enabled = $true
+        $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Save a copy inside the repo (sounds\freebuff.<ext>) so the sound outlives the original file.')
+    }
+    else {
+        $btnFbSound.Text = 'FB SOUND'
+        $btnFbSoundTip.SetToolTip($btnFbSound, 'FreeBuff completion sound: stock.' + [Environment]::NewLine + 'Left-click to pick an audio file, right-click to clear.')
+        $btnFbSoundCopy.Enabled = $false
+        $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Pick a .wav first - COPY stores it inside the repo.')
+    }
+}
+Load-FbSound
+
+$btnFbSound = New-Object Windows.Forms.Button
+$btnFbSound.Text = 'FB SOUND'; $btnFbSound.Location = '640,434'; $btnFbSound.Size = '140,24'; $btnFbSound.Font = $FONT
+$btnFbSound.FlatStyle = 'Flat'; $btnFbSound.FlatAppearance.BorderSize = 0
+
+$btnFbSound.Add_Click({
+        $dlg = New-Object Windows.Forms.OpenFileDialog
+        $dlg.Title = 'Pick the FreeBuff "finished" sound'
+        $dlg.Filter = 'Audio files (*.wav;*.mp3;*.ogg;*.flac;*.m4a;*.aac)|*.wav;*.mp3;*.ogg;*.flac;*.m4a;*.aac|All files (*.*)|*.*'
+        if ($script:fbSoundPath) { $dlg.InitialDirectory = Split-Path $script:fbSoundPath -Parent }
+        if ($dlg.ShowDialog() -ne 'OK') { return }
+        # A pick that fails the playability gate is NOT saved: "sound set" after
+        # "preview skipped" would be contradictory, and the patch would refuse it
+        # anyway. The old preference (if any) stays intact.
+        if (-not (Play-FbSoundPreview $dlg.FileName)) { return }
+        $script:fbSoundPath = $dlg.FileName
+        Save-FbSound
+        Update-FbSoundButton
+        Say-Log "FreeBuff sound set: $($dlg.FileName)  (applies on the next Apply for freebuff)"
+    })
+
+$btnFbSound.Add_MouseDown({
+        param($sender, $e)
+        if ($e.Button -ne [Windows.Forms.MouseButtons]::Right) { return }
+        $script:fbSoundPath = $null
+        Stop-FbSoundPreview
+        Save-FbSound
+        Update-FbSoundButton
+        Say-Log 'FreeBuff sound cleared - the stock chime will be restored on the next Apply.'
+    })
+
+# COPY: drops a durable copy of the chosen audio inside the repo
+# (sounds/freebuff.<ext>) and repoints the preference at it. The preference alone is just a path - it
+# dies with the file it names; the repo copy outlives the original. Enabled only
+# while a custom sound is set; the copy is idempotent (re-copying overwrites).
+$btnFbSoundCopy = New-Object Windows.Forms.Button
+$btnFbSoundCopy.Text = 'COPY'; $btnFbSoundCopy.Location = '784,434'; $btnFbSoundCopy.Size = '68,24'; $btnFbSoundCopy.Font = $FONT
+$btnFbSoundCopy.FlatStyle = 'Flat'; $btnFbSoundCopy.FlatAppearance.BorderSize = 0
+$btnFbSoundCopy.Enabled = $false
+
+$btnFbSoundCopy.Add_Click({
+        if (-not $script:fbSoundPath) {
+            Say-Log 'FreeBuff sound: nothing to copy yet - pick a .wav first.'
+            return
+        }
+        if (-not (Test-Path $script:fbSoundPath)) {
+            Say-Log "FreeBuff sound copy: the source is gone - $($script:fbSoundPath)  (pick it again, or COPY before deleting it)"
+            return
+        }
+        try {
+            $destDir = Join-Path $script:root 'sounds'
+            $ext = [System.IO.Path]::GetExtension($script:fbSoundPath)
+            if (-not $ext) { $ext = '.wav' }
+            $dest = Join-Path $destDir ('freebuff' + $ext.ToLower())
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+            # Copying a file onto itself throws; skip when the choice is already
+            # the repo copy. Compare canonical paths, not Test-Path.
+            $srcFull = [System.IO.Path]::GetFullPath($script:fbSoundPath)
+            $dstFull = [System.IO.Path]::GetFullPath($dest)
+            if ($srcFull -ieq $dstFull) {
+                Say-Log "FreeBuff sound is already the repo copy: $dest"
+            }
+            else {
+                Copy-Item $script:fbSoundPath $dest -Force
+                $script:fbSoundPath = $dest
+                Save-FbSound
+                Update-FbSoundButton
+                Say-Log "FreeBuff sound copied into the repo: $dest`n  (preference now points at the copy - deleting the original is safe)"
+            }
+        }
+        catch {
+            Say-Log "FreeBuff sound copy FAILED: $($_.Exception.Message)"
+        }
+    })
+
+$btnFbSoundTip = New-Object Windows.Forms.ToolTip
+$btnFbSoundCopyTip = New-Object Windows.Forms.ToolTip
+Update-FbSoundButton
+
 $log = New-Object Windows.Forms.TextBox
-$log.Location = '640,460'; $log.Size = '212,76'
+$log.Location = '640,462'; $log.Size = '212,76'
 $log.Multiline = $true; $log.ScrollBars = 'Vertical'; $log.ReadOnly = $true
 $log.BorderStyle = 'FixedSingle'
 
@@ -300,10 +550,10 @@ $status = New-Object Windows.Forms.Label
 $status.Location = '12,546'; $status.Size = '840,26'
 
 $form.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
-        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $log, $status))
+        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnFbSoundCopy, $log, $status))
 $lstThemes.TabIndex = 0; $clbMyApps.TabIndex = 1; $clbPopularApps.TabIndex = 2
 $btnSelectAll.TabIndex = 3; $btnSelectNone.TabIndex = 4; $btnApply.TabIndex = 5
-$btnSave.TabIndex = 6; $btnDelCustom.TabIndex = 7; $btnRevert.TabIndex = 8; $log.TabIndex = 9
+$btnSave.TabIndex = 6; $btnDelCustom.TabIndex = 7; $btnRevert.TabIndex = 8; $btnFbSound.TabIndex = 9; $btnFbSoundCopy.TabIndex = 10; $log.TabIndex = 11
 
 # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ TARGET DISCOVERY Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 # Read from install.ps1's own listing rather than duplicated here: one source of
@@ -631,7 +881,7 @@ function Skin-Self {
     foreach ($c in @($lstThemes, $clbMyApps, $clbPopularApps, $log)) {
         $c.BackColor = C $t.compareBack; $c.ForeColor = C $t.textPrimary
     }
-    foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnSelectAll, $btnSelectNone)) {
+    foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnSelectAll, $btnSelectNone)) {
         $b.BackColor = C $t.surfaceRaised; $b.ForeColor = C $t.textPrimary
         $b.FlatAppearance.BorderColor = C $t.borderHighlight
         $b.FlatAppearance.BorderSize = 2

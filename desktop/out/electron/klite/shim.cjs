@@ -488,6 +488,84 @@ const SCROLL_INTENT_FIX = `(() => {
   return "scroll intent fix installed";
 })()`;
 
+// ─── ADS DIE AT THE LAYER THAT CANNOT GO STALE ──────────────────────────────
+// patch-freebuff-ads.js cuts FreeBuff's ads out of the renderer bundle and the
+// orchestrator byte-for-byte. That is the primary layer, and it is exactly as
+// durable as the strings it matches. A future FreeBuff release can rename every
+// minified identifier, move the ad component, or renumber the API paths -- and
+// the byte patch needs new strings after the first such release.
+//
+// This block is the layer that does NOT depend on any of that. It rides inside
+// the shim and intercepts the two things the application cannot rename without
+// breaking its own ad network:
+//
+//   1. the network calls. The renderer talks to the ad server over fetch/XHR to
+//      URLs that contain /api/ad/. Any request whose URL matches that path is
+//      turned into a rejection before it leaves the page, so the ad network is
+//      unreachable even if a future bundle wires the call sites back up.
+//   2. the painted card. Any element whose class contains `sponsored-ad` is
+//      hidden (display:none) as soon as it appears, forever, so even a build
+//      that renders ads with brand-new identifiers shows nothing.
+//
+// The block is harmless in non-FreeBuff apps: the URL pattern is unique to
+// FreeBuff's ad network and the class does not exist elsewhere. It never
+// touches requests that do not match, so no legitimate traffic is affected.
+const AD_BLOCK = `(() => {
+  if (window.__wintageAdBlock) return "already running";
+  window.__wintageAdBlock = true;
+
+  // Backslashes are DOUBLED, and that is load-bearing: this payload is a template
+  // literal in the shim, so a single \/ collapses to / and a single \b to a
+  // backspace character before the renderer ever sees the text. Written singly,
+  // the emitted line was "const AD_PATH = //api/ad/(...)" -- a comment -- and the
+  // payload died at parse with "Script failed to execute". It never ran once, on
+  // any launch, while the status file reported the failure to nobody.
+  // tools/test-shim-payloads.js now interpolates and parses this one too.
+  const AD_PATH = /\\/api\\/ad\\/(slot|impression|click)\\b/;
+  const AD_CLASS = /sponsored-ad/i;
+
+  const rf = window.fetch && window.fetch.bind(window);
+  if (rf) {
+    window.fetch = function (input, init) {
+      let url = "";
+      try { url = typeof input === "string" ? input : (input && input.url) || ""; } catch (e) { }
+      if (AD_PATH.test(url)) return Promise.reject(new TypeError("blocked by wintage"));
+      return rf(input, init);
+    };
+  }
+
+  const rxo = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    if (AD_PATH.test(String(url))) {
+      this.__wintageBlocked = true;
+      setTimeout(() => { try { this.abort(); } catch (e) { } }, 0);
+    }
+    return rxo.apply(this, arguments);
+  };
+  const rxs = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function () {
+    if (this.__wintageBlocked) return;
+    return rxs.apply(this, arguments);
+  };
+
+  const hideAds = () => {
+    for (const el of document.querySelectorAll('[class*="sponsored-ad"]')) {
+      if (el.__wintageAdHidden) continue;
+      el.__wintageAdHidden = true;
+      el.style.setProperty("display", "none", "important");
+    }
+  };
+  hideAds();
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; hideAds(); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
+  return "ad block installed";
+})()`;
+
 // ─── A BAR THAT REPORTS A VALUE: TRIED, MEASURED, WITHDRAWN ──────────────────
 // The problem is real and stays on the board. A usage or quota bar carries its
 // number in the PROPORTION between fill and track, surface flattening paints both
@@ -699,6 +777,9 @@ if (css) {
         wc.executeJavaScript(SCROLL_INTENT_FIX, true)
           .then(r => stamp('scrollintent: ' + r))
           .catch(err => stamp('scrollintent FAILED: ' + (err && err.message)));
+        wc.executeJavaScript(AD_BLOCK, true)
+          .then(r => stamp('adblock: ' + r))
+          .catch(err => stamp('adblock FAILED: ' + (err && err.message)));
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         wc.insertCSS(payload, { cssOrigin: 'author' })
           .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })
