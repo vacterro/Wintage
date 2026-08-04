@@ -823,8 +823,39 @@ input::placeholder, textarea::placeholder { color: ${T.textMuted} !important; }
    box-shadow, so this outline is now the only focus affordance there is — the
    old input/textarea/select/button/a list was too narrow once that ring was gone. */
 input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible,
-summary:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
+summary:focus-visible, [tabindex]:not([tabindex="-1"]):not(div):not(article):not(section):not(main):not(p):not(blockquote):focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
   outline: 1px dotted ${T.textPrimary} !important; outline-offset: -4px !important;
+}
+
+/* ChatGPT (chatgpt.com) Surface & Theme Variable Overrides */
+html[class*="dark"], body:has([class*="chatgpt"]), [data-message-author-role] {
+  --main-surface-primary: ${T.background} !important;
+  --main-surface-secondary: ${T.backgroundSoft} !important;
+  --main-surface-tertiary: ${T.surface} !important;
+  --surface-primary: ${T.background} !important;
+  --surface-secondary: ${T.backgroundSoft} !important;
+  --surface-tertiary: ${T.surface} !important;
+  --bg-primary: ${T.background} !important;
+  --bg-secondary: ${T.backgroundSoft} !important;
+  --bg-tertiary: ${T.surface} !important;
+}
+
+/* Inline code snippets (code:not(pre code), kbd, samp) */
+p code, li code, blockquote code, td code, dd code, span code, code:not(pre code), kbd, samp {
+  display: inline !important;
+  box-decoration-break: clone !important;
+  -webkit-box-decoration-break: clone !important;
+  padding: 0px 4px !important;
+  margin: 0 2px !important;
+  border: 1px solid ${T.borderMuted} !important;
+  background-color: ${T.backgroundSoft} !important;
+  color: ${T.textPrimary} !important;
+  font-family: ${FONT} !important;
+  vertical-align: baseline !important;
+  line-height: normal !important;
+}
+p, li, dd, blockquote {
+  line-height: 1.4 !important;
 }
 
 table { border-collapse: collapse !important; background-color: ${T.backgroundSoft} !important; border-spacing: 0 !important; }
@@ -996,11 +1027,37 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
 dialog:not(:root), [popover]:not(:root),
 [role="menu"]:not(:root), [role="listbox"]:not(:root),
 [role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
-[class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
+[class*="menu" i]:not(a):not(button),
 [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
 [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
-[data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
+[class*="popover" i], [class*="modal" i], [class*="flyout" i], [class*="drawer" i],
+[class*="sheet" i], [class*="callout" i], [class*="picker" i], [class*="context-menu" i],
+[class*="toast" i], [class*="snackbar" i],
+[data-radix-portal] *, [data-radix-popper-content-wrapper] *, [data-floating-ui-portal] *,
+[data-state="open"][role], [data-radix-menu-content], [data-radix-dropdown-menu-content],
+[data-radix-popover-content], [data-radix-select-content], [data-radix-tooltip-content],
+[data-radix-dialog-content], [data-radix-context-menu-content], [data-radix-hover-card-content],
+[id*="headlessui-portal"] * {
   background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important; ${B_OUTER}
+}
+
+[role="dialog"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[role="menu"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[role="listbox"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[role="tooltip"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+dialog :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[popover] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="popover" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="modal" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="dialog" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="dropdown" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="menu" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="tooltip" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="flyout" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[data-radix-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[data-floating-ui-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)) {
+  background-color: inherit !important;
+  color: inherit !important;
 }
 
 `;
@@ -1079,14 +1136,40 @@ dialog:not(:root), [popover]:not(:root),
        text overlaps the page underneath (the Reddit hovercard bug). Recolor only -
        never force opacity/z-index/visibility.
        Specificity is bumped with :not(:root):not(.w) to beat [class]:not(:root). */
-    dialog:not(:root):not(.w), [popover]:not(:root):not(.w),
-    [role="menu"]:not(:root):not(.w), [role="listbox"]:not(:root):not(.w),
-    [role="tooltip"]:not(:root):not(.w), [role="dialog"]:not(:root):not(.w), [role="alertdialog"]:not(:root):not(.w),
-    [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
+    dialog:not(:root), [popover]:not(:root),
+    [role="menu"]:not(:root), [role="listbox"]:not(:root),
+    [role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
+    [class*="menu" i]:not(a):not(button),
     [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
     [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
-    [data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
+    [class*="popover" i], [class*="modal" i], [class*="flyout" i], [class*="drawer" i],
+    [class*="sheet" i], [class*="callout" i], [class*="picker" i], [class*="context-menu" i],
+    [class*="toast" i], [class*="snackbar" i],
+    [data-radix-portal] *, [data-radix-popper-content-wrapper] *, [data-floating-ui-portal] *,
+    [data-state="open"][role], [data-radix-menu-content], [data-radix-dropdown-menu-content],
+    [data-radix-popover-content], [data-radix-select-content], [data-radix-tooltip-content],
+    [data-radix-dialog-content], [data-radix-context-menu-content], [data-radix-hover-card-content],
+    [id*="headlessui-portal"] * {
       background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important; ${B_OUTER}
+    }
+
+    [role="dialog"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [role="menu"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [role="listbox"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [role="tooltip"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    dialog :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [popover] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [class*="popover" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [class*="modal" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [class*="dialog" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [class*="dropdown" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [class*="menu" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [class*="tooltip" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [class*="flyout" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [data-radix-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+    [data-floating-ui-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)) {
+      background-color: inherit !important;
+      color: inherit !important;
     }
 
     button, input[type="button"], input[type="submit"], input[type="reset"], shreddit-button, .btn,

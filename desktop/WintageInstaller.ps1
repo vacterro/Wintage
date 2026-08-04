@@ -14,8 +14,10 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName PresentationCore
-# WPF MediaPlayer (System.Windows.Media) is used as the fallback preview player
-# for everything that is not a PCM WAV. It rides on Media Foundation, so it
+# The preview player is SoundPlayer over an ffmpeg-transcoded temp PCM WAV (the
+# reliable path on machines where WPF MediaPlayer fails to decode even plain
+# PCM). WPF MediaPlayer (System.Windows.Media) remains only as the last-resort
+# fallback for machines without ffmpeg. It rides on Media Foundation, so it
 # decodes whatever the machine has codecs for (MP3/AAC/M4A/FLAC/OGG on Win10+;
 # WMA is deliberately not accepted - the installed file is played by Chromium,
 # which cannot decode WMA at all). PresentationCore is part of the desktop .NET
@@ -239,11 +241,15 @@ Load-CustomPaths
 
 $onTargetCheck = {
     param($sender, $e)
-    if ($e.NewValue -ne 'Checked') { return }
-    $key = ($sender.Items[$e.Index] -split '\s+')[0]
-    if ($key -notin $PATH_TARGETS) { return }
-    if ($script:customPaths.ContainsKey($key)) { return }
-    if (-not (Ask-CustomPath $key)) { $e.NewValue = 'Unchecked' }
+    if ($e.NewValue -eq 'Checked') {
+        $key = ($sender.Items[$e.Index] -split '\s+')[0]
+        if ($key -in $PATH_TARGETS -and -not $script:customPaths.ContainsKey($key) -and -not (Ask-CustomPath $key)) {
+            $e.NewValue = 'Unchecked'
+        }
+    }
+    # The FB sound picker belongs to a single freebuff install: it is visible
+    # only while the freebuff target is the one checked target.
+    Update-FbButtonsVisibility $sender $e.Index $e.NewValue
 }
 $clbMyApps.Add_ItemCheck($onTargetCheck)
 $clbPopularApps.Add_ItemCheck($onTargetCheck)
@@ -322,6 +328,10 @@ $script:fbSoundPath = $null
 # everything else), so picking a new sound stops whatever is still playing
 # instead of layering previews on top of each other.
 $script:fbSoundPlayer = $null
+# Temp PCM WAV owned by the current preview. SoundPlayer.Play() reads from the
+# file even after Load(), so the temp must outlive the player - it is deleted in
+# Stop-FbSoundPreview, the single point where the player is torn down.
+$script:fbPreviewTmp = $null
 # Set by the MediaPlayer's async MediaFailed event so the non-WAV preview path
 # can still tell "playing" from "could not decode" - Play() itself never throws.
 $script:fbPreviewFailed = $false
@@ -337,6 +347,10 @@ function Stop-FbSoundPreview {
             try { $script:fbSoundPlayer.Close() } catch { }
         }
         $script:fbSoundPlayer = $null
+    }
+    if ($script:fbPreviewTmp) {
+        Remove-Item -LiteralPath $script:fbPreviewTmp -Force -ErrorAction SilentlyContinue
+        $script:fbPreviewTmp = $null
     }
 }
 function Get-FbAudioKind([string]$path) {
@@ -364,6 +378,26 @@ function Get-FbAudioKind([string]$path) {
     }
     catch { return $null }
 }
+function Convert-ToPlayableWav([string]$path) {
+    # Transcodes ANY audio (ADPCM WAV, MP3, OGG, FLAC, M4A, AAC) to a temp PCM WAV
+    # that System.Media.SoundPlayer can always decode. ffmpeg is the one
+    # dependency; it is present on this machine (C:\Windows\ffmpeg.exe). Returns
+    # the temp path on success, $null on failure. The caller owns the file.
+    $ff = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    if (-not $ff) { return $null }
+    $tmp = Join-Path $env:TEMP ("fbpreview_{0}.wav" -f ([guid]::NewGuid().ToString('N')))
+    try {
+        # 2>$null: with $ErrorActionPreference='Stop' the 2>&1 merge turns native
+        # stderr into terminating error records on some 5.1 installs. The exit
+        # code below is the real success signal anyway.
+        & $ff.Source -y -v error -i $path -acodec pcm_s16le -ar 44100 -ac 2 $tmp 2>$null
+        if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $tmp)) { return $tmp }
+    }
+    catch { }
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    return $null
+}
+
 function Play-FbSoundPreview([string]$path) {
     # $true  - preview started; $false - not playable: nothing was started,
     #          caller must not save it
@@ -375,10 +409,34 @@ function Play-FbSoundPreview([string]$path) {
         Say-Log "preview skipped: $name is not a recognized audio file (WAV/MP3/OGG/FLAC/M4A/AAC)"
         return $false
     }
-    # SoundPlayer only decodes PCM WAV - the lightweight path for the classic
-    # case. It throws on anything it cannot decode (ADPCM, mp3-in-wav, ...);
-    # those and every other container fall through to the WPF MediaPlayer,
-    # which decodes whatever Media Foundation codecs the machine has.
+    # Primary path: transcode to PCM WAV and play with SoundPlayer. Reliable for
+    # ADPCM WAV and every compressed container even on machines where the WPF
+    # MediaPlayer cannot decode at all (MediaFailed fires on plain PCM there).
+    $pcm = Convert-ToPlayableWav $path
+    if ($pcm) {
+        $p = $null
+        try {
+            $p = New-Object System.Media.SoundPlayer $pcm
+            $p.Load()
+            # The temp must stay until Stop-FbSoundPreview: Play() re-reads the
+            # file even after Load(). $script:fbPreviewTmp makes the teardown the
+            # owner of the file, so it cannot leak or die early.
+            $script:fbPreviewTmp = $pcm
+            $p.Play()   # async - the GUI thread is never blocked
+            $script:fbSoundPlayer = $p
+            Say-Log "preview: $name"
+            return $true
+        }
+        catch {
+            try { if ($p) { $p.Dispose() } } catch { }
+            Remove-Item -LiteralPath $pcm -Force -ErrorAction SilentlyContinue
+            $script:fbPreviewTmp = $null
+            $script:fbSoundPlayer = $null
+        }
+    }
+    # Fallback for machines without ffmpeg: SoundPlayer (PCM WAV only), then the
+    # WPF MediaPlayer. SoundPlayer throws on anything it cannot decode (ADPCM,
+    # mp3-in-wav, ...); those fall through to MediaPlayer below.
     if ($kind -ceq 'wav') {
         $p = $null
         try {
@@ -596,6 +654,25 @@ function Get-CheckedTargetItems {
         foreach ($i in $list.CheckedIndices) { $items += $list.Items[$i] }
     }
     $items
+}
+
+function Update-FbButtonsVisibility([object]$sender = $null, [int]$index = -1, [string]$newValue = '') {
+    # The FB SOUND / COPY buttons are part of the freebuff install path. They
+    # appear only while the freebuff target is the ONE checked target - with
+    # several apps checked, a freebuff-only sound picker would look like it
+    # applies to all of them. When hidden, the log moves up into their row.
+    $keys = @()
+    foreach ($list in $TARGET_LISTS) {
+        for ($i = 0; $i -lt $list.Items.Count; $i++) {
+            $isChecked = $list.GetItemChecked($i)
+            if ($list -eq $sender -and $i -eq $index) { $isChecked = ($newValue -eq 'Checked') }
+            if ($isChecked) { $keys += (($list.Items[$i]) -split '\s+')[0] }
+        }
+    }
+    $show = ($keys.Count -eq 1) -and ($keys[0] -eq 'freebuff')
+    $btnFbSound.Visible = $show
+    $btnFbSoundCopy.Visible = $show
+    $log.Location = if ($show) { '640,462' } else { '640,434' }
 }
 
 # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ RENDERING Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
@@ -817,6 +894,7 @@ $btnApply.Add_Click({
                 Say-Log ("{0}: {1}" -f $key, $last)
             }
             Load-Targets
+            Update-FbButtonsVisibility
             $status.Text = "Applied '$slug'. Restart any app that was themed."
         }
         catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message) }
@@ -829,11 +907,13 @@ $btnSelectAll.Add_Click({
             if ($state -eq 'not installed' -or $state -eq 'fused shut') { continue }
             $target.List.SetItemChecked($target.ItemIndex, $true)
         }
+        Update-FbButtonsVisibility
     })
 $btnSelectNone.Add_Click({
         foreach ($list in $TARGET_LISTS) {
             for ($i = 0; $i -lt $list.Items.Count; $i++) { $list.SetItemChecked($i, $false) }
         }
+        Update-FbButtonsVisibility
     })
 
 $btnRevert.Add_Click({
@@ -890,6 +970,7 @@ function Skin-Self {
 }
 
 Load-Targets
+Update-FbButtonsVisibility
 # The startup palette also owns the first row. Selecting Golden Default while
 # leaving Dark Golden above it looked like a stale default even though Apply used
 # the right value.
@@ -909,5 +990,9 @@ $status.Text = 'Pick a theme, tick the targets, press APPLY. Editing any colour 
 # wide with the preview panel right beside it, and a clipped hint is no hint.
 $tip = New-Object Windows.Forms.ToolTip
 $tip.SetToolTip($clbMyApps, "Right-click saipenview / smartvac / wildrift to change its folder." + [Environment]::NewLine + "Asked once, then remembered in $($script:pathsFile).")
+
+# A preview's temp PCM WAV is deleted on teardown; closing the window is the
+# last teardown of the session, so sweep it there too.
+$form.Add_FormClosed({ Stop-FbSoundPreview })
 
 [void]$form.ShowDialog()

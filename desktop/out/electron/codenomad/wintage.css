@@ -409,8 +409,39 @@ input::placeholder, textarea::placeholder { color: #675091 !important; }
    box-shadow, so this outline is now the only focus affordance there is — the
    old input/textarea/select/button/a list was too narrow once that ring was gone. */
 input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible,
-summary:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
+summary:focus-visible, [tabindex]:not([tabindex="-1"]):not(div):not(article):not(section):not(main):not(p):not(blockquote):focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
   outline: 1px dotted #B099DE !important; outline-offset: -4px !important;
+}
+
+/* ChatGPT (chatgpt.com) Surface & Theme Variable Overrides */
+html[class*="dark"], body:has([class*="chatgpt"]), [data-message-author-role] {
+  --main-surface-primary: #1C242A !important;
+  --main-surface-secondary: #21282F !important;
+  --main-surface-tertiary: #29313C !important;
+  --surface-primary: #1C242A !important;
+  --surface-secondary: #21282F !important;
+  --surface-tertiary: #29313C !important;
+  --bg-primary: #1C242A !important;
+  --bg-secondary: #21282F !important;
+  --bg-tertiary: #29313C !important;
+}
+
+/* Inline code snippets (code:not(pre code), kbd, samp) */
+p code, li code, blockquote code, td code, dd code, span code, code:not(pre code), kbd, samp {
+  display: inline !important;
+  box-decoration-break: clone !important;
+  -webkit-box-decoration-break: clone !important;
+  padding: 0px 4px !important;
+  margin: 0 2px !important;
+  border: 1px solid #424A57 !important;
+  background-color: #21282F !important;
+  color: #B099DE !important;
+  font-family: Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif !important;
+  vertical-align: baseline !important;
+  line-height: normal !important;
+}
+p, li, dd, blockquote {
+  line-height: 1.4 !important;
 }
 
 table { border-collapse: collapse !important; background-color: #21282F !important; border-spacing: 0 !important; }
@@ -582,10 +613,36 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
 dialog:not(:root), [popover]:not(:root),
 [role="menu"]:not(:root), [role="listbox"]:not(:root),
 [role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
-[class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
+[class*="menu" i]:not(a):not(button),
 [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
 [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
-[data-radix-popper-content-wrapper] > div, [data-radix-portal] > div, [data-floating-ui-portal] > div {
+[class*="popover" i], [class*="modal" i], [class*="flyout" i], [class*="drawer" i],
+[class*="sheet" i], [class*="callout" i], [class*="picker" i], [class*="context-menu" i],
+[class*="toast" i], [class*="snackbar" i],
+[data-radix-portal] *, [data-radix-popper-content-wrapper] *, [data-floating-ui-portal] *,
+[data-state="open"][role], [data-radix-menu-content], [data-radix-dropdown-menu-content],
+[data-radix-popover-content], [data-radix-select-content], [data-radix-tooltip-content],
+[data-radix-dialog-content], [data-radix-context-menu-content], [data-radix-hover-card-content],
+[id*="headlessui-portal"] * {
   background-color: #343D4A !important; background-image: none !important; color: #B099DE !important; border: 2px solid !important; border-color: #575776 #0E1216 #0E1216 #575776 !important; box-shadow: none !important;
+}
+
+[role="dialog"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[role="menu"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[role="listbox"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[role="tooltip"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+dialog :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[popover] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="popover" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="modal" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="dialog" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="dropdown" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="menu" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="tooltip" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[class*="flyout" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[data-radix-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
+[data-floating-ui-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)) {
+  background-color: inherit !important;
+  color: inherit !important;
 }
 
