@@ -330,50 +330,1124 @@ const FLOAT_FIX = `(() => {
     RETRIES.set(el, n + 1);
     requestAnimationFrame(() => requestAnimationFrame(() => fixOne(el)));
     setTimeout(() => fixOne(el), 260);
+const REPAINTER_FIX = `(() => {
+  if (window.__wintageRepainter) return "already running";
+  window.__wintageRepainter = true;
+
+  const THEME_ID = 'electron';
+  const THEMES = {
+    electron: {
+      tokens: {
+        background: '#000000',
+        backgroundSoft: '#000000',
+        surface: '#0A0A0A',
+        surfaceRaised: '#141414',
+        surfaceAlt: '#1C1C1C',
+        borderDark: '#1A1A1A',
+        borderHighlight: '#FFFFFF',
+        bevelLight: '#5C5C5C',
+        borderMuted: '#333333',
+        link: '#FFFFFF',
+        textPrimary: '#A0A0A0',
+        textSecondary: '#777777',
+        textMuted: '#484848',
+        accentTeal: '#008080',
+        accentTealDeep: '#004C4C',
+        success: '#4A7A20',
+        warning: '#7A7A20',
+        danger: '#7A2020',
+        dangerText: '#CE4444',
+        selection: '#141414',
+        compareBack: '#000000'
+      }
+    }
   };
+  
+  let B_OUTER = \`border: 2px solid !important; border-color: #5C5C5C #1A1A1A #1A1A1A #5C5C5C !important; box-shadow: none !important;\`;
+  let B_INNER = \`border: 2px solid !important; border-color: #1A1A1A #5C5C5C #5C5C5C #1A1A1A !important; box-shadow: none !important;\`;
+  let B_SUNK = \`border: 2px solid !important; border-color: #1A1A1A #5C5C5C #5C5C5C #1A1A1A !important; box-shadow: none !important;\`;
+  let FONT = \`Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif\`;
 
-  const fixTree = root => {
-    if (!root.querySelectorAll) return;
-    // Only out-of-flow elements can qualify, but there is no selector for that, so
-    // the cheap filter is the one the DOM can answer: a panel is either portalled
-    // to the top of the tree or it is not a panel. Scanning body's own descendants
-    // wholesale is what the userscript's repainter exists for; here the point is to
-    // stay cheap enough to run on every mutation batch.
-    for (const el of root.querySelectorAll("*")) fixOne(el);
+  
+
+  function parseRGB(str) {
+    if (!str) return null;
+    const m = str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*[,/]\s*([\d.]+))?/);
+    if (!m) return null;
+    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? parseFloat(m[4]) : 1 };
+  }
+  // Write-if-changed: re-verify passes revisit every element, so identical
+  // rewrites must not invalidate styles or churn the style attribute.
+  function setImp(el, prop, val) {
+    const st = el.style;
+    if (st.getPropertyValue(prop) !== val || st.getPropertyPriority(prop) !== 'important') {
+      st.setProperty(prop, val, 'important');
+    }
+  }
+
+  // 🚨 READ/WRITE SPLIT — this was THE idle-CPU bug (v1.3.0) 🚨
+  // process() used to read getComputedStyle and write inline styles in the same
+  // loop. Every inline write invalidates style, so the NEXT element's read had
+  // to force a whole-document style recalc — and this theme's own selectors make
+  // that the most expensive recalc shape there is (`*`, `*, *::before, *::after`,
+  // the 8-`:not([class*="…" i])` icon-font selector, the 12-negation hover-freeze
+  // selector). One write per element therefore bought one full recalc per
+  // element. Measured live on en.wikipedia.org/wiki/World_War_II, 16921 elements,
+  // published v1.2.1 eval'd in-page:
+  //     2500 elements, reads only ................  70.6 ms
+  //     2500 elements, interleaved read+write ....  1069–1994 ms   ← old code
+  //     2500 elements, batched read-then-write ...  230.9 ms  (~190 ms of which
+  //                                                 is ONE whole-doc recalc)
+  // One real instrumented sweeper tick measured 253 ms per 1.5 s interval =
+  // 16.9 % of a core, permanently, on a page that was doing nothing.
+  //
+  // So process() now ONLY READS. Instead of writing, it appends [el, prop, val]
+  // triples to a queue that the caller flushes once at the end: N recalcs -> 1.
+  // A flat array (not objects) keeps the queue allocation-free per element.
+  //
+  // Correctness note on batching: `color` is inherited, so a child no longer
+  // sees its parent's just-corrected color while being read — it fails the
+  // contrast check against the ORIGINAL inherited value and gets its own
+  // explicit inline color. Identical final pixels, one extra declaration; it
+  // can never resolve to a DIFFERENT color, only to the same one stated twice.
+  // Non-inherited properties (background, border-*) are unaffected either way.
+  //
+  // Attribute writes stay inline and are deliberately NOT queued: setAttribute
+  // ('data-w95-done') is not referenced by any selector in this theme, so it
+  // invalidates nothing (measured: 6.7 ms for all 16921 elements), and
+  // removeAttribute('bgcolor'/'background') is a no-op when absent.
+  // 🚨 SELF-WRITE SUPPRESSION IS BY IDENTITY, NEVER BY A TIME WINDOW (v1.4.2) 🚨
+  // 'style' IS in the observer's attributeFilter, which ADR-002 said never to do.
+  // It is worth doing — a site mutating an existing element's inline style is
+  // otherwise invisible, and catching it with an event is what let the 30s
+  // polling heartbeat be deleted entirely. But setImp writes inline styles, so
+  // the observer WILL be handed its own output and the suppression has to be
+  // airtight.
+  //
+  // The first attempt muted all 'style' records for 100ms after each flush.
+  // Measured on a static article (16595 elements), 12-second window:
+  //     site alone, no theme .......    0 style mutations
+  //     with the theme ............. 9466 style mutations
+  // i.e. every single one was ours. The mute discarded them at flush time, so
+  // there was no runaway — but 9466 records were still allocated, delivered
+  // through a microtask, and pushed into pendingMuts to be walked by the next
+  // debounce. And it was only ever timing-safe by luck: the filter runs at the
+  // END of the 60ms debounce, so any flush that lands >100ms before its debounce
+  // fires (i.e. exactly when the main thread is busy, which is exactly during a
+  // heavy sweep) lets our own writes through, and each one that gets processed
+  // clears data-w95-done and re-processes the element, generating more writes.
+  // A blanket window also drops the SITE's real style changes for 100ms.
+  //
+  // So: record precisely which elements we wrote, then drain the observer queue
+  // ourselves with takeRecords() before the callback ever runs, keeping every
+  // record that was not ours. Timing-independent and scoped to the exact
+  // elements involved.
+  const selfWritten = new Set();
+
+  function flushWrites(w) {
+    if (!w.length) return;
+    for (let i = 0; i < w.length; i += 3) {
+      setImp(w[i], w[i + 1], w[i + 2]);
+      selfWritten.add(w[i]);
+    }
+    w.length = 0;
+    // takeRecords() returns AND clears the pending queue, so this runs before
+    // the observer callback is ever invoked for these mutations.
+    let kept = 0;
+    for (const obs of [mainObserver, shadowObserver]) {
+      let recs;
+      try { recs = obs.takeRecords(); } catch (e) { continue; }
+      for (let i = 0; i < recs.length; i++) {
+        const m = recs[i];
+        if (m.type === 'attributes' && m.attributeName === 'style' && selfWritten.has(m.target)) continue;
+        pendingMuts.push(m);
+        kept++;
+      }
+    }
+    selfWritten.clear();
+    // Anything genuinely foreign that was queued alongside our writes still has
+    // to be handled; the debounce is not running at this point (flushWrites is
+    // called at the END of it, and from runSweeper), so it needs re-arming.
+    // Known and accepted gap: a site style-change on an element WE also wrote to
+    // in the same batch is dropped. It is self-healing — the next sweep re-reads
+    // that element's computed style from scratch.
+    if (kept && !debounceTimer) onMutations(EMPTY_MUTATIONS);
+  }
+  const EMPTY_MUTATIONS = [];
+
+  // 🚨 SATURATED COLOUR -> ONE OF THREE SEMANTIC TOKENS (UI.md law 5) 🚨
+  // The pre-1.4.0 rule multiplied a light saturated background by 0.18, which
+  // "preserved the hue" — and in doing so emitted an unbounded set of arbitrary
+  // colours that trace to no token at all. GitHub's diff green became one
+  // brown-green, GitLab's a different one, a warning banner a third: iron law 5
+  // broken every time, and every site kept its own colour signature.
+  //
+  // UI.md ships exactly three semantic colours, so the site's own hue only has to
+  // answer one question: which of the three did it mean? Hue sectors, wide and
+  // deliberately coarse, because the answer only needs to be right to within
+  // "green / amber / red":
+  //   red-ish    (>=345 or <35 deg) -> --danger
+  //   yellow-ish (35..75 deg)       -> --warning
+  //   green-ish  (75..170 deg)      -> --success
+  // Everything else — blues, purples, teals, magentas — carries no shared meaning
+  // across sites, so it becomes plain --surfaceRaised rather than being forced
+  // into a status colour it never claimed.
+  function semanticToken(c) {
+    const max = Math.max(c.r, c.g, c.b), min = Math.min(c.r, c.g, c.b), d = max - min;
+    if (d === 0) return T.surfaceRaised;
+    let h;
+    if (max === c.r) h = 60 * (((c.g - c.b) / d) % 6);
+    else if (max === c.g) h = 60 * ((c.b - c.r) / d + 2);
+    else h = 60 * ((c.r - c.g) / d + 4);
+    if (h < 0) h += 360;
+    if (h >= 345 || h < 35) return T.danger;
+    if (h < 75) return T.warning;
+    if (h < 170) return T.success;
+    return T.surfaceRaised;
+  }
+
+  // UI.md's five permitted sizes, and the role mapping GLOBAL_CSS uses. Kept as
+  // lookups so the JS enforcement below can never drift from the CSS layer.
+  const SIZE_ALLOWED = new Set(['10px', '11px', '12px', '14px', '16px']);
+  const LADDER = {
+    H1: '16px', H2: '14px', H3: '14px', H4: '14px', H5: '14px', H6: '14px',
+    SMALL: '10px', SUB: '10px', SUP: '10px', FIGCAPTION: '10px'
   };
+  // The palette as the browser serialises it, for cheap "is this already one of
+  // ours?" tests against a computed value.
+  const PALETTE_RGB = new Set(Object.keys(T).map(k => {
+    const h = T[k];
+    return 'rgb(' + parseInt(h.slice(1, 3), 16) + ', ' + parseInt(h.slice(3, 5), 16) + ', ' + parseInt(h.slice(5, 7), 16) + ')';
+  }));
 
-  fixTree(document);
-  let passes = 0;
-  const settle = () => { if (++passes < 3) { fixTree(document); setTimeout(settle, 600); } };
-  setTimeout(settle, 600);
+  const ICONISH = /icon|fa-|symbols|glyph|mdi|bi-/i;
+  function isIconish(el) {
+    // className is an SVGAnimatedString on SVG elements, not a string — read the
+    // attribute instead of trusting the property.
+    const c = el.getAttribute && el.getAttribute('class');
+    return c ? ICONISH.test(c) : false;
+  }
 
-  let queued = false;
-  const mutations = [];
-  new MutationObserver(records => {
-    mutations.push(...records);
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      const recs = mutations.splice(0, mutations.length);
-      for (const r of recs) {
-        if (r.type === "childList") {
-          for (const node of r.addedNodes) {
-            if (node.nodeType === 1) { fixOne(node); fixTree(node); }
-          }
-        } else if (r.type === "attributes") {
-          // A popover is usually mounted closed and then opened by a class or
-          // style flip, so the element that matters was already in the tree when
-          // it measured zero. Re-measuring on its own attribute change is the only
-          // thing that catches it, and it is why the mark is re-decided rather
-          // than latched on first sight.
-          if (r.target.nodeType === 1) fixOne(r.target);
+  const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape';
+  const SHADOW_SKIP_TAGS = new Set(['YTD-LOGO', 'YT-ICON', 'YT-ICON-SHAPE', 'YT-IMG-SHADOW', 'YTD-AVATAR-SHAPE', 'YT-AVATAR-SHAPE', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
+  const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR)$/i;
+
+  const piercedRoots = new Set();
+
+  function pierceShadow(host) {
+    const tag = (host.tagName || '').toUpperCase();
+    if (SHADOW_SKIP_TAGS.has(tag)) return;
+    if (!host.shadowRoot || piercedRoots.has(host.shadowRoot)) return;
+    piercedRoots.add(host.shadowRoot);
+    try {
+      injectStyle(host.shadowRoot, 'shadow', SHADOW_CSS);
+      if (!CSS_ONLY_MODE) {
+        shadowObserver.observe(host.shadowRoot, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'bgcolor', 'background', 'style']
+        });
+        stylesDirty = true;
+      }
+    } catch (e) { }
+  }
+
+
+  // ─── :hover RULE SURGERY (v29.1) ────────────────────────────────────────────
+  // Strips paint properties out of every readable :hover rule so sites cannot
+  // flashbang-highlight on hover. Functional props (display, visibility,
+  // opacity, transform) are left untouched so hover-opened menus keep working.
+  // Cross-origin sheets that throw on cssRules access are covered by the CSS
+  // freeze rule in GLOBAL_CSS/SHADOW_CSS instead.
+  const HOVER_PAINT = /^(background|box-shadow|filter|backdrop-filter|color|border|outline|text-decoration|text-shadow|--)/;
+  const sheetSeen = new WeakMap(); // sheet -> cssRules.length at last pass
+
+  function stripHoverRule(rule) {
+    const st = rule.style;
+    if (!st) return;
+    const names = [];
+    for (let i = 0; i < st.length; i++) names.push(st[i]);
+    for (let i = 0; i < names.length; i++) {
+      if (HOVER_PAINT.test(names[i])) st.removeProperty(names[i]);
+    }
+  }
+
+  function walkRules(container) {
+    let rules;
+    try { rules = container.cssRules; } catch (e) { return; } // cross-origin
+    if (!rules) return;
+    for (let i = 0; i < rules.length; i++) {
+      const r = rules[i];
+      try {
+        if (r.selectorText && r.selectorText.indexOf(':hover') !== -1) stripHoverRule(r);
+        if (r.cssRules && r.cssRules.length) walkRules(r); // @media/@supports/@layer/nesting
+      } catch (e) { }
+    }
+  }
+
+  // Returns true when at least one sheet had changed since the last pass — the
+  // caller treats that as "late CSS is still landing" and requests a force
+  // re-verify (v1.3.0). On a settled page it returns false every time, which is
+  // what lets the expensive pass go quiet.
+  function stripHoverSheets(root) {
+    let changed = false;
+    const lists = [root.styleSheets, root.adoptedStyleSheets];
+    for (let l = 0; l < lists.length; l++) {
+      const list = lists[l];
+      if (!list) continue;
+      for (let i = 0; i < list.length; i++) {
+        const sheet = list[i];
+        const node = sheet.ownerNode;
+        if (node && node.getAttribute && node.getAttribute('data-w95')) continue; // our own hover bevels stay
+        let count;
+        try { count = sheet.cssRules ? sheet.cssRules.length : 0; } catch (e) { continue; }
+        const seen = sheetSeen.get(sheet);
+        if (seen === count) continue; // unchanged since last pass
+        sheetSeen.set(sheet, count);
+        changed = true;
+        if (seen === undefined || count < seen) {
+          walkRules(sheet); // first sight or rules removed: full walk
+        } else {
+          // CSS-in-JS engines insertRule constantly; re-walking the whole sheet
+          // every tick was a jank source. Walk the appended rules only.
+          try {
+            const rules = sheet.cssRules;
+            for (let r = seen; r < count; r++) {
+              const rule = rules[r];
+              if (rule.selectorText && rule.selectorText.indexOf(':hover') !== -1) stripHoverRule(rule);
+              if (rule.cssRules && rule.cssRules.length) walkRules(rule);
+            }
+          } catch (e) { }
         }
       }
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden", "open", "data-state", "aria-hidden", "aria-expanded"] });
+    }
+    return changed;
+  }
 
-  return "float fix installed";
+  // `w` is the caller's write queue (see flushWrites). Reads only — every style
+  // change is appended, never applied here.
+  function process(el, force, w) {
+    // v29 FIX: the old `el.closest(':hover')` guard was fatal — html/body match
+    // :hover whenever the cursor is anywhere over the viewport, so closest()
+    // returned truthy for EVERY element and the sweeper silently processed
+    // nothing while the mouse was on the page (= dark-on-dark text never got
+    // contrast-fixed). Only skip elements that are themselves in an interactive
+    // state chain; they get retried on later sweeps.
+    try {
+      if (el && el.matches && el.matches(':hover,:active,:focus')) return;
+    } catch (e) { }
+
+    if (!el || el.nodeType !== 1) return;
+    if (!force && el.hasAttribute('data-w95-done')) return;
+    el.setAttribute('data-w95-done', '1');
+
+    if (el.shadowRoot) pierceShadow(el);
+
+    const cs = window.getComputedStyle(el);
+
+    // 🚨 INFINITE ANIMATIONS GET PAUSED, NOT SPED UP (v1.4.1) 🚨
+    // The global 'animation-duration: 0.001s' makes FINITE animations instant,
+    // which is the goal. On an INFINITE animation it does the opposite of
+    // stopping it. Measured exactly, via the Web Animations API on a real
+    // spinner (duration 1ms, iterations Infinity):
+    //     iterations in 1 second .............. 1000   (site intended: 1)
+    //     iterations per 60fps frame ..........   16.7 (site intended: 0)
+    //     angle rendered on 6 consecutive frames:
+    //       240deg, 120deg, 0deg, 240deg, 120deg, 0deg
+    // 16.667ms per frame divided by a 1ms duration leaves a repeating 2/3
+    // remainder, so a spinner does not freeze — it strobes between exactly three
+    // rotations forever. That is worse than the smooth spin it replaced, and it
+    // makes this theme's "zero animations" claim false. ADR-001 checked that
+    // Chromium does not FLOOD animationiteration events here and stopped there;
+    // it never checked what was actually on screen. See ADR-004.
+    //
+    // Pausing is safe precisely where the 0.001s compromise is pointless: an
+    // infinite animation's 'animationend' NEVER fires, so no animationend-driven
+    // state machine can be waiting on one — and keeping animationend alive is the
+    // entire reason 0.001s was chosen over 0s/none in the first place (ADR-001).
+    // 'paused' rather than 'animation: none' because a paused animation keeps
+    // applying its current computed value: cancelling instead would snap the
+    // element back to its base state, which for a pulse/skeleton loop is often
+    // opacity 0 — i.e. it would make content vanish.
+    //
+    // Known residual risk: code that drives state from 'animationiteration'
+    // (some marquee and carousel loops) will stall. Rare, and the alternative is
+    // a permanent three-position strobe on every spinner on the web.
+    //
+    // This runs BEFORE shouldSkip on purpose. The two commonest spinner shapes
+    // are both in the skip set: Tailwind's 'svg.animate-spin' (SVG is in
+    // TAG_SKIP) and a spinner inside a loading <button> (shouldSkip matches
+    // closest('button')). Checking after the skip would miss exactly the cases
+    // that matter.
+    const iterCount = cs.animationIterationCount;
+    if (iterCount && iterCount.indexOf('infinite') !== -1) {
+      w.push(el, 'animation-play-state', 'paused');
+    }
+
+    // 🚨 UI.md HARD INVARIANTS, ENFORCED FROM JS BECAUSE CSS CANNOT WIN (v1.4.3) 🚨
+    // Our universal rules are '* { border-radius: 0 !important }' etc, which score
+    // specificity (0,0,0). A site's own '!important' beats them the moment it has
+    // any specificity at all, and an ID rule beats them absolutely — no number of
+    // ':root' prefixes can outrank (1,0,0). Measured on stackoverflow.com:
+    //     a.bar-sm ....................... border-radius 4px   (site .class wins)
+    //     h1.fs-headline1 ................ font-size 27px      (site .class wins)
+    //     h2.fs-body2 .................... font-size 15px
+    //     #onetrust-banner-sdk ........... box-shadow present  (site #id wins)
+    // Inline '!important' is the one declaration that outranks every author rule
+    // regardless of selector, and that is exactly what setImp writes. So these
+    // three invariants are re-asserted here whenever the computed value actually
+    // disagrees. The check is nearly free — 'cs' is already resolved, this is three
+    // more property reads — and the write is skipped entirely when the CSS layer
+    // already won, which is the overwhelming majority of elements (14 of 3362 on
+    // the page above).
+    //
+    // Runs BEFORE shouldSkip because these are universal invariants: a rounded
+    // corner or a drop shadow is just as wrong on a <button> or an <img> as
+    // anywhere else, and buttons are skipped by shouldSkip via closest('button').
+    if (cs.borderTopLeftRadius !== '0px' || cs.borderTopRightRadius !== '0px' ||
+      cs.borderBottomLeftRadius !== '0px' || cs.borderBottomRightRadius !== '0px') {
+      w.push(el, 'border-radius', '0');
+    }
+    if (cs.boxShadow && cs.boxShadow !== 'none') {
+      w.push(el, 'box-shadow', 'none');
+    }
+    // Type ladder, same role mapping as GLOBAL_CSS. Icon-font carriers are
+    // exempt for the same reason as in CSS: their font-size IS their glyph size.
+    const fs = cs.fontSize;
+    if (fs && !SIZE_ALLOWED.has(fs) && !isIconish(el)) {
+      w.push(el, 'font-size', LADDER[(el.tagName || '').toUpperCase()] || '12px');
+    }
+
+    if (shouldSkip(el)) {
+      // Controls and their contents are deliberately kept out of the generic
+      // repainter so our bevels and labels survive (that is what the
+      // closest('button') skip is for). But CSS alone cannot defend them: a site
+      // rule with ID specificity and !important beats our button rule outright.
+      // Measured on stackoverflow.com's cookie banner —
+      //     #onetrust-consent-sdk #onetrust-accept-btn-handler
+      //         { background: var(--black-600) !important; color: #fff !important }
+      // scores (2,0,0) against our 'button { … !important }' at (0,0,1), and
+      //     #onetrust-banner-sdk * { color: var(--black-600) !important }
+      // at (1,0,0) beats every universal colour rule we have. The result was
+      // near-black text on near-black surfaces inside the banner, on elements the
+      // repainter had explicitly excluded.
+      //
+      // So: clamp, but only what is PROVABLY off-palette. A correctly themed
+      // control already computes to a palette value and is skipped here, so this
+      // cannot flatten our own bevel colours or relabel button internals — which
+      // is exactly the regression the skip exists to prevent.
+      if (el.closest && el.closest('button')) {
+        if (cs.color && !PALETTE_RGB.has(cs.color)) {
+          w.push(el, 'color', T.textPrimary);
+        }
+        const cbg = parseRGB(cs.backgroundColor);
+        if (cbg && cbg.a > 0.3 && !PALETTE_RGB.has(cs.backgroundColor)) {
+          w.push(el, 'background-color', T.surfaceRaised);
+        }
+      }
+      return;
+    }
+
+    el.removeAttribute('background');
+    el.removeAttribute('bgcolor');
+
+    // Checkbox/radio: only force native appearance on a REAL, visible control
+    // (the confirmed invisible-checked-state bug). Skip entirely for the
+    // hidden-proxy pattern (opacity:0 / near-zero size / clipped) that custom
+    // switch components rely on — see the CSS comment above for why.
+    const tagUC = (el.tagName || '').toUpperCase();
+    if (tagUC === 'INPUT') {
+      const inputType = (el.type || '').toLowerCase();
+      if (inputType === 'checkbox' || inputType === 'radio') {
+        // opacity is the ONLY reliable signal — every accessible custom-switch
+        // technique uses it (keyboard/screen-reader focus requires the real
+        // input stay hit-testable, ruling out display:none). Size is NOT a
+        // reliable signal: a checkbox with appearance:none and no explicit
+        // width/height collapses to 0x0 in Chromium regardless of whether the
+        // site intentionally hid it — a live test confirmed a genuinely
+        // BROKEN, unstyled real checkbox (the original government-form bug
+        // shape) also measures 0x0, so a size check produces false positives
+        // that silently reintroduce that exact bug.
+        const hiddenProxy = parseFloat(cs.opacity) < 0.05;
+        if (!hiddenProxy) {
+          w.push(el, 'appearance', 'auto', el, '-webkit-appearance', 'auto');
+        }
+        return;
+      }
+    }
+
+    // UI.md law 2: zero gradients. Pre-1.4.0 this only killed LIGHT gradients,
+    // which left every dark-themed site's own coloured gradients intact — and a
+    // gradient is the most identity-carrying surface treatment there is, so
+    // leaving them meant sites still looked like themselves. Now ALL gradient
+    // functions go, whatever their hue.
+    //
+    // Only gradient FUNCTIONS, never url(): a huge number of sites still draw
+    // their icons as background-image sprites, and killing url() backgrounds
+    // deletes those icons outright. This is why the kill lives in JS at all — CSS
+    // cannot say "background-image: none, but only if it is a gradient".
+    //
+    // progress/meter/slider are exempt: their fill IS a gradient on many sites,
+    // and flattening it leaves a progress bar that cannot show progress — which
+    // UI.md itself wants preserved ("long work reports progress in text").
+    const bgImg = cs.backgroundImage;
+    if (bgImg && bgImg !== 'none' && /(^|\s|,)(linear|radial|conic|repeating-linear|repeating-radial|repeating-conic)-gradient\(/i.test(bgImg)) {
+      const tagG = (el.tagName || '').toUpperCase();
+      const roleG = el.getAttribute ? el.getAttribute('role') : null;
+      if (tagG !== 'PROGRESS' && tagG !== 'METER' && roleG !== 'progressbar' && roleG !== 'slider') {
+        w.push(el, 'background-image', 'none');
+      }
+    }
+
+    // PAGE-SIZED PHOTO BACKDROPS.
+    // url() backgrounds are deliberately kept (see above): on most elements they
+    // are icons, and killing them leaves invisible buttons. But at page scale the
+    // same rule is what left steamcommunity.com with its neon profile artwork
+    // blazing down both sides of a themed column -- the site paints a photo on a
+    // full-bleed div, our surfaces go brown around it, and the result is the
+    // screenshot the user sent.
+    //
+    // Size is the discriminator, and it is a safe one: nothing that is an icon is
+    // 70% of the viewport in BOTH dimensions.
+    //
+    // But getBoundingClientRect FORCES LAYOUT, and this whole file exists in its
+    // current shape because layout thrash once burned 94% of the main thread
+    // (ADR-004, and the sweep-rate hot loop in ADR-006). "Only when a url() is
+    // present" is not a tight enough guard on its own: an icon-sprite-heavy page
+    // has hundreds of those. So the measurement is gated behind a pure DOM-shape
+    // test first -- a page-level backdrop is always near the top of the tree,
+    // never buried twelve divs deep -- which costs no layout at all and leaves a
+    // handful of candidates per page.
+    if (bgImg && bgImg !== 'none' && /url\(/i.test(bgImg)) {
+      let depth = 0, p = el;
+      while (p && p !== document.body && p !== document.documentElement && depth < 5) { p = p.parentElement; depth++; }
+      if (depth < 5) {
+        const r = el.getBoundingClientRect();
+        if (r.width > innerWidth * 0.7 && r.height > innerHeight * 0.7) {
+          w.push(el, 'background-image', 'none');
+        }
+      }
+    }
+
+    // 🚨 FLOATING SURFACES ARE MEASURED, NOT NAMED 🚨
+    // GLOBAL_CSS re-solidifies popovers off a list of NAMES -- role="menu",
+    // [class*="popup" i], [class*="dropdown" i], the radix and floating-ui portal
+    // attributes -- because the surface-flattening wipe above would otherwise leave
+    // them see-through with the page behind them showing through. That list has
+    // missed the same app twice now (E-381, E-407): Claude's popovers carry none of
+    // those markers.
+    //
+    // Adding more names does not fix a name list, it postpones it. Every entry is
+    // one library's vocabulary, and an app that renames a component or swaps its
+    // popover library drops off the list at its next release with nothing to show
+    // for it -- no error, no failing gate, just a hole in the theme that the user
+    // finds. So the test below asks what a popover IS, in terms the layout engine
+    // answers and a rename cannot change: out of flow, big enough to read, and
+    // actually covering content it does not own. The same test runs in Electron
+    // apps as the shim's FLOAT_FIX, which is the only place it can run there --
+    // that path ships CSS with no repainter behind it.
+    //
+    // The last of the three replaced an "explicit z-index, not auto" test that
+    // shipped in the first pass and was wrong on the first app it met: Claude's
+    // Settings panel is role="dialog", position: fixed, 606x720 over a 638x1079
+    // window, and z-index: auto. It stacks by paint order, which is ordinary.
+    // Requiring a number was requiring a habit, and a habit is a name in disguise.
+    if (cs.position === 'fixed' || cs.position === 'absolute') {
+      // Free checks first, all off the computed style already read above.
+      // pointer-events:none means a scrim or a measurement probe, never a panel.
+      // COST GATE, AND IT IS NOT OPTIONAL. Everything below this line forces
+      // layout -- a rect read, then a hit test -- and the first version of this
+      // block ran both for EVERY out-of-flow element on every pass, then took
+      // data-w95-done OFF the small ones so they were measured again forever.
+      // On a page with hundreds of absolutely-positioned icons that is a
+      // permanent hot loop: reported as the CPU pinned at idle on chatgpt.com,
+      // and it is exactly the thrash ADR-004/ADR-006 exist to prevent.
+      // A panel always has children, and childElementCount costs nothing.
+      if (el.childElementCount > 0 &&
+        cs.pointerEvents !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0') {
+        // Layout reads start here, and only for the handful of elements that got
+        // this far -- the ordering is the ADR-004/ADR-006 discipline, same as the
+        // page-backdrop test above.
+        const r = el.getBoundingClientRect();
+        // Closed, or the zero-size wrapper that HOSTS the panel: nothing to do.
+        // It is NOT re-dirtied here. A popover is mounted closed and opened by a
+        // style or class flip, and both are in the observer's attributeFilter --
+        // so the open lands as a mutation, which clears data-w95-done and brings
+        // the element back through here already measuring its real size. Marking
+        // it dirty on every pass instead bought exactly nothing and cost a
+        // forced layout per element per sweep, forever.
+        // Covers the whole viewport: never solidified, that would black out the
+        // page -- but never ignored either. A backdrop that TAKES POINTER EVENTS
+        // owns the window, and the wipe erases the dim it announces itself with.
+        // An invisible modal still eats every click, which is how CodeNomad's tabs
+        // stopped responding. Give the dim back, translucent, so the page stays
+        // legible under it. No pointer events or no explicit stacking order means
+        // scenery rather than a modal, and scenery is left alone.
+        if (r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) {
+          if (cs.zIndex && cs.zIndex !== 'auto') {
+            w.push(el, 'background-color', 'color-mix(in srgb, ' + T.background + ' 55%, transparent)',
+              el, 'background-image', 'none');
+          }
+        } else if (r.width >= 40 && r.height >= 24) {
+          // The hit test decides. Everything above admits far too much: if the
+          // paint stack under this element's own centre holds nothing but its own
+          // ancestors, it is an adornment inside its own card and inheriting the
+          // surface is correct. Anything foreign under it means it covers content
+          // it does not own, which is what floating means.
+          // STATE COLOURS ARE NOT REPAINTED, AND THAT IS MEASURED TOO. The
+          // working/waiting/done indicators carry their whole meaning in a
+          // background colour, which is why the wipe already excludes them. That
+          // exclusion is what lets this be a measurement instead of a second name
+          // list: after the wipe, a surface that needs solidifying is transparent
+          // BY DEFINITION, so anything still holding a colour is holding it on
+          // purpose. A condition, not an early return -- an element that keeps its
+          // own colour still needs the rest of process(): contrast, borders, radius.
+          const ownBg = parseRGB(cs.backgroundColor);
+          const cx = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
+          const cy = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
+          let stack = null;
+          if (!(ownBg && ownBg.a > 0.08)) {
+            try { stack = document.elementsFromPoint(cx, cy); } catch (e) { }
+          }
+          const at = stack ? stack.indexOf(el) : -1;
+          for (let k = at + 1; at >= 0 && k < stack.length; k++) {
+            const under = stack[k];
+            if (under === document.body || under === document.documentElement) continue;
+            if (under.contains(el)) continue;
+            w.push(el, 'background-color', T.surfaceRaised,
+              el, 'background-image', 'none',
+              el, 'color', T.textPrimary,
+              el, 'border-width', '2px',
+              el, 'border-style', 'solid',
+              el, 'border-color', T.bevelLight + ' ' + T.borderDark + ' ' + T.borderDark + ' ' + T.bevelLight,
+              el, 'box-shadow', 'none',
+              // The bevel is added to a box the site already sized; absorb it.
+              el, 'box-sizing', 'border-box');
+            break;
+          }
+        }
+      }
+    }
+
+    // 🚨 NEVER RE-GRADE A COLOUR THAT IS ALREADY OURS 🚨
+    // The repainter classifies by luminance, and our own tokens have luminances
+    // that land in its buckets: --backgroundSoft #1E1408 (lum 0.0088) and
+    // --surfaceRaised #362812 (lum 0.0234) both fall in the "< 0.05" bucket and
+    // were being re-graded to --surface on every pass. Caught live on wikipedia
+    // the moment the dark band was widened: body went from #1E1408 to #2A1C0A,
+    // and dialogs / th / hovercards would have drifted the same way, so the whole
+    // surface hierarchy would slowly collapse onto one shade. A palette value is
+    // by definition already correct — leave it alone.
+    const bgColor = cs.backgroundColor;
+    if (bgColor && bgColor !== 'transparent' && !PALETTE_RGB.has(bgColor)) {
+      const bg = parseRGB(bgColor);
+      if (bg && bg.a > 0.08) {
+        const L = elev(lum(bg));
+        const spread = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b);
+        const grayish = spread <= 24;
+        let repaint = null;
+        if (L > 0.45) {
+          // Flashbang surface — the far end of our own polarity, so on the golden
+          // palette this is literally the old "light surface" branch and on a light
+          // palette it is the site's dark chrome. Low-alpha tints go fully transparent
+          // (the "gray rectangle blocks"), neutral solids go dark brown, and
+          // saturated light tints (GitHub diff green/red, warning yellows,
+          // highlight rows) snap to the semantic token they meant.
+          if (bg.a <= 0.35) repaint = 'transparent';
+          else if (grayish) repaint = T.backgroundSoft;
+          else repaint = semanticToken(bg);
+        } else if (L >= 0.004) {
+          // DARK SURFACES. Two gaps used to let a site keep its own dark palette
+          // here, both measured on amazon.com:
+          //   #nav-belt  #131921  spread 14, lum 0.0094 — grayish, but the old
+          //     "near-black is left alone" floor was 0.015, so it survived.
+          //   #nav-main  #232f3e  spread 27, lum 0.0274 — over the old grayish
+          //     cutoff of 24 but under the saturated cutoff of 60, so it fell
+          //     through BOTH branches and was never touched at all.
+          // A dark navy chrome bar is a surface, not an accent, so the neutral
+          // band is widened to spread <= 60 and the two branches are merged:
+          // anything genuinely saturated (> 60) still goes to a semantic token,
+          // everything else joins the vintage brown scale.
+          //
+          // The floor drops from 0.015 to 0.004, which still leaves true black
+          // alone — video players and modal scrims sit at or near lum 0 — while
+          // catching real chrome like #131921.
+          repaint = spread > 60
+            ? semanticToken(bg)
+            : (L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface);
+        }
+        if (repaint) {
+          w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
+        }
+      }
+    }
+
+    // Same guard for text: --textSecondary #B09558 has a channel spread of 88, so
+    // the "not grayish" branch would have flattened every secondary label to
+    // --textPrimary on the next pass. Palette in, palette out, untouched.
+    const fgColor = cs.color;
+    if (fgColor && !PALETTE_RGB.has(fgColor)) {
+      const fg = parseRGB(fgColor);
+      if (fg && fg.a > 0.1) {
+        // Contrast is measured against the ACTUAL backdrop this theme paints, not
+        // against a constant. It used to read `const darkBg = 0.008` with the
+        // comment "luminance of #1E1408" — correct, and correct only for golden:
+        // on a light palette that constant claims every dark text colour is
+        // perfectly readable, so the whole 4.5:1 branch below stops firing exactly
+        // where it is needed most.
+        const rawFgLum = lum(fg);
+        const fgLum = elev(rawFgLum);
+        const cr = contrast(rawFgLum, BG_SOFT_LUM);
+        const grayish = Math.max(fg.r, fg.g, fg.b) - Math.min(fg.r, fg.g, fg.b) <= 40;
+
+        if (el.closest && el.closest('a')) {
+          // Anything inside a link takes the link colour when it is unreadable,
+          // washed out, OR simply not one of ours — the last clause is iron law 5
+          // and it was missing. Measured on amazon.com: span#nav-cart-count kept
+          // #f08804 and span.navFooterDescText kept #999999, because both are
+          // legible enough (7.1:1 and 6.3:1) that the first two tests passed them
+          // through. Legible is not the same as on-palette.
+          if (cr < 4.5 || (fgLum > 0.4 && grayish) || !PALETTE_RGB.has(fgColor)) {
+            w.push(el, 'color', T.link);
+          }
+        } else {
+          if (cr < 4.5) {
+            w.push(el, 'color', T.textPrimary);
+          } else if (grayish) {
+            if (fgLum > 0.4) w.push(el, 'color', T.textPrimary);
+            else if (fgLum > 0.15) w.push(el, 'color', T.textSecondary);
+          } else {
+            // Legible but SATURATED text — a site's own coloured heading, tag or
+            // status label. Left alone pre-1.4.0, which is another way sites kept
+            // their own voice, so it gets normalised too: to --textPrimary.
+            //
+            // Deliberately NOT to semanticToken() like the background path does.
+            // --success/--warning/--danger are BACKGROUND tokens; as text on
+            // --backgroundSoft they measure 2.6:1 / 3.4:1 / 1.8:1, all far under
+            // the WCAG AA 4.5:1 UI.md also demands. Snapping coloured text onto
+            // them would trade one iron law for a worse violation of the
+            // accessibility floor — and UI.md settles that tie itself: "error
+            // text must be readable without color alone."
+            w.push(el, 'color', T.textPrimary);
+          }
+        }
+      }
+    }
+
+    // Light/white border lines (table rules, row separators, panel edges) →
+    // vintage brown, per side. Fields keep their golden bevels (buttons are
+    // already excluded by shouldSkip). Saturated colored borders (e.g. red
+    // error outlines) are left alone via the grayish check.
+    const tg = (el.tagName || '').toUpperCase();
+    if (!/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(tg)) {
+      const SIDES = ['Top', 'Right', 'Bottom', 'Left'];
+      for (let i = 0; i < 4; i++) {
+        const s = SIDES[i];
+        if (cs['border' + s + 'Width'] === '0px' || cs['border' + s + 'Style'] === 'none') continue;
+        const bc = parseRGB(cs['border' + s + 'Color']);
+        if (!bc || bc.a <= 0.1) continue;
+        const grayish = Math.max(bc.r, bc.g, bc.b) - Math.min(bc.r, bc.g, bc.b) <= 60;
+        if (grayish && elev(lum(bc)) > 0.18) {
+          w.push(el, 'border-' + s.toLowerCase() + '-color', T.surfaceRaised);
+        }
+      }
+    }
+  }
+
+  function shouldSkip(el) {
+    const tag = (el.tagName || '').toUpperCase();
+    if (TAG_SKIP.test(tag)) return true;
+    if (tag === 'INPUT') {
+      const t = (el.type || '').toLowerCase();
+      // Natively-rendered controls: repainting them hides the checked state.
+      // checkbox/radio are handled specially in process() (need computed
+      // style to tell a real control from a hidden custom-switch proxy).
+      if (t === 'range' || t === 'color' || t === 'file') return true;
+    }
+    if (el.closest && el.closest('button')) return true;
+    // CSS above owns CodeNomad's native semantic state dot. Repainting it would
+    // erase the working/idle distinction after the first mutation batch.
+    try { if (el.matches && el.matches('.status-indicator.session-status > .status-dot')) return true; } catch (e) { }
+    try { if (el.closest && el.closest(JS_SKIP_SELECTOR)) return true; } catch (e) { }
+    return false;
+  }
+
+  // Mutations accumulate in a queue with a fixed 60ms flush. The previous
+  // clearTimeout+reset pattern silently DROPPED every batch except the last
+  // one (each reset discarded the prior closure's mutations) and could starve
+  // forever on continuously-mutating pages.
+  let debounceTimer = null;
+  let pendingMuts = [];
+  const attrCooldown = new WeakMap(); // element -> last attribute-triggered process time
+
+  // Generic circuit breaker for sites not on the known-host list. A universal
+  // userscript cannot predict every future SPA, so it must fail cold rather than
+  // turn a new framework's mutation storm into a space heater. Once tripped, the
+  // CSS theme remains active but all JavaScript repaint work stops for this page.
+  const MUTATION_WINDOW_MS = 2000;
+  const MUTATION_RECORD_LIMIT = 1200;
+  const MUTATION_WORK_LIMIT_MS = 180;
+  const ADDED_NODE_BUDGET = 500;
+  let mutationWindowStart = performance.now();
+  let mutationRecords = 0;
+  let mutationWorkMs = 0;
+  let repainterSuspended = CSS_ONLY_MODE;
+
+  function resetMutationWindow(now) {
+    mutationWindowStart = now;
+    mutationRecords = 0;
+    mutationWorkMs = 0;
+  }
+
+  function suspendRepainter(reason) {
+    if (repainterSuspended) return;
+    repainterSuspended = true;
+    try { mainObserver.disconnect(); } catch (e) { }
+    try { shadowObserver.disconnect(); } catch (e) { }
+    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+    if (sweepTimer) { clearTimeout(sweepTimer); sweepTimer = null; sweepPlannedAt = 0; }
+    pendingMuts.length = 0;
+    forcePassesOwed = 0;
+    try {
+      document.documentElement.setAttribute('data-w95-perf', 'css-only');
+      document.documentElement.setAttribute('data-w95-perf-reason', reason);
+    } catch (e) { }
+  }
+
+  function noteMutationPressure(records) {
+    const now = performance.now();
+    if (now - mutationWindowStart >= MUTATION_WINDOW_MS) resetMutationWindow(now);
+    mutationRecords += records;
+    if (mutationRecords > MUTATION_RECORD_LIMIT || mutationWorkMs > MUTATION_WORK_LIMIT_MS) {
+      suspendRepainter(mutationRecords > MUTATION_RECORD_LIMIT ? 'mutation-rate' : 'mutation-work');
+      return true;
+    }
+    return false;
+  }
+
+  function addWorkPressure(ms, reason) {
+    const now = performance.now();
+    if (now - mutationWindowStart >= MUTATION_WINDOW_MS) resetMutationWindow(now);
+    mutationWorkMs += ms;
+    if (mutationWorkMs > MUTATION_WORK_LIMIT_MS) suspendRepainter(reason);
+  }
+
+  function onMutations(mutations) {
+    if (repainterSuspended || noteMutationPressure(mutations.length)) return;
+    for (let i = 0; i < mutations.length; i++) pendingMuts.push(mutations[i]);
+    if (debounceTimer) return;
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      if (repainterSuspended) { pendingMuts.length = 0; return; }
+      const workStarted = performance.now();
+      const batch = pendingMuts;
+      pendingMuts = [];
+      const w = [];
+      const added = [];
+      let styleishAdded = false;
+      for (const m of batch) {
+        // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
+        // CSS-in-JS) — re-process them or they keep stale baked-in colors.
+        // Hover-chain elements are skipped inside process() and retried later,
+        // so hover class-toggles don't bake in highlight colors.
+        if (m.type === 'attributes') {
+          const t = m.target;
+          if (t && t.nodeType === 1) {
+            // No time-window mute here any more — our own style writes are
+            // filtered out by identity in flushWrites before this ever runs.
+            // Cooldown: carousels/virtual scrollers toggle classes many times a
+            // second; re-processing each toggle (computed-style read + writes)
+            // is a jank source. During the cooldown just mark the element dirty
+            // — the next light sweep picks up its settled state.
+            const now = Date.now();
+            if ((attrCooldown.get(t) || 0) + 500 > now) {
+              t.removeAttribute('data-w95-done');
+            } else {
+              attrCooldown.set(t, now);
+              t.removeAttribute('data-w95-done');
+              process(t, false, w);
+            }
+            const tag = (t.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (t.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            }
+          }
+          continue;
+        }
+        if (m.type === 'childList') {
+          const target = m.target;
+          if (target && target.nodeType === 1) {
+            const tag = (target.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (target.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            }
+          }
+        }
+        for (const node of m.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          added.push(node);
+          if (!styleishAdded) {
+            const tag = (node.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
+              styleishAdded = true;
+            }
+          }
+        }
+      }
+
+      // De-dup the batch before touching anything (v1.3.0). The parser and SPA
+      // hydration routinely report a container AND its descendants as separate
+      // addedNodes records in the SAME batch, and the old loop walked every
+      // record's whole subtree — so a node covered by an ancestor's walk was
+      // re-read, and the code even cleared its data-w95-done first to guarantee
+      // the redundant pass happened. Keep only records with no added ancestor in
+      // this batch; walking up parentNode is O(depth), never O(batch²).
+      if (added.length) {
+        const inBatch = new Set(added);
+        let addedProcessed = 0;
+        let addedTruncated = false;
+        for (const node of added) {
+          let covered = false;
+          for (let p = node.parentNode; p; p = p.parentNode) {
+            if (inBatch.has(p)) { covered = true; break; }
+          }
+          // Added then removed again inside the same 60ms window: a detached
+          // element has no computed style worth reading and no pixels to fix.
+          if (covered || !node.isConnected) continue;
+          node.removeAttribute && node.removeAttribute('data-w95-done');
+          process(node, false, w);
+          addedProcessed++;
+          const kids = node.getElementsByTagName('*');
+          for (let i = 0; i < kids.length; i++) {
+            if (addedProcessed >= ADDED_NODE_BUDGET) { addedTruncated = true; break; }
+            kids[i].removeAttribute && kids[i].removeAttribute('data-w95-done');
+            process(kids[i], false, w);
+            addedProcessed++;
+          }
+          if (addedProcessed >= ADDED_NODE_BUDGET) { addedTruncated = true; break; }
+        }
+        // Only stylesheet-bearing additions need a force re-verify. Plain DOM
+        // churn is already processed inline above and does not justify another
+        // full sweep.
+        if (styleishAdded || addedTruncated) {
+          stylesDirty = stylesDirty || styleishAdded;
+          requestForceSweep();
+        }
+      }
+      flushWrites(w);
+      addWorkPressure(performance.now() - workStarted, 'mutation-work');
+    }, 60);
+  }
+  const mainObserver = new MutationObserver(onMutations);
+  const shadowObserver = new MutationObserver(onMutations);
+
+  if (!CSS_ONLY_MODE && document.documentElement) {
+    mainObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'bgcolor', 'background', 'style']
+    });
+  }
+
+  // Force passes are budgeted: on huge pages (endless feeds) each pass
+  // re-verifies a rotating 2500-element window instead of the whole DOM, so a
+  // single pass never janks the main thread; full coverage arrives over a few
+  // rotations. The scheduler is now adaptive: when nothing changes, it backs
+  // off instead of ticking forever in the background like a stubborn appliance.
+  const FORCE_BUDGET = 2500;
+  let forceCursor = 0;
+
+  let forcePassesOwed = 0;
+  let sweepTimer = null;
+  let stylesDirty = true;
+
+  // 🚨 THE SWEEP RATE IS FLOOR-LIMITED. NOTHING MAY SCHEDULE A SWEEP AT 0ms 🚨
+  // Measured on a real chatgpt.com conversation (3392 elements, 15s, primitives
+  // counted by wrapping them on the prototypes):
+  //     querySelectorAll ....    151 calls  -> ~10 sweeps per SECOND
+  //     getComputedStyle ....  42563 calls
+  //     Element.closest .....  80114 calls
+  //     setAttribute ........  43080 calls
+  //     long tasks .......... 14158 ms out of 15000 (~94% of wall time)
+  // With the script disabled the same page spent 2517ms. So the engine was
+  // running roughly 150 full sweeps in 15 seconds instead of ten.
+  //
+  // Cause: requestForceSweep() ended in scheduleNextSweep(true), i.e. a 0ms
+  // timer, and it is called from the mutation handler on every batch that
+  // contains added nodes. On a React app that inserts nodes continuously, every
+  // insertion queued an immediate full sweep, whose own writes and stylesheet
+  // check queued the next one. Back-to-back sweeps with no floor.
+  //
+  // Two rules now make that impossible:
+  //   1. MIN_SWEEP_GAP — a hard minimum between the END of one sweep and the
+  //      START of the next. However much churn arrives, sweeps cannot exceed
+  //      one per second. This is the actual safety property; the adaptive
+  //      backoff below is only an idle optimisation on top of it.
+  //   2. A pending timer that already fires SOONER is never replaced by a later
+  //      one, and never cancelled and re-armed. The old code cleared and re-armed
+  //      the timer on every call, so a stream of requests could keep pushing the
+  //      timer around instead of letting it fire.
+  const MIN_SWEEP_GAP = 1000;
+  let lastSweepEnd = 0;
+  let sweepPlannedAt = 0;
+
+  function scheduleSweep(delay) {
+    if (repainterSuspended || document.hidden) return;
+    const now = Date.now();
+    // Never sooner than MIN_SWEEP_GAP after the last sweep finished.
+    const earliest = lastSweepEnd + MIN_SWEEP_GAP - now;
+    const d = Math.max(delay, earliest, 0);
+    const fireAt = now + d;
+    // An already-pending sweep that lands sooner wins; do not churn the timer.
+    if (sweepTimer && sweepPlannedAt <= fireAt) return;
+    if (sweepTimer) clearTimeout(sweepTimer);
+    sweepPlannedAt = fireAt;
+    sweepTimer = setTimeout(() => {
+      sweepTimer = null;
+      sweepPlannedAt = 0;
+      if (document.hidden) return;
+
+      const force = forcePassesOwed > 0;
+      if (force) forcePassesOwed--;
+
+      runSweeper(force);
+      lastSweepEnd = Date.now();
+
+      // No automatic reschedule here. Fresh work comes from mutations,
+      // stylesheet loads, visibility changes, or the explicit load-time passes.
+    }, d);
+  }
+
+  // A request means "there is fresh work, revisit soon" — soon being the fast
+  // lane, NEVER immediately. runSweeper itself calls this (via stripHoverSheets
+  // spotting a changed sheet), so an immediate schedule here is a direct
+  // sweep-calls-sweep loop.
+  function requestForceSweep() {
+    if (repainterSuspended) return;
+    if (forcePassesOwed < 2) forcePassesOwed++;
+    scheduleSweep(1500);
+  }
+
+  function runSweeper(force) {
+    if (repainterSuspended) return;
+    const sweepStarted = performance.now();
+    // Prune shadow roots whose hosts left the DOM (SPA navigations) — keeping
+    // them leaks memory and bloats every sweep on long sessions.
+    piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) piercedRoots.delete(root); } catch (e) { } });
+    // Hover-rule scanning is the expensive part. Only do it when we have a
+    // concrete stylesheet signal, or when the caller explicitly asked for a
+    // full re-verify.
+    const scanStyles = force || stylesDirty;
+    if (scanStyles) {
+      stylesDirty = false;
+      stripHoverSheets(document);
+      piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
+    }
+    const searchRoots = [document, ...piercedRoots];
+    // ONE write queue for the whole sweep across every root: the flush at the
+    // end is what collapses thousands of style invalidations into a single
+    // recalc. Never flush inside the loop (see the flushWrites comment).
+    const w = [];
+    searchRoots.forEach(root => {
+      try {
+        const all = root.querySelectorAll(force ? '*' : '*:not([data-w95-done])');
+        if (force && all.length > FORCE_BUDGET) {
+          const start = forceCursor % all.length;
+          for (let n = 0; n < FORCE_BUDGET; n++) { process(all[(start + n) % all.length], true, w); }
+          forceCursor += FORCE_BUDGET;
+        } else {
+          for (let i = 0; i < all.length; i++) { process(all[i], force, w); }
+        }
+      } catch (e) { }
+    });
+    flushWrites(w);
+    addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
+  }
+
+  // Elements processed before the site's CSS finished loading bake in unstyled
+  // values and would otherwise stay wrong forever (white surfaces that "heal"
+  // only when the SPA happens to re-render them). Full re-verify passes
+  // (force=true) re-check EVERY element: at DOMContentLoaded, again 1s later
+  // once late CSS settled, then on demand whenever requestForceSweep() fires.
+  // The write-if-changed guard in setImp keeps repeat passes cheap.
+  function startSweeping() {
+    injectLate();
+    if (CSS_ONLY_MODE) {
+      try {
+        document.documentElement.setAttribute('data-w95-perf', 'css-only');
+        document.documentElement.setAttribute('data-w95-perf-reason', 'known-high-churn-host');
+      } catch (e) { }
+      // One final cascade-order correction after late app CSS arrives. No DOM
+      // scan, no observer, no repeating timer.
+      window.addEventListener('load', injectLate, { once: true });
+      return;
+    }
+    // The boot pass measured ONE 716ms long task on a 16921-element page, right
+    // when the site's own init scripts are competing for the main thread — the
+    // "have to reload a couple of times before it comes up" symptom. The
+    // read/write split above is what actually shrinks it; deferring the second
+    // pass past load keeps it out of the critical window as well.
+    // CSS already paints immediately. Corrective JS work is deferred and
+    // floor-limited instead of blocking DOMContentLoaded with a full traversal.
+    requestForceSweep();
+    setTimeout(() => { stylesDirty = true; requestForceSweep(); }, 1500);
+
+    if (!IS_TOP) {
+      // Sub-frame: bounded settling passes, then nothing. The MutationObserver
+      // stays live, so a late-loading embed still gets themed — that path is
+      // event-driven and costs zero while idle.
+      setTimeout(() => { stylesDirty = true; requestForceSweep(); }, 3000);
+      return;
+    }
+
+    // Top frame: event-driven sweeps only. Idle means idle; fresh work
+    // re-arms the scheduler through mutations, stylesheet loads, or focus/visibility changes.
+
+    // Pages that finished loading while the tab was hidden got no sweeps; on
+    // return, re-verify immediately so the user never sees stale white. This is
+    // the ONE place a sweep still runs synchronously without waiting for the
+    // floor — it is user-initiated (they just looked at the tab) and happens at
+    // most once per tab switch, so it cannot form a loop.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        // A tab switch must not synchronously walk a 20,000-node conversation.
+        // Repaint later through the same rate-limited lane as every other cause.
+        stylesDirty = true;
+        requestForceSweep();
+      } else if (sweepTimer) {
+        clearTimeout(sweepTimer);
+        sweepTimer = null;
+        sweepPlannedAt = 0;
+      }
+    });
+
+    // Late external stylesheet loads can alter computed styles without DOM
+    // churn. Catch them once and reschedule a real pass instead of polling.
+    document.addEventListener('load', (evt) => {
+      const t = evt.target;
+      if (!t || t.nodeType !== 1) return;
+      if ((t.tagName || '').toUpperCase() !== 'LINK') return;
+      const rel = (t.rel || '').toLowerCase();
+      if (rel.includes('stylesheet')) {
+        stylesDirty = true;
+        requestForceSweep();
+      }
+    }, true);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startSweeping, { once: true });
+  } else {
+    startSweeping();
+  }
+
+  
+
+  return "repainter active";
 })()`;
 
 // ─── SCROLLING UP MUST MEAN SCROLLING UP ─────────────────────────────────────
@@ -771,9 +1845,9 @@ if (css) {
         wc.executeJavaScript(WCO_FIX, true)
           .then(r => stamp('wcofix: ' + r))
           .catch(err => stamp('wcofix FAILED: ' + (err && err.message)));
-        wc.executeJavaScript(FLOAT_FIX, true)
-          .then(r => stamp('floatfix: ' + r))
-          .catch(err => stamp('floatfix FAILED: ' + (err && err.message)));
+        wc.executeJavaScript(REPAINTER_FIX, true)
+          .then(r => stamp('repainter: ' + r))
+          .catch(err => stamp('repainter FAILED: ' + (err && err.message)));
         wc.executeJavaScript(SCROLL_INTENT_FIX, true)
           .then(r => stamp('scrollintent: ' + r))
           .catch(err => stamp('scrollintent FAILED: ' + (err && err.message)));

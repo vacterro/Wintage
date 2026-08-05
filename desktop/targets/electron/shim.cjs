@@ -330,50 +330,47 @@ const FLOAT_FIX = `(() => {
     RETRIES.set(el, n + 1);
     requestAnimationFrame(() => requestAnimationFrame(() => fixOne(el)));
     setTimeout(() => fixOne(el), 260);
-  };
+const REPAINTER_FIX = `(() => {
+  if (window.__wintageRepainter) return "already running";
+  window.__wintageRepainter = true;
 
-  const fixTree = root => {
-    if (!root.querySelectorAll) return;
-    // Only out-of-flow elements can qualify, but there is no selector for that, so
-    // the cheap filter is the one the DOM can answer: a panel is either portalled
-    // to the top of the tree or it is not a panel. Scanning body's own descendants
-    // wholesale is what the userscript's repainter exists for; here the point is to
-    // stay cheap enough to run on every mutation batch.
-    for (const el of root.querySelectorAll("*")) fixOne(el);
-  };
-
-  fixTree(document);
-  let passes = 0;
-  const settle = () => { if (++passes < 3) { fixTree(document); setTimeout(settle, 600); } };
-  setTimeout(settle, 600);
-
-  let queued = false;
-  const mutations = [];
-  new MutationObserver(records => {
-    mutations.push(...records);
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      const recs = mutations.splice(0, mutations.length);
-      for (const r of recs) {
-        if (r.type === "childList") {
-          for (const node of r.addedNodes) {
-            if (node.nodeType === 1) { fixOne(node); fixTree(node); }
-          }
-        } else if (r.type === "attributes") {
-          // A popover is usually mounted closed and then opened by a class or
-          // style flip, so the element that matters was already in the tree when
-          // it measured zero. Re-measuring on its own attribute change is the only
-          // thing that catches it, and it is why the mark is re-decided rather
-          // than latched on first sight.
-          if (r.target.nodeType === 1) fixOne(r.target);
-        }
+  const THEME_ID = 'electron';
+  const THEMES = {
+    electron: {
+      tokens: {
+        background: '${T.background}',
+        backgroundSoft: '${T.backgroundSoft}',
+        surface: '${T.surface}',
+        surfaceRaised: '${T.surfaceRaised}',
+        surfaceAlt: '${T.surfaceAlt}',
+        borderDark: '${T.borderDark}',
+        borderHighlight: '${T.borderHighlight}',
+        bevelLight: '${T.bevelLight}',
+        borderMuted: '${T.borderMuted}',
+        link: '${T.link}',
+        textPrimary: '${T.textPrimary}',
+        textSecondary: '${T.textSecondary}',
+        textMuted: '${T.textMuted}',
+        accentTeal: '${T.accentTeal}',
+        accentTealDeep: '${T.accentTealDeep}',
+        success: '${T.success}',
+        warning: '${T.warning}',
+        danger: '${T.danger}',
+        dangerText: '${T.dangerText}',
+        selection: '${T.selection}',
+        compareBack: '${T.compareBack}'
       }
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden", "open", "data-state", "aria-hidden", "aria-expanded"] });
+    }
+  };
+  
+  let B_OUTER = \`${B_OUTER}\`;
+  let B_INNER = \`${B_INNER}\`;
+  let B_SUNK = \`${B_SUNK}\`;
+  let FONT = \`${FONT}\`;
 
-  return "float fix installed";
+  /* __REPAINTER__ */
+
+  return "repainter active";
 })()`;
 
 // ─── SCROLLING UP MUST MEAN SCROLLING UP ─────────────────────────────────────
@@ -771,9 +768,9 @@ if (css) {
         wc.executeJavaScript(WCO_FIX, true)
           .then(r => stamp('wcofix: ' + r))
           .catch(err => stamp('wcofix FAILED: ' + (err && err.message)));
-        wc.executeJavaScript(FLOAT_FIX, true)
-          .then(r => stamp('floatfix: ' + r))
-          .catch(err => stamp('floatfix FAILED: ' + (err && err.message)));
+        wc.executeJavaScript(REPAINTER_FIX, true)
+          .then(r => stamp('repainter: ' + r))
+          .catch(err => stamp('repainter FAILED: ' + (err && err.message)));
         wc.executeJavaScript(SCROLL_INTENT_FIX, true)
           .then(r => stamp('scrollintent: ' + r))
           .catch(err => stamp('scrollintent FAILED: ' + (err && err.message)));

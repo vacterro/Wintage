@@ -142,7 +142,16 @@ function buildElectron(packs) {
   };
   bevels.B_SUNK = bevels.B_INNER;
 
-  const shim = fs.readFileSync(path.join(DESKTOP, 'targets', 'electron', 'shim.cjs'), 'utf8');
+  const shimTemplate = fs.readFileSync(path.join(DESKTOP, 'targets', 'electron', 'shim.cjs'), 'utf8');
+
+  const repStartMarker = '// --- REPAINTER START ---';
+  const repEndMarker = '// --- REPAINTER END ---';
+  const repStart = src.indexOf(repStartMarker);
+  const repEnd = src.indexOf(repEndMarker);
+  if (repStart < 0 || repEnd < 0) throw new Error('repainter markers missing in wintage.user.js');
+  const repainterBody = src.slice(repStart + repStartMarker.length, repEnd);
+  
+  const shim = shimTemplate.replace('/* __REPAINTER__ */', repainterBody);
 
   for (const pack of packs) {
     const resolve = text => text
@@ -177,7 +186,7 @@ function buildElectron(packs) {
     if (left) throw new Error('unresolved placeholder in ' + pack.slug + ' css near: ' + css.slice(left.index, left.index + 60));
     emit(path.join(OUT, 'electron', pack.slug, 'wintage.css'),
       '/* Wintage ' + pack.label + ' - generated from wintage.user.js v' + VERSION + '. Do not edit. */\n' + css + '\n');
-    emit(path.join(OUT, 'electron', pack.slug, 'shim.cjs'), shim);
+    emit(path.join(OUT, 'electron', pack.slug, 'shim.cjs'), resolve(shim));
   }
 }
 

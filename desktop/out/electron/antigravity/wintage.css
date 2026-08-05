@@ -600,49 +600,8 @@ aside:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i
 nav:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 header:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 footer:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[class]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[id]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="group"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="toolbar"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="region"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="presentation"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="none"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
-  background-color: transparent !important; background-image: none !important; color: inherit !important;
-}
-dialog:not(:root), [popover]:not(:root),
-[role="menu"]:not(:root), [role="listbox"]:not(:root),
-[role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
-[class*="menu" i]:not(a):not(button),
-[class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
-[class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
-[class*="popover" i], [class*="modal" i], [class*="flyout" i], [class*="drawer" i],
-[class*="sheet" i], [class*="callout" i], [class*="picker" i], [class*="context-menu" i],
-[class*="toast" i], [class*="snackbar" i],
-[data-radix-portal] *, [data-radix-popper-content-wrapper] *, [data-floating-ui-portal] *,
-[data-state="open"][role], [data-radix-menu-content], [data-radix-dropdown-menu-content],
-[data-radix-popover-content], [data-radix-select-content], [data-radix-tooltip-content],
-[data-radix-dialog-content], [data-radix-context-menu-content], [data-radix-hover-card-content],
-[id*="headlessui-portal"] * {
-  background-color: #31354D !important; background-image: none !important; color: #95DEE2 !important; border: 2px solid !important; border-color: #4B6678 #0D0F17 #0D0F17 #4B6678 !important; box-shadow: none !important;
+main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
+  /* Blanket wipe retired (T-121). JS repainter handles backgrounds accurately now. */
 }
 
-[role="dialog"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[role="menu"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[role="listbox"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[role="tooltip"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-dialog :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[popover] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="popover" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="modal" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="dialog" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="dropdown" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="menu" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="tooltip" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="flyout" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[data-radix-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[data-floating-ui-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)) {
-  background-color: inherit !important;
-  color: inherit !important;
-}
 

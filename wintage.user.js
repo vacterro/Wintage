@@ -1014,51 +1014,10 @@ aside:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i
 nav:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 header:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 footer:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[class]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[id]:not(:root):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="group"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="toolbar"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="region"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="presentation"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[role="none"]:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
-  background-color: transparent !important; background-image: none !important; color: inherit !important;
-}
-dialog:not(:root), [popover]:not(:root),
-[role="menu"]:not(:root), [role="listbox"]:not(:root),
-[role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
-[class*="menu" i]:not(a):not(button),
-[class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
-[class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
-[class*="popover" i], [class*="modal" i], [class*="flyout" i], [class*="drawer" i],
-[class*="sheet" i], [class*="callout" i], [class*="picker" i], [class*="context-menu" i],
-[class*="toast" i], [class*="snackbar" i],
-[data-radix-portal] *, [data-radix-popper-content-wrapper] *, [data-floating-ui-portal] *,
-[data-state="open"][role], [data-radix-menu-content], [data-radix-dropdown-menu-content],
-[data-radix-popover-content], [data-radix-select-content], [data-radix-tooltip-content],
-[data-radix-dialog-content], [data-radix-context-menu-content], [data-radix-hover-card-content],
-[id*="headlessui-portal"] * {
-  background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important; ${B_OUTER}
+main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
+  /* Blanket wipe retired (T-121). JS repainter handles backgrounds accurately now. */
 }
 
-[role="dialog"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[role="menu"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[role="listbox"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[role="tooltip"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-dialog :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[popover] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="popover" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="modal" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="dialog" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="dropdown" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="menu" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="tooltip" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[class*="flyout" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[data-radix-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-[data-floating-ui-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)) {
-  background-color: inherit !important;
-  color: inherit !important;
-}
 
 `;
 
@@ -1128,49 +1087,11 @@ dialog :where(div, span, section, article, nav, aside, main, header, footer, [cl
        mystery for eight rounds. :root is never a thing to hand inherit to.
        (No backticks in this comment: it sits inside a template literal and one would
        end it. node --check caught that too, on the very same edit.) */
-    div, span, section, article, aside, nav, header, footer, main,
-    [class]:not(:root), [id]:not(:root), [role="group"], [role="toolbar"], [role="region"], [role="presentation"], [role="none"] { background-color: transparent !important; background-image: none !important; color: inherit !important; }
-
-        /* Re-solidify floating surfaces AFTER the transparency wipe above, otherwise
-       hovercards/tooltips/menus inside shadow roots render see-through and their
-       text overlaps the page underneath (the Reddit hovercard bug). Recolor only -
-       never force opacity/z-index/visibility.
-       Specificity is bumped with :not(:root):not(.w) to beat [class]:not(:root). */
-    dialog:not(:root), [popover]:not(:root),
-    [role="menu"]:not(:root), [role="listbox"]:not(:root),
-    [role="tooltip"]:not(:root), [role="dialog"]:not(:root), [role="alertdialog"]:not(:root),
-    [class*="menu" i]:not(a):not(button),
-    [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
-    [class*="hovercard" i], [class*="hover-card" i], faceplate-hovercard,
-    [class*="popover" i], [class*="modal" i], [class*="flyout" i], [class*="drawer" i],
-    [class*="sheet" i], [class*="callout" i], [class*="picker" i], [class*="context-menu" i],
-    [class*="toast" i], [class*="snackbar" i],
-    [data-radix-portal] *, [data-radix-popper-content-wrapper] *, [data-floating-ui-portal] *,
-    [data-state="open"][role], [data-radix-menu-content], [data-radix-dropdown-menu-content],
-    [data-radix-popover-content], [data-radix-select-content], [data-radix-tooltip-content],
-    [data-radix-dialog-content], [data-radix-context-menu-content], [data-radix-hover-card-content],
-    [id*="headlessui-portal"] * {
-      background-color: ${T.surfaceRaised} !important; background-image: none !important; color: ${T.textPrimary} !important; ${B_OUTER}
+    div, span, section, article, aside, nav, header, footer, main {
+      /* Blanket wipe retired (T-121) */
     }
 
-    [role="dialog"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [role="menu"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [role="listbox"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [role="tooltip"] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    dialog :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [popover] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [class*="popover" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [class*="modal" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [class*="dialog" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [class*="dropdown" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [class*="menu" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [class*="tooltip" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [class*="flyout" i] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [data-radix-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)),
-    [data-floating-ui-portal] :where(div, span, section, article, nav, aside, main, header, footer, [class]:not(:root)) {
-      background-color: inherit !important;
-      color: inherit !important;
-    }
+
 
     button, input[type="button"], input[type="submit"], input[type="reset"], shreddit-button, .btn,
     [class~="button" i], [class~="btn" i], a[role="button"], span[role="button"], summary {
@@ -1186,10 +1107,7 @@ dialog :where(div, span, section, article, nav, aside, main, header, footer, [cl
 
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
     button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
-    /* Same exclusions as the light-DOM wipe, for the same reason: a shadow tree is
-       not a place where status dots stop existing, and a web component that puts
-       one inside a button is the ordinary case, not an exotic one. */
-    button *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) { background-color: transparent !important; box-shadow: none !important; border: none !important; }
+    /* Same exclusions as the light-DOM wipe retired in T-121 */
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK} box-sizing: border-box !important; }
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
@@ -1270,6 +1188,7 @@ dialog :where(div, span, section, article, nav, aside, main, header, footer, [cl
     const s = document.querySelector('style[data-w95="global"]');
     if (s) target.appendChild(s);
   }
+  // --- REPAINTER START ---
 
   function parseRGB(str) {
     if (!str) return null;
@@ -2346,4 +2265,5 @@ dialog :where(div, span, section, article, nav, aside, main, header, footer, [cl
     startSweeping();
   }
 
+  // --- REPAINTER END ---
 })();
