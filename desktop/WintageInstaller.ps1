@@ -488,7 +488,11 @@ function Load-FbSound {
     try {
         $p = (Get-Content $script:fbSoundFile -Raw).Trim()
         if ($p -and (Test-Path $p)) { $script:fbSoundPath = $p }
-    } catch { }
+    } catch {
+        $message = "could not read freebuff-sound.txt: $($_.Exception.Message)"
+        if (Get-Command Say-Log -CommandType Function -ErrorAction SilentlyContinue) { Say-Log $message }
+        else { Write-Warning $message }
+    }
 }
 function Save-FbSound {
     try {
