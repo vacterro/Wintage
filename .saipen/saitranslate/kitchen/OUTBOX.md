@@ -4,10 +4,11 @@
 
 - **status:** draft
 - **producer:** saitranslate
-- **source_head:** 71f9852cf9623553ef5dd16d1e702a5d08c93c24 (project HEAD)
-  (drafted at 6e18ec1; re-verified at 71f9852 — README.md drift is screenshots
-  only, which are omitted from translations by design, plus line-ending
-  normalization; zero structural drift, payload remains faithful)
+- **source_head:** 3e1e77a09d79ee64255ef62c8c254a24cc1b6cb5 (project HEAD)
+  (drafted at 6e18ec1; re-verified at 71f9852 and 3e1e77a — README.md byte-identical
+  across both re-verifies (blob 071b4c1), so the RU/ET/Дед payload is still
+  faithful; desktop/README.md gained FreeBuff ad-removal + sound sections since,
+  but that surface stays EN-only pending the dedicated instance (T-102))
 - **coverage:** real surfaces inventoried in kitchen/surface.md —
   docs: README.md (translated), desktop/README.md + browser-theme/README.txt
   (surfaces exist, EN only, translation pending the dedicated instance);
@@ -48,3 +49,9 @@
   (omitted by design) + CRLF normalization, no heading/text/token/command
   changes. Payload unchanged and still faithful; status stays draft until
   T-102 completes the 29-language bundle.
+
+  UPDATE (E-450, `ee` re-verify): source_head refreshed to 3e1e77a (post
+  v1.26.0 ship). README.md blob byte-identical to 71f9852 (071b4c1), payload
+  still faithful. desktop/README.md gained FreeBuff ad-removal + sound-button
+  sections — surface stays EN-only pending the dedicated instance (T-102);
+  no loader exists yet (T-103). Status stays draft; `eee` remains a no-op.

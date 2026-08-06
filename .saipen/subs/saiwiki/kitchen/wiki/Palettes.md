@@ -36,6 +36,6 @@ would vanish. Re-apply them onto a fresh build with:
 
 ## Custom
 
-The desktop installer's GUI shows all eighteen colour tokens as editable swatches.
+The desktop installer's GUI shows all twenty-one colour tokens as editable swatches.
 Editing any swatch forks the palette into **Custom** rather than changing a shipped
 theme under you.

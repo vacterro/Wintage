@@ -19,7 +19,7 @@ powershell -File desktop\WintageInstaller.ps1
 ```
 
 Theme list with colour chips, the targets found on this machine, a live Win95
-preview, and all eighteen colour tokens as editable swatches. Editing any swatch
+preview, and all twenty-one colour tokens as editable swatches. Editing any swatch
 forks the palette into **Custom**. A live WCAG panel shows contrast for the three
 text-bearing tokens before Apply.
 

@@ -2,7 +2,7 @@
 
 ## WIKI-001: Wintage wiki authored from current HEAD docs (v1.23.3)
 
-- **status:** ready
+- **status:** shipped
 - **summary:** Wintage GitHub wiki was a one-page stub ("Welcome to the Wintage wiki!").
   Authored the complete maintained wiki (8 pages) from the current project docs:
   Home, Installation, Palettes, Desktop, Known-Behaviors, Development, _Sidebar,
@@ -11,14 +11,15 @@
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** eeb25156495f9973f6a1171eba8876d96556e5d0 (project), 3fffb8a75a8930b4f39cc88a2b4af51112e40934 (wiki remote)
-  (authored at 6e18ec1; restamped to v1.24.0 at dad7f2a; re-verified at eeb2515
-  -- README drift since is screenshots + CRLF only, CHANGELOG gained the
-  [1.24.0] entry the _Footer already links, pages carry 1.24.0 stamps)
+- **source_head:** 3e1e77a09d79ee64255ef62c8c254a24cc1b6cb5 (project), 7fffb8a75a8930b4f39cc88a2b4af51112e40934 (wiki remote)
+  (authored at 6e18ec1; restamped to v1.24.0 at dad7f2a; re-verified at eeb2515;
+  v1.26.0 restamp at 3e1e77a -- README drift since was screenshots + CRLF/palette
+  sections only, CHANGELOG now carries the [1.26.0] entry, pages carry 1.26.0 stamps)
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
   Known-Behaviors, Development, _Sidebar, _Footer); source invariants = README.md
-  structure, CHANGELOG.md current version 1.23.3, desktop/README.md target table
-  (14 targets + mechanisms + update-survival), sixteen-palette registry.
+  structure, CHANGELOG.md current version 1.26.0, desktop/README.md target table
+  (14 targets + mechanisms + update-survival) + FreeBuff ad-removal/sound sections,
+  twenty-one-token registry (16 packs).
 - **payload:**
   - kitchen/wiki/Home.md
   - kitchen/wiki/Installation.md
@@ -29,13 +30,14 @@
   - kitchen/wiki/_Sidebar.md
   - kitchen/wiki/_Footer.md
 - **verified:**
-  - Version stamps 1.23.3 cross-checked against CHANGELOG.md top entry.
-  - Palette table (16 palettes, 10-token Dark Golden table) cross-checked against
+  - Version stamps 1.26.0 cross-checked against CHANGELOG.md top entry and
+    wintage.user.js @version.
+  - Palette table (16 palettes, 21-token Dark Golden table) cross-checked against
     README.md and themes/*.json (16 packs present).
   - Desktop target table cross-checked against desktop/README.md (14 rows,
-    mechanisms and update-survival match).
-  - Freshness: drafted against project HEAD 6e18ec1 (uncommitted working tree is the
-    Claude transparency fix series, not wiki-relevant).
+    mechanisms and update-survival match; FreeBuff ad-removal + sound added).
+  - Freshness: restamped against project HEAD 3e1e77a (v1.26.0); only version /
+    token-count / FreeBuff-subsection drift demanded edits, no structural redraft.
   - Wiki remote reviewed read-only: single stub Home.md, no other pages to preserve.
 - **instructions:** (1) Push kitchen/wiki/*.md to github.com/vacterro/Wintage.wiki
   (add Home.md content, add 7 new pages; keep _Sidebar/_Footer). (2) No main-project
@@ -57,3 +59,13 @@
   drift requiring a redraft -- README diff is screenshots + CRLF only, and the
   CHANGELOG [1.24.0] entry is already linked from _Footer. Status stays ready;
   the wiki-remote push remains the qqq step.
+  UPDATE (E-447, `qq` prepare v1.26.0): pages restamped to v1.26.0 (2026-08-03) --
+  Home.md current-version line + _Footer.md stamp; Palettes.md/Desktop.md token
+  count 18 -> 21; Desktop.md gained the FreeBuff ad-removal + completion-sound
+  section; Development.md gained inspect-electron.js + shim/terminal test gates.
+  source_head refreshed to 3e1e77a. Status stays ready; push remains the qqq step.
+
+  UPDATE (E-451, `qqq` collect + ship): consumed. All 8 pages pushed to
+  github.com/vacterro/Wintage.wiki master (00a619c, replaces 3fffb8a stub).
+  Remote master byte-identical to kitchen. Handoff fully integrated; status:
+  shipped.

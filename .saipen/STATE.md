@@ -1,19 +1,20 @@
 ---
-phase: VERIFY
-task: T-122
-next_action: "WAIT: restart Claude/Antigravity/CodeNomad and confirm -- Settings/popovers opaque AND the running/waiting/done dot has its colour back"
+phase: HUNT
+task: none
+next_action: "WAIT: manual-verify -- restart Antigravity and FreeBuff and confirm both launch with the theme live."
 blocker: none
 agent: claude-opus-5
 mode: full
 saipen_version: 7
-schema_version: 2
+schema_version: 3
+style_contract: ded-97af6dca
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
-goal_tickets: 0
-transition_from: BUILD
-last_event: 440
-updated: 2026-08-03T15:20:00Z
+goal_tickets: 1
+transition_from: ADD
+last_event: 457
+updated: 2026-08-06T16:58:00Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)

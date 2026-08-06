@@ -1,4 +1,4 @@
-# Real translation surface — Wintage (HEAD 6e18ec1, v1.23.3)
+# Real translation surface — Wintage (HEAD 3e1e77a, v1.26.0)
 
 Determined by reading the actual project, per TRANSLATE § 2. Nothing fabricated.
 
@@ -7,7 +7,7 @@ Determined by reading the actual project, per TRANSLATE § 2. Nothing fabricated
 | surface | size | translate? |
 |---|---|---|
 | `README.md` | ~10 KB | YES — the root doc users read; primary surface |
-| `desktop/README.md` | ~8 KB | YES — install/mechanism docs for the desktop subsystem |
+| `desktop/README.md` | ~9 KB | YES — install/mechanism docs for the desktop subsystem (gained FreeBuff ad-removal + sound sections at v1.26.0; EN only, translation pending the dedicated instance) |
 | `browser-theme/README.txt` | small | YES — install notes for the companion browser theme |
 | `CHANGELOG.md` | small | NO — release ledger, stays English by convention |
 | `LICENSE` | — | NO — legal text, never translated |
