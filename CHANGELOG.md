@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.26.1] - 2026-08-06
+
+- Fixed: Antigravity and FreeBuff would not start at all after 1.26.0. Retiring the old floating-surface payload cut its tail and left its head behind, so the next declaration closed that unterminated string instead of opening its own and the shim died on load with `SyntaxError: Invalid or unexpected token`. The error is thrown in Electron's main process, before any window exists, which is why it presented as the application refusing to launch rather than as a theme problem.
+- The repainter is now carried into the shim as an encoded string instead of pasted into a template literal. Pasted, every backslash in its regular expressions was read as an escape -- `\d` became `d`, `\s` became `s` -- so the code still parsed and silently stopped recognising the colours it exists to correct.
+- Shadow roots are themed in the desktop apps again. `insertCSS` produces a document stylesheet, which cannot cross a shadow boundary, so those rules travel inside the repainter payload and are injected root by root.
+- Three new release gates, because every existing one was green while the above shipped: the build parses each generated shim, refuses an unresolved placeholder, and fails when the repainter starts reading a helper the shim does not provide; the payload suite parses each generated shim and the payload it builds.
+- Removed a stale VS Code colour theme left behind when a palette was renamed -- nothing generated or read it.
+- Fixed: the installer treated an unreadable FreeBuff sound preference as "no sound set" and said nothing about it.
+
 ## [1.26.0] - 2026-08-03
 
 - Floating surfaces are decided by measurement rather than a list of component names. The deciding test is a hit test at the panel's own centre: if what lies under it is only its own ancestors it is an adornment, and anything foreign under it means it covers content it does not own. An earlier "must carry an explicit z-index" rule was wrong on the first application it met -- Claude's Settings dialog is `position: fixed` with `z-index: auto`.

@@ -202,7 +202,7 @@ const REPAINTER_FIX = `(() => {
   if (window.__wintageRepainter) return "already running";
   window.__wintageRepainter = true;
 
-  const W95_VERSION = '1.26.0';
+  const W95_VERSION = '1.26.1';
 
   // This pack's palette, whole. Not trimmed to what the repainter happens to read
   // today: it builds PALETTE_RGB from Object.keys(T) to recognise its own colours,
