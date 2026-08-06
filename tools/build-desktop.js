@@ -12,6 +12,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(ROOT, 'themes');
@@ -131,10 +132,10 @@ function buildElectron(packs) {
   };
 
   const globalCss = literal('GLOBAL_CSS');
-  // Still extracted, and deliberately so: literal() throws if the declaration is
-  // gone, which keeps this build honest about the userscript it is reading. It is
-  // just no longer concatenated into the document sheet -- see the note below.
-  literal('SHADOW_CSS');
+  // Never concatenated onto the document sheet -- see the long note below for why
+  // that was incapable of working. It is carried into the repainter payload
+  // instead, which injects it into each shadow root it pierces, one at a time.
+  const shadowCss = literal('SHADOW_CSS');
   const bevels = {
     B_OUTER: constLiteral('B_OUTER'),
     B_INNER: constLiteral('B_INNER'),
@@ -150,9 +151,55 @@ function buildElectron(packs) {
   const repEnd = src.indexOf(repEndMarker);
   if (repStart < 0 || repEnd < 0) throw new Error('repainter markers missing in wintage.user.js');
   const repainterBody = src.slice(repStart + repStartMarker.length, repEnd);
-  
-  const shim = shimTemplate.replace('/* __REPAINTER__ */', repainterBody);
 
+  // ─── THE PRELUDE MUST KEEP UP WITH THE USERSCRIPT ──────────────────────────
+  // The extracted body is a slice out of the middle of an IIFE, so every helper it
+  // reads from the enclosing scope -- T, elev, contrast, injectStyle -- has to be
+  // re-declared by the shim's prelude. Nothing about moving a helper across the
+  // REPAINTER marker looks dangerous while doing it, and the cost lands far away:
+  // a ReferenceError thrown inside executeJavaScript, which the user experiences as
+  // "the theme does nothing" with no error anywhere they would think to look.
+  //
+  // So the build refuses to ship that. Names declared at the top level of the
+  // userscript's IIFE, referenced by the body, and NOT provided by the prelude are
+  // a hard failure here.
+  const preludeStart = shimTemplate.indexOf('const REPAINTER_FIX = `(() => {');
+  const preludeEnd = shimTemplate.indexOf('` + REPAINTER_BODY + `');
+  if (preludeStart < 0 || preludeEnd < 0) throw new Error('repainter prelude not found in shim template');
+  const prelude = shimTemplate.slice(preludeStart, preludeEnd);
+  const declared = (text, re) => new Set([...text.matchAll(re)].map(m => m[1]));
+
+  const provided = declared(prelude, /(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/g);
+  const outer = new Set([
+    ...declared(src.slice(0, repStart) + src.slice(repEnd), /^ {2}(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gm),
+    ...declared(src.slice(0, repStart) + src.slice(repEnd), /^ {2}function\s+([A-Za-z_$][\w$]*)/gm)
+  ]);
+  const bodyCode = stripNonCode(repainterBody);
+  const bodyOwn = new Set([
+    ...declared(bodyCode, /(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g),
+    ...declared(bodyCode, /function\s+([A-Za-z_$][\w$]*)/g)
+  ]);
+  const orphans = [...outer].filter(n =>
+    !provided.has(n) && !bodyOwn.has(n) &&
+    new RegExp('(^|[^\\w$.])' + n + '([^\\w$]|$)').test(bodyCode));
+  if (orphans.length) {
+    throw new Error('repainter body reads ' + orphans.join(', ') + ' from the userscript\'s outer scope, ' +
+      'and the shim prelude does not define ' + (orphans.length > 1 ? 'them' : 'it') + '. ' +
+      'Add ' + (orphans.length > 1 ? 'them' : 'it') + ' to desktop/targets/electron/shim.cjs or move the ' +
+      'declaration inside the REPAINTER markers.');
+  }
+
+  // A stray ${T.x} inside the body would be eaten by resolve() below and turned
+  // into a bare colour in the middle of JS. Nothing in the repainter needs one, and
+  // if that changes it should be a decision, not a surprise.
+  const collides = /\$\{(T\.\w+|B_OUTER|B_INNER|B_SUNK|FONT|VERSION)\}/.exec(repainterBody);
+  if (collides) throw new Error('repainter body contains a build placeholder: ' + collides[0]);
+
+  // JSON, not paste. See the note in the shim template: pasted into a template
+  // literal, every \d in the repainter's regexes silently becomes a d.
+  for (const marker of ['/* __REPAINTER__ */ ""', '/* __SHADOW_CSS__ */ ""']) {
+    if (!shimTemplate.includes(marker)) throw new Error('shim template marker missing: ' + marker);
+  }
   for (const pack of packs) {
     const resolve = text => text
       .replace(/\$\{(B_OUTER|B_INNER|B_SUNK|FONT)\}/g, (m, k) => bevels[k])
@@ -160,7 +207,8 @@ function buildElectron(packs) {
         if (!(k in pack.tokens)) throw new Error('unknown token T.' + k);
         return pack.tokens[k];
       })
-      .replace(/\$\{DARK \? '(\w+)' : '(\w+)'\}/g, '$1');
+      .replace(/\$\{DARK \? '(\w+)' : '(\w+)'\}/g, '$1')
+      .replace(/\$\{VERSION\}/g, VERSION);
     // Two passes: the bevel constants themselves contain ${T.x}.
     // GLOBAL_CSS ONLY. SHADOW_CSS used to be concatenated on here, and that was a
     // straight mistake: the shim delivers this through insertCSS, which produces a
@@ -186,8 +234,86 @@ function buildElectron(packs) {
     if (left) throw new Error('unresolved placeholder in ' + pack.slug + ' css near: ' + css.slice(left.index, left.index + 60));
     emit(path.join(OUT, 'electron', pack.slug, 'wintage.css'),
       '/* Wintage ' + pack.label + ' - generated from wintage.user.js v' + VERSION + '. Do not edit. */\n' + css + '\n');
-    emit(path.join(OUT, 'electron', pack.slug, 'shim.cjs'), resolve(shim));
+    // The shim is loaded by Electron's MAIN process, before any window exists. A
+    // syntax error there is not a broken theme, it is an application that will not
+    // start -- which is exactly what shipped once, from a template literal closed
+    // early by a backtick. Both gates are cheap and neither is optional.
+    // SHADOW_CSS is resolved BEFORE it is JSON-encoded, not after. ${FONT} expands
+    // to a stack containing "MS Sans Serif" -- double quotes, dropped raw into the
+    // middle of an already-quoted JSON string, which ends it early. Encoding last is
+    // the only order that can be right.
+    const shimOut = resolve(shimTemplate
+      .replace('/* __REPAINTER__ */ ""', () => JSON.stringify(repainterBody))
+      .replace('/* __SHADOW_CSS__ */ ""', () => JSON.stringify(resolve(resolve(shadowCss)))));
+    const stray = /\$\{/.exec(shimOut);
+    if (stray) throw new Error('unresolved placeholder in ' + pack.slug + ' shim near: ' + shimOut.slice(stray.index, stray.index + 60));
+    try {
+      new vm.Script(shimOut, { filename: pack.slug + '/shim.cjs' });
+    } catch (e) {
+      throw new Error('generated shim for ' + pack.slug + ' does not parse: ' + e.message);
+    }
+    emit(path.join(OUT, 'electron', pack.slug, 'shim.cjs'), shimOut);
   }
+}
+
+// Comments, strings, template text and regex literals go before the free-identifier
+// gate reads the repainter, because each of them can hold a word that looks exactly
+// like a reference and is not one -- the body discusses GLOBAL_CSS and CSS_ONLY_MODE
+// in prose, and a gate that cannot tell prose from code is a gate someone deletes.
+function stripNonCode(src) {
+  let out = '', i = 0, last = '';
+  let depth = 0;                 // brace depth
+  const tplStack = [];           // brace depth at which each open ${ } started
+  let inTpl = false;
+  const push = ch => { out += ch; if (!/\s/.test(ch)) last = ch; };
+  // `return /x/` is a regex; `a / b` is division. The difference is the token
+  // before the slash, so keywords that can precede a value are checked too.
+  const KEYWORD = /(?:^|[^\w$])(return|typeof|case|in|of|delete|void|instanceof|new|do|else|yield|await)\s*$/;
+
+  while (i < src.length) {
+    const c = src[i], d = src[i + 1];
+
+    if (inTpl) {
+      if (c === '\\') { i += 2; continue; }
+      if (c === '`') { inTpl = false; i++; push('0'); continue; }
+      if (c === '$' && d === '{') { tplStack.push(depth); depth++; inTpl = false; i += 2; out += ' '; continue; }
+      if (c === '\n') out += '\n';
+      i++; continue;
+    }
+
+    if (c === '/' && d === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+    if (c === '/' && d === '*') { i += 2; while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    if (c === '"' || c === "'") {
+      const q = c; i++;
+      while (i < src.length && src[i] !== q) { if (src[i] === '\\') i++; i++; }
+      i++; push('0'); continue;
+    }
+    if (c === '`') { inTpl = true; i++; continue; }
+    if (c === '/' && (!/[\w$)\]]/.test(last) || KEYWORD.test(out))) {
+      i++;
+      let cls = false;
+      while (i < src.length) {
+        const r = src[i];
+        if (r === '\\') { i += 2; continue; }
+        if (r === '\n') break;
+        if (r === '[') cls = true;
+        else if (r === ']') cls = false;
+        else if (r === '/' && !cls) { i++; break; }
+        i++;
+      }
+      while (i < src.length && /[a-z]/.test(src[i])) i++;   // flags
+      push('0'); continue;
+    }
+    if (c === '{') depth++;
+    if (c === '}') {
+      if (tplStack.length && depth === tplStack[tplStack.length - 1] + 1) {
+        tplStack.pop(); depth--; inTpl = true; i++; out += ' '; continue;
+      }
+      depth--;
+    }
+    push(c); i++;
+  }
+  return out;
 }
 
 // в”Ђв”Ђв”Ђ TARGET: browser в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ

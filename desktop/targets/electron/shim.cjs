@@ -163,212 +163,122 @@ const SCROLL_FIX = `(() => {
   return "scroll fix installed";
 })()`;
 
-// ─── FLOATING SURFACES ARE MEASURED, NOT NAMED ───────────────────────────────
-// The stylesheet flattens surfaces so an app reads as one window instead of a
-// stack of vendor greys, and then re-solidifies the panels that must stay opaque
-// -- menus, tooltips, popovers -- off a list of NAMES: role="menu",
-// [class*="popup" i], [class*="dropdown" i], the radix and floating-ui portal
-// attributes. That list has now missed the same app twice. Claude Desktop's
-// popovers carry none of those markers, so the wipe reaches them and the text
-// behind reads straight through the panel.
+// ─── THE REPAINTER, SHIPPED WHOLE ────────────────────────────────────────────
+// A stylesheet cannot win against an application that computes its colours in JS,
+// and the attempt to paper over that with CSS -- a blanket that wiped backgrounds
+// to transparent and re-solidified panels off a list of library NAMES -- lost the
+// race against the app's own state writes and left panels unreadable. Both halves
+// of that idea are gone now.
 //
-// The list cannot be finished by adding more names to it, and that is the whole
-// point of this block. Every entry on it is one library's vocabulary; an app that
-// renames a component, swaps its popover library, or ships its own design system
-// -- which all three agent shells targeted here do -- drops off the list at its
-// next release, silently. Nothing errors. The theme just quietly gets a hole in
-// it, and the person who finds it is the user.
+// The userscript already solves this properly: it measures computed styles and
+// writes back only what is actually wrong. So the repainter is NOT reimplemented
+// here. tools/build-desktop.js extracts it from wintage.user.js between its
+// REPAINTER markers and drops it in below, exactly the way the stylesheet is
+// extracted, so a fix made once is a fix made everywhere.
 //
-// So the test is what a popover IS rather than what it is called, in terms the
-// layout engine can answer and an app rename cannot change:
-//   1. out of flow            position: fixed | absolute
-//   2. big enough to read     and not the full-viewport scrim, nor the zero-size
-//                             wrapper that HOSTS the panel
-//   3. actually floating      at its own centre, the paint stack UNDER it holds
-//                             something that is not one of its ancestors
-// Both size tests and the hit test must hold. Colours are written as var() rather
-// than resolved hex so a palette switch repaints these with everything else, and
-// so this file stays palette-independent -- it is copied byte-identical into all
-// sixteen packs.
-//
-// Rule 3 replaced an earlier "has an explicit z-index, not auto" test, and the
-// swap is the whole reason this works now. That test sounded right and was wrong
-// on the first app it met: Claude's Settings panel is `role="dialog"`,
-// `position: fixed`, 606x720 over a 638x1079 window -- and `z-index: auto`. It
-// stacks by paint order, not by a number, which is ordinary and extremely common.
-// Requiring a number is requiring a habit, and a habit is just another name in
-// disguise. What cannot be opted out of is the hit test: an element that is
-// painted over content it does not own IS floating, however it got there, and an
-// absolutely-positioned adornment inside its own card is not -- everything under
-// that one is its own ancestor. Measured live against this app: of ~1500
-// elements, 1332 rejected as in-flow, 116 as too small, 5 as viewport-sized, and
-// exactly 3 marked -- the Settings dialog, an open popover, and the caption strip.
-const FLOAT_FIX = `(() => {
-  if (window.__wintageFloatFix) return "already running";
-  window.__wintageFloatFix = true;
+// It arrives as a JSON string literal rather than as text pasted inside a template
+// literal, and that is not a style preference. The repainter is full of regex
+// literals -- /rgba?\(\s*(\d+)/ and its relatives -- and inside a template literal
+// every one of those backslashes is an escape: \s collapses to s, \d to d, \( to
+// (. The result still parses and silently matches the wrong thing. A single
+// backtick in any of its comments ends the string outright, which is precisely how
+// this shim shipped unloadable. JSON.stringify is the only encoding that carries
+// all of it through verbatim.
+const REPAINTER_BODY = /* __REPAINTER__ */ "";
 
-  const MARK = "data-w95-float";
+// The one place insertCSS cannot reach. It produces a DOCUMENT stylesheet, and a
+// document stylesheet does not cross a shadow boundary, so every rule written for
+// a shadow tree has to be carried in and injected root by root -- which is what
+// the repainter's pierceShadow does with this.
+const SHADOW_CSS = /* __SHADOW_CSS__ */ "";
 
-  const solidify = el => {
-    const s = el.style;
-    s.setProperty("background-color", "var(--surfaceRaised)", "important");
-    s.setProperty("background-image", "none", "important");
-    s.setProperty("color", "var(--textPrimary)", "important");
-    s.setProperty("border-width", "2px", "important");
-    s.setProperty("border-style", "solid", "important");
-    s.setProperty("border-color", "var(--bevelLight) var(--borderDark) var(--borderDark) var(--bevelLight)", "important");
-    s.setProperty("box-shadow", "none", "important");
-    // The 2px bevel is added to an element the app already sized, so the box model
-    // has to absorb it rather than grow by 4px in each axis.
-    s.setProperty("box-sizing", "border-box", "important");
-    el.setAttribute(MARK, "1");
-  };
-
-  const fixOne = el => {
-    let cs;
-    try { cs = getComputedStyle(el); } catch (e) { return; }
-    if (cs.position !== "fixed" && cs.position !== "absolute") return;
-    // Refused for a reason time can change: it may be mid-entry. Ask again later.
-    if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") { recheck(el); return; }
-    // A click-through layer is a scrim or a measurement probe, never a panel.
-    if (cs.pointerEvents === "none") return;
-
-    const r = el.getBoundingClientRect();
-    // Zero-size means the panel is closed or this is the wrapper that hosts it.
-    // Neither is paintable, and the wrapper must stay transparent or it blacks out
-    // a viewport-sized rectangle over the app. Re-decided rather than latched: a
-    // popover is mounted closed, so a decision made while it measured nothing
-    // would be the only decision ever made about it.
-    if (r.width < 40 || r.height < 24) { el.removeAttribute(MARK); recheck(el); return; }
-    // COVERS THE WHOLE VIEWPORT: not a panel, but not nothing either.
-    // This used to be a plain return, and the guard is still right about what it
-    // was written for -- painting a full-screen layer opaque blacks out the
-    // application. What it got wrong is treating "do not solidify" as "do not
-    // touch", and that cost a user their app: CodeNomad's tabs stopped responding
-    // because the application had a modal open -- div.fixed inset-0 bg-black/50
-    // z-50, pointer-events auto -- and the flattening wipe had erased the dim it
-    // announces itself with. An invisible modal still eats every click. Read off
-    // the live app with elementsFromPoint at a tab's centre, which returned that
-    // layer rather than the tab.
-    //
-    // A backdrop that TAKES POINTER EVENTS is a claim on the whole window, and the
-    // reader has to be able to see it. So it gets the dim back -- translucent, so
-    // the app stays legible underneath, which is also what the app itself asked
-    // for. Everything unmeasurable is left alone: no pointer events (a decorative
-    // gradient layer, a drag-and-drop helper) or no explicit stacking order and it
-    // is not a modal backdrop, it is scenery.
-    if (r.width > innerWidth * 0.92 && r.height > innerHeight * 0.92) {
-      if (cs.zIndex && cs.zIndex !== "auto" && !el.hasAttribute(MARK)) {
-        el.style.setProperty("background-color", "rgba(0, 0, 0, 0.45)", "important");
-        // Preferred when the engine has it: the dim is made from the palette's own
-        // background rather than a hardcoded black, so it follows a theme switch.
-        el.style.setProperty("background-color", "color-mix(in srgb, var(--background) 55%, transparent)", "important");
-        el.style.setProperty("background-image", "none", "important");
-        el.setAttribute(MARK, "scrim");
-      }
-      return;
-    }
-    if (!el.childElementCount && !(el.textContent || "").trim()) return;
-    if (el.hasAttribute(MARK)) return;
-
-    // STATE COLOURS ARE NOT REPAINTED, AND THIS IS MEASURED TOO.
-    // The working/waiting/done indicators -- blue while running, amber when the
-    // agent wants the user, grey when finished -- carry their whole meaning in a
-    // background colour, which is why the stylesheet's transparency wipe already
-    // excludes them. That exclusion is what makes this test possible without
-    // naming anything: after the wipe, a panel that needs solidifying is
-    // transparent BY DEFINITION, and anything still holding its own colour is
-    // holding it on purpose. So a non-transparent background is the app saying
-    // "this colour is load-bearing", and the correct move is to leave it alone.
-    // Cheaper and stricter than re-listing status/indicator/dot markers here, and
-    // it cannot go stale when an app renames its indicator.
-    const own = cs.backgroundColor;
-    if (own && own !== "transparent") {
-      const m = /^rgba?\(([^)]+)\)/.exec(own);
-      const a = m ? parseFloat(m[1].split(",")[3]) : 1;
-      if (!(a >= 0) || a > 0.08) return;
-    }
-
-    // THE hit test. Everything above this line is cheap and admits far too much;
-    // this is the line that decides. Read the paint stack at the element's own
-    // centre: if what lies under it is nothing but its own ancestors, it is an
-    // adornment sitting inside its own card -- an icon, a focus ring, a corner
-    // badge -- and the app is right to have it inherit the surface. If something
-    // foreign is under it, it is covering content it does not own, which is the
-    // definition of floating and the reason it has to be opaque.
-    const cx = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
-    const cy = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
-    let stack;
-    try { stack = document.elementsFromPoint(cx, cy); } catch (e) { return; }
-    const i = stack.indexOf(el);
-    if (i < 0) return;                                   // covered by something else
-    for (let k = i + 1; k < stack.length; k++) {
-      const under = stack[k];
-      if (under === document.body || under === document.documentElement) continue;
-      if (under.contains(el)) continue;                  // its own ancestor
-      solidify(el);
-      return;
-    }
-  };
-
-  // A PANEL IS NOT ITS FINAL SIZE WHEN IT IS BORN.
-  // Reported as "sometimes it is see-through", and intermittent is the tell. A
-  // dialog is mounted and then animated in: at the moment the mutation arrives it
-  // can still measure zero, or sit at opacity 0, or carry an entering transform.
-  // fixOne correctly refuses to paint that -- and if nothing else ever touches the
-  // element, nothing ever asks again, so the one measurement that decided its
-  // whole appearance was taken before it had one.
-  //
-  // So a candidate that was refused for a reason that TIME CAN CHANGE is asked
-  // again, twice, and then never: once on the next frame, once after the animation
-  // budget. Bounded per element by a counter, so this can never become a loop --
-  // an element that is genuinely closed simply fails all three and is dropped.
-  const RETRIES = new WeakMap();
-  const recheck = el => {
-    const n = RETRIES.get(el) || 0;
-    if (n >= 2) return;
-    RETRIES.set(el, n + 1);
-    requestAnimationFrame(() => requestAnimationFrame(() => fixOne(el)));
-    setTimeout(() => fixOne(el), 260);
+// Everything the extracted body reads from the userscript's outer scope has to be
+// handed to it here. That list is not maintained by hand and hope: build-desktop.js
+// fails the build if the userscript ever starts reading something this prelude does
+// not define, because the failure mode otherwise is a ReferenceError thrown inside
+// executeJavaScript, which surfaces as "the theme just does not work" and nothing
+// else.
 const REPAINTER_FIX = `(() => {
   if (window.__wintageRepainter) return "already running";
   window.__wintageRepainter = true;
 
-  const THEME_ID = 'electron';
-  const THEMES = {
-    electron: {
-      tokens: {
-        background: '${T.background}',
-        backgroundSoft: '${T.backgroundSoft}',
-        surface: '${T.surface}',
-        surfaceRaised: '${T.surfaceRaised}',
-        surfaceAlt: '${T.surfaceAlt}',
-        borderDark: '${T.borderDark}',
-        borderHighlight: '${T.borderHighlight}',
-        bevelLight: '${T.bevelLight}',
-        borderMuted: '${T.borderMuted}',
-        link: '${T.link}',
-        textPrimary: '${T.textPrimary}',
-        textSecondary: '${T.textSecondary}',
-        textMuted: '${T.textMuted}',
-        accentTeal: '${T.accentTeal}',
-        accentTealDeep: '${T.accentTealDeep}',
-        success: '${T.success}',
-        warning: '${T.warning}',
-        danger: '${T.danger}',
-        dangerText: '${T.dangerText}',
-        selection: '${T.selection}',
-        compareBack: '${T.compareBack}'
-      }
-    }
-  };
-  
-  let B_OUTER = \`${B_OUTER}\`;
-  let B_INNER = \`${B_INNER}\`;
-  let B_SUNK = \`${B_SUNK}\`;
-  let FONT = \`${FONT}\`;
+  const W95_VERSION = '${VERSION}';
 
-  /* __REPAINTER__ */
+  // This pack's palette, whole. Not trimmed to what the repainter happens to read
+  // today: it builds PALETTE_RGB from Object.keys(T) to recognise its own colours,
+  // so a missing token would make it treat one of our own greys as the site's.
+  const T = {
+    background: '${T.background}',
+    backgroundSoft: '${T.backgroundSoft}',
+    surface: '${T.surface}',
+    surfaceRaised: '${T.surfaceRaised}',
+    surfaceAlt: '${T.surfaceAlt}',
+    borderDark: '${T.borderDark}',
+    borderHighlight: '${T.borderHighlight}',
+    bevelLight: '${T.bevelLight}',
+    borderMuted: '${T.borderMuted}',
+    link: '${T.link}',
+    textPrimary: '${T.textPrimary}',
+    textSecondary: '${T.textSecondary}',
+    textMuted: '${T.textMuted}',
+    accentTeal: '${T.accentTeal}',
+    accentTealDeep: '${T.accentTealDeep}',
+    success: '${T.success}',
+    warning: '${T.warning}',
+    danger: '${T.danger}',
+    dangerText: '${T.dangerText}',
+    selection: '${T.selection}',
+    compareBack: '${T.compareBack}'
+  };
+
+  let IS_TOP = true;
+  try { IS_TOP = window.top === window.self; } catch (e) { IS_TOP = false; }
+
+  // The userscript drops to CSS-only on a short list of hosts whose DOM churns
+  // hard enough that the repainter costs more than it wins. A desktop shell is one
+  // known application rather than the open web, and shipping the repainter here is
+  // the entire point of this block, so it stays on.
+  const CSS_ONLY_MODE = false;
+
+  // Polarity. Every luminance threshold downstream was written against a dark
+  // palette; elev() normalises the incoming value so the same numbers keep their
+  // meaning on a light one. Identical to the userscript's, deliberately.
+  function lum({ r, g, b }) {
+    const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  }
+  function hexLum(hex) {
+    return lum({ r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) });
+  }
+  function contrast(a, b) { return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
+  const BG_LUM = hexLum(T.background);
+  const BG_SOFT_LUM = hexLum(T.backgroundSoft);
+  const DARK = BG_LUM < 0.18;
+  const elev = L => (DARK ? L : 1 - L);
+
+  const SHADOW_CSS = ` + JSON.stringify(SHADOW_CSS) + `;
+
+  function injectStyle(root, id, content) {
+    if (root.querySelector && root.querySelector('style[data-w95="' + id + '"]')) return;
+    const s = document.createElement('style');
+    s.setAttribute('data-w95', id);
+    s.setAttribute('data-w95-ver', W95_VERSION);
+    s.textContent = content;
+    const target = root.head || root.documentElement || root;
+    try { target.insertBefore(s, target.firstChild); } catch (e) {
+      try { (document.head || document.documentElement).appendChild(s); } catch (e2) { }
+    }
+  }
+
+  // In the browser the theme is a <style> node and injectLate's whole job is to
+  // move it to the end of <head> so late application CSS cannot outrank it by
+  // position. Here the stylesheet arrives through insertCSS, which is not a DOM
+  // node at all and already applies at author origin after the document's own
+  // sheets. There is nothing to move, so this is a deliberate no-op rather than a
+  // reimplementation of something that does not apply.
+  function injectLate() { }
+
+` + REPAINTER_BODY + `
 
   return "repainter active";
 })()`;
