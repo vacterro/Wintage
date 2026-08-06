@@ -4,8 +4,6 @@
 
 
 ## TODO
-- [ ] T-107 Add a language-switcher bar to root README.md linking README.ru.md / README.et.md / README.ded.md | verify: all three links resolve, bar renders on GitHub
-
 - [ ] T-103 WintageInstaller.ps1 / install.ps1 / wintage.user.js have real user-visible strings but no i18n loader; adding an i18n loader is a real feature before UI-string translation becomes real — no fabricated JSON bundle | verify: loader reads locales; UI strings resolve per language
 - [ ] T-120 Stranded DOING → demoted: Idle CPU: duplicate GLOBAL_CSS injection removed and permanently-dirty out-of-flow elements fixed | verify: user reports chatgpt.com idle CPU in Brave after the userscript is updated -- E-424..E-427
 - [ ] T-119 Stranded DOING → demoted: Scroll jumps/snaps back mid-conversation while content loads below; stack-capturing recorder installed | verify: recorder log names the writer, fix lands, user scrolls mid-stream without a jump
@@ -19,6 +17,7 @@
 - [x] T-114 `install.ps1 -Reapply`: reads manifest, rediscover paths via re-invoking install.ps1 per target, re-apply outdated payloads; passes through user path params; honours -WhatIf; idempotent | verify: empty manifest -> nothing-to-do; up-to-date -> skips; outdated -> reports action; second run is no-op by construction -- E-472, E-473
 - [x] T-115 Simulated-update fixture: tools/test-reapply.ps1 with 6 tests (up-to-date skip, outdated detection, -WhatIf, empty manifest, round-trip, missing target) -- all PASS. Exercises -Reapply pipeline under -WhatIf without touching live installs | verify: 6/6 PASS -- E-474
 - [x] T-116 Opt-in logon task (ScheduledTask at logon running install.ps1 -Reapply -Quiet). Register/Unregister via install.ps1 switches + WintageInstaller.ps1 CheckBox. -Quiet suppresses routine messages, only failures reported. Round-trip register→verify→unregister PASS | verify: task exists after Register, gone after Unregister; both files parse 0 errors -- E-476
+- [x] T-107 Language-switcher bar: `[EN](README.md) | [RU](README.ru.md) | [ET](README.et.md) | [Дед](README.ded.md)` added after support badge in all 4 READMEs | verify: all links resolve as relative paths; bar renders on GitHub -- E-484
 - [x] T-132 Node exit codes unchecked in WintageInstaller.ps1: added $LASTEXITCODE guards after apply-themes.js + build-desktop.js in Save-Custom and Delete-Custom | verify: grep confirms guards exist; PS parse 0 errors -- E-480
 - [x] T-133 Dead Write-Utf8Lines function removed from install.ps1:62 | verify: rg Write-Utf8Lines returns 0 matches; PS parse 0 errors -- E-480
 - [x] T-134 Stale kitchen verify-t017-render-equivalence.js deleted (T-017 DONE) | verify: file absent; recoverable via git -- E-480

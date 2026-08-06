@@ -1,7 +1,7 @@
 ---
-phase: HUNT
+phase: DONE
 task: none
-next_action: RUN: saipen crew stage 1 -- hunt (full sweep, explicit sc command)
+next_action: PHASE SCOUT T-107
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -11,10 +11,10 @@ style_contract: ded-97af6dca
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
-goal_tickets: 8
-transition_from: RECOVER
-last_event: 478
-updated: 2026-08-06T23:59:00Z
+goal_tickets: 14
+transition_from: SHIP
+last_event: 483
+updated: 2026-08-07T00:14:00Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)
@@ -49,13 +49,13 @@ Left needing the user's eyes: CodeNomad after restart, and the Antigravity resty
 
 # Previous wave — five extra themes (goal wave 1)
 
-Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, NomadCode —
+Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, CodeNomad —
 five palettes alongside the existing Dark Golden, switchable at runtime.
 
 T-017..T-026 on BOARD. Infrastructure first (registry, switch, palette-independent
 repainter), then one ticket per palette, then companion browser themes and docs.
 
-Open question, not blocking T-017/T-018/T-019: FreeBuff and NomadCode have no
+Open question, not blocking T-017/T-018/T-019: FreeBuff and CodeNomad have no
 public palette I can trace. Golden, Claude Code, Antigravity and K-Lite/MPC-HC do.
 If the user has a screenshot or a source file for those two, it beats guessing.
 

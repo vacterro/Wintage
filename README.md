@@ -4,6 +4,8 @@
 <img width="876" height="618" alt="2026-08-01_230413" src="https://github.com/user-attachments/assets/5c1839ac-b977-46a0-9003-d6bffa9299a8" />
 [🤍 Support Developer](https://buymeacoffee.com/vacuum34)
 
+[EN](README.md) | [RU](README.ru.md) | [ET](README.et.md) | [Дед](README.ded.md)
+
 _The modern web optimizes for aesthetics at the expense of usability. Rounded corners replace visual hierarchy, animations replace feedback, shadows replace structure, and minimalism often removes the very cues our brains rely on to understand an interface._
 
 _Users shouldn't have to guess whether something is a button, a label, a card, or plain text. Wintage brings back explicit visual language: raised buttons, sunken inputs, sharp boundaries, consistent typography, zero distractions, and immediate state changes._
