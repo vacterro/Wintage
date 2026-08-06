@@ -43,7 +43,7 @@ koormust ja teeb veebist jälle täpse instrumendi, mitte dekoratiivsete mullide
 
 Wintage pole enam üks palett. Kuus on UI.md enda struktuur, pööratud teise
 toonide perekonda (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff,
-NomadCode); Custom on redigeeritav ja salvestatav lauaarvuti paigaldajast; üheksa
+CodeNomad); Custom on redigeeritav ja salvestatav lauaarvuti paigaldajast; üheksa
 on imporditud [FastPrompter](https://github.com/vacterro) projektist (Default,
 Golden Vintage, Golden Default, Vintage Dark, Vintage Classic, Dark 2 OLED,
 Dracula, Nord, Solarized Dark). Igaüks neist läbib WCAG AA kolme teksti kandva

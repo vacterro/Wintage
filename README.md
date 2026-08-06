@@ -30,7 +30,7 @@ _Every element communicates its purpose at a glance, reducing cognitive load and
 ## Sixteen palettes, and a switch
 
 Wintage is no longer one palette. Six are UI.md's own structure rotated to another
-hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, NomadCode),
+hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, CodeNomad),
 Custom can be edited and saved from the desktop installer, and nine are imported
 from [FastPrompter](https://github.com/vacterro) (Default, Golden
 Vintage, Golden Default, Vintage Dark, Vintage Classic, Dark 2 OLED, Dracula, Nord,

@@ -139,7 +139,7 @@ function dangerTextFor(colour, backdrop) {
 }
 
 // Rotating a hue does not preserve contrast: at golden's lightness a violet is far
-// darker than an amber, so NomadCode's indigo came out at 4.02:1 while the amber it
+// darker than an amber, so CodeNomad's indigo came out at 4.02:1 while the amber it
 // was derived from sits at 7.28:1. Structure is the thing being preserved, and a
 // text token that fails AA is not the same structure вЂ” so the three tokens that
 // carry text get lifted in lightness until they clear the floor. It is a small,

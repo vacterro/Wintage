@@ -59,6 +59,50 @@ function Write-Utf8Lines([string]$path, $lines) { [System.IO.File]::WriteAllLine
 $script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)
 function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8WithBom) }
 
+$WintageAppData = Join-Path $env:APPDATA 'Wintage'
+$ManifestPath = Join-Path $WintageAppData 'installed.json'
+
+function Read-Manifest {
+    if (-not (Test-Path $ManifestPath)) { return @{} }
+    $json = (Read-Utf8 $ManifestPath).Trim()
+    if (-not $json) { return @{} }
+    try { $json | ConvertFrom-Json -AsHashtable } catch { @{} }
+}
+
+function Write-Manifest($manifest) {
+    if ($WhatIfPreference) { return }
+    New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
+    Write-Utf8 $ManifestPath (($manifest | ConvertTo-Json -Depth 3) + "`n")
+}
+
+function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $payloadVersion) {
+    $m = Read-Manifest
+    $m[$target] = @{
+        palette       = $palette
+        path          = $resolvedPath
+        appVersion    = $appVersion
+        payloadVersion = $payloadVersion
+        applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+    Write-Manifest $m
+}
+
+function Remove-ManifestEntry($target) {
+    $m = Read-Manifest
+    if ($m.ContainsKey($target)) {
+        $m.Remove($target)
+        Write-Manifest $m
+    }
+}
+
+function Get-PayloadVersion {
+    $raw = (Read-Utf8 (Join-Path $root 'wintage.user.js')) -split "`n" |
+        Where-Object { $_ -match '// @version\s+(\S+)' } |
+        Select-Object -First 1
+    if ($raw -match '// @version\s+(\S+)') { return $matches[1] }
+    return 'unknown'
+}
+
 function Convert-HexToBgr([string]$hex) {
     $hex = $hex.Replace('#', '')
     if ($hex.Length -eq 8) { $hex = $hex.Substring(0, 6) }
@@ -212,6 +256,11 @@ function Invoke-WindowsTerminal {
             if ($LASTEXITCODE -ne 0) { throw "Windows Terminal patch failed for $settings" }
         }
     }
+    if ($settingsPaths.Count) {
+        $firstPath = $settingsPaths[0]
+        if ($DoRevert) { Remove-ManifestEntry 'terminal' }
+        else { Set-ManifestEntry 'terminal' $PaletteSlug $firstPath 'n/a' (Get-PayloadVersion) }
+    }
 }
 
 $CONHOST_KEY = 'HKCU:\Console'
@@ -245,6 +294,7 @@ function Invoke-Conhost {
             }
             Remove-Item $CONHOST_BACKUP -Force
             Say 'Console Host: restored pre-Wintage registry values.' 'Green'
+            Remove-ManifestEntry 'conhost'
         }
         return
     }
@@ -322,6 +372,7 @@ function Invoke-Conhost {
         }
         Say "Console Host: applied $PaletteSlug + $CONSOLE_FONT to $($keys.Count) registry profile(s)." 'Green'
         Say '  Restart cmd/PowerShell windows to replace the old proportional-font cells.' 'Yellow'
+        Set-ManifestEntry 'conhost' $PaletteSlug $CONHOST_KEY 'n/a' (Get-PayloadVersion)
     }
 }
 
@@ -439,8 +490,8 @@ function Invoke-WindowsTheme {
             Remove-Item -LiteralPath $fullOld -Force -ErrorAction SilentlyContinue
         }
     }
-    if ($DoRevert) { Say 'Windows: restored the saved pre-Wintage theme.' 'Green' }
-    else { Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green' }
+    if ($DoRevert) { Say 'Windows: restored the saved pre-Wintage theme.' 'Green'; Remove-ManifestEntry 'windows' }
+    else { Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'; Set-ManifestEntry 'windows' $PaletteSlug $WINDOWS_THEMES_DIR 'n/a' (Get-PayloadVersion) }
 }
 
 $MPC_KEY = 'HKCU:\Software\MPC-HC\MPC-HC\Settings'
@@ -450,6 +501,7 @@ $MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
 function Invoke-TotalCmd {
     param([int]$Index, [switch]$DoRevert, [string]$PaletteSlug)
     $appName = if ($Index -eq 1) { 'Total Commander' } else { 'Total Commander (Local)' }
+    $manifestName = if ($Index -eq 1) { 'totalcmd' } else { 'totalcmd2' }
     $candidates = if ($Index -eq 1) {
         @($TotalCmdIni, 'V:\___VAC\__P\_TOTALCMD\wincmd.ini', (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
     } else {
@@ -490,6 +542,7 @@ function Invoke-TotalCmd {
                 Copy-Item $iniBak $ini -Force
                 Remove-Item $iniBak -Force
                 Say "$($appName): restored wincmd.ini from the pre-Wintage backup" 'Green'
+                Remove-ManifestEntry $manifestName
             }
             else {
                 # No backup: this ini was themed by an older version that never made
@@ -615,6 +668,7 @@ function Invoke-TotalCmd {
         Write-Utf8BomLines $ini $finalLines
         $recentNote = if ($recentFilterIds.Count) { "; recent-file indicator themed ($($recentFilterIds.Count) filter(s))" } else { '; no existing recent-file filter found' }
         Say "$($appName): applied $PaletteSlug$recentNote" 'Green'
+        Set-ManifestEntry $manifestName $PaletteSlug $ini 'n/a' (Get-PayloadVersion)
     }
 }
 
@@ -632,6 +686,7 @@ function Invoke-SmartVac {
                 Copy-Item $bakFile $pyFile -Force
                 Remove-Item $bakFile -Force
                 Say "SMART VAC CLEANER: restored from backup" 'Green'
+                Remove-ManifestEntry 'smartvac'
             }
         } else {
             Say "SMART VAC CLEANER: nothing to revert." 'DarkYellow'
@@ -672,6 +727,7 @@ function Invoke-SmartVac {
     
     Write-Utf8 $pyFile $code
     Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
+    Set-ManifestEntry 'smartvac' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
 }
 
 function Invoke-WildRift {
@@ -688,6 +744,7 @@ function Invoke-WildRift {
                 Copy-Item $bakFile $pyFile -Force
                 Remove-Item $bakFile -Force
                 Say "WildRiftAssistant: restored from backup" 'Green'
+                Remove-ManifestEntry 'wildrift'
             }
         } else {
             Say "WildRiftAssistant: nothing to revert." 'DarkYellow'
@@ -710,6 +767,7 @@ function Invoke-WildRift {
     $code = $code -replace '(?s)TOKENS\s*=\s*\{.*?\}', $pyTokens
     Write-Utf8 $pyFile $code
     Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
+    Set-ManifestEntry 'wildrift' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
 }
 
 function Get-CssShape {
@@ -741,6 +799,7 @@ function Invoke-Saipenview {
                 Copy-Item $bakFile $cssFile -Force
                 Remove-Item $bakFile -Force
                 Say "SAIPENVIEW: restored from backup" 'Green'
+                Remove-ManifestEntry 'saipenview'
             }
         } else {
             Say "SAIPENVIEW: nothing to revert." 'DarkYellow'
@@ -841,6 +900,7 @@ function Invoke-Saipenview {
         Write-Utf8 $cssFile $text
 
         Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
+        Set-ManifestEntry 'saipenview' $PaletteSlug $cssFile 'n/a' (Get-PayloadVersion)
         if ($missing.Count) {
             # Reported, not silently dropped: a token SAIPENVIEW does not declare is a
             # gap in coverage the next person should know about.
@@ -862,6 +922,7 @@ function Invoke-BetterDiscord {
             if ($PSCmdlet.ShouldProcess($bdCss, 'Remove Wintage theme')) {
                 Remove-Item $bdCss -Force
                 Say "BetterDiscord: removed $bdCss" 'Green'
+                Remove-ManifestEntry 'discord'
             }
         } else { Say "BetterDiscord: nothing installed, nothing to revert." }
         return
@@ -872,6 +933,7 @@ function Invoke-BetterDiscord {
         $meta = "/**`n * @name Wintage ($PaletteSlug)`n * @author Wintage Installer`n * @version 1.0.0`n * @description Win95 Theme`n */`n`n"
         Write-Utf8 $bdCss ($meta + $css)
         Say "BetterDiscord: installed theme -> $bdCss" 'Green'
+        Set-ManifestEntry 'discord' $PaletteSlug $bdCss 'n/a' (Get-PayloadVersion)
     }
 }
 
@@ -921,6 +983,7 @@ function Invoke-Obsidian {
                 $bak = Join-Path $here "backup/obsidian-appearance-$safe.json"
                 if ((Test-Path $bak) -and (Test-Path $appearance)) { Copy-Item $bak $appearance -Force }
                 Say "Obsidian: removed Wintage themes from $vault" 'Green'
+                Remove-ManifestEntry 'obsidian'
             }
             continue
         }
@@ -948,6 +1011,7 @@ function Invoke-Obsidian {
             }
             Say "Obsidian: installed $count themes into $vault, active '$activeName'" 'Green'
             Say "  Reload the vault (Ctrl+R) or Settings > Appearance to see it." 'DarkGray'
+            Set-ManifestEntry 'obsidian' $PaletteSlug $themesDir 'n/a' (Get-PayloadVersion)
         }
     }
 }
@@ -975,6 +1039,8 @@ function Invoke-Obs {
     if ($PSCmdlet.ShouldProcess($OBS_CONFIG, $action)) {
         & node $args
         if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
+        if ($DoRevert) { Remove-ManifestEntry 'obs' }
+        else { Set-ManifestEntry 'obs' $PaletteSlug $OBS_CONFIG 'n/a' (Get-PayloadVersion) }
     }
 }
 
@@ -994,6 +1060,7 @@ function Invoke-MpcHc {
             # it is stated rather than glossed.
             & reg import $bak 2>&1 | Out-Null
             Say "MPC-HC: restored the captured values from $bak" 'Green'
+            Remove-ManifestEntry 'mpchc'
         }
         return
     }
@@ -1023,6 +1090,7 @@ function Invoke-MpcHc {
             Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
         }
         Say 'MPC-HC: dark theme on, OSD set to Verdana 16, zero transparency, bordered.' 'Green'
+        Set-ManifestEntry 'mpchc' 'n/a' $MPC_KEY 'n/a' (Get-PayloadVersion)
         Say '  NOT reachable: the player chrome colours are compiled into MPC-HC and no' 'Yellow'
         Say '  registry value exposes them, so this target cannot take a palette. Only the' 'Yellow'
         Say '  built-in dark theme and the OSD typography are settable.' 'Yellow'
@@ -1272,6 +1340,7 @@ foreach ($name in $names) {
         if ($Revert) {
             if ($PSCmdlet.ShouldProcess($e.Resources, 'Remove the Wintage shim')) {
                 & node $nodeArgs --revert
+                if ($LASTEXITCODE -eq 0) { Remove-ManifestEntry $name }
             }
             continue
         }
@@ -1304,6 +1373,13 @@ foreach ($name in $names) {
                     }
                 }
                 Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray'
+                $appVer = 'n/a'
+                try {
+                    $verOut = & node $nodeArgs --version 2>$null
+                    if ($LASTEXITCODE -eq 0 -and $verOut) { $appVer = $verOut.Trim() }
+                } catch {}
+                Set-ManifestEntry $name $Palette $e.Resources $appVer (Get-PayloadVersion)
+                Say "  Recorded in $ManifestPath" 'DarkGray'
             }
         }
         continue
@@ -1323,6 +1399,7 @@ foreach ($name in $names) {
             if ($PSCmdlet.ShouldProcess($dest, 'Remove installed Wintage themes')) {
                 Remove-Item $dest -Recurse -Force
                 Say "$($t.Name): removed $dest" 'Green'
+                Remove-ManifestEntry $name
             }
         }
         else { Say "$($t.Name): nothing installed, nothing to revert." }
@@ -1351,5 +1428,6 @@ foreach ($name in $names) {
         $count = (Get-ChildItem (Join-Path $dest 'themes') -Filter '*.json').Count
         Say "$($t.Name): installed $count themes -> $dest" 'Green'
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
+        Set-ManifestEntry $name $Palette $dest 'n/a' (Get-PayloadVersion)
     }
 }

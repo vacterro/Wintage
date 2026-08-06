@@ -43,6 +43,16 @@ const asar = path.join(resources, 'app.asar');
 const appDir = path.join(resources, 'app');
 const dryRun = has('dry-run');
 const inPlace = has('in-place');
+const showVersion = has('version');
+
+if (showVersion) {
+  if (!fs.existsSync(asar)) { console.log('n/a'); process.exit(0); }
+  try {
+    const pkg = asarPackageJson(asar);
+    console.log(pkg.version || 'n/a');
+  } catch (e) { console.log('n/a'); }
+  process.exit(0);
+}
 
 // в”Ђв”Ђв”Ђ Reading the original package.json out of the asar в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // This matters more than it looks. Electron derives the app NAME from the entry

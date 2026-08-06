@@ -1,7 +1,7 @@
 # Palettes
 
 Wintage ships **sixteen palettes**. Six are UI.md's own structure rotated to another
-hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, NomadCode);
+hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, CodeNomad);
 Custom can be edited and saved from the desktop installer; nine are imported from
 FastPrompter (Default, Golden Vintage, Golden Default, Vintage Dark, Vintage Classic,
 Dark 2 OLED, Dracula, Nord, Solarized Dark).

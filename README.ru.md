@@ -38,7 +38,7 @@ _Каждый элемент с первого взгляда говорит, з
 
 Wintage — это больше не одна палитра. Шесть — это собственная структура UI.md,
 повёрнутая в другое семейство оттенков (Dark Golden, Claude Code, Antigravity,
-K-Lite, FreeBuff, NomadCode); Custom можно редактировать и сохранять из
+K-Lite, FreeBuff, CodeNomad); Custom можно редактировать и сохранять из
 десктопного установщика; девять импортированы из
 [FastPrompter](https://github.com/vacterro) (Default, Golden Vintage, Golden
 Default, Vintage Dark, Vintage Classic, Dark 2 OLED, Dracula, Nord, Solarized
