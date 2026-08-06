@@ -1,8 +1,8 @@
 ---
-phase: DONE
+phase: BLOCKED
 task: none
-next_action: PHASE SCOUT T-107
-blocker: none
+next_action: WAIT: user brake -- 5 stranded TODO tickets (T-120/T-119/T-118/T-117/T-112) require user verification (user reports idle CPU, scroll jumps, usage bars, status indicators, popovers). No workable tickets remain. 16/20 goal tickets used, 1/3 waves.
+blocker: remaining TODO tickets are unworkable (verify criteria require user action)
 agent: claude-opus-5
 mode: full
 saipen_version: 7
@@ -11,10 +11,10 @@ style_contract: ded-97af6dca
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
-goal_tickets: 15
+goal_tickets: 16
 transition_from: SHIP
-last_event: 485
-updated: 2026-08-07T00:22:00Z
+last_event: 488
+updated: 2026-08-07T00:30:00Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)
@@ -46,53 +46,3 @@ two of them reported SUCCESS while failing.
   under them nudged out using `navigator.windowControlsOverlay`.
 
 Left needing the user's eyes: CodeNomad after restart, and the Antigravity restyle.
-
-# Previous wave — five extra themes (goal wave 1)
-
-Objective: Antigravity, Claude Code, K-Lite media player, FreeBuff, CodeNomad —
-five palettes alongside the existing Dark Golden, switchable at runtime.
-
-T-017..T-026 on BOARD. Infrastructure first (registry, switch, palette-independent
-repainter), then one ticket per palette, then companion browser themes and docs.
-
-Open question, not blocking T-017/T-018/T-019: FreeBuff and CodeNomad have no
-public palette I can trace. Golden, Claude Code, Antigravity and K-Lite/MPC-HC do.
-If the user has a screenshot or a source file for those two, it beats guessing.
-
-## Previous wave — UI.md conformance (v1.4.0 .. v1.4.7)
-
-T-006..T-012 BUILT + VERIFIED as v1.4.0. Reasoning + deviations in
-KNOWLEDGE/ADR-003.md; perf history in ADR-002.md; animation history in ADR-001.md.
-
-Measured live, en.wikipedia.org WWII, 16921 elements:
-
-| check | result |
-|---|---|
-| font sizes present | 10/12/14/16px, nothing else |
-| font weights present | 400 and 700, nothing else |
-| off-palette backgrounds | 0 |
-| off-palette text colours | 0 |
-| box-shadows / rounded corners / gradients | 0 / 0 / 0 |
-| idle CPU settled | 0.14 % (v1.3.0 0.09 %, pre-fix 16.9 %) |
-
-Two bugs were caught only by live measurement, both now guarded:
-
-1. **Specificity.** The base type selector's six `:not([class*="..." i])` matches
-   score (0,6,4), so `h1 { font-size: 16px !important }` at (0,0,1) LOST — every
-   heading silently flattened to 12px. Exceptions are now carved out of the base
-   selector (disjoint, no specificity race); the `font-weight` pair had the same
-   bug, fixed with a `:root`/`:host` prefix.
-2. **`node --check` cannot see inside a CSS template literal.** Prose pasted after
-   a comment's closing `*/` left a stray `*/` in `GLOBAL_CSS`; `--check` passed and
-   the browser's CSS parser silently discarded rules while recovering. Now
-   `tools/check-css.js` fails on stray/unclosed/nested comments, brace imbalance
-   and off-palette hex, and `release.ps1` gates on it. Guard validated by
-   injecting all three fault classes.
-
-Deliberate deviations from UI.md (full reasoning in ADR-003): transition/animation
-stay at 0.001s (ADR-001 live evidence beats the literal law); no global `margin:0`
-or `box-sizing`; no `body{overflow-x:hidden}`; no class-name-based status colours;
-semantic tokens never used as text colour (1.8:1 fails AA).
-
-Also open: local branch `perf-verify` still exists (squash-merged, so git calls it
-unmerged — `-D` is destructive and needs the user's word).
