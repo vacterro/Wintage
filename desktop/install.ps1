@@ -31,7 +31,8 @@ param(
     [switch]$NoBrowserLaunch,
     [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\',
     [string]$SmartVacPath = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\',
-    [string]$WildRiftPath = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\'
+    [string]$WildRiftPath = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\',
+    [switch]$Reapply
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,7 +67,12 @@ function Read-Manifest {
     if (-not (Test-Path $ManifestPath)) { return @{} }
     $json = (Read-Utf8 $ManifestPath).Trim()
     if (-not $json) { return @{} }
-    try { $json | ConvertFrom-Json -AsHashtable } catch { @{} }
+    try {
+        $obj = $json | ConvertFrom-Json
+        $ht = @{}
+        foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
+        return $ht
+    } catch { return @{} }
 }
 
 function Write-Manifest($manifest) {
@@ -1103,6 +1109,45 @@ function Invoke-MpcHc {
 # silently reported "not themed" instead of "fused shut", which is the one line in
 # the table a user actually needs when an app refuses to start.
 $node = Get-Command node -ErrorAction SilentlyContinue
+
+# ---- Reapply mode: read manifest, rediscover paths, re-apply outdated payloads ----
+if ($Reapply) {
+    $currentVer = Get-PayloadVersion
+    $manifest = Read-Manifest
+    if ($manifest.Count -eq 0) { Say 'Nothing to do -- the manifest is empty (no targets have been installed).' 'Green'; exit 0 }
+    $didWork = $false
+    $passArgs = @{}
+    if ($CodeNomadPath) { $passArgs['-CodeNomadPath'] = $CodeNomadPath }
+    if ($TotalCmdIni)  { $passArgs['-TotalCmdIni'] = $TotalCmdIni }
+    if ($TotalCmd2Ini) { $passArgs['-TotalCmd2Ini'] = $TotalCmd2Ini }
+    if ($SaipenviewPath) { $passArgs['-SaipenviewPath'] = $SaipenviewPath }
+    if ($SmartVacPath) { $passArgs['-SmartVacPath'] = $SmartVacPath }
+    if ($WildRiftPath) { $passArgs['-WildRiftPath'] = $WildRiftPath }
+    if ($Force) { $passArgs['-Force'] = $Force }
+    if ($PortableBrowserRoot) { $passArgs['-PortableBrowserRoot'] = $PortableBrowserRoot }
+    if ($BrowserStageRoot) { $passArgs['-BrowserStageRoot'] = $BrowserStageRoot }
+    $sorted = @($manifest.Keys | Sort-Object)
+    foreach ($key in $sorted) {
+        $data = $manifest[$key]
+        if ($data.payloadVersion -ge $currentVer) {
+            Say "$key`: up to date (manifest v$($data.payloadVersion), repo v$currentVer)." 'DarkGray'
+            continue
+        }
+        $action = "Re-apply $key @ $($data.palette) (v$($data.payloadVersion) -> v$currentVer)"
+        if (-not $PSCmdlet.ShouldProcess("$key ($($data.palette))", $action)) { continue }
+        $didWork = $true
+        $callArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
+            '-Target', $key, '-Palette', $data.palette)
+        foreach ($pk in $passArgs.Keys) { $callArgs += $pk; $callArgs += $passArgs[$pk] }
+        if ($WhatIfPreference) { $callArgs += '-WhatIf' }
+        Say "$key`: re-applying $($data.palette) ..." 'Cyan'
+        $result = & powershell @callArgs 2>&1
+        if ($LASTEXITCODE -eq 0) { Say "$key`: re-applied successfully." 'Green' }
+        else { Say "$key`: FAILED ($LASTEXITCODE)." 'Red'; Write-Warning ($result -join "`n") }
+    }
+    if (-not $didWork) { Say 'Nothing to do -- all recorded targets are up to date.' 'Green' }
+    exit 0
+}
 
 if (-not $Target) {
     # The whole point of the listing is answering three questions at once: is the app
