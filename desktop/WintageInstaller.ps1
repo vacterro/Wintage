@@ -868,7 +868,9 @@ function Save-Custom {
     [System.IO.File]::WriteAllText($file, $json, (New-Object System.Text.UTF8Encoding $false))
     Say-Log "saved themes/custom.json"
     & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
+    if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: apply-themes.js failed -- theme packs may be stale'; return }
     & node (Join-Path $root 'tools/build-desktop.js') | Out-Null
+    if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: build-desktop.js failed -- desktop/out may be stale'; return }
     Load-Packs
 }
 
@@ -878,7 +880,9 @@ function Delete-Custom {
         Remove-Item $file -Force
         Say-Log "deleted themes/custom.json"
         & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
+        if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: apply-themes.js failed -- theme packs may be stale'; return }
         & node (Join-Path $root 'tools/build-desktop.js') | Out-Null
+        if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: build-desktop.js failed -- desktop/out may be stale'; return }
         Load-Packs
         $script:current = 'goldendefault'
         $lstThemes.SelectedItem = $script:packs[$script:current].label

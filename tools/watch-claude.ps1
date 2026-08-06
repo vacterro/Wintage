@@ -16,6 +16,7 @@ $action = {
     node tools/check-css.js
     if ($LASTEXITCODE -eq 0) {
         node tools/build-desktop.js
+        if ($LASTEXITCODE -ne 0) { Write-Host 'build-desktop.js failed -- not hot-reloading.'; return }
         # Find Claude app path dynamically
         $claudeAppPath = (Get-ChildItem -Path "$env:LOCALAPPDATA\AnthropicClaude\app-*" | Sort-Object Name -Descending | Select-Object -First 1).FullName
         if ($claudeAppPath) {

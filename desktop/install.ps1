@@ -59,7 +59,6 @@ function Say($msg, $colour = 'Gray') { Write-Host $msg -ForegroundColor $colour 
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script:Utf8NoBom) }
 function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllText($path, $text, $script:Utf8NoBom) }
-function Write-Utf8Lines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8NoBom) }
 $script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)
 function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8WithBom) }
 
@@ -1096,6 +1095,7 @@ function Invoke-MpcHc {
             # anything created since. That is the honest limit of a .reg backup and
             # it is stated rather than glossed.
             & reg import $bak 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { Write-Warning "MPC-HC: reg import failed ($LASTEXITCODE) -- values not restored." }
             Say "MPC-HC: restored the captured values from $bak" 'Green'
             Remove-ManifestEntry 'mpchc'
         }
@@ -1106,7 +1106,8 @@ function Invoke-MpcHc {
         New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
         if (-not (Test-Path $bak)) {
             & reg export $MPC_REG $bak /y 2>&1 | Out-Null
-            Say "MPC-HC: settings backed up to $bak" 'DarkGray'
+            if ($LASTEXITCODE -ne 0) { Write-Warning "MPC-HC: reg export failed ($LASTEXITCODE) -- backup not created, revert will be unavailable." }
+            else { Say "MPC-HC: settings backed up to $bak" 'DarkGray' }
         }
         else { Say "MPC-HC: keeping the existing backup at $bak (it holds the pre-Wintage state)" 'DarkGray' }
 

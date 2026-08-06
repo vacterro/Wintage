@@ -1,7 +1,7 @@
 ---
-phase: DONE
+phase: HUNT
 task: none
-next_action: PHASE SCOUT T-116
+next_action: RUN: saipen crew stage 1 -- hunt (full sweep, explicit sc command)
 blocker: none
 agent: claude-opus-5
 mode: full
@@ -11,10 +11,10 @@ style_contract: ded-97af6dca
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
 goal_mode: true
 goal_waves: 1
-goal_tickets: 7
-transition_from: SHIP
-last_event: 475
-updated: 2026-08-06T23:42:00Z
+goal_tickets: 8
+transition_from: RECOVER
+last_event: 478
+updated: 2026-08-06T23:59:00Z
 ---
 
 # Current wave — three apps reported unthemed, one common cause each (v1.22.0)
