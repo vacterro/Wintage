@@ -9,7 +9,8 @@
   templates from the packs, `install.ps1` installs into the user profile,
   `WintageInstaller.ps1` is the WinForms GUI.
 - `tools/` — generators and gates: `apply-themes.js`, `derive-palette.js`,
-  `check-css.js`, `build-desktop.js`, `electron-fuses.js`, plus the test harnesses.
+  `check-css.js`, `build-desktop.js`, `electron-fuses.js`, `inspect-electron.js`
+  (reads a live themed app over CDP), plus the test harnesses.
 - `browser-theme/` — companion Chromium theme manifests generated from a role-based
   template.
 - `tests/` — PowerShell test harness (`Run-Tests.ps1`).
@@ -37,6 +38,8 @@ bigger releases.
   version stamp consistency.
 - `tools/test-theme-packs.js`, `tools/test-repainter-polarity.js`,
   `tools/test-theme-switch.js` — the behavioural harnesses gated into release.
+- `tools/test-shim-payloads.js`, `tools/test-terminal-font.js` — the Electron
+  shim payloads parse, and the terminal colour table stays console-consistent.
 
 ## Deliberate deviations from UI.md
 
