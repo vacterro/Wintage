@@ -32,7 +32,10 @@ param(
     [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\',
     [string]$SmartVacPath = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\',
     [string]$WildRiftPath = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\',
-    [switch]$Reapply
+    [switch]$Reapply,
+    [switch]$Quiet,
+    [switch]$RegisterLogonTask,
+    [switch]$UnregisterLogonTask
 )
 
 $ErrorActionPreference = 'Stop'
@@ -107,6 +110,34 @@ function Get-PayloadVersion {
         Select-Object -First 1
     if ($raw -match '// @version\s+(\S+)') { return $matches[1] }
     return 'unknown'
+}
+
+$TASK_NAME = 'Wintage Reapply at Logon'
+
+function Register-WintageLogonTask {
+    if ($WhatIfPreference) {
+        Say "Would register logon task: '$TASK_NAME'" 'Cyan'
+        return
+    }
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Reapply -Quiet"
+    $trigger = New-ScheduledTaskTrigger -AtLogOn
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName $TASK_NAME -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Say "Registered logon task: '$TASK_NAME' -- install.ps1 -Reapply -Quiet runs at every logon." 'Green'
+}
+
+function Unregister-WintageLogonTask {
+    if (-not (Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue)) {
+        Say "Logon task '$TASK_NAME' not found -- nothing to remove." 'DarkGray'
+        return
+    }
+    if ($WhatIfPreference) {
+        Say "Would unregister logon task: '$TASK_NAME'" 'Cyan'
+        return
+    }
+    Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false
+    Say "Unregistered logon task: '$TASK_NAME'." 'Green'
 }
 
 function Convert-HexToBgr([string]$hex) {
@@ -1130,7 +1161,7 @@ if ($Reapply) {
     foreach ($key in $sorted) {
         $data = $manifest[$key]
         if ($data.payloadVersion -ge $currentVer) {
-            Say "$key`: up to date (manifest v$($data.payloadVersion), repo v$currentVer)." 'DarkGray'
+            if (-not $Quiet) { Say "$key`: up to date (manifest v$($data.payloadVersion), repo v$currentVer)." 'DarkGray' }
             continue
         }
         $action = "Re-apply $key @ $($data.palette) (v$($data.payloadVersion) -> v$currentVer)"
@@ -1140,14 +1171,21 @@ if ($Reapply) {
             '-Target', $key, '-Palette', $data.palette)
         foreach ($pk in $passArgs.Keys) { $callArgs += $pk; $callArgs += $passArgs[$pk] }
         if ($WhatIfPreference) { $callArgs += '-WhatIf' }
-        Say "$key`: re-applying $($data.palette) ..." 'Cyan'
+        if (-not $Quiet) { Say "$key`: re-applying $($data.palette) ..." 'Cyan' }
         $result = & powershell @callArgs 2>&1
-        if ($LASTEXITCODE -eq 0) { Say "$key`: re-applied successfully." 'Green' }
+        if ($LASTEXITCODE -eq 0) {
+            if (-not $Quiet) { Say "$key`: re-applied successfully." 'Green' }
+        }
         else { Say "$key`: FAILED ($LASTEXITCODE)." 'Red'; Write-Warning ($result -join "`n") }
     }
-    if (-not $didWork) { Say 'Nothing to do -- all recorded targets are up to date.' 'Green' }
+    if (-not $didWork) {
+        if (-not $Quiet) { Say 'Nothing to do -- all recorded targets are up to date.' 'Green' }
+    }
     exit 0
 }
+
+if ($RegisterLogonTask) { Register-WintageLogonTask; exit 0 }
+if ($UnregisterLogonTask) { Unregister-WintageLogonTask; exit 0 }
 
 if (-not $Target) {
     # The whole point of the listing is answering three questions at once: is the app

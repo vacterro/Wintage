@@ -311,6 +311,20 @@ $btnRevert = New-Object Windows.Forms.Button
 $btnRevert.Text = 'REVERT SELECTED TARGETS'; $btnRevert.Location = '640,402'; $btnRevert.Size = '212,26'
 $btnRevert.FlatStyle = 'Flat'; $btnRevert.FlatAppearance.BorderSize = 0
 
+$chkLogonTask = New-Object Windows.Forms.CheckBox
+$chkLogonTask.Text = 'Re-apply theme at logon'
+$chkLogonTask.Location = '640,436'; $chkLogonTask.Size = '212,20'
+$chkLogonTask.Font = $FONT
+$chkLogonTask.FlatStyle = 'Flat'
+$chkLogonTask.Add_CheckedChanged({
+    $taskArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $here 'install.ps1'))
+    if ($chkLogonTask.Checked) {
+        & powershell @taskArgs -RegisterLogonTask 2>&1 | ForEach-Object { Say-Log $_ }
+    } else {
+        & powershell @taskArgs -UnregisterLogonTask 2>&1 | ForEach-Object { Say-Log $_ }
+    }
+})
+
 # ─── FREEBUFF COMPLETION SOUND ───────────────────────────────────────────────
 # The GUI only stores the PREFERENCE; install.ps1 -Target freebuff reads the same
 # file and hands it to patch-freebuff-ads.js --sound, so the ads and the sound are
@@ -526,7 +540,7 @@ function Update-FbSoundButton {
 Load-FbSound
 
 $btnFbSound = New-Object Windows.Forms.Button
-$btnFbSound.Text = 'FB SOUND'; $btnFbSound.Location = '640,434'; $btnFbSound.Size = '140,24'; $btnFbSound.Font = $FONT
+$btnFbSound.Text = 'FB SOUND'; $btnFbSound.Location = '640,462'; $btnFbSound.Size = '140,24'; $btnFbSound.Font = $FONT
 $btnFbSound.FlatStyle = 'Flat'; $btnFbSound.FlatAppearance.BorderSize = 0
 
 $btnFbSound.Add_Click({
@@ -560,7 +574,7 @@ $btnFbSound.Add_MouseDown({
 # dies with the file it names; the repo copy outlives the original. Enabled only
 # while a custom sound is set; the copy is idempotent (re-copying overwrites).
 $btnFbSoundCopy = New-Object Windows.Forms.Button
-$btnFbSoundCopy.Text = 'COPY'; $btnFbSoundCopy.Location = '784,434'; $btnFbSoundCopy.Size = '68,24'; $btnFbSoundCopy.Font = $FONT
+$btnFbSoundCopy.Text = 'COPY'; $btnFbSoundCopy.Location = '784,462'; $btnFbSoundCopy.Size = '68,24'; $btnFbSoundCopy.Font = $FONT
 $btnFbSoundCopy.FlatStyle = 'Flat'; $btnFbSoundCopy.FlatAppearance.BorderSize = 0
 $btnFbSoundCopy.Enabled = $false
 
@@ -604,7 +618,7 @@ $btnFbSoundCopyTip = New-Object Windows.Forms.ToolTip
 Update-FbSoundButton
 
 $log = New-Object Windows.Forms.TextBox
-$log.Location = '640,462'; $log.Size = '212,76'
+$log.Location = '640,494'; $log.Size = '212,56'
 $log.Multiline = $true; $log.ScrollBars = 'Vertical'; $log.ReadOnly = $true
 $log.BorderStyle = 'FixedSingle'
 
@@ -612,7 +626,7 @@ $status = New-Object Windows.Forms.Label
 $status.Location = '12,546'; $status.Size = '840,26'
 
 $form.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
-        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnFbSoundCopy, $log, $status))
+        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $chkLogonTask, $btnFbSound, $btnFbSoundCopy, $log, $status))
 $lstThemes.TabIndex = 0; $clbMyApps.TabIndex = 1; $clbPopularApps.TabIndex = 2
 $btnSelectAll.TabIndex = 3; $btnSelectNone.TabIndex = 4; $btnApply.TabIndex = 5
 $btnSave.TabIndex = 6; $btnDelCustom.TabIndex = 7; $btnRevert.TabIndex = 8; $btnFbSound.TabIndex = 9; $btnFbSoundCopy.TabIndex = 10; $log.TabIndex = 11
@@ -998,5 +1012,8 @@ $tip.SetToolTip($clbMyApps, "Right-click saipenview / smartvac / wildrift to cha
 # A preview's temp PCM WAV is deleted on teardown; closing the window is the
 # last teardown of the session, so sweep it there too.
 $form.Add_FormClosed({ Stop-FbSoundPreview })
+
+$existing = Get-ScheduledTask -TaskName 'Wintage Reapply at Logon' -ErrorAction SilentlyContinue
+if ($existing) { $chkLogonTask.Checked = $true }
 
 [void]$form.ShowDialog()
