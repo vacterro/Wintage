@@ -1,3 +1,3 @@
-done: v1.24.0 shipped (791f3f6, tag pushed) -- Claude transparency fixes (5 commits) + README.ru/et/ded + wiki/ mirror restamped to 1.24.0 + two new release gates; clipboard gate hardened for console-width wrap
-remaining: T-107 README language-switcher; T-102 29 translations; T-103 UI i18n loader
-awaiting: wiki-remote push (qqq); saitranslate handoff stays draft until T-102
+done: v1.26.1 pushed (2f8f250, tag v1.26.1) — Antigravity and FreeBuff would not start at all after 1.26.0; the shim died at load with a SyntaxError in Electron's main process. Repaired, the repainter now travels encoded instead of pasted, shadow-root CSS reaches the desktop apps again, and three new release gates cover the payload every existing gate was green about. Also: orphaned VS Code theme removed, installer's swallowed sound-preference read failure fixed, wiki restamped to 1.26.0 with the FreeBuff ad mentions dropped.
+remaining: T-120 — idle CPU on chatgpt.com after the userscript update needs your reading.
+awaiting: restart Antigravity and FreeBuff; both carry the v1.26.1 payload and neither has been seen running with it.
