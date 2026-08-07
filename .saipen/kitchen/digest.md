@@ -1,3 +1,3 @@
-done: v1.26.1 pushed (2f8f250, tag v1.26.1) — Antigravity and FreeBuff would not start at all after 1.26.0; the shim died at load with a SyntaxError in Electron's main process. Repaired, the repainter now travels encoded instead of pasted, shadow-root CSS reaches the desktop apps again, and three new release gates cover the payload every existing gate was green about. Also: orphaned VS Code theme removed, installer's swallowed sound-preference read failure fixed, wiki restamped to 1.26.0 with the FreeBuff ad mentions dropped.
-remaining: T-120 — idle CPU on chatgpt.com after the userscript update needs your reading.
-awaiting: restart Antigravity and FreeBuff; both carry the v1.26.1 payload and neither has been seen running with it.
+done: dd all -- 11 plan tickets shipped in v1.26.2 (53e31ce, pushed+tagged): portable-path removal, config warnings, manifest recording for browsers, fuse-exe backup, backup pruning, token-helper consolidation, validator debt cleared (validate.py conformant).
+remaining: nothing (TODO empty).
+awaiting: BLOCKED T-102 (saitranslate 29 langs, cleared by ee) and T-065 (YouTube Studio, needs authenticated DOM).
