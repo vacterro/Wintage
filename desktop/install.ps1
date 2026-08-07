@@ -1261,8 +1261,8 @@ if (-not $Target) {
     # "which one did I put on Freebuff again" has no answer short of reading JSON.
     $palettes = (Get-ChildItem (Join-Path $root 'themes') -Filter '*.json' | ForEach-Object { $_.BaseName }) -join '|'
 
-    Say "Wintage desktop targets:" 'Cyan'
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'target', 'application', 'state', 'palette') 'DarkGray'
+    Say (T 'ListingHeader') 'Cyan'
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f (T 'ColTarget'), (T 'ColApp'), (T 'ColState'), (T 'ColPalette')) 'DarkGray'
 
     foreach ($k in $TARGETS.Keys | Sort-Object) {
         $t = $TARGETS[$k]
@@ -1405,11 +1405,11 @@ if (-not $Target) {
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obsidian', ('Obsidian (' + $obsVaults.Count + ' vault(s))'), $obs, 'all (pick in Appearance)')
 
-    Say "Palettes: $palettes" 'DarkGray'
-    Say "  .\install.ps1 -Target freebuff -Palette klite     one app, one palette" 'Cyan'
-    Say "  .\install.ps1 -Target all -Palette goldendefault  everything, one palette" 'Cyan'
-    Say "  .\install.ps1 -Target freebuff -Revert            undo one" 'Cyan'
-    Say "Repainting an already-themed app works while it is running; a first install does not." 'DarkGray'
+    Say ((T 'PalettesLabel') + " $palettes") 'DarkGray'
+    Say (T 'HelpOneApp') 'Cyan'
+    Say (T 'HelpAll') 'Cyan'
+    Say (T 'HelpRevert') 'Cyan'
+    Say (T 'RepaintNote') 'DarkGray'
     return
 }
 
@@ -1418,12 +1418,12 @@ if (-not $Target) {
 if ($node) {
     & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        if (-not $Force) { throw "desktop/out is out of date with themes/*.json. Run 'node tools/build-desktop.js' first, or pass -Force to install what is already built." }
-        Say "WARNING: installing a build that is out of date with themes/*.json (-Force)." 'Yellow'
+        if (-not $Force) { throw (T 'BuildStale') }
+        Say (T 'BuildStaleForce') 'Yellow'
     }
 }
 elseif (-not $Force) {
-    Say "node not found - cannot verify the build is current. Installing what is in desktop/out as-is." 'Yellow'
+    Say (T 'NodeNotFoundBuild') 'Yellow'
 }
 
 # Every target that is neither a VS Code extension nor an Electron app -- i.e. one
@@ -1443,7 +1443,7 @@ $declared = (Get-Command $PSCommandPath).Parameters['Target'].Attributes |
     Select-Object -First 1 -ExpandProperty ValidValues
 $orphans = @($declared | Where-Object { $_ -ne 'all' -and $known -notcontains $_ })
 if ($orphans.Count) {
-    Say "WARNING: -Target all would skip $($orphans -join ', ') - they are selectable but in no dispatch list." 'Yellow'
+    Say ((T 'SkippedByTargets') -f ($orphans -join ', ')) 'Yellow'
 }
 
 $names = if ($Target -eq 'all') { $known } else { @($Target) }

@@ -23,5 +23,22 @@
   "Failed": "VIGA",
   "RegisteredLogonTask": "Sisselogimisülesanne registreeritud",
   "UnregisteredLogonTask": "Sisselogimisülesanne eemaldatud",
-  "LogonTaskNotRegistered": "Sisselogimisülesannet ei leitud -- pole midagi eemaldada."
+  "LogonTaskNotRegistered": "Sisselogimisülesannet ei leitud -- pole midagi eemaldada.",
+  "FoundNotThemed": "found, not themed",
+  "AllPickEditor": "all (pick in the editor)",
+  "CompiledIn": "n/a - colours are compiled in",
+  "ListingHeader": "Wintage desktop targets:",
+  "ColTarget": "target",
+  "ColApp": "application",
+  "ColState": "state",
+  "ColPalette": "palette",
+  "PalettesLabel": "Palettes:",
+  "RepaintNote": "Repainting an already-themed app works while it is running; a first install does not.",
+  "BuildStale": "desktop/out is out of date with themes/*.json. Run 'node tools/build-desktop.js' first, or pass -Force to install what is already built.",
+  "BuildStaleForce": "WARNING: installing a build that is out of date with themes/*.json (-Force).",
+  "NodeNotFoundBuild": "node not found - cannot verify the build is current. Installing what is in desktop/out as-is.",
+  "SkippedByTargets": "WARNING: -Target all would skip {0} - they are selectable but in no dispatch list.",
+  "HelpOneApp": "  .\\install.ps1 -Target freebuff -Palette klite     one app, one palette",
+  "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  everything, one palette",
+  "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            undo one"
 }
