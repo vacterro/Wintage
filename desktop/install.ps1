@@ -117,33 +117,7 @@ function Remove-ManifestEntry($target) {
     }
 }
 
-$LOCALES_DIR = Join-Path $here 'locales'
-
-function Read-I18n($locale) {
-    $file = Join-Path $LOCALES_DIR "$locale.json"
-    if (-not (Test-Path $file)) { return @{} }
-    $ht = @{}
-    try {
-        $obj = (Read-Utf8 $file) | ConvertFrom-Json
-        foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
-    } catch { }
-    return $ht
-}
-
-function Load-I18n($preferredLocale) {
-    $script:i18n = Read-I18n 'en'
-    if ($preferredLocale -and $preferredLocale -ne 'en') {
-        $overlay = Read-I18n $preferredLocale
-        foreach ($k in $overlay.Keys) { $script:i18n[$k] = $overlay[$k] }
-    }
-}
-
-function T($key) {
-    if ($script:i18n -and $script:i18n.ContainsKey($key)) { return $script:i18n[$key] }
-    return $key
-}
-
-Load-I18n ((Get-Culture).TwoLetterISOLanguageName)
+. (Join-Path $PSScriptRoot 'i18n.ps1')
 
 function Get-PayloadVersion {
     $raw = (Read-Utf8 (Join-Path $root 'wintage.user.js')) -split "`n" |

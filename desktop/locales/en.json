@@ -45,5 +45,7 @@
   "SkippedByTargets": "WARNING: -Target all would skip {0} - they are selectable but in no dispatch list.",
   "HelpOneApp": "  .\\install.ps1 -Target freebuff -Palette klite     one app, one palette",
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  everything, one palette",
-  "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            undo one"
+  "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            undo one",
+  "FbSoundOn": "FB SOUND: ON",
+  "StatusHint": "Pick a theme, tick the targets, press APPLY. Editing any colour forks it into Custom."
 }

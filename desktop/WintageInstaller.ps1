@@ -36,6 +36,8 @@ $here = $PSScriptRoot
 $root = Split-Path $here -Parent
 $themeDir = Join-Path $root 'themes'
 
+. (Join-Path $here 'i18n.ps1')
+
 # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ PALETTE LOADING Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 $script:packs = @{}
 function Load-Packs {
@@ -129,7 +131,7 @@ $FONTB = New-Object Drawing.Font('Verdana', 8.25, [Drawing.FontStyle]::Bold, [Dr
 
 # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ FORM Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 $form = New-Object Windows.Forms.Form
-$form.Text = 'Wintage Theme Installer'
+$form.Text = (T 'WintageInstallerTitle')
 $form.Size = New-Object Drawing.Size(880, 620)
 $form.FormBorderStyle = 'FixedSingle'
 $form.MaximizeBox = $false
@@ -143,7 +145,7 @@ if ($form.Width -gt $work.Width -or $form.Height -gt $work.Height) {
 
 # Theme list ------------------------------------------------------------------
 $lblThemes = New-Object Windows.Forms.Label
-$lblThemes.Text = 'THEME'; $lblThemes.Location = '12,10'; $lblThemes.Size = '200,16'; $lblThemes.Font = $FONTB
+$lblThemes.Text = (T 'Palettes'); $lblThemes.Location = '12,10'; $lblThemes.Size = '200,16'; $lblThemes.Font = $FONTB
 $lstThemes = New-Object Windows.Forms.ListBox
 $lstThemes.Location = '12,28'; $lstThemes.Size = '200,210'
 $lstThemes.BorderStyle = 'FixedSingle'
@@ -157,13 +159,13 @@ $lstThemes.IntegralHeight = $false
 # reachable; fake separator rows inside one checklist would be selectable noise.
 $MY_APP_KEYS = @('codenomad', 'saipenview', 'smartvac', 'wildrift')
 $lblMyApps = New-Object Windows.Forms.Label
-$lblMyApps.Text = 'MY APPS'; $lblMyApps.Location = '12,248'; $lblMyApps.Size = '200,16'; $lblMyApps.Font = $FONTB
+$lblMyApps.Text = (T 'MyApps'); $lblMyApps.Location = '12,248'; $lblMyApps.Size = '200,16'; $lblMyApps.Font = $FONTB
 $clbMyApps = New-Object Windows.Forms.CheckedListBox
 $clbMyApps.Location = '12,266'; $clbMyApps.Size = '200,78'
 $clbMyApps.BorderStyle = 'FixedSingle'; $clbMyApps.CheckOnClick = $true; $clbMyApps.IntegralHeight = $false
 
 $lblPopularApps = New-Object Windows.Forms.Label
-$lblPopularApps.Text = 'POPULAR APPS'; $lblPopularApps.Location = '12,352'; $lblPopularApps.Size = '200,16'; $lblPopularApps.Font = $FONTB
+$lblPopularApps.Text = (T 'PopularApps'); $lblPopularApps.Location = '12,352'; $lblPopularApps.Size = '200,16'; $lblPopularApps.Font = $FONTB
 $clbPopularApps = New-Object Windows.Forms.CheckedListBox
 $clbPopularApps.Location = '12,370'; $clbPopularApps.Size = '200,132'
 $clbPopularApps.BorderStyle = 'FixedSingle'; $clbPopularApps.CheckOnClick = $true; $clbPopularApps.IntegralHeight = $false
@@ -270,22 +272,22 @@ $clbMyApps.Add_MouseDown($onTargetMouseDown)
 $clbPopularApps.Add_MouseDown($onTargetMouseDown)
 
 $btnSelectAll = New-Object Windows.Forms.Button
-$btnSelectAll.Text = 'ALL'; $btnSelectAll.Location = '12,508'; $btnSelectAll.Size = '96,24'; $btnSelectAll.Font = $FONT
+$btnSelectAll.Text = (T 'SelectAll'); $btnSelectAll.Location = '12,508'; $btnSelectAll.Size = '96,24'; $btnSelectAll.Font = $FONT
 $btnSelectAll.FlatStyle = 'Flat'; $btnSelectAll.FlatAppearance.BorderSize = 0
 
 $btnSelectNone = New-Object Windows.Forms.Button
-$btnSelectNone.Text = 'NONE'; $btnSelectNone.Location = '116,508'; $btnSelectNone.Size = '96,24'; $btnSelectNone.Font = $FONT
+$btnSelectNone.Text = (T 'SelectNone'); $btnSelectNone.Location = '116,508'; $btnSelectNone.Size = '96,24'; $btnSelectNone.Font = $FONT
 $btnSelectNone.FlatStyle = 'Flat'; $btnSelectNone.FlatAppearance.BorderSize = 0
 
 # Preview ---------------------------------------------------------------------
 $lblPreview = New-Object Windows.Forms.Label
-$lblPreview.Text = 'PREVIEW'; $lblPreview.Location = '226,10'; $lblPreview.Size = '200,16'; $lblPreview.Font = $FONTB
+$lblPreview.Text = (T 'Preview'); $lblPreview.Location = '226,10'; $lblPreview.Size = '200,16'; $lblPreview.Font = $FONTB
 $preview = New-Object Windows.Forms.Panel
 $preview.Location = '226,28'; $preview.Size = '400,300'
 
 # Swatches --------------------------------------------------------------------
 $lblTokens = New-Object Windows.Forms.Label
-$lblTokens.Text = 'COLOURS  (click a swatch to change - switches to Custom)'
+$lblTokens.Text = (T 'Tokens')
 $lblTokens.Location = '226,338'; $lblTokens.Size = '420,16'; $lblTokens.Font = $FONTB
 $swatchPanel = New-Object Windows.Forms.Panel
 $swatchPanel.Location = '226,356'; $swatchPanel.Size = '400,180'
@@ -296,23 +298,23 @@ $lblInfo = New-Object Windows.Forms.Label
 $lblInfo.Location = '640,28'; $lblInfo.Size = '212,300'; $lblInfo.Font = $FONT
 
 $btnApply = New-Object Windows.Forms.Button
-$btnApply.Text = 'APPLY'; $btnApply.Location = '640,330'; $btnApply.Size = '212,34'; $btnApply.Font = $FONTB
+$btnApply.Text = (T 'Apply'); $btnApply.Location = '640,330'; $btnApply.Size = '212,34'; $btnApply.Font = $FONTB
 $btnApply.FlatStyle = 'Flat'; $btnApply.FlatAppearance.BorderSize = 0
 
 $btnSave = New-Object Windows.Forms.Button
-$btnSave.Text = 'SAVE'; $btnSave.Location = '640,370'; $btnSave.Size = '104,26'
+$btnSave.Text = (T 'Save'); $btnSave.Location = '640,370'; $btnSave.Size = '104,26'
 $btnSave.FlatStyle = 'Flat'; $btnSave.FlatAppearance.BorderSize = 0
 
 $btnDelCustom = New-Object Windows.Forms.Button
-$btnDelCustom.Text = 'DEL CUSTOM'; $btnDelCustom.Location = '748,370'; $btnDelCustom.Size = '104,26'
+$btnDelCustom.Text = (T 'DelCustom'); $btnDelCustom.Location = '748,370'; $btnDelCustom.Size = '104,26'
 $btnDelCustom.FlatStyle = 'Flat'; $btnDelCustom.FlatAppearance.BorderSize = 0
 
 $btnRevert = New-Object Windows.Forms.Button
-$btnRevert.Text = 'REVERT SELECTED TARGETS'; $btnRevert.Location = '640,402'; $btnRevert.Size = '212,26'
+$btnRevert.Text = (T 'Revert'); $btnRevert.Location = '640,402'; $btnRevert.Size = '212,26'
 $btnRevert.FlatStyle = 'Flat'; $btnRevert.FlatAppearance.BorderSize = 0
 
 $chkLogonTask = New-Object Windows.Forms.CheckBox
-$chkLogonTask.Text = 'Re-apply theme at logon'
+$chkLogonTask.Text = (T 'LogonTask')
 $chkLogonTask.Location = '640,436'; $chkLogonTask.Size = '212,20'
 $chkLogonTask.Font = $FONT
 $chkLogonTask.FlatStyle = 'Flat'
@@ -525,13 +527,13 @@ function Save-FbSound {
 }
 function Update-FbSoundButton {
     if ($script:fbSoundPath) {
-        $btnFbSound.Text = 'FB SOUND: ON'
+        $btnFbSound.Text = (T 'FbSoundOn')
         $btnFbSoundTip.SetToolTip($btnFbSound, "FreeBuff completion sound:`n$($script:fbSoundPath)`nLeft-click to change, right-click to clear. COPY stores it inside the repo so it survives deleting the original.")
         $btnFbSoundCopy.Enabled = $true
         $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Save a copy inside the repo (sounds\freebuff.<ext>) so the sound outlives the original file.')
     }
     else {
-        $btnFbSound.Text = 'FB SOUND'
+        $btnFbSound.Text = (T 'FbSound')
         $btnFbSoundTip.SetToolTip($btnFbSound, 'FreeBuff completion sound: stock.' + [Environment]::NewLine + 'Left-click to pick an audio file, right-click to clear.')
         $btnFbSoundCopy.Enabled = $false
         $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Pick a .wav first - COPY stores it inside the repo.')
@@ -540,7 +542,7 @@ function Update-FbSoundButton {
 Load-FbSound
 
 $btnFbSound = New-Object Windows.Forms.Button
-$btnFbSound.Text = 'FB SOUND'; $btnFbSound.Location = '640,462'; $btnFbSound.Size = '140,24'; $btnFbSound.Font = $FONT
+$btnFbSound.Text = (T 'FbSound'); $btnFbSound.Location = '640,462'; $btnFbSound.Size = '140,24'; $btnFbSound.Font = $FONT
 $btnFbSound.FlatStyle = 'Flat'; $btnFbSound.FlatAppearance.BorderSize = 0
 
 $btnFbSound.Add_Click({
@@ -574,7 +576,7 @@ $btnFbSound.Add_MouseDown({
 # dies with the file it names; the repo copy outlives the original. Enabled only
 # while a custom sound is set; the copy is idempotent (re-copying overwrites).
 $btnFbSoundCopy = New-Object Windows.Forms.Button
-$btnFbSoundCopy.Text = 'COPY'; $btnFbSoundCopy.Location = '784,462'; $btnFbSoundCopy.Size = '68,24'; $btnFbSoundCopy.Font = $FONT
+$btnFbSoundCopy.Text = (T 'FbSoundCopy'); $btnFbSoundCopy.Location = '784,462'; $btnFbSoundCopy.Size = '68,24'; $btnFbSoundCopy.Font = $FONT
 $btnFbSoundCopy.FlatStyle = 'Flat'; $btnFbSoundCopy.FlatAppearance.BorderSize = 0
 $btnFbSoundCopy.Enabled = $false
 
@@ -1005,7 +1007,7 @@ Refresh-Swatches
 Update-Info
 Skin-Self
 $lstThemes.Add_SelectedIndexChanged({ Skin-Self })
-$status.Text = 'Pick a theme, tick the targets, press APPLY. Editing any colour forks it into Custom.'
+$status.Text = (T 'StatusHint')
 
 # The folder is asked for once and remembered, so the way to CHANGE it has to be
 # discoverable somewhere. A tooltip rather than a longer label: the label is 200px
