@@ -88,7 +88,30 @@ const movedAsar = path.join(appDir, 'app.asar');
 const unpacked = asar + '.unpacked';
 const movedUnpacked = movedAsar + '.unpacked';
 
+function resolveExe() {
+  return arg('exe') || (() => {
+    const dir = path.dirname(resources);
+    const skip = /^(uninstall|elevate|squirrel|update)/i;
+    const exes = fs.readdirSync(dir).filter(n => n.endsWith('.exe') && !skip.test(n));
+    if (exes.length !== 1) return null;
+    return path.join(dir, exes[0]);
+  })();
+}
+
+// defuse() flips two fuse bytes inside the app EXE; those bytes are not covered by
+// the asar relocation revert, so defuse() leaves a byte-exact backup beside the EXE.
+// Restore it here so --revert undoes the whole install, not half of it.
+function restoreFuseBackup(exe) {
+  if (!exe) return;
+  const bak = exe + '.wintage-fuse.bak';
+  if (!fs.existsSync(bak)) return;
+  fs.copyFileSync(bak, exe);
+  fs.unlinkSync(bak);
+  console.log('install-electron: restored original fuse bytes in ' + exe + ' from backup');
+}
+
 if (has('revert')) {
+  restoreFuseBackup(resolveExe());
   if (inPlace) {
     const asarBak = asar + '.bak';
     if (!fs.existsSync(asarBak)) { console.log('install-electron: no backup found at ' + asarBak); process.exit(0); }
@@ -175,13 +198,7 @@ if (!fs.existsSync(asar)) die('no app.asar in ' + resources + ' - this does not 
 // Claude's desktop app broke: installed cleanly, then would not start. Reading the
 // fuses out of the binary turns a mystery into a refusal with a reason.
   const { blockers, defuse } = require('./electron-fuses.js');
-  const exe = arg('exe') || (() => {
-    const dir = path.dirname(resources);
-    const skip = /^(uninstall|elevate|squirrel|update)/i;
-    const exes = fs.readdirSync(dir).filter(n => n.endsWith('.exe') && !skip.test(n));
-    if (exes.length !== 1) return null;
-    return path.join(dir, exes[0]);
-  })();
+  const exe = resolveExe();
   if (exe) {
     const b = blockers(exe);
     if (b.reasons.length) {

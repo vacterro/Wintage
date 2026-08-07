@@ -80,6 +80,7 @@ function blockers(exe) {
 function defuse(exe) {
   let data;
   try { data = fs.readFileSync(exe); } catch (e) { return { error: e.message }; }
+  const original = Buffer.from(data);
   const i = data.indexOf(SENTINEL);
   if (i < 0) return { error: 'no fuse wire' };
   const at = i + SENTINEL.length;
@@ -87,10 +88,13 @@ function defuse(exe) {
   if (data[at + 6] === 0x31) { data[at + 6] = 0x30; changed = true; } // EnableEmbeddedAsarIntegrityValidation
   if (data[at + 7] === 0x31) { data[at + 7] = 0x30; changed = true; } // OnlyLoadAppFromAsar
   if (changed) {
+    const backup = exe + '.wintage-fuse.bak';
+    try { fs.writeFileSync(backup, original); }
+    catch (e) { return { error: 'could not back up ' + exe + ' to ' + backup + ': ' + e.message }; }
     try { fs.writeFileSync(exe, data); }
     catch (e) { return { error: 'could not write ' + exe + ': ' + e.message + ' (is the app running?)' }; }
   }
-  return { success: true, changed };
+  return { success: true, changed, backup: changed ? exe + '.wintage-fuse.bak' : null };
 }
 
 module.exports = { readFuses, blockers, defuse };
