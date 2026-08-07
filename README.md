@@ -66,7 +66,7 @@ or have their colours compiled in -- is written down in
 
 ## Features
 
-- **Dark golden palette** — deep brown-black canvas `#1A0F05`, golden text `#D4B87A`, golden bevel highlights `#C0A060`. Solid flat surfaces only: no gradients, no blur, no transparency effects.
+- **Golden Default palette** — deep brown-black canvas `#1A0F05`, golden text `#D4B87A`, golden bevel highlights `#C0A060`. Solid flat surfaces only: no gradients, no blur, no transparency effects.
 - **Classic 3D bevels** — buttons raised, inputs sunken, pressed buttons push in (with the authentic 1px label shift). Scrollbars are full 16px Win95-style, beveled thumb and buttons included.
 - **Radius killer** — `border-radius: 0` enforced everywhere, including framework CSS variables (Bootstrap, Material, YouTube, Reddit).
 - **Motion is forbidden** — all transitions and animations are zeroed out. State changes are instant, like a real 1995 UI.
@@ -81,6 +81,10 @@ or have their colours compiled in -- is written down in
 - **Safety guard** — the script disables itself on OAuth, captcha, banking, and payment pages so critical flows are never restyled.
 
 ## Palette
+
+The table below shows 10 of the 21 Golden Default palette tokens. Every shipped
+palette defines all 21; the remaining 11 cover bevel structure, text secondary,
+semantic colours (success/warning/danger), selection, and per-target specifics.
 
 | Token | Hex | Used for |
 |---|---|---|

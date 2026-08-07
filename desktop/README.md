@@ -18,7 +18,7 @@ powershell -File desktop\WintageInstaller.ps1
 ```
 
 Theme list with colour chips, the targets found on this machine, a live Win95
-preview, and all eighteen colour tokens as editable swatches. Editing any swatch
+preview, and all twenty-one colour tokens as editable swatches. Editing any swatch
 forks the palette into **Custom** rather than changing a shipped theme under you.
 The panel on the right shows live WCAG contrast for the three tokens that carry
 text — a palette that FAILs there is refused by the build gate anyway, so it is
@@ -39,11 +39,11 @@ theme, so the GUI cannot drift away from the command line.
 ## The command line
 
 ```powershell
-.\install.ps1                                  # what is here, what is themed, with which palette
-.\install.ps1 -Target freebuff -Palette klite  # one app, one palette
-.\install.ps1 -Target all -Palette goldendefault # everything
-.\install.ps1 -Target all -WhatIf              # say what would change, touch nothing
-.\install.ps1 -Target freebuff -Revert         # undo one
+.\desktop\install.ps1                                  # what is here, what is themed, with which palette
+.\desktop\install.ps1 -Target freebuff -Palette klite  # one app, one palette
+.\desktop\install.ps1 -Target all -Palette goldendefault # everything
+.\desktop\install.ps1 -Target all -WhatIf              # say what would change, touch nothing
+.\desktop\install.ps1 -Target freebuff -Revert         # undo one
 ```
 
 `-Palette` defaults to `goldendefault` (**Golden Default**). The GUI opens on the
