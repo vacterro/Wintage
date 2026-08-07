@@ -294,7 +294,7 @@ $ELECTRON = @{
     }
 }
 
-# Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ MPC-HC (K-Lite) Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
+# ---- MPC-HC (K-Lite) ----
 # Native Win32, no stylesheet, no injection point. Its dark theme's colours are
 # COMPILED IN (CMPCTheme in the MPC-HC source) and no registry value exposes them,
 # so this target cannot carry a palette at all. What it can do is switch the dark
@@ -775,7 +775,7 @@ function Invoke-SmartVac {
     if (-not $PSCmdlet.ShouldProcess($pyFile, "Apply $PaletteSlug theme")) { return }
     
     Copy-Item $pyFile $bakFile -Force
-    $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw | ConvertFrom-Json
+    $json = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json")) | ConvertFrom-Json
     $t = $json.tokens
     $code = Read-Utf8 $pyFile
     
@@ -835,7 +835,7 @@ function Invoke-WildRift {
     if (-not (Test-Path $bakFile)) {
         Copy-Item $pyFile $bakFile -Force
     }
-    $json = Get-Content (Join-Path $root "themes/$PaletteSlug.json") -Raw | ConvertFrom-Json
+    $json = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json")) | ConvertFrom-Json
     $pyTokens = "TOKENS = {`r`n"
     foreach ($p in $json.tokens.psobject.properties) {
         $pyTokens += "    `"$($p.Name)`": `"$($p.Value)`",`r`n"
@@ -927,7 +927,7 @@ function Invoke-Saipenview {
         # no font, no padding, no border width. Colours change, geometry cannot.
         $jsonPath = Join-Path $root "themes\$PaletteSlug.json"
         if (-not (Test-Path $jsonPath)) { Say "SAIPENVIEW: theme file not found ($PaletteSlug.json)" 'Red'; return }
-        $t = (Get-Content $jsonPath -Raw | ConvertFrom-Json).tokens
+        $t = ((Read-Utf8 $jsonPath) | ConvertFrom-Json).tokens
 
         # Always recolour from the pristine backup, never from the current file: patching
         # an already-patched file is fine here (the regex is idempotent) but starting from
@@ -1386,14 +1386,14 @@ if (-not $Target) {
     $tc1Dir = Join-Path $env:APPDATA 'GHISLER'
     $tc1Ini = Join-Path $tc1Dir 'wincmd.ini'
     $tc1 = if (Test-Path $tc1Ini) {
-        if ((Get-Content $tc1Ini | Select-String "ActiveTitleText=") -ne $null) { 'themed' } else { 'found, not themed' }
+        if ((Read-Utf8 $tc1Ini) -match "ActiveTitleText=") { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'totalcmd', 'Total Commander', $tc1, '-')
 
     $tc2Dir = Join-Path $env:LOCALAPPDATA 'GHISLER'
     $tc2Ini = Join-Path $tc2Dir 'wincmd.ini'
     $tc2 = if (Test-Path $tc2Ini) {
-        if ((Get-Content $tc2Ini | Select-String "ActiveTitleText=") -ne $null) { 'themed' } else { 'found, not themed' }
+        if ((Read-Utf8 $tc2Ini) -match "ActiveTitleText=") { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'totalcmd2', 'Total Commander (Local)', $tc2, '-')
 
@@ -1474,7 +1474,7 @@ foreach ($name in $names) {
     if ($name -eq 'totalcmd2') { Invoke-TotalCmd -Index 2 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'obsidian') { Invoke-Obsidian -DoRevert:$Revert -PaletteSlug $Palette; continue }
 
-    # Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Electron targets Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
+                # ---- Electron targets ----
     if ($ELECTRON.ContainsKey($name)) {
         $e = $ELECTRON[$name]
         if ($name -eq 'codenomad') { Remove-DeadCodeNomadCss }
