@@ -173,7 +173,11 @@ function toPack(name, raw) {
 }
 
 const source = arg('source', DEFAULT_SOURCE);
-if (!fs.existsSync(source)) {
+if (!source || !fs.existsSync(source)) {
+  if (checkOnly) {
+    console.log('import-fastprompter: no FastPrompter source available - freshness check skipped');
+    process.exit(0);
+  }
   console.error('import-fastprompter: source not found: ' + source);
   console.error('  pass --source <path to fastprompter themes.py>');
   process.exit(1);

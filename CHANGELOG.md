@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.2] - 2026-08-07
+
+- Portable browser root is no longer hardcoded to a personal-machine path. `tools/install-browsers.ps1` defaults to an empty `-PortableRoot` and only scans it when one is supplied (the installer passes the remembered `portable` entry from `paths.json`); the same hardcoded path was removed from prose in `desktop/README.md` and from the FastPrompter importer's default source.
+- Corrupt config is no longer silent. `Read-PathsJson` and `Read-Manifest` now warn when `paths.json` or `installed.json` fails to parse, instead of returning an empty table that looks identical to "nothing configured".
+- The browsers target now records itself in the install manifest, so `-Reapply` can rediscover it like every other target; the fuse-deflip in `tools/electron-fuses.js` backs up the original EXE before mutating it and `--revert` restores those bytes.
+- Installer housekeeping: a stale comment about the removed `FLOAT_FIX` patch was corrected, the GUI's mojibaked section dividers were cleaned, config reads switched to the UTF-8-safe `Read-Utf8`, backup folders are pruned to the eight newest, palette-token reads were consolidated into one helper, and generated `desktop/out/` output is no longer tracked in git (rebuilt with `node tools/build-desktop.js`).
+
 ## [1.26.1] - 2026-08-06
 
 - Fixed: Antigravity and FreeBuff would not start at all after 1.26.0. Retiring the old floating-surface payload cut its tail and left its head behind, so the next declaration closed that unterminated string instead of opening its own and the shim died on load with `SyntaxError: Invalid or unexpected token`. The error is thrown in Electron's main process, before any window exists, which is why it presented as the application refusing to launch rather than as a theme problem.

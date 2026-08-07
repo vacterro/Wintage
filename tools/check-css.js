@@ -256,8 +256,10 @@ function checkFloatingSurfaces() {
   }
   // Wide enough to reach the hit test at the end of the block. It was 3000 and
   // the block outgrew it, which reported the two measurements at the bottom as
-  // missing -- a gate lying in the safe direction is still a gate lying.
-  const block = src.slice(i, i + 6000);
+  // missing -- a gate lying in the safe direction is still a gate lying. It was
+  // 6000 and the block outgrew that too (a comment about the repainter's shim
+  // split added two lines), so the hit test now lives past the window's end.
+  const block = src.slice(i, i + 8000);
   for (const [needle, what] of [
     ['cs.position', 'out of flow (position)'],
     ['getBoundingClientRect', 'big enough to read (measured rect)'],
