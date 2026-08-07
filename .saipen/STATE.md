@@ -1,7 +1,7 @@
 ---
 phase: DONE
 task: none
-next_action: WAIT: user brake -- qqq done: saiwiki v1.26.2 wiki collected + shipped (T-166), origin main = 9fb22b9, Wintage.wiki master = 1a54ffb.
+next_action: WAIT: user brake -- proposal plan on the board (T-167..T-170), pick a ticket or say continue to take the top one.
 blocker: none
 agent: claude
 mode: full
@@ -11,6 +11,6 @@ style_contract: ded-4ae736e4
 saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
 goal_mode: false
 transition_from: PREPARE
-last_event: 547
-updated: 2026-08-07T22:37:00Z
+last_event: 548
+updated: 2026-08-07T22:41:00Z
 ---
