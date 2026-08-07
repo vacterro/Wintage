@@ -30,11 +30,11 @@ a console window. The legacy `.cmd` launcher forwards to the same hidden host;
 Command line:
 
 ```powershell
-.\install.ps1                                  # what is here, what is themed, with which palette
-.\install.ps1 -Target freebuff -Palette klite  # one app, one palette
-.\install.ps1 -Target all -Palette goldendefault # everything
-.\install.ps1 -Target all -WhatIf              # say what would change, touch nothing
-.\install.ps1 -Target freebuff -Revert         # undo one
+.\desktop\install.ps1                                  # what is here, what is themed, with which palette
+.\desktop\install.ps1 -Target freebuff -Palette klite  # one app, one palette
+.\desktop\install.ps1 -Target all -Palette goldendefault # everything
+.\desktop\install.ps1 -Target all -WhatIf              # say what would change, touch nothing
+.\desktop\install.ps1 -Target freebuff -Revert         # undo one
 ```
 
 See [Desktop](Desktop.md) for what each target can and cannot reach.

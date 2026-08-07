@@ -1,6 +1,7 @@
 # BOARD
 
 ## DOING
+- [/] T-166 [from saiwiki WIKI-002, qqq collect] integrate ready wiki package at 5e79f51 (v1.26.2): apply 8 kitchen/wiki pages to repo wiki/ mirror (.md-adapted links), push kitchen pages to github.com/vacterro/Wintage.wiki master, commit + push origin | verify: repo wiki/ matches kitchen content with .md links only; Wintage.wiki remote master carries the 8 bare-link pages; validate.py conformant
 
 ## TODO
 

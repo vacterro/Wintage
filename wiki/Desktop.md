@@ -81,7 +81,8 @@ the fixed-width cell grid, so both hosts use Consolas.
 
 ## Rebuilding
 
-Everything under `desktop/out/` is generated from `themes/*.json`:
+Everything under `desktop/out/` is generated from `themes/*.json`. It is not
+tracked in git, so a fresh clone must build it once before installing:
 
 ```powershell
 node ..\tools\build-desktop.js          # rebuild all targets

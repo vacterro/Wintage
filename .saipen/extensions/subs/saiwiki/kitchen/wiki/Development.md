@@ -7,7 +7,8 @@
 - `themes/*.json` — the sixteen palette packs, the single source of truth for colour.
 - `desktop/` — the desktop theme subsystem: `tools/build-desktop.js` fills `${token}`
   templates from the packs, `install.ps1` installs into the user profile,
-  `WintageInstaller.ps1` is the WinForms GUI.
+  `WintageInstaller.ps1` is the WinForms GUI. Generated `desktop/out/` is
+  gitignored and rebuilt with `node tools/build-desktop.js`.
 - `tools/` — generators and gates: `apply-themes.js`, `derive-palette.js`,
   `check-css.js`, `build-desktop.js`, `electron-fuses.js`, `inspect-electron.js`
   (reads a live themed app over CDP), plus the test harnesses.
