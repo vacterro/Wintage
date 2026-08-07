@@ -476,6 +476,13 @@ hr { border: none !important; border-top: 2px solid #494C50 !important; backgrou
 .status-indicator.session-status.session-permission > .status-dot,
 .status-indicator.session-status.session-retrying > .status-dot { background-color: #963030 !important; }
 
+/* Claude Code / Claude Desktop reports thinking on this dot. The wipe above
+   spares it so the app's own colour survives; darken the running (thinking)
+   state explicitly so it reads as work in progress instead of a bright pin.
+   Same warning token CodeNomad's session-working uses, so "thinking" means
+   the same colour across both apps. */
+.status-dot[data-kind="running"] { background-color: #969630 !important; }
+
 /* Status colours (--success/--warning/--danger) are deliberately NOT applied by
    class-name substring here. '[class*="error" i]' matches 'error-boundary',
    '[class*="valid" i]' matches 'validation-container' — both are large wrappers,
