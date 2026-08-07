@@ -8,9 +8,9 @@ mode: full
 saipen_version: 7
 schema_version: 3
 style_contract: ded-4ae736e4
-saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
+saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
 goal_mode: false
 transition_from: PREPARE
-last_event: 542
-updated: 2026-08-07T13:10:00Z
+last_event: 544
+updated: 2026-08-07T13:20:25Z
 ---
