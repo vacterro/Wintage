@@ -9,9 +9,10 @@
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** e24adf7f9383b5ce6cdb3380e3b6b5ee518d759a (project HEAD)
+- **source_head:** 8c2ed25 (project HEAD)
   (previously: 6e18ec1 authored, dad7f2a restamped v1.24.0, eeb2515 re-verified,
-  3e1e77a v1.26.0 restamp, now v1.26.1 at e24adf7)
+  3e1e77a v1.26.0 restamp, e24adf7 v1.26.1, now 8c2ed25 — README unchanged since
+  e24adf7, only code/installer/artifact changes, wiki content still faithful)
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
   Known-Behaviors, Development, _Sidebar, _Footer). Source invariants: README.md
   (Golden Default palette label, 10-of-21 note), desktop/README.md (target table
