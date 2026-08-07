@@ -33,6 +33,7 @@ param(
     [string]$SmartVacPath,
     [string]$WildRiftPath,
     [switch]$Reapply,
+    [switch]$Status,
     [switch]$Quiet,
     [switch]$RegisterLogonTask,
     [switch]$UnregisterLogonTask
@@ -1238,6 +1239,21 @@ if ($Reapply) {
 
 if ($RegisterLogonTask) { Register-WintageLogonTask; exit 0 }
 if ($UnregisterLogonTask) { Unregister-WintageLogonTask; exit 0 }
+
+if ($Status) {
+    $manifest = Read-Manifest
+    if ($manifest.Count -eq 0) { Say 'Nothing installed -- the manifest is empty.' 'Green'; exit 0 }
+    Say ('{0,-14} {1,-18} {2,-17} {3}' -f 'target', 'palette', 'payload ver', 'path') 'DarkGray'
+    $sorted = @($manifest.Keys | Sort-Object)
+    foreach ($key in $sorted) {
+        $d = $manifest[$key]
+        $pal = if ($d.palette) { $d.palette } else { '-' }
+        $ver = if ($d.payloadVersion) { $d.payloadVersion } else { '-' }
+        $path = if ($d.path) { $d.path } else { '-' }
+        Say ('{0,-14} {1,-18} {2,-17} {3}' -f $key, $pal, $ver, $path)
+    }
+    exit 0
+}
 
 if (-not $Target) {
     # The whole point of the listing is answering three questions at once: is the app
