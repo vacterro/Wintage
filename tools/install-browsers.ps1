@@ -3,7 +3,7 @@ param(
     [string]$Palette = 'goldendefault',
     [switch]$ListJson,
     [switch]$Revert,
-    [string]$PortableRoot = 'V:\___VAC\__P',
+    [string]$PortableRoot = '',
     [string]$StageRoot = (Join-Path $env:LOCALAPPDATA 'Wintage\browser-theme'),
     [string]$Catalog,
     [switch]$NoLaunch,
