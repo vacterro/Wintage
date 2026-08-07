@@ -1671,9 +1671,11 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     // for it -- no error, no failing gate, just a hole in the theme that the user
     // finds. So the test below asks what a popover IS, in terms the layout engine
     // answers and a rename cannot change: out of flow, big enough to read, and
-    // actually covering content it does not own. The same test runs in Electron
-    // apps as the shim's FLOAT_FIX, which is the only place it can run there --
-    // that path ships CSS with no repainter behind it.
+    // actually covering content it does not own. The same test is part of the
+    // repainter block below, which build-desktop.js extracts (REPAINTER
+    // START/END) and ships inside the Electron shim; there it is the whole
+    // mechanism -- FLOAT_FIX was folded into the repainter and no longer exists
+    // as a separate patch.
     //
     // The last of the three replaced an "explicit z-index, not auto" test that
     // shipped in the first pass and was wrong on the first app it met: Claude's

@@ -76,7 +76,10 @@ function Read-PathsJson {
         $ht = @{}
         foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
         return $ht
-    } catch { return @{} }
+    } catch {
+        Write-Warning "could not read ${PathsPath}: $($_.Exception.Message) -- remembered paths ignored"
+        return @{}
+    }
 }
 
 function Read-Manifest {
@@ -88,7 +91,10 @@ function Read-Manifest {
         $ht = @{}
         foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
         return $ht
-    } catch { return @{} }
+    } catch {
+        Write-Warning "could not read ${ManifestPath}: $($_.Exception.Message) -- treating as empty"
+        return @{}
+    }
 }
 
 function Write-Manifest($manifest) {

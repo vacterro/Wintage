@@ -22,7 +22,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(ROOT, 'themes');
-const DEFAULT_SOURCE = 'V:/___VAC/__K/__CODE/_PY/_FastPrompter/src/fastprompter/theme/themes.py';
+const DEFAULT_SOURCE = '';
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf('--' + name);
