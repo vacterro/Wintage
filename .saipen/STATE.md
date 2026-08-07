@@ -1,25 +1,16 @@
 ---
 phase: DONE
 task: none
-next_action: WAIT: blocked -- untriaged MARKHUNT findings in ## BLOCKED; triage into ## TODO or dismiss
-blocker: 6 [MARKHUNT] tickets (T-138..T-143) from aa pass E-489 need human triage
-agent: claude-opus-5
+next_action: WAIT: user brake -- 3 new [MARKHUNT] findings in BLOCKED (T-152..T-154) need triage. T-144 i18n GUI in DOING (claude-code-5). Proposal plan T-148..T-151, T-146..T-147 TODO, 5 demoted, T-102+T-138..T-143+T-152..T-154 BLOCKED.
+blocker: none
+agent: opencode
 mode: full
 saipen_version: 7
 schema_version: 3
-style_contract: ded-97af6dca
+style_contract: ded-4ae736e4
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN\saipen
-goal_mode: true
-goal_waves: 1
-goal_tickets: 16
+goal_mode: false
 transition_from: MARKHUNT
-last_event: 489
-updated: 2026-08-07T00:45:00Z
+last_event: 501
+updated: 2026-08-07T00:33:00Z
 ---
-
-# Current wave — three apps reported unthemed, one common cause each (v1.22.0)
-
-T-089 complete locally and deployed: Golden Default is first, available targets
-start selected, Windows Terminal + conhost are first-class targets, conhost is live
-on goldendefault, and CodeNomad's native session status colours are restored. The
-user needs to restart CodeNomad and existing console windows to see the new payload.

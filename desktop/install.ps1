@@ -22,16 +22,16 @@ param(
     [string]$Palette = 'goldendefault',
     [switch]$Revert,
     [switch]$Force,
-    [string]$CodeNomadPath = 'V:\___VAC\__P\__SOFT\___CODETOOLS\CodeNomad',
+    [string]$CodeNomadPath,
     [string]$TotalCmdIni,
     [string]$TotalCmd2Ini,
-    [string]$PortableBrowserRoot = 'V:\___VAC\__P',
+    [string]$PortableBrowserRoot,
     [string]$BrowserStageRoot = (Join-Path $env:LOCALAPPDATA 'Wintage\browser-theme'),
     [string]$BrowserCatalog,
     [switch]$NoBrowserLaunch,
-    [string]$SaipenviewPath = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\',
-    [string]$SmartVacPath = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\',
-    [string]$WildRiftPath = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\',
+    [string]$SaipenviewPath,
+    [string]$SmartVacPath,
+    [string]$WildRiftPath,
     [switch]$Reapply,
     [switch]$Quiet,
     [switch]$RegisterLogonTask,
@@ -64,6 +64,19 @@ function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllL
 
 $WintageAppData = Join-Path $env:APPDATA 'Wintage'
 $ManifestPath = Join-Path $WintageAppData 'installed.json'
+$PathsPath = Join-Path $WintageAppData 'paths.json'
+
+function Read-PathsJson {
+    if (-not (Test-Path $PathsPath)) { return @{} }
+    try {
+        $json = (Read-Utf8 $PathsPath).Trim()
+        if (-not $json) { return @{} }
+        $obj = $json | ConvertFrom-Json
+        $ht = @{}
+        foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
+        return $ht
+    } catch { return @{} }
+}
 
 function Read-Manifest {
     if (-not (Test-Path $ManifestPath)) { return @{} }
@@ -567,9 +580,9 @@ function Invoke-TotalCmd {
     $appName = if ($Index -eq 1) { 'Total Commander' } else { 'Total Commander (Local)' }
     $manifestName = if ($Index -eq 1) { 'totalcmd' } else { 'totalcmd2' }
     $candidates = if ($Index -eq 1) {
-        @($TotalCmdIni, 'V:\___VAC\__P\_TOTALCMD\wincmd.ini', (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
+        @($TotalCmdIni, (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
     } else {
-        @($TotalCmd2Ini, 'V:\___VAC\__P\_TOTALCMD2\wincmd.ini', (Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini'))
+        @($TotalCmd2Ini, (Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini'))
     }
     $ini = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 
@@ -1169,6 +1182,16 @@ function Invoke-MpcHc {
 # silently reported "not themed" instead of "fused shut", which is the one line in
 # the table a user actually needs when an app refuses to start.
 $node = Get-Command node -ErrorAction SilentlyContinue
+
+# Resolve source-tree paths from paths.json when not passed on the command line.
+# The GUI writes remembered paths there; the CLI consults the same file so a path
+# entered once is available to every install.ps1 invocation without repeating it.
+$pathsJson = Read-PathsJson
+if (-not $SaipenviewPath -and $pathsJson.ContainsKey('saipenview')) { $SaipenviewPath = $pathsJson['saipenview'] }
+if (-not $SmartVacPath -and $pathsJson.ContainsKey('smartvac')) { $SmartVacPath = $pathsJson['smartvac'] }
+if (-not $WildRiftPath -and $pathsJson.ContainsKey('wildrift')) { $WildRiftPath = $pathsJson['wildrift'] }
+if (-not $CodeNomadPath -and $pathsJson.ContainsKey('codenomad')) { $CodeNomadPath = $pathsJson['codenomad'] }
+if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $PortableBrowserRoot = $pathsJson['portable'] }
 
 # ---- Reapply mode: read manifest, rediscover paths, re-apply outdated payloads ----
 if ($Reapply) {
