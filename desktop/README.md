@@ -171,7 +171,8 @@ Verdana collides inside the fixed-width cell grid used by both terminal hosts.
 ### Browsers and Tampermonkey
 
 `browsers` finds Chrome, Edge, Brave, Cent, Vivaldi and Opera profiles from
-installed locations and the portable root (`V:\___VAC\__P` by default). Its status
+installed locations and from the portable root you point it at (`-PortableRoot`, or
+the remembered `portable` entry in `paths.json`). Its status
 shows both profile count and how many contain Tampermonkey. Apply copies the chosen
 browser-chrome theme to the stable
 `%LOCALAPPDATA%\Wintage\browser-theme` folder, puts that path on the clipboard,

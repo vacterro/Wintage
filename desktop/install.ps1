@@ -984,7 +984,7 @@ function Invoke-BetterDiscord {
     }
 
     if ($PSCmdlet.ShouldProcess($bdCss, 'Install Wintage theme')) {
-        $css = Get-Content (Join-Path $out "electron/$PaletteSlug/wintage.css") -Raw
+        $css = Read-Utf8 (Join-Path $out "electron/$PaletteSlug/wintage.css")
         $meta = "/**`n * @name Wintage ($PaletteSlug)`n * @author Wintage Installer`n * @version 1.0.0`n * @description Win95 Theme`n */`n`n"
         Write-Utf8 $bdCss ($meta + $css)
         Say "BetterDiscord: installed theme -> $bdCss" 'Green'
@@ -1019,7 +1019,7 @@ function Invoke-Obsidian {
     # it always matches the folder name Obsidian will look for -- never guessed.
     $activeManifest = Join-Path $builtRoot "$PaletteSlug/manifest.json"
     if (-not (Test-Path $activeManifest)) { throw "No Obsidian build for palette '$PaletteSlug'." }
-    $activeName = (Get-Content $activeManifest -Raw | ConvertFrom-Json).name
+        $activeName = (Read-Utf8 $activeManifest | ConvertFrom-Json).name
 
     foreach ($vault in $vaults) {
         $themesDir = Join-Path $vault '.obsidian/themes'
@@ -1046,7 +1046,7 @@ function Invoke-Obsidian {
         if ($PSCmdlet.ShouldProcess($vault, "Install all Wintage themes, activate $PaletteSlug")) {
             New-Item -ItemType Directory -Force -Path $themesDir | Out-Null
             foreach ($pack in (Get-ChildItem $builtRoot -Directory)) {
-                $manifest = Get-Content (Join-Path $pack.FullName 'manifest.json') -Raw | ConvertFrom-Json
+                $manifest = Read-Utf8 (Join-Path $pack.FullName 'manifest.json') | ConvertFrom-Json
                 $dest = Join-Path $themesDir $manifest.name
                 New-Item -ItemType Directory -Force -Path $dest | Out-Null
                 Copy-Item (Join-Path $pack.FullName '*') -Destination $dest -Recurse -Force
@@ -1305,8 +1305,8 @@ if (-not $Target) {
                  elseif ($themed) { 'themed' }
                  else { 'found, not themed' }
         $pal = if (-not $themed) { '-' }
-               elseif ($e.InPlace) { (Get-Content $palFile -Raw).Trim() }
-               else { (Get-Content $pkg -Raw | ConvertFrom-Json).wintagePalette }
+               elseif ($e.InPlace) { (Read-Utf8 $palFile).Trim() }
+               else { (Read-Utf8 $pkg | ConvertFrom-Json).wintagePalette }
         Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $k, $e.Name, $state, $pal)
     }
 
@@ -1325,7 +1325,7 @@ if (-not $Target) {
                 elseif ($terminalMarkers.Count -eq $terminalPaths.Count) { 'themed' }
                 else { 'found, not themed' }
     $terminalPal = if ($terminalMarkers.Count) {
-        (@($terminalMarkers | ForEach-Object { (Get-Content $_ -Raw).Trim() } | Sort-Object -Unique) -join '|')
+        (@($terminalMarkers | ForEach-Object { (Read-Utf8 $_).Trim() } | Sort-Object -Unique) -join '|')
     } else { '-' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'terminal', "Windows Terminal ($($terminalPaths.Count) install(s))", $terminal, $terminalPal)
 
@@ -1516,7 +1516,7 @@ foreach ($name in $names) {
                             $patchArgs = @()
                             $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
                             if (Test-Path $soundPref) {
-                                $wav = (Get-Content $soundPref -Raw).Trim()
+                                $wav = (Read-Utf8 $soundPref).Trim()
                                 if ($wav -and (Test-Path $wav)) { $patchArgs = @('--sound', $wav) }
                             }
                             & node $adPatch @patchArgs

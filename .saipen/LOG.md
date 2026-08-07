@@ -279,3 +279,4 @@
 - 07.08.26 12:38 [E-530] [parent: E-529] [T-none] RUN: validate.py -> FAIL (remaining: 13 DONE-no-verify + 15 LOG timestamps + STATE seat now fixed + prepare fixed) -- conformance debt consolidated on T-165
 
 - 07.08.26 12:38 [E-531] [parent: E-530] [T-155] RUN: BUILD+VERIFY -> PASS -- install-browsers.ps1:6 -PortableRoot default cleared to empty; install.ps1 always passes -PortableRoot explicitly (paths.json fallback), so discovery untouched. rg V: 0 hits, PS parse 0 errors
+- 07.08.26 12:42 [E-532] [parent: E-531] [T-153|T-156|T-154] RUN: BUILD+VERIFY -> PASS -- README portable-root prose generic, 9 GUI mojibake dividers rewritten as clean # ---- TITLE ----, all Get-Content -Raw reads converted to Read-Utf8 (7 in install.ps1, 1 in GUI); rg V: 0 hits README, 0 non-ASCII GUI, 0 Get-Content in both, PS parse 0 errors, ALL TESTS PASSED
