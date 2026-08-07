@@ -20,6 +20,8 @@ _Каждый элемент с первого взгляда говорит, з
 
 [🤍 Поддержать разработчика](https://buymeacoffee.com/vacuum34)
 
+[EN](README.md) | [RU](README.ru.md) | [ET](README.et.md) | [Дед](README.ded.md)
+
 [Список изменений](CHANGELOG.md)
 
 ## Установка

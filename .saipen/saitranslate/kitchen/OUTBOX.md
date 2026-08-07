@@ -4,47 +4,47 @@
 
 - **status:** draft
 - **producer:** saitranslate
-- **source_head:** c88ad1265b34c2a47aae56642846e4b86eb14ccb (project HEAD)
-  (drafted at 6e18ec1; re-verified at 71f9852, 3e1e77a, cd6df0b, c88ad12 —
-  README.md unchanged since cd6df0b, payload still faithful)
-- **coverage:** real surfaces inventoried in kitchen/surface.md —
-  docs: README.md (translated), desktop/README.md + browser-theme/README.txt
-  (surfaces exist, EN only, translation pending the dedicated instance);
-  UI strings: **i18n loader SHIPPED (T-103, 85d5053)** — 4 locale JSONs in
-  desktop/locales/ (en/ru/et/ded.json). GUI being wired (T-144 in DOING,
-  claude-code-5). Non-en locales stale: missing 5 keys vs en.json (T-152
-  MARKHUNT). CLI output (Say calls) still hardcoded English (T-150 proposed).
+- **source_head:** 708bc21c5d86e51fb090183fb67b3d9d81451234 (project HEAD, v1.26.2)
+- **coverage:**
+  - docs — README.md: RU/ET/Дед translations current (source unchanged since
+    ee55770/c88ad12; kitchen payloads re-synced with the language-switcher bar
+    that T-107 added to the live root copies, so collection cannot strip it).
+  - docs — desktop/README.md: real surface, **EN only**; changed since the last
+    OUTBOX (T-153 portable-root prose, T-160 Rebuilding note). Translation
+    pending the dedicated instance (T-102).
+  - docs — browser-theme/README.txt: real surface, **EN only**, unchanged since
+    544fb3f. Translation pending the dedicated instance (T-102).
+  - UI strings — desktop/locales/{en,ru,et,ded}.json: **complete**, 49 keys each,
+    zero gaps vs en.json (T-152 resolved). Loader (T-103), CLI wiring (T-150) and
+    GUI wiring (T-144) all shipped in v1.26.2. Core share of the UI surface is
+    done; the 29 remaining languages' UI strings are the dedicated instance's job.
 - **payload:**
-  - kitchen/README.ru.md — Russian (updated for v1.26.1 doc drift)
-  - kitchen/README.et.md — Estonian (updated for v1.26.1 doc drift)
-  - kitchen/README.ded.md — Дед voice (updated for v1.26.1 doc drift)
+  - kitchen/README.ru.md — Russian (matches live README.ru.md byte-for-byte)
+  - kitchen/README.et.md — Estonian (matches live README.et.md byte-for-byte)
+  - kitchen/README.ded.md — Дед voice (matches live README.ded.md byte-for-byte)
+  - desktop/locales/ru.json, et.json, ded.json — already live in the main repo
+    (shipped with T-103/T-144); no injection needed
   (English source = README.md at source_head; no file to ship for EN)
-  (Repo root copies at README.ru.md / README.et.md / README.ded.md also updated)
-- **verified:** RU/ET/Дед updated against README.md at source_head: heading
-  structure, code fences, hex tokens, commands, the donation link and the
-  Changelog link preserved; prose translated; UTF-8 clean; no placeholders.
+- **verified:** RU/ET/Дед payloads byte-identical to the live repo-root copies
+  (switcher bar included), UTF-8 clean, heading structure / code fences / hex
+  tokens / commands preserved; locale JSONs parse and all four carry 49 keys.
   The five screenshot `<img>` tags are deliberately omitted from translations
-  (heavy image content, not text) -- noted, not a silent gap.
-- **instructions:** (1) When T-102 (dedicated instance) completes the 29-language
-  bundle, re-run `ee` to refresh this OUTBOX to status: ready. (2) `eee` refuses
-  while draft — by design. (3) T-152 (non-en locale gap) should be resolved before
-  declaring the UI translation surface ready. (4) Integration of a ready handoff:
-  README.<lang>.md siblings are already injected at repo root; refresh them from
-  kitchen on `eee collect`.
+  (heavy image content, not text) — noted, not a silent gap.
+- **instructions:** (1) `eee` refuses while draft — by design. (2) status becomes
+  `ready` only when the 29-language bundle (T-102) lands; Core does not grind it
+  per the TRANSLATE hard split. (3) On collect of the Core share, refresh the
+  repo-root README.ru/et/ded.md from these kitchen copies; the locale JSONs are
+  already integrated. (4) desktop/README.md + browser-theme/README.txt enter the
+  bundle when T-102's instance covers them.
 - **details:**
-  Per TRANSLATE hard split, Core owns EN/RU/ET/Дед only. The 29 remaining
-  languages are subSaipen work — ticketed T-102, deliberately not grinded here.
-  The UI surface now has a real loader (T-103) and locale files, but non-en
-  locales are behind en.json by 5 keys. Honest partial > rounded-up 100%.
+  Per TRANSLATE hard split, Core owns EN/RU/ET/Дед only; the 29 remaining
+  languages are subSaipen work, ticketed T-102. No subSaipen mechanism is
+  initialised in this project (.saipen/extensions absent), so T-102 stays
+  blocked until that instance runs. Honest partial > rounded-up 100%.
 
-  UPDATE (E-388, `ee inject`): the Core-share payload was injected into the
-  main project at repo root as README.ru.md / README.et.md / README.ded.md.
-  These root copies are now the live integration; the kitchen copies here are
-  the archived payload.
-
-  UPDATE (E-505, `ee` re-verify): source_head refreshed to cd6df0b (post
-  T-145/T-148/T-149). README.md diff since 3e1e77a: language switcher bar,
-  NomadCode→CodeNomad, "Dark golden"→"Golden Default", 10-of-21 palette note.
-  All three translations updated. T-103 i18n loader exists with 4 locale JSONs;
-  T-144 GUI wiring in progress. Non-en locales 5 keys behind (T-152). Status
-  stays draft — T-102 29 languages + T-152 locale gap pending.
+  UPDATE (ee, 07.08.26): source_head refreshed 708bc21 (v1.26.2). README.md
+  unchanged since the last kitchen build; kitchen payloads re-synced with the
+  T-107 language-switcher bar. UI surface now complete for the Core share —
+  all four locales at 49 keys (T-152 resolved), loader + CLI + GUI wired.
+  desktop/README.md drifted (T-153/T-160) but is EN-only and outside the Core
+  share. Status stays draft — T-102 pending.

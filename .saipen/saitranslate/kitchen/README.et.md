@@ -18,6 +18,8 @@ koormust ja teeb veebist jälle täpse instrumendi, mitte dekoratiivsete mullide
 
 [🤍 Toeta arendajat](https://buymeacoffee.com/vacuum34)
 
+[EN](README.md) | [RU](README.ru.md) | [ET](README.et.md) | [Дед](README.ded.md)
+
 [Muudatuste logi](CHANGELOG.md)
 
 ## Paigaldamine
