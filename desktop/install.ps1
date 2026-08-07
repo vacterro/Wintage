@@ -80,6 +80,9 @@ function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script
 function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllText($path, $text, $script:Utf8NoBom) }
 $script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)
 function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8WithBom) }
+# Every palette token read used to inline the same (Read-Utf8 X | ConvertFrom-Json).tokens
+# chain; one helper (T-143).
+function Get-PaletteTokens([string]$jsonPath) { (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens }
 
 $WintageAppData = Join-Path $env:APPDATA 'Wintage'
 $ManifestPath = Join-Path $WintageAppData 'installed.json'
@@ -377,7 +380,7 @@ function Invoke-Conhost {
 
     $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
     if (-not (Test-Path $paletteFile)) { Say "Console Host: theme file not found ($PaletteSlug.json)" 'Red'; return }
-    $t = (Read-Utf8 $paletteFile | ConvertFrom-Json).tokens
+    $t = Get-PaletteTokens $paletteFile
     $values = [ordered]@{
         FaceName      = @{ Value = $CONSOLE_FONT; Type = 'String' }
         FontFamily    = @{ Value = 54; Type = 'DWord' }
@@ -512,7 +515,7 @@ function Invoke-WindowsTheme {
     if ($DoRevert) { Restore-WindowsInactiveAccent }
     else {
         Backup-WindowsInactiveAccent
-        $tokens = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json") | ConvertFrom-Json).tokens
+        $tokens = Get-PaletteTokens (Join-Path $root "themes/$PaletteSlug.json")
         $inactiveAccent = ([uint32](Convert-HexToBgr $tokens.surfaceRaised)) -bor [uint32]4278190080
         $expectedAccent = $inactiveAccent
         New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $inactiveAccent -PropertyType DWord -Force | Out-Null
@@ -651,7 +654,7 @@ function Invoke-TotalCmd {
         }
         $jsonPath = Join-Path (Split-Path $PSScriptRoot -Parent) "themes\$PaletteSlug.json"
         if (-not (Test-Path $jsonPath)) { Say "$($appName): theme file not found ($PaletteSlug.json)" 'Red'; return }
-        $t = (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens
+        $t = Get-PaletteTokens $jsonPath
 
         $bg = Convert-HexToBgr $t.background
         $fg = Convert-HexToBgr $t.textPrimary
@@ -928,7 +931,7 @@ function Invoke-Saipenview {
         # no font, no padding, no border width. Colours change, geometry cannot.
         $jsonPath = Join-Path $root "themes\$PaletteSlug.json"
         if (-not (Test-Path $jsonPath)) { Say "SAIPENVIEW: theme file not found ($PaletteSlug.json)" 'Red'; return }
-        $t = ((Read-Utf8 $jsonPath) | ConvertFrom-Json).tokens
+        $t = Get-PaletteTokens $jsonPath
 
         # Always recolour from the pristine backup, never from the current file: patching
         # an already-patched file is fine here (the regex is idempotent) but starting from
