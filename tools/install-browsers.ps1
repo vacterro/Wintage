@@ -53,7 +53,7 @@ function Get-Browsers {
     )
     foreach ($item in $known) { Add-Browser $item[0] $item[1] $item[2] }
 
-    if (Test-Path -LiteralPath $PortableRoot) {
+    if ($PortableRoot -and (Test-Path -LiteralPath $PortableRoot)) {
         $exeNames = @('chrome.exe', 'brave.exe', 'msedge.exe', 'vivaldi.exe', 'opera.exe')
         $files = Get-ChildItem -LiteralPath $PortableRoot -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -in $exeNames } | Sort-Object { $_.FullName.Length }

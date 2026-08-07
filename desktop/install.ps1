@@ -1353,7 +1353,8 @@ if (-not $Target) {
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obs', 'OBS Studio', $obs, $obsPal)
 
     $browserTool = Join-Path $root 'tools/install-browsers.ps1'
-    $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-ListJson', '-PortableRoot', $PortableBrowserRoot, '-StageRoot', $BrowserStageRoot)
+    $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-ListJson', '-StageRoot', $BrowserStageRoot)
+    if ($PortableBrowserRoot) { $browserArgs += @('-PortableRoot', $PortableBrowserRoot) }
     if ($BrowserCatalog) { $browserArgs += @('-Catalog', $BrowserCatalog) }
     $browserInfo = (& powershell @browserArgs 2>$null | Out-String).Trim() | ConvertFrom-Json
     $browserState = if (-not $browserInfo.ProfileCount) { 'not installed' }
@@ -1460,13 +1461,16 @@ foreach ($name in $names) {
     if ($name -eq 'windows') { Invoke-WindowsTheme -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'browsers') {
         $browserTool = Join-Path $root 'tools/install-browsers.ps1'
-        $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-Palette', $Palette, '-PortableRoot', $PortableBrowserRoot, '-StageRoot', $BrowserStageRoot)
+        $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-Palette', $Palette, '-StageRoot', $BrowserStageRoot)
+        if ($PortableBrowserRoot) { $browserArgs += @('-PortableRoot', $PortableBrowserRoot) }
         if ($BrowserCatalog) { $browserArgs += @('-Catalog', $BrowserCatalog) }
         if ($NoBrowserLaunch) { $browserArgs += '-NoLaunch' }
         if ($Revert) { $browserArgs += '-Revert' }
         if ($WhatIfPreference) { $browserArgs += '-WhatIf' }
         & powershell @browserArgs
         if ($LASTEXITCODE -ne 0) { throw 'Browser theme installer failed.' }
+        if ($Revert) { Remove-ManifestEntry 'browsers' }
+        else { Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion) }
         continue
     }
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
