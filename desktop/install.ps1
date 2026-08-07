@@ -752,6 +752,7 @@ function Invoke-TotalCmd {
 
 function Invoke-SmartVac {
     param([switch]$DoRevert, [string]$PaletteSlug)
+    Assert-SafeProjectPath $SmartVacPath 'SMART VAC CLEANER'
     if (-not (Test-Path $SmartVacPath)) { Say "SMART VAC CLEANER: not found at $SmartVacPath" 'DarkYellow'; return }
     
     $pyFile = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py'
@@ -810,6 +811,7 @@ function Invoke-SmartVac {
 
 function Invoke-WildRift {
     param([switch]$DoRevert, [string]$PaletteSlug)
+    Assert-SafeProjectPath $WildRiftPath 'WildRiftAssistant'
     if (-not (Test-Path $WildRiftPath)) { Say "WildRiftAssistant: not found at $WildRiftPath" 'DarkYellow'; return }
     
     $pyFile = Join-Path $WildRiftPath 'theme.py'
@@ -866,6 +868,7 @@ function Get-CssShape {
 
 function Invoke-Saipenview {
     param([switch]$DoRevert, [string]$PaletteSlug)
+    Assert-SafeProjectPath $SaipenviewPath 'SAIPENVIEW'
     if (-not (Test-Path $SaipenviewPath)) { Say "SAIPENVIEW: not found at $SaipenviewPath" 'DarkYellow'; return }
     
     $cssFile = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css'
@@ -1193,6 +1196,30 @@ if (-not $SmartVacPath -and $pathsJson.ContainsKey('smartvac')) { $SmartVacPath 
 if (-not $WildRiftPath -and $pathsJson.ContainsKey('wildrift')) { $WildRiftPath = $pathsJson['wildrift'] }
 if (-not $CodeNomadPath -and $pathsJson.ContainsKey('codenomad')) { $CodeNomadPath = $pathsJson['codenomad'] }
 if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $PortableBrowserRoot = $pathsJson['portable'] }
+
+function Assert-SafeProjectPath([string]$path, [string]$label) {
+    # Source-tree targets write into a folder the user owns. A path inside a
+    # system directory, a drive root, or the user-profile root itself is either
+    # a mistake (the tool path typed as C:\Windows) or a write where the user
+    # should not be writing (a theme patch must not reach System32). Refuse it
+    # loudly rather than patching whatever file happens to live there.
+    if (-not $path) { return }
+    $full = [System.IO.Path]::GetFullPath($path).TrimEnd('\')
+    $forbidden = @(
+        [System.IO.Path]::GetPathRoot($full).TrimEnd('\'),
+        ([System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\')),
+        ([System.IO.Path]::GetFullPath($env:APPDATA).TrimEnd('\')),
+        ([System.IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd('\')),
+        ([System.IO.Path]::GetFullPath($env:WINDIR).TrimEnd('\')),
+        ([System.IO.Path]::GetFullPath($env:SystemRoot).TrimEnd('\'))
+    ) | Where-Object { $_ }
+    if ($full -in $forbidden -or $full.StartsWith(([System.IO.Path]::GetFullPath($env:WINDIR) + '\'), [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Unsafe $label path: $full - refusing to write outside a user-writable project root."
+    }
+    if ($env:ProgramFiles -and $full.StartsWith(([System.IO.Path]::GetFullPath($env:ProgramFiles) + '\'), [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Unsafe $label path: $full - Program Files is not a source-tree project location."
+    }
+}
 
 # ---- Reapply mode: read manifest, rediscover paths, re-apply outdated payloads ----
 if ($Reapply) {
