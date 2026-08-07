@@ -4,12 +4,9 @@
 
 - **status:** draft
 - **producer:** saitranslate
-- **source_head:** cd6df0b6b467b15989f391a8f8b1a8f11bb06f08 (project HEAD)
-  (drafted at 6e18ec1; re-verified at 71f9852, 3e1e77a, and cd6df0b — README.md
-  changed since 3e1e77a: "Dark golden palette"→"Golden Default palette" + 10-of-21
-  note added under ## Palette. All three translations updated to match. Also
-  NomadCode→CodeNomad already reflected. desktop/README.md gained FreeBuff
-  ad-removal + sound sections since drafting; EN only, pending T-102.)
+- **source_head:** c88ad1265b34c2a47aae56642846e4b86eb14ccb (project HEAD)
+  (drafted at 6e18ec1; re-verified at 71f9852, 3e1e77a, cd6df0b, c88ad12 —
+  README.md unchanged since cd6df0b, payload still faithful)
 - **coverage:** real surfaces inventoried in kitchen/surface.md —
   docs: README.md (translated), desktop/README.md + browser-theme/README.txt
   (surfaces exist, EN only, translation pending the dedicated instance);

@@ -1,4 +1,7 @@
 desktop/backup/
+
+# Generated output -- rebuilt by node tools/build-desktop.js (README documents it)
+desktop/out/
 scratch*.py
 *_old.js
 

@@ -46,6 +46,24 @@ $out = Join-Path $here 'out'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backupRoot = Join-Path $here "backup/$stamp"
 
+# Keep only the newest timestamped backup dirs. Every apply that replaces an
+# existing install adds one, and nothing ever removed them (T-160). Fixed-name
+# files (conhost-settings.json, windows-dwm-settings.json) are single revert
+# sources and are deliberately NOT pruned.
+function Prune-Backups([int]$keep = 8) {
+    if ($WhatIfPreference) { return }
+    $backupDir = Join-Path $here 'backup'
+    if (-not (Test-Path $backupDir)) { return }
+    $dirs = @(Get-ChildItem -LiteralPath $backupDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d{8}-\d{6}$' } |
+        Sort-Object Name -Descending)
+    if ($dirs.Count -le $keep) { return }
+    foreach ($old in $dirs[$keep..($dirs.Count - 1)]) {
+        Remove-Item -LiteralPath $old.FullName -Recurse -Force
+        Say "Pruned old backup: $($old.Name)" 'DarkGray'
+    }
+}
+
 function Say($msg, $colour = 'Gray') { Write-Host $msg -ForegroundColor $colour }
 
 # PowerShell 5.1 writes a BOM with `Set-Content -Encoding UTF8`, and `Get-Content`
@@ -1581,6 +1599,7 @@ foreach ($name in $names) {
             Copy-Item $dest -Destination $bak -Recurse -Force
             Remove-Item $dest -Recurse -Force
             Say "$($t.Name): previous install backed up to $bak" 'DarkGray'
+            Prune-Backups
         }
     }
 

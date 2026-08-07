@@ -299,7 +299,8 @@ Close MPC-HC before applying: it rewrites its settings on exit.
 
 ## Rebuilding
 
-Everything under `desktop/out/` is generated from `themes/*.json`:
+Everything under `desktop/out/` is generated from `themes/*.json`. It is not
+tracked in git (T-160), so a fresh clone must build it once before installing:
 
 ```powershell
 node ..\tools\build-desktop.js          # rebuild all targets
