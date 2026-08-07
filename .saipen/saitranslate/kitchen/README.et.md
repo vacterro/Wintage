@@ -77,7 +77,7 @@ fusitud kinni või mille värvid on kompileeritud sisse — on kirjas dokumendis
 
 ## Funktsioonid
 
-- **Tume kuldne palett** — sügav pruunikasmust lõuend `#1A0F05`, kuldne tekst
+- **Golden Default palett** — sügav pruunikasmust lõuend `#1A0F05`, kuldne tekst
   `#D4B87A`, kuldsed servad `#C0A060`. Ainult tasased pinnad: ei gradiiente, ei
   hägustust, ei läbipaistvust.
 - **Klassikalised 3D servad** — nupud kõrgendatud, väljad süvistatud, vajutatud
@@ -113,6 +113,11 @@ fusitud kinni või mille värvid on kompileeritud sisse — on kirjas dokumendis
   lehtedel ise välja, et kriitilised voogud jääksid puutumata.
 
 ## Palett
+
+Allolevas tabelis on 10 Golden Default paleti 21-st tokenist. Iga
+kaasasolev palett määratleb kõik 21; ülejäänud 11 hõlmavad servade
+struktuuri, teisest teksti, semantilisi värve (edukus/hoiatus/oht),
+valikut ja sihtmärgipõhiseid üksikasju.
 
 | Tooken | Hex | Kasutus |
 |---|---|---|
