@@ -636,9 +636,9 @@ function Invoke-BetterDiscord {
     }
 
     if ($PSCmdlet.ShouldProcess($bdCss, 'Install Wintage theme')) {
-        $css = Read-Utf8 (Join-Path $out "electron/$PaletteSlug/wintage.css")
-        $meta = "/**`n * @name Wintage ($PaletteSlug)`n * @author Wintage Installer`n * @version 1.0.0`n * @description Win95 Theme`n */`n`n"
-        Write-Utf8 $bdCss ($meta + $css)
+        $built = Join-Path $out "betterdiscord/$PaletteSlug/wintage.theme.css"
+        if (-not (Test-Path $built)) { throw "Built BetterDiscord output missing for '$PaletteSlug'. Run 'node tools/build-desktop.js'." }
+        Copy-Item $built $bdCss -Force
         Say "BetterDiscord: installed theme -> $bdCss" 'Green'
         Set-ManifestEntry 'discord' $PaletteSlug $bdCss 'n/a' (Get-PayloadVersion)
     }

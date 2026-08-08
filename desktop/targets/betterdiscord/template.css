@@ -1,0 +1,176 @@
+/**
+ * @name Wintage (${label})
+ * @author Wintage Installer
+ * @version 1.0.0
+ * @description Win95 Dark Golden theme for Discord.
+ * @authorId 0
+ */
+/* ${label} - generated from wintage.user.js palettes. Do not edit. */
+/* BetterDiscord theme: maps Wintage tokens onto Discord's own CSS variables
+   so the app keeps its native layout and only the colours/depth change. */
+
+:root {
+  /* UI.md token block -- single source of colour truth. */
+  --wintage-background: ${background};
+  --wintage-backgroundSoft: ${backgroundSoft};
+  --wintage-surface: ${surface};
+  --wintage-surfaceRaised: ${surfaceRaised};
+  --wintage-surfaceAlt: ${surfaceAlt};
+  --wintage-borderDark: ${borderDark};
+  --wintage-borderHighlight: ${borderHighlight};
+  --wintage-bevelLight: ${bevelLight};
+  --wintage-borderMuted: ${borderMuted};
+  --wintage-textPrimary: ${textPrimary};
+  --wintage-textSecondary: ${textSecondary};
+  --wintage-textMuted: ${textMuted};
+  --wintage-link: ${link};
+  --wintage-success: ${success};
+  --wintage-warning: ${warning};
+  --wintage-danger: ${danger};
+  --wintage-dangerText: ${dangerText};
+  --wintage-selection: ${selection};
+  --wintage-compareBack: ${compareBack};
+  --wintage-accentTeal: ${accentTeal};
+}
+
+/* Discord surface ladder (theme-dark). */
+.theme-dark {
+  --background-primary: var(--wintage-backgroundSoft);
+  --background-primary-alt: var(--wintage-background);
+  --background-secondary: var(--wintage-surface);
+  --background-secondary-alt: var(--wintage-surfaceRaised);
+  --background-tertiary: var(--wintage-surface);
+  --background-accent: var(--wintage-surfaceRaised);
+  --background-floating: var(--wintage-surfaceRaised);
+  --background-nested-floating: var(--wintage-surface);
+  --background-mobile-primary: var(--wintage-backgroundSoft);
+  --background-mobile-secondary: var(--wintage-surface);
+  --channeltextarea-background: var(--wintage-background);
+  --info-warning-foreground: var(--wintage-textPrimary);
+  --info-positive-background: var(--wintage-surface);
+  --info-positive-foreground: var(--wintage-textSecondary);
+  --info-warning-background: var(--wintage-surface);
+
+  /* Text. */
+  --text-normal: var(--wintage-textPrimary);
+  --text-muted: var(--wintage-textMuted);
+  --text-link: var(--wintage-link);
+  --text-positive: var(--wintage-success);
+  --text-warning: var(--wintage-warning);
+  --text-danger: var(--wintage-danger);
+  --text-brand: var(--wintage-link);
+  --header-primary: var(--wintage-textPrimary);
+  --header-secondary: var(--wintage-textSecondary);
+
+  /* Interactive controls. */
+  --interactive-normal: var(--wintage-textPrimary);
+  --interactive-hover: var(--wintage-textPrimary);
+  --interactive-active: var(--wintage-textPrimary);
+  --interactive-muted: var(--wintage-textMuted);
+
+  /* Accent / brand. */
+  --brand-experiment: var(--wintage-accentTeal);
+  --brand-experiment-600: var(--wintage-accentTealDeep);
+  --brand-experiment-500: var(--wintage-accentTeal);
+  --brand-experiment-200: var(--wintage-textSecondary);
+  --brand-experiment-100: var(--wintage-textSecondary);
+
+  /* Scrollbars. */
+  --scrollbar-auto-thumb: var(--wintage-borderMuted);
+  --scrollbar-auto-track: var(--wintage-background);
+  --scrollbar-thin-thumb: var(--wintage-borderMuted);
+  --scrollbar-thin-track: transparent;
+
+  /* Modifier backgrounds (hover / active rows). */
+  --background-modifier-hover: var(--wintage-surfaceAlt);
+  --background-modifier-active: var(--wintage-surfaceRaised);
+  --background-modifier-selected: var(--wintage-surfaceRaised);
+  --background-modifier-accent: var(--wintage-accentTeal);
+  --input-background: var(--wintage-background);
+}
+
+/* The light theme is deliberately not supported -- Wintage is dark-first
+   (UI.md). If the user has light mode on, force the dark variable set. */
+.theme-light {
+  --background-primary: var(--wintage-backgroundSoft);
+  --background-primary-alt: var(--wintage-background);
+  --background-secondary: var(--wintage-surface);
+  --background-secondary-alt: var(--wintage-surfaceRaised);
+  --background-tertiary: var(--wintage-surface);
+  --background-accent: var(--wintage-surfaceRaised);
+  --background-floating: var(--wintage-surfaceRaised);
+  --channeltextarea-background: var(--wintage-background);
+  --text-normal: var(--wintage-textPrimary);
+  --text-muted: var(--wintage-textMuted);
+  --text-link: var(--wintage-link);
+  --text-positive: var(--wintage-success);
+  --text-warning: var(--wintage-warning);
+  --text-danger: var(--wintage-danger);
+  --header-primary: var(--wintage-textPrimary);
+  --header-secondary: var(--wintage-textSecondary);
+  --interactive-normal: var(--wintage-textPrimary);
+  --interactive-hover: var(--wintage-textPrimary);
+  --interactive-active: var(--wintage-textPrimary);
+  --interactive-muted: var(--wintage-textMuted);
+  --brand-experiment: var(--wintage-accentTeal);
+  --brand-experiment-600: var(--wintage-accentTealDeep);
+  --scrollbar-auto-thumb: var(--wintage-borderMuted);
+  --scrollbar-auto-track: var(--wintage-background);
+  --scrollbar-thin-thumb: var(--wintage-borderMuted);
+  --scrollbar-thin-track: transparent;
+  --background-modifier-hover: var(--wintage-surfaceAlt);
+  --background-modifier-active: var(--wintage-surfaceRaised);
+  --background-modifier-selected: var(--wintage-surfaceRaised);
+  --input-background: var(--wintage-background);
+}
+
+/* Square corners -- UI.md law 1. */
+.theme-dark, .theme-light {
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-xxl: 0px;
+  --radius-xxxl: 0px;
+  --radius-xs: 0px;
+  --radius-2xs: 0px;
+  --radius-round: 0px;
+}
+.theme-dark *, .theme-light * { border-radius: 0 !important; }
+
+/* Bevel language (UI.md law 3): raised panels get a light top/left + dark
+   bottom/right edge. Discord's own flat borders are replaced where they are
+   visible: buttons, inputs, search, popouts, modal headers. */
+.theme-dark button:not([class*="buttonReset"]):not([class*="closeButton"]),
+.theme-dark input, .theme-dark textarea, .theme-dark select,
+.theme-dark [class*="searchBar"], .theme-dark [class*="container-"] [class*="search" i] {
+  border: 2px solid !important;
+  border-color: var(--wintage-bevelLight) var(--wintage-borderDark) var(--wintage-borderDark) var(--wintage-bevelLight) !important;
+}
+.theme-dark button:active:not([class*="closeButton"]) {
+  border-color: var(--wintage-borderDark) var(--wintage-bevelLight) var(--wintage-bevelLight) var(--wintage-borderDark) !important;
+  transform: translate(1px, 1px);
+}
+.theme-dark [class*="sidebar"], .theme-dark [class*="channelSidebar"] {
+  background-color: var(--wintage-surface) !important;
+}
+.theme-dark [class*="panels"] { background-color: var(--wintage-surface) !important; }
+.theme-dark [class*="members"] { background-color: var(--wintage-backgroundSoft) !important; }
+
+/* Font: Verdana everywhere (UI.md law 4). */
+.theme-dark, .theme-light {
+  --font-primary: Verdana, "Segoe UI", sans-serif !important;
+  --font-display: Verdana, "Segoe UI", sans-serif !important;
+  --font-code: "Consolas", monospace !important;
+  --font-size-normal: 12px;
+}
+.theme-dark * { font-family: var(--font-primary) !important; }
+
+/* Flat depth: no elevation shadows (UI.md law 2). */
+.theme-dark [class*="elevation"] { box-shadow: none !important; }
+
+/* Status colours stay semantic. */
+.theme-dark [class*="status-"][class*="online"] { background-color: var(--wintage-success) !important; }
+.theme-dark [class*="status-"][class*="idle"] { background-color: var(--wintage-warning) !important; }
+.theme-dark [class*="status-"][class*="dnd"], .theme-dark [class*="status-"][class*="busy"] { background-color: var(--wintage-danger) !important; }
+.theme-dark [class*="status-"][class*="offline"] { background-color: var(--wintage-textMuted) !important; }

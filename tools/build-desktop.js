@@ -380,6 +380,24 @@ function buildObs(packs) {
   }
 }
 
+// ─── TARGET: BetterDiscord ──────────────────────────────────────────────────
+// Discord is themed through its own CSS variables, not element selectors: the
+// generic web GLOBAL_CSS (built for arbitrary sites) breaks Discord's native
+// layout because the app manages its surfaces via --background-*/--text-*/
+// --interactive-* variables that a site-oriented stylesheet never touches.
+// This template maps Wintage tokens onto those variables, so the app keeps its
+// structure and only colours/depth change. One .css file per palette, installed
+// by the installer into %APPDATA%\BetterDiscord\themes\wintage.theme.css.
+function buildBetterDiscord(packs) {
+  const template = fs.readFileSync(path.join(DESKTOP, 'targets', 'betterdiscord', 'template.css'), 'utf8');
+  for (const pack of packs) {
+    const css = fill(template, pack.tokens, { label: pack.label, __file: 'betterdiscord/template.css' });
+    const left = /\$\{/.exec(css);
+    if (left) throw new Error('unresolved placeholder in betterdiscord ' + pack.slug + ' near: ' + css.slice(left.index, left.index + 60));
+    emit(path.join(OUT, 'betterdiscord', pack.slug, 'wintage.theme.css'), css);
+  }
+}
+
 // ─── TARGET: Windows system theme ───────────────────────────────────────────
 // The generated file owns only Windows' colour/mode sections. At install time it
 // is merged over the user's active .theme, preserving wallpaper, sounds and desktop
@@ -408,7 +426,7 @@ function buildWindows(packs) {
 // reflects themes/ exactly.
 function prune(packs) {
   const live = new Set(packs.map(p => p.slug));
-  for (const target of ['electron', 'browser', 'obsidian', 'obs', 'windows']) {
+  for (const target of ['electron', 'browser', 'obsidian', 'obs', 'betterdiscord', 'windows']) {
     const dir = path.join(OUT, target);
     if (!fs.existsSync(dir)) continue;
     for (const slug of fs.readdirSync(dir)) {
@@ -427,6 +445,7 @@ buildElectron(packs);
 buildBrowser(packs);
 buildObsidian(packs);
 buildObs(packs);
+buildBetterDiscord(packs);
 buildWindows(packs);
 prune(packs);
 
