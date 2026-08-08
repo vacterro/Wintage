@@ -99,6 +99,14 @@ if ($LASTEXITCODE -ne 0) { throw "Theme block is out of date with themes/*.json 
 node (Join-Path $PSScriptRoot 'tools/test-theme-packs.js')
 if ($LASTEXITCODE -ne 0) { throw "Theme pack test failed - release aborted, version line already bumped, fix and rerun" }
 
+# The repo wiki/ mirror is copied from the saiwiki kitchen and only ever differs
+# by .md link adaptation. A hand edit on one side drifts silently until someone
+# reads both — the exact failure the qq run caught at T-145, when Installation.md
+# still carried a command desktop/README.md had already fixed. This pins that the
+# two stay in lockstep.
+node (Join-Path $PSScriptRoot 'tools/check-wiki-mirror.js')
+if ($LASTEXITCODE -ne 0) { throw "Wiki mirror drifted from the saiwiki kitchen - re-run prepare saiwiki (qq) and collect before release" }
+
 # Every string the shim hands to executeJavaScript must be valid JavaScript, and
 # node --check cannot see inside template literals -- the same blind spot
 # check-css.js exists for, on the CSS side. Pin that the shipped payloads parse.

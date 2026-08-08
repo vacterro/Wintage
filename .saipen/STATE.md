@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-167 README/wiki palette table mislabels legacy hexes as Golden Default
-next_action: RUN: ship T-167 -- docs-only, commit + push, no version bump (T-166 precedent)
+task: T-168 Add wiki-mirror drift gate for release.ps1
+next_action: RUN: ship T-168 -- commit + push (small gate tool, no version bump)
 blocker: none
 agent: claude
 mode: full
@@ -12,6 +12,6 @@ schema_version: 3
 style_contract: ded-4ae736e4
 saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
 transition_from: REVIEW
-last_event: 552
-updated: 2026-08-08T21:13:00Z
+last_event: 555
+updated: 2026-08-08T21:23:00Z
 ---
