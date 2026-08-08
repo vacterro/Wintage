@@ -79,8 +79,8 @@ fusitud kinni või mille värvid on kompileeritud sisse — on kirjas dokumendis
 
 ## Funktsioonid
 
-- **Golden Default palett** — sügav pruunikasmust lõuend `#1A0F05`, kuldne tekst
-  `#D4B87A`, kuldsed servad `#C0A060`. Ainult tasased pinnad: ei gradiiente, ei
+- **Golden Default palett** — sügav pruunikasmust lõuend `#1A1810`, kuldne tekst
+  `#D4C89A`, kuldsed servad `#F0D060`. Ainult tasased pinnad: ei gradiiente, ei
   hägustust, ei läbipaistvust.
 - **Klassikalised 3D servad** — nupud kõrgendatud, väljad süvistatud, vajutatud
   nupp vajub sisse (autentse 1px sildi nihkega). Kerimisribad on täismõõdus 16px
@@ -123,16 +123,16 @@ valikut ja sihtmärgipõhiseid üksikasju.
 
 | Tooken | Hex | Kasutus |
 |---|---|---|
-| Canvas | `#1A0F05` | kõige välimine taust |
-| Soft | `#1E1408` | keha / sisu taust |
-| Surface | `#2A1C0A` | päised, navigatsioon, paneelid |
-| Raised | `#362812` | nupud, hüpikud, kerimisriba käepide |
-| Alt | `#3A2A15` | nupu hõljumine |
-| Bevel highlight | `#C0A060` | ülemised-vasakud 3D servad |
-| Bevel shadow | `#0E0803` | alumised-paremad 3D servad |
-| Text | `#D4B87A` | peamine kuldne tekst |
-| Muted | `#7A6838` | kohahoidjad, keelatud |
-| Accent | `#9DD9F9` | lingid, fookus |
+| background | `#1A1810` | kõige välimine taust |
+| backgroundSoft | `#232018` | keha / sisu taust |
+| surface | `#332E22` | päised, navigatsioon, paneelid |
+| surfaceRaised | `#3D372A` | nupud, hüpikud, kerimisriba käepide |
+| surfaceAlt | `#453D30` | nupu hõljumine |
+| borderHighlight | `#F0D060` | faaside servad, lingid |
+| borderDark | `#100E08` | süvistatud servad, raamid |
+| textPrimary | `#D4C89A` | peamine kuldne tekst |
+| textMuted | `#6E674E` | kohahoidjad, keelatud |
+| link | `#F0D060` | lingid, fookus |
 
 ## Ühilduv brauseriteema
 

@@ -66,7 +66,7 @@ or have their colours compiled in -- is written down in
 
 ## Features
 
-- **Golden Default palette** — deep brown-black canvas `#1A0F05`, golden text `#D4B87A`, golden bevel highlights `#C0A060`. Solid flat surfaces only: no gradients, no blur, no transparency effects.
+- **Golden Default palette** — deep brown-black canvas `#1A1810`, golden text `#D4C89A`, golden bevel highlights `#F0D060`. Solid flat surfaces only: no gradients, no blur, no transparency effects.
 - **Classic 3D bevels** — buttons raised, inputs sunken, pressed buttons push in (with the authentic 1px label shift). Scrollbars are full 16px Win95-style, beveled thumb and buttons included.
 - **Radius killer** — `border-radius: 0` enforced everywhere, including framework CSS variables (Bootstrap, Material, YouTube, Reddit).
 - **Motion is forbidden** — all transitions and animations are zeroed out. State changes are instant, like a real 1995 UI.
@@ -88,16 +88,16 @@ semantic colours (success/warning/danger), selection, and per-target specifics.
 
 | Token | Hex | Used for |
 |---|---|---|
-| Canvas | `#1A0F05` | outermost background |
-| Soft | `#1E1408` | body / content backdrop |
-| Surface | `#2A1C0A` | headers, nav, panels |
-| Raised | `#362812` | buttons, popups, scrollbar thumb |
-| Alt | `#3A2A15` | button hover |
-| Bevel highlight | `#C0A060` | top-left 3D edges |
-| Bevel shadow | `#0E0803` | bottom-right 3D edges |
-| Text | `#D4B87A` | primary golden text |
-| Muted | `#7A6838` | placeholders, disabled |
-| Accent | `#9DD9F9` | links, focus |
+| background | `#1A1810` | outermost background |
+| backgroundSoft | `#232018` | body / content backdrop |
+| surface | `#332E22` | headers, nav, panels |
+| surfaceRaised | `#3D372A` | buttons, popups, scrollbar thumb |
+| surfaceAlt | `#453D30` | button hover |
+| borderHighlight | `#F0D060` | bevel edges, links |
+| borderDark | `#100E08` | sunken edges, borders |
+| textPrimary | `#D4C89A` | primary golden text |
+| textMuted | `#6E674E` | placeholders, disabled |
+| link | `#F0D060` | links, focus |
 
 ## Matching browser theme
 
