@@ -1,3 +1,4 @@
 - 07.08.26 01:45 [E-001] [agent: saitest] START: spawned by Core during the sc crew circuit
 - 07.08.26 01:46 [E-002] [agent: saitest] RUN: reproduction pass -> REPRODUCED -- grep proves "NomadCode" in six live docs; 16/16 theme packs label the palette CodeNomad
 - 07.08.26 01:47 [E-003] [agent: saitest] RUN: collected by main agent -> T-131
+- 08.08.26 23:56 [E-004] [agent: saitest] RUN: reproduction pass @c3925a4 -> 2 REPRODUCED + 1 NOT_REPRODUCED -- ST-101 Core-share ru/et/ded README lack source-digest; ST-102 desktop/browser-theme surfaces have 29 bundle translations but zero Core-share ru/et/ded; ST-103 sweep of 29 READMEs + 33 locales + 16 betterdiscord CSS clean. OUTBOX ready.

@@ -59,3 +59,36 @@
 - **coverage:** grep proves line 18 is the node call, and there is no `$LASTEXITCODE` check following it.
 - **verified:** REPRODUCED — unguarded build call confirmed.
 - **instructions:** Add `$LASTEXITCODE` guard after `node tools/build-desktop.js` in watch-claude.ps1.
+
+## ST-101: REPRODUCED — Core-share README ru/et/ded carry no source-digest marker (Damaged state)
+
+- **status:** reviewed
+- **source_head:** c3925a4
+- **summary:** `README.ru.md`, `README.et.md`, `README.ded.md` (repo root AND `.saipen/saitranslate/kitchen/`) have no `<!-- source-digest: README.md sha256:... -->` line, while all 29 bundle translations DO. translate.md §3 requires every locale README to carry the source digest of the English source it was translated from; the three Core-share locales are the only ones missing it. A locale without its digest is a half-written record — nothing signals when it has gone stale.
+- **payload:** LOW defect. Add the current digest line (`sha256:ee7c6a2a1626faed`) to all three files, root + kitchen copies.
+- **coverage:** script scan of all 32 root README.*.md found exactly 3 without a digest marker (ru/et/ded); kitchen copies confirmed identical state.
+- **verified:** REPRODUCED — `Select-String "source-digest"` returns no match for ru/et/ded in root and kitchen; 29 bundle files all carry it.
+- **instructions:** Append `<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->` to README.ru.md, README.et.md, README.ded.md (root + kitchen copies stay byte-identical).
+
+## ST-102: REPRODUCED — Core-share translations absent on desktop/README and browser-theme surfaces (Boundary)
+
+- **status:** reviewed
+- **source_head:** c3925a4
+- **summary:** `desktop/README.<lang>.md` and `browser-theme/README.<lang>.txt` exist for all 29 bundle languages, but NO `desktop/README.ru.md`/`et.md`/`ded.md` and NO `browser-theme/README.ru.txt`/`et.txt`/`ded.txt` exist (checked repo root and saitranslate kitchen). The root README has Core-share ru/et/ded; the two other surfaces are 29/29 with zero Core-share coverage. Asymmetry: a Russian/Polish... (RU/ET/Дед) user gets translated install docs on one surface and English-only on the others. Boundary family: 0 Core-share + 29 bundle = the set is not complete.
+- **payload:** LOW gap. Either translate desktop/README + browser-theme README into ru/et/ded (Core share), or document the intentional omission.
+- **coverage:** directory listing of desktop/ and browser-theme/ shows ru/et/ded absent; kitchen mirrors confirm.
+- **verified:** REPRODUCED — `Test-Path` for all six (desktop ru/et/ded, browser-theme ru/et/ded) returns False in root and kitchen; all 29 bundle files present.
+- **instructions:** Core decides: translate the two surfaces into ru/et/ded, or record the omission as intentional.
+
+## ST-103: NOT_REPRODUCED — bundle translations and BetterDiscord theme are structurally clean
+
+- **status:** reviewed
+- **source_head:** c3925a4
+- **summary:** Adversarial sweep of the two newest changes found no breakage:
+  - ST-002-part: all 29 root README.<lang>.md have `[EN](README.md)` switcher bar, correct digest (`ee7c6a2a1626faed`), zero stale legacy hexes, valid UTF-8.
+  - ST-003-part: all 33 `desktop/locales/*.json` parse (ConvertFrom-Json) and carry exactly the en.json 49-key set (0 missing, 0 extra).
+  - ST-004-part: all 16 `desktop/out/betterdiscord/<slug>/wintage.theme.css` have balanced braces, BD `@name`/`@author` header, the required Discord variables (`--background-primary`, `--text-normal`, `--interactive-normal`, `--brand-experiment`, `--channeltextarea-background`, `--scrollbar-auto-thumb`), and zero unresolved `${` placeholders.
+- **payload:** none — no fix needed.
+- **coverage:** programmatic scan (python) of 32 READMEs, 33 locales, 16 BetterDiscord CSS files.
+- **verified:** NOT_REPRODUCED — all checks green; the only findings in the run are ST-101 and ST-102 above.
+- **instructions:** none; the negative result is the deliverable (nobody retries these blind).
