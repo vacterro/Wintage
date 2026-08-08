@@ -1,11 +1,11 @@
 # BOARD
 
 ## DOING
-- [/] T-177 [from saitranslate SAIT-002, eee collect] integrate full 29-language translation bundle: apply kitchen README.<lang>.md -> repo root (29), kitchen/desktop/README.<lang>.md -> desktop/README.<lang>.md (29), kitchen/browser-theme/README.<lang>.txt -> browser-theme/README.<lang>.txt (29), kitchen/locales/<lang>.json -> desktop/locales/ (12 new: uk pt nl pl sv da fi no tr cs sk hr) | verify: repo root has all 29 README.<lang>.md (plus existing ru/et/ded), all parse/UTF-8 clean, language switcher bars intact, locale JSONs 49-key parity, --gate ship PASS | owner: claude | claim_time: 2026-08-08T23:15:00Z
 
 ## TODO
 
 ## DONE
+- [x] T-177 [from saitranslate SAIT-002, eee collect] integrate full 29-language translation bundle: 29 kitchen README.<lang>.md -> repo root, 29 desktop/README.<lang>.md, 29 browser-theme/README.<lang>.txt, 12 new desktop/locales/<lang>.json (uk pt nl pl sv da fi no tr cs sk hr) | verify: E-580+E-581 116 files applied, 32 README at root all with EN switcher bar + digest, locales 49-key parity, UTF-8 clean, README.md EN untouched, --gate ship conformant; shipped 26e1d74
 - [x] T-102 Dedicated saitranslate instance: 29-language translation bundle complete on every real surface (README, desktop/README, browser-theme/README.txt, UI locale JSONs) — 12 languages newly translated (uk pt nl pl sv da fi no tr cs sk hr), 17 existing refreshed to the T-167 palette table + T-171 browser-theme correction + current digests | verify: E-578 SAIT-002 ready at adbf1dc, 29x4 coverage zero missing, all JSONs 49-key parity, all digests current, --gate collect:saitranslate PASS
 - [x] T-175 [from CONVERGE stage M] EE closure blocker: --gate converge FAILed because saitranslate package was draft; resolved by the T-102 dedicated-instance run producing the full ready bundle (SAIT-002) | verify: E-578 --gate converge PASS (EE ready, QQ ready)
 - [x] T-176 Discord/BetterDiscord dedicated theme: generic web GLOBAL_CSS replaced with desktop/targets/betterdiscord/template.css mapping Wintage tokens to Discord's CSS variables (dark+light, brand, modifiers, scrollbars, radius-kill, bevels, Verdana, status colours); build-desktop emits 16 palettes, Invoke-BetterDiscord copies dedicated build with @name meta | verify: E-573+E-574 16 palettes 0 unresolved 0 missing, parse clean, ALL TESTS PASSED, live install works; shipped 1dd24c6

@@ -2,13 +2,13 @@
 
 ## SAIT-002: Wintage full translation bundle — 29 languages × README/desktop/browser-theme/locales
 
-- **status:** ready
+- **status:** reviewed
 - **summary:** Complete 29-language translation bundle across every real surface —
   README, desktop README, browser-theme README, and UI locale JSONs (49 keys each).
-  Supersedes the Core-share-only SAIT-001 draft.
+  Supersedes the Core-share-only SAIT-001 draft. Collected at T-177 (eee), shipped 26e1d74.
 - **critical:** false
 - **producer:** saitranslate
-- **source_head:** 3fd1ae60ef197ff028e1620574781ea4e7e355e7 (project HEAD)
+- **source_head:** f79229d94b08214e267b8ab9c54b058d88228251 (project HEAD)
 - **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
 - **role_revision:** sha256:f241e6b83c39e9b46bfa586638efb0374bbb39889646f723b9189bbb4912c0c5
 - **coverage:**
