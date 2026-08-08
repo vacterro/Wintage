@@ -1,6 +1,7 @@
 # BOARD
 
 ## DOING
+- [/] T-177 [from saitranslate SAIT-002, eee collect] integrate full 29-language translation bundle: apply kitchen README.<lang>.md -> repo root (29), kitchen/desktop/README.<lang>.md -> desktop/README.<lang>.md (29), kitchen/browser-theme/README.<lang>.txt -> browser-theme/README.<lang>.txt (29), kitchen/locales/<lang>.json -> desktop/locales/ (12 new: uk pt nl pl sv da fi no tr cs sk hr) | verify: repo root has all 29 README.<lang>.md (plus existing ru/et/ded), all parse/UTF-8 clean, language switcher bars intact, locale JSONs 49-key parity, --gate ship PASS | owner: claude | claim_time: 2026-08-08T23:15:00Z
 
 ## TODO
 
