@@ -8,7 +8,7 @@
   Supersedes the Core-share-only SAIT-001 draft.
 - **critical:** false
 - **producer:** saitranslate
-- **source_head:** adbf1dc473760e0fd49babb86ea93d0e5e55481d (project HEAD)
+- **source_head:** 3fd1ae60ef197ff028e1620574781ea4e7e355e7 (project HEAD)
 - **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
 - **role_revision:** sha256:f241e6b83c39e9b46bfa586638efb0374bbb39889646f723b9189bbb4912c0c5
 - **coverage:**

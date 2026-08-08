@@ -138,7 +138,7 @@
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** adbf1dc473760e0fd49babb86ea93d0e5e55481d
+- **source_head:** 3fd1ae60ef197ff028e1620574781ea4e7e355e7
 - **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
 - **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
