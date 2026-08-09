@@ -1,11 +1,11 @@
 # BOARD
 
 ## DOING
-- [/] T-179 [from saitest ST-102] Core-share translations absent on desktop/README and browser-theme surfaces: all 29 bundle languages exist for desktop/README.<lang>.md and browser-theme/README.<lang>.txt, but zero ru/et/ded variants exist (repo root and kitchen) — asymmetric vs root README where ru/et/ded are live; a RU/ET/Дед user gets translated install docs on one surface, English-only on the other two | verify: desktop/README.{ru,et,ded}.md + browser-theme/README.{ru,et,ded}.txt either translated (Core share) or the omission is documented as intentional; surfaces symmetric | owner: claude | claim_time: 2026-08-09T00:07:00Z
 
 ## TODO
 
 ## DONE
+- [x] T-179 [from saitest ST-102] Core-share ru/et/ded translations absent on desktop/README + browser-theme surfaces (29 bundle languages present, zero Core-share); translated desktop/README.{ru,et,ded}.md + browser-theme/README.{ru,et,ded}.txt, synced byte-identical to saitranslate kitchen | verify: E-586+E-587 surfaces symmetric (32 desktop, 32 browser), digest 1b166ae6/056bdd1c, UTF-8 clean, root==kitchen, gate ship conformant; shipped 90e4cca
 - [x] T-178 [from saitest ST-101] Core-share README ru/et/ded (repo root + .saipen/saitranslate/kitchen/) carried no source-digest marker while all 29 bundle translations did; added `<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->` to all 6 files, root==kitchen byte-identical | verify: E-584+E-585 32/32 README carry digest, zero missing, value matches HEAD-normalised README.md, gate ship conformant; shipped 0a56795
 - [x] T-177 [from saitranslate SAIT-002, eee collect] integrate full 29-language translation bundle: 29 kitchen README.<lang>.md -> repo root, 29 desktop/README.<lang>.md, 29 browser-theme/README.<lang>.txt, 12 new desktop/locales/<lang>.json (uk pt nl pl sv da fi no tr cs sk hr) | verify: E-580+E-581 116 files applied, 32 README at root all with EN switcher bar + digest, locales 49-key parity, UTF-8 clean, README.md EN untouched, --gate ship conformant; shipped 26e1d74
 - [x] T-102 Dedicated saitranslate instance: 29-language translation bundle complete on every real surface (README, desktop/README, browser-theme/README.txt, UI locale JSONs) — 12 languages newly translated (uk pt nl pl sv da fi no tr cs sk hr), 17 existing refreshed to the T-167 palette table + T-171 browser-theme correction + current digests | verify: E-578 SAIT-002 ready at adbf1dc, 29x4 coverage zero missing, all JSONs 49-key parity, all digests current, --gate collect:saitranslate PASS
