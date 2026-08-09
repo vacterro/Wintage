@@ -173,10 +173,10 @@ function Get-CodeNomadResources {
         if (Test-ElectronApp $r) { return $r }
     }
     $candidates = @(
-        (Join-Path $CodeNomadPath 'resources'),
         (Join-Path $env:LOCALAPPDATA 'Programs/CodeNomad/resources'),
         (Join-Path $env:ProgramFiles 'CodeNomad/resources')
     )
+    if ($CodeNomadPath) { $candidates = @((Join-Path $CodeNomadPath 'resources')) + $candidates }
     foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
     return $null
 }
