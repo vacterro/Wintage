@@ -1,7 +1,7 @@
 ---
 phase: DONE
 task: none
-next_action: RUN: CONVERGE stage C exhausted -- T-180/T-181 shipped; proceed stage D (sub collect), E (test gate), F (forced HUNT)
+next_action: RUN: CONVERGE stage D -- read all sub OUTBOXes, collect actionable entries
 blocker: none
 agent: claude
 mode: full
