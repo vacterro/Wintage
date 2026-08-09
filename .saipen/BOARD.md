@@ -1,11 +1,11 @@
 # BOARD
 
 ## DOING
-- [/] T-181 [HUNT E-589 SIG6] `.saipen/kitchen/repair-log-qq.py` is a one-shot RECOVER script from the E-221 collision incident (renumbered E-220..224 -> E-378..382), no longer exercisable, owning incident long closed | verify: file removed or moved to logs/ with a note; zero references from active code | blocker: phases/clean.md owns deletion — HUNT records only | owner: claude | claim_time: 2026-08-09T01:11:00Z
 
 ## TODO
 
 ## DONE
+- [x] T-181 [HUNT E-589 SIG6] kitchen/repair-log-qq.py (one-shot E-221 recovery, untracked+gitignored, zero references) archived byte-exact to .saipen/recovery/repair-log-qq/ and removed from kitchen | verify: E-593+E-594 recovery copy hash-verified + compiles, kitchen exactly 2 files, gate ship conformant; shipped 438c587
 - [x] T-180 [HUNT E-589 SIG1+SIG5] install.ps1 died at load when -CodeNomadPath empty: Get-CodeNomadResources joined '' into $ELECTRON table at load, PS 5.1 Join-Path throws on ''; broke listing + any target + Run-Tests WhatIf isolation (predated T-169) | verify: E-590+E-591 ALL TESTS PASSED exit 0, listing works, smartvac/wildrift/totalcmd WhatIf exit 0, guard-only diff, gate ship conformant; shipped b8c50b6
 - [x] T-179 [from saitest ST-102] Core-share ru/et/ded translations absent on desktop/README + browser-theme surfaces (29 bundle languages present, zero Core-share); translated desktop/README.{ru,et,ded}.md + browser-theme/README.{ru,et,ded}.txt, synced byte-identical to saitranslate kitchen | verify: E-586+E-587 surfaces symmetric (32 desktop, 32 browser), digest 1b166ae6/056bdd1c, UTF-8 clean, root==kitchen, gate ship conformant; shipped 90e4cca
 - [x] T-178 [from saitest ST-101] Core-share README ru/et/ded (repo root + .saipen/saitranslate/kitchen/) carried no source-digest marker while all 29 bundle translations did; added `<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->` to all 6 files, root==kitchen byte-identical | verify: E-584+E-585 32/32 README carry digest, zero missing, value matches HEAD-normalised README.md, gate ship conformant; shipped 0a56795

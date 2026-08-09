@@ -1,7 +1,7 @@
 ---
-phase: SHIP
-task: T-181 stale kitchen recovery script
-next_action: RUN: ship T-181 -- commit + push (kitchen hygiene)
+phase: DONE
+task: none
+next_action: RUN: CONVERGE stage C exhausted -- T-180/T-181 shipped; proceed stage D (sub collect), E (test gate), F (forced HUNT)
 blocker: none
 agent: claude
 mode: full
@@ -11,7 +11,7 @@ saipen_version: 7
 schema_version: 3
 style_contract: ded-4ae736e4
 saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
-transition_from: REVIEW
-last_event: 594
-updated: 2026-08-09T01:12:00Z
+transition_from: SHIP
+last_event: 595
+updated: 2026-08-09T01:13:00Z
 ---

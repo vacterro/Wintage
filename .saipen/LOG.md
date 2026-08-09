@@ -343,3 +343,4 @@
 - 09.08.26 01:11 [E-592] [parent: E-591] [T-180] RUN: ship T-180 -> pushed b8c50b6 -- gate --gate ship PASS after push. T-180 -> DONE.
 - 09.08.26 01:11 [E-593] [parent: E-592] [T-181] RUN: SCOUT -> build+verify -- kitchen/repair-log-qq.py (one-shot E-221 recovery, untracked+gitignored, zero references, owning incident closed) moved byte-exact to .saipen/recovery/repair-log-qq/ then deleted from kitchen; kitchen now holds only digest.md + markhunt_progress.md. conf: high -- recovery copy hash-verified, zero rg references, deletion satisfies clean.md proof-of-recovery
 - 09.08.26 01:12 [E-594] [parent: E-593] [T-181] DEC: REVIEW -> SHIP -- independent re-run green: recovery copy compiles, kitchen exactly 2 files, gate ship conformant; no P0-P3
+- 09.08.26 01:13 [E-595] [parent: E-594] [T-181] RUN: ship T-181 -> pushed 438c587 -- gate --gate ship PASS. T-181 -> DONE. Board TODO empty.
