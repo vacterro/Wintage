@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-180 source-tree path dispatch bug (HUNT)
-next_action: RUN: ship T-180 -- commit + push (installer bugfix, no version bump)
+task: T-181 stale kitchen recovery script
+next_action: RUN: ship T-181 -- commit + push (kitchen hygiene)
 blocker: none
 agent: claude
 mode: full
@@ -12,6 +12,6 @@ schema_version: 3
 style_contract: ded-4ae736e4
 saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
 transition_from: REVIEW
-last_event: 591
-updated: 2026-08-09T01:10:00Z
+last_event: 594
+updated: 2026-08-09T01:12:00Z
 ---
