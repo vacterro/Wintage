@@ -165,3 +165,5 @@ Dark). Каждая из них проходит WCAG AA по трём токе�
 ## Лицензия
 
 [MIT](LICENSE)
+
+<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->

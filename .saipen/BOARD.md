@@ -1,9 +1,9 @@
 # BOARD
 
 ## DOING
+- [/] T-178 [from saitest ST-101] Core-share README ru/et/ded (repo root + .saipen/saitranslate/kitchen/) carry no `<!-- source-digest: README.md sha256:... -->` marker, while all 29 bundle translations DO — translate.md §3 requires every locale README to carry the digest of its English source; a locale without it is a half-written record, nothing signals staleness | verify: README.ru.md, README.et.md, README.ded.md (root + kitchen, byte-identical) end with `<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->`; rg source-digest across all 32 README.*.md returns 32 | owner: claude | claim_time: 2026-08-09T00:00:00Z
 
 ## TODO
-- [ ] T-178 [from saitest ST-101] Core-share README ru/et/ded (repo root + .saipen/saitranslate/kitchen/) carry no `<!-- source-digest: README.md sha256:... -->` marker, while all 29 bundle translations DO — translate.md §3 requires every locale README to carry the digest of its English source; a locale without it is a half-written record, nothing signals staleness | verify: README.ru.md, README.et.md, README.ded.md (root + kitchen, byte-identical) end with `<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->`; rg source-digest across all 32 README.*.md returns 32
 - [ ] T-179 [from saitest ST-102] Core-share translations absent on desktop/README and browser-theme surfaces: all 29 bundle languages exist for desktop/README.<lang>.md and browser-theme/README.<lang>.txt, but zero ru/et/ded variants exist (repo root and kitchen) — asymmetric vs root README where ru/et/ded are live; a RU/ET/Дед user gets translated install docs on one surface, English-only on the other two | verify: desktop/README.{ru,et,ded}.md + browser-theme/README.{ru,et,ded}.txt either translated (Core share) or the omission is documented as intentional; surfaces symmetric
 
 ## DONE

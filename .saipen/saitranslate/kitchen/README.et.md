@@ -168,3 +168,5 @@ kliendid võtavad uuenduse automaatselt. Suuremate väljalasete jaoks anna
 ## Litsents
 
 [MIT](LICENSE)
+
+<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
