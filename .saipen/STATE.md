@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-178 Core-share README digest markers
-next_action: RUN: ship T-178 -- commit + push (doc-only, no version bump)
+task: T-179 Core-share translations on desktop/browser surfaces
+next_action: RUN: ship T-179 -- commit + push (6 translation files, no version bump)
 blocker: none
 agent: claude
 mode: full
@@ -12,6 +12,6 @@ schema_version: 3
 style_contract: ded-4ae736e4
 saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
 transition_from: REVIEW
-last_event: 585
-updated: 2026-08-09T00:06:00Z
+last_event: 587
+updated: 2026-08-09T00:13:00Z
 ---
