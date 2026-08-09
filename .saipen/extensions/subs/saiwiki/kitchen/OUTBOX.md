@@ -12,7 +12,7 @@
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** 5e79f513d6f5a6c01d2c3d0c2be68b700149baee
+- **source_head:** 2483b4989f3da4b9f42d03b46cbb48ecff7c9340
 - **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
 - **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
@@ -77,7 +77,7 @@
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** 576a03b329143064797881f8848fe19a8e1b31b5
+- **source_head:** 2483b4989f3da4b9f42d03b46cbb48ecff7c9340
 - **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
 - **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
@@ -126,7 +126,7 @@
 
 ## WIKI-004: Wintage wiki forced-fresh at 1dd24c6 (qq)
 
-- **status:** ready
+- **status:** reviewed
 - **summary:** Complete 8-page maintained wiki re-verified against current HEAD
   (1dd24c6). No page content changed since WIKI-003 (which went stale when T-176
   shipped): version stamps still 1.26.2, install commands still
@@ -134,11 +134,12 @@
   the BetterDiscord target (desktop/targets/betterdiscord/, generated
   out/betterdiscord/) but no wiki page describes desktop targets in enough detail
   to need an update; the 16-palette count and token table are unchanged.
+  Collected at sc stage 6 — repo wiki/ mirror already current (check-wiki-mirror PASS).
 - **main_project_refs:** [README.md, CHANGELOG.md, desktop/README.md, wintage.user.js, themes/*.json]
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** 3fd1ae60ef197ff028e1620574781ea4e7e355e7
+- **source_head:** 2483b4989f3da4b9f42d03b46cbb48ecff7c9340
 - **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
 - **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,

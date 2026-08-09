@@ -1,7 +1,7 @@
 ---
 phase: DONE
 task: none
-next_action: RUN: CONVERGE stage D -- read all sub OUTBOXes, collect actionable entries
+next_action: RUN: sc stage 7 publish -- ordinary saipen ship, or named refusal
 blocker: none
 agent: claude
 mode: full
@@ -11,7 +11,7 @@ saipen_version: 7
 schema_version: 3
 style_contract: ded-4ae736e4
 saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
-transition_from: SHIP
-last_event: 595
-updated: 2026-08-09T01:13:00Z
+transition_from: DONE
+last_event: 597
+updated: 2026-08-09T01:16:00Z
 ---
