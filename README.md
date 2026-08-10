@@ -115,13 +115,13 @@ the stable theme path to the clipboard. Later palette changes reuse that path.
 
 ## Releasing a new version (maintainers)
 
-Edit `wintage.user.js`, then run:
+Add a `## [x.y.z] - date` entry to the top of `CHANGELOG.md` first — `release.ps1` refuses to run without it. Then:
 
 ```powershell
 .\release.ps1 -Message "what changed"
 ```
 
-It bumps the `@version` patch number, commits, and pushes — Tampermonkey clients pick the update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases.
+It bumps the `@version` patch number (the Tampermonkey header and the `W95_VERSION` stamp both move together), rebuilds the generated desktop themes, runs the whole release-gate suite, and commits, tags, and pushes — Tampermonkey clients pick the update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases.
 
 <img width="1440" height="860" alt="2026-07-29_180529" src="https://github.com/user-attachments/assets/7888e96f-f854-4b68-bd82-58f76b85f630" />
 <img width="641" height="1080" alt="2026-08-01_230328" src="https://github.com/user-attachments/assets/2a33c723-eaee-4f49-b4e7-2d24e6bc599e" />
