@@ -186,11 +186,14 @@ $TARGET_LISTS = @($clbMyApps, $clbPopularApps)
 #
 # Right-click a target to change its folder -- that is the whole escape hatch, and
 # it is why the dialog no longer opens on tick.
+# Defaults seed the folder dialog when a target has no remembered path. They are
+# derived from the environment, never a personal-machine literal: these three are
+# dev tools that live anywhere, so the dialog opens at the user's home folder.
 $PATH_TARGETS = @('saipenview', 'smartvac', 'wildrift')
 $PATH_DEFAULTS = @{
-    'saipenview' = 'v:\___VAC\__K\__CODE\_PY\_SAIPENVIEW\'
-    'smartvac'   = 'v:\___VAC\__K\__CODE\_PY\_SMART_VAC_CLEANER\'
-    'wildrift'   = 'v:\___VAC\__K\__CODE\_PY\_WR\WildRiftAssistant\'
+    'saipenview' = $env:USERPROFILE
+    'smartvac'   = $env:USERPROFILE
+    'wildrift'   = $env:USERPROFILE
 }
 $script:pathsFile = Join-Path $env:APPDATA 'Wintage\paths.json'
 $script:customPaths = @{}
