@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.26.3] - 2026-08-10
+
+- BetterDiscord is now a dedicated target. The generic web stylesheet broke Discord's layout because it never fills Discord's own CSS variables; a dedicated theme maps every Wintage palette token onto Discord's variable surface (dark + light, brand, modifiers, scrollbars, bevels on buttons and inputs, Verdana, status colours) and installs under the BetterDiscord theme directory.
+- The whole README/installer/browser-theme surface now ships in 29 languages. Twelve languages were added outright (Ukrainian, Portuguese, Dutch, Polish, Swedish, Danish, Finnish, Norwegian, Turkish, Czech, Slovak, Croatian) and the other seventeen were refreshed to the current palette table; the installer gained 12 new UI locales alongside its existing four.
+- Fixed: `install.ps1` died on every launch when no CodeNomad path was configured -- `Join-Path` throws on an empty first argument during target-table construction, so listing and every target failed before this fix.
+- The installer monolith was split into shared modules (`desktop/modules/common.ps1` and `desktop/modules/targets.ps1`); behaviour is unchanged, the listing, `-Reapply` and `-Status` flows were re-verified byte-identical.
+- A new release gate pins that the repository `wiki/` mirror never drifts from the maintained wiki source.
+- Docs corrected: the palette tables now name the real Golden Default tokens, the browser-theme README no longer claims to use the same palette as the userscript, and the Core-share ru/et/ded READMEs carry the same source-digest markers as the translated bundle.
+
 ## [1.26.2] - 2026-08-07
 
 - Portable browser root is no longer hardcoded to a personal-machine path. `tools/install-browsers.ps1` defaults to an empty `-PortableRoot` and only scans it when one is supplied (the installer passes the remembered `portable` entry from `paths.json`); the same hardcoded path was removed from prose in `desktop/README.md` and from the FastPrompter importer's default source.
