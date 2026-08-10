@@ -5,9 +5,11 @@ Read this file first, then read the source files, then produce the output
 files listed below for YOUR assigned language codes only. Do not touch any
 file that is not in your output list. Do not write outside the kitchen tree.
 
-## Project root (absolute)
+## Project root
 
-    V:\___VAC\__K\__CODE\_TAMPERMONKEY\_WIN95THEME\Wintage
+The project root is the git repository that contains this contract file
+(the checkout holding `wintage.user.js`). Resolve it with
+`git rev-parse --show-toplevel` from inside this checkout.
 
 ## Source files (read these)
 
