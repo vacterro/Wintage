@@ -1,10 +1,11 @@
 # OUTBOX
 
-## WIKI-005: Wintage wiki forced-fresh at 96a1a62, v1.26.3 (qq)
+## WIKI-005: Wintage wiki forced-fresh at 96a1a62, re-verified at fd53d63, v1.26.3 (qq)
 
-- **status:** ready
+- **status:** reviewed
+- **collected_at:** 2026-08-10T20:21:00Z (qqq, T-186)
 - **summary:** Complete 8-page maintained wiki regenerated and verified against current
-  HEAD (96a1a62). Version stamps lifted 1.26.2 -> 1.26.3 (Home + _Footer) after v1.26.3
+  HEAD (96a1a62, re-verified at fd53d63 after the eee translation ship). Version stamps lifted 1.26.2 -> 1.26.3 (Home + _Footer) after v1.26.3
   shipped and T-182..T-184, T-173, T-183 landed on top. Development.md release section
   corrected to the post-T-184 README contract: `CHANGELOG.md` head-entry prerequisite
   named, the stale "Edit `wintage.user.js`, then run" instruction removed, and the
@@ -14,7 +15,7 @@
 - **critical:** false
 - **severity:** P3
 - **producer:** saiwiki
-- **source_head:** 96a1a6243e1c63f12d575ffcea959961bdb68938
+- **source_head:** fd53d6350dbc61d062d4fc750e7b8d0b890fc255
 - **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
 - **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
 - **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
@@ -80,6 +81,12 @@
   check-wiki-mirror wired at release.ps1:107 and named in Development.md:45, CHANGELOG
   head-entry prerequisite stated at Development.md:21. Package stays ready; collect is
   qqq.
+
+  RE-VERIFY (qqq, 10.08.26): source_head refreshed 96a1a62 -> fd53d63 after the eee
+  translation ship (fd53d63 touched only README.<lang>.md translations + .saipen/;
+  git diff 96a1a62..fd53d63 over README.md/CHANGELOG.md/desktop/README.md/wintage.user.js/
+  release.ps1/themes/ is empty). fingerprint c66baf69 + role_revision 54a42475
+  unchanged. All 8 pages still faithful; package ready for qqq collect.
 
 ## WIKI-002: Wintage wiki restamped to v1.26.2, forced-fresh (qq)
 

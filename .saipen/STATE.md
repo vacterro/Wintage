@@ -1,7 +1,7 @@
 ---
 phase: DONE
 task: none
-next_action: RUN: converge closure -- qqq (collect saiwiki + ship) then eee (collect saitranslate + ship), then --gate converge and close
+next_action: RUN: converge closure -- ship T-186 (wiki collect), then --gate converge and close
 blocker: none
 agent: claude
 mode: full
@@ -12,6 +12,6 @@ schema_version: 3
 style_contract: ded-4ae736e4
 saipen_home: C:\Users\vac34\.config\opencode\skills\saipen
 transition_from: SHIP
-last_event: 628
-updated: 2026-08-10T20:14:00Z
+last_event: 631
+updated: 2026-08-10T20:21:00Z
 ---
