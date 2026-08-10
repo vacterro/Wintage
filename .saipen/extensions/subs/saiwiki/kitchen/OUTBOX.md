@@ -1,5 +1,60 @@
 # OUTBOX
 
+## WIKI-006: Wintage wiki fresh QQ at 83d3d1e, payload already live (converge closure)
+
+- **status:** ready
+- **summary:** Converge stage-L fresh QQ bound to the post-closure HEAD (83d3d1e).
+  Complete 8-page maintained wiki re-verified against the current identity; the
+  payload is already integrated (qqq shipped it at 83d3d1e: repo wiki/ mirror
+  restamped to v1.26.3 with .md links + Wintage.wiki master 9260021), so
+  collect is a content-equivalent no-op. Freshness identity: source_head
+  83d3d1e, fingerprint c66baf69 (clean delta, .saipen excluded), role_revision
+  54a42475 (unchanged charter).
+- **critical:** false
+- **severity:** P3
+- **producer:** saiwiki
+- **source_head:** 83d3d1e635efa28091c6f05577753f219bf7643d (project HEAD)
+- **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
+- **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
+- **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
+  Known-Behaviors, Development, _Sidebar, _Footer). Source invariants cross-checked:
+  wintage.user.js @version 1.26.3 + W95_VERSION, CHANGELOG.md [1.26.3] - 2026-08-10,
+  README.md (post-T-184 release section, sixteen palettes), desktop/README.md,
+  16-palette THEMES registry in wintage.user.js, release.ps1 gate list (incl.
+  check-wiki-mirror).
+- **payload:** the 8 kitchen/wiki/*.md pages — already live: repo wiki/ mirror
+  carries them with .md-adapted links (check-wiki-mirror PASS), Wintage.wiki
+  master carries the bare-link forms (9260021). Collect = verify only.
+- **verified:**
+  - Freshness identity recomputed with tools/freshness.py at 83d3d1e:
+    source_head 83d3d1e635efa28091c6f05577753f219bf7643d, fingerprint
+    c66baf69 (clean delta, .saipen excluded), role_revision 54a42475 matches
+    the charter's declared YAML value.
+  - Version stamps: Home.md + _Footer.md carry 1.26.3, zero 1.26.2 remains in
+    any page; matches wintage.user.js @version 1.26.3 and CHANGELOG [1.26.3].
+  - Development.md release section matches the post-T-184 README contract: zero
+    "Edit wintage.user.js" hits across all pages; CHANGELOG head-entry
+    prerequisite named; check-wiki-mirror listed in the Gates section and wired
+    at release.ps1:107.
+  - Palettes.md token-table hexes byte-match themes/goldendefault.json (10/10).
+  - Repo wiki/ mirror: every kitchen page has a mirror page; check-wiki-mirror
+    PASSes (last run at qqq collect, 83d3d1e tree unchanged for wiki sources).
+  - Wintage.wiki master already at 9260021 (qqq push) — remote collect done.
+- **instructions:** (1) This is a closure-bar package (CONVERGE.md stage L): it
+  exists so `--gate converge` sees QQ fresh+ready at the final HEAD. (2)
+  Collect via `qqq` is optional — it re-verifies byte-identity (proven here)
+  and marks reviewed; no repo or remote mutation is required. (3) If any
+  future source change lands before collect, re-run `qq` first.
+- **details:**
+  Fresh QQ, not reuse: WIKI-005 was collected by `qqq` at 83d3d1e and its
+  source_head was fd53d63, so the closure bar (CONVERGE.md stage M: "bound to
+  the current source identity") demanded a fresh ready package at the final
+  HEAD. The translation ship touched no wiki-relevant source; regeneration
+  against all three freshness inputs is content-equivalent — a legal no-op
+  with the rerun verification recorded above. All work under
+  .saipen/extensions/subs/saiwiki/kitchen/; the main repo tree and wiki remote
+  were not touched by this preparation.
+
 ## WIKI-005: Wintage wiki forced-fresh at 96a1a62, re-verified at fd53d63, v1.26.3 (qq)
 
 - **status:** reviewed
