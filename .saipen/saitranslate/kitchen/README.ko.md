@@ -91,16 +91,16 @@ Wintage는 더 이상 단일 팔레트가 아니다. 여섯 개는 UI.md 자체�
 
 ## 새 버전 릴리스 (메인테이너용)
 
-`wintage.user.js` 를 편집한 뒤 실행:
+먼저 `CHANGELOG.md` 맨 위에 `## [x.y.z] - date` 항목을 추가하세요 — 없으면 `release.ps1`이 실행을 거부합니다. 그런 다음:
 
 ```powershell
 .\release.ps1 -Message "변경 내용"
 ```
 
-`@version` 패치 번호를 올리고, 커밋하고, 푸시한다 — Tampermonkey 클라이언트가 업데이트를 자동으로 가져간다. 더 큰 릴리스에는 `-Bump minor` 또는 `-Bump major` 를 전달한다.
+`@version` 패치 번호를 올리고(Tampermonkey 헤더와 `W95_VERSION` 스탬프가 함께 움직임), 생성된 데스크톱 테마를 다시 빌드하며, 릴리스 게이트 전체를 실행하고, 커밋·태그·푸시한다 — Tampermonkey 클라이언트가 업데이트를 자동으로 가져간다. 더 큰 릴리스에는 `-Bump minor` 또는 `-Bump major` 를 전달한다.
 
 ## 라이선스
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

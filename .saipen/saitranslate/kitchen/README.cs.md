@@ -91,16 +91,16 @@ Cíl `browsers` desktopového instalátoru detekuje nainstalované a přenosné 
 
 ## Vydání nové verze (pro správce)
 
-Upravte `wintage.user.js`, poté spusťte:
+Nejprve přidejte na začátek `CHANGELOG.md` záznam `## [x.y.z] - date` — bez něj se `release.ps1` odmítne spustit. Poté:
 
 ```powershell
 .\release.ps1 -Message "co se změnilo"
 ```
 
-Zvýší číslo `@version` patch, commitne a odešle — klienti Tampermonkey aktualizaci získají automaticky. Pro větší vydání předejte `-Bump minor` nebo `-Bump major`.
+Zvýší číslo `@version` (patch) (hlavička Tampermonkey a razítko `W95_VERSION` se pohybují společně), znovu sestaví generované desktopové motivy, spustí celou sadu release bran a commitne, otaguje a odešle — klienti Tampermonkey aktualizaci získají automaticky. Pro větší vydání předejte `-Bump minor` nebo `-Bump major`.
 
 ## Licence
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

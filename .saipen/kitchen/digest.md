@@ -1,3 +1,3 @@
-done: v1.26.3 RELEASED and pushed (953061f + tag) -- BetterDiscord theme, 29-language bundle, installer load fix, module split; sc circuit complete
-remaining: nothing on TODO
-awaiting: user triage of T-173/T-174 (untriaged MARKHUNT findings in ## BLOCKED)
+done: SAIT-004 COLLECTED (eee, T-185) -- post-T-184 translation refresh: 32 root README.<lang>.md updated (release section + digest 886c5e27060e7b30); desktop/browser-theme/locales already byte-identical, re-verified
+remaining: converge closure -- qqq (collect saiwiki WIKI-005 + ship, push wiki remote) then --gate converge and close; then CLEAN (board 56KB soft cap, LOG seal)
+awaiting: nothing user-gated

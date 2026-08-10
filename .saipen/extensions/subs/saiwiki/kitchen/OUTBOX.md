@@ -1,5 +1,86 @@
 # OUTBOX
 
+## WIKI-005: Wintage wiki forced-fresh at 96a1a62, v1.26.3 (qq)
+
+- **status:** ready
+- **summary:** Complete 8-page maintained wiki regenerated and verified against current
+  HEAD (96a1a62). Version stamps lifted 1.26.2 -> 1.26.3 (Home + _Footer) after v1.26.3
+  shipped and T-182..T-184, T-173, T-183 landed on top. Development.md release section
+  corrected to the post-T-184 README contract: `CHANGELOG.md` head-entry prerequisite
+  named, the stale "Edit `wintage.user.js`, then run" instruction removed, and the
+  `check-wiki-mirror` gate added to the Gates list (T-168). All other pages re-verified
+  faithful to current docs.
+- **main_project_refs:** [README.md, CHANGELOG.md, desktop/README.md, wintage.user.js, themes/*.json]
+- **critical:** false
+- **severity:** P3
+- **producer:** saiwiki
+- **source_head:** 96a1a6243e1c63f12d575ffcea959961bdb68938
+- **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
+- **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
+- **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
+  Known-Behaviors, Development, _Sidebar, _Footer). Source invariants cross-checked:
+  wintage.user.js @version 1.26.3 + W95_VERSION, CHANGELOG.md [1.26.3] - 2026-08-10,
+  README.md (sixteen palettes, Golden Default label, 10-of-21 token table, post-T-184
+  release section), desktop/README.md (desktop/out/ untracked note, Rebuilding commands,
+  GUI token count 21), 16-palette THEMES registry in wintage.user.js
+  (golden/claudecode/antigravity/klite/freebuff/codenomad/fpdefault/goldenvintage/
+  goldendefault/vintagedark/vintageclassic/oled/dracula/nord/solarized/custom),
+  release.ps1 gate list (incl. check-wiki-mirror).
+- **payload:**
+  - kitchen/wiki/Home.md (v1.26.3 stamp)
+  - kitchen/wiki/Installation.md (`.\desktop\install.ps1` command block)
+  - kitchen/wiki/Palettes.md (T-167 corrected goldendefault token table)
+  - kitchen/wiki/Desktop.md (desktop/out/ untracked note in Rebuilding)
+  - kitchen/wiki/Known-Behaviors.md
+  - kitchen/wiki/Development.md (post-T-184 release section, check-wiki-mirror gate)
+  - kitchen/wiki/_Sidebar.md
+  - kitchen/wiki/_Footer.md (v1.26.3 stamp)
+- **verified:**
+  - Version stamps: Home.md + _Footer.md now carry 1.26.3, matching wintage.user.js
+    @version 1.26.3 and CHANGELOG.md [1.26.3] (2026-08-10); grep over kitchen wiki shows
+    zero remaining 1.26.2.
+  - Development.md release section now matches README.md's post-T-184 contract: rg over
+    kitchen wiki returns zero "Edit wintage.user.js" hits; CHANGELOG head-entry
+    prerequisite named (release.ps1:26-30 throws without it); @version + W95_VERSION both
+    move together; -Bump minor/major stated.
+  - check-wiki-mirror added to the Gates list; release.ps1:107 wires it as a gate.
+  - Palette count 16 confirmed against the THEMES registry and README.md "Sixteen
+    palettes" (T-176 added a target, not a palette).
+  - Palettes.md token table hexes byte-match themes/goldendefault.json (10/10:
+    #1A1810/#232018/#332E22/#3D372A/#453D30/#F0D060/#100E08/#D4C89A/#6E674E/#F0D060).
+  - install.ps1 command block `.\desktop\install.ps1` matches desktop/README.md;
+    desktop/install.ps1 exists at repo HEAD.
+  - desktop/out/ untracked claims match .gitignore + desktop/README.md.
+  - Freshness: source identity computed with tools/freshness.py after the last source
+    read (96a1a62 / c66baf69); role_revision re-derived from project-local
+    .saipen/extensions/subs/saiwiki.md charter, matches its declared YAML value.
+  - Repo wiki/ mirror now intentionally drifts from kitchen (1.26.2 stamps + stale
+    Development.md release section) until qqq collects and re-syncs it.
+- **instructions:** (1) On collect, apply only the 8 kitchen/wiki/*.md pages to the
+  repo wiki/ mirror with .md-adapted links (kitchen pages link as [Home](Home); the
+  repo mirror carries [Home](Home.md) per T-105 precedent — adapt at injection, never
+  edit kitchen). (2) The mirror currently lags this package (1.26.2 stamps, stale
+  Development.md release section); collect closes the drift and tools/check-wiki-mirror.js
+  goes green again. (3) Use `qqq` to collect and ship (push to
+  github.com/vacterro/Wintage.wiki master).
+- **details:**
+  Forced-fresh, not reuse: WIKI-004 went stale when v1.26.3 shipped (953061f) and
+  T-182..T-184, T-173, T-183 landed on top, moving source_head 2483b49 -> 96a1a62.
+  The wiki-visible changes since WIKI-004: the version bump, and the T-184 README
+  release-section correction whose pre-fix form the wiki Development page still mirrored
+  ("Edit wintage.user.js" — the same defect T-184 removed from README.md). Nothing
+  pushed; main project tree untouched (all changes under
+  .saipen/extensions/subs/saiwiki/).
+
+  RE-VERIFY (qq, 10.08.26): freshness identity recomputed with tools/freshness.py —
+  source_head still 96a1a62, fingerprint still c66baf69, role_revision still 54a42475
+  (the ee pass touched only .saipen/, excluded from the fingerprint). All 8 pages
+  re-verified: Home/_Footer carry 1.26.3, zero 1.26.2 hits, zero "Edit
+  wintage.user.js", Palettes.md hexes byte-match themes/goldendefault.json (10/10),
+  check-wiki-mirror wired at release.ps1:107 and named in Development.md:45, CHANGELOG
+  head-entry prerequisite stated at Development.md:21. Package stays ready; collect is
+  qqq.
+
 ## WIKI-002: Wintage wiki restamped to v1.26.2, forced-fresh (qq)
 
 - **status:** reviewed
@@ -126,7 +207,7 @@
 
 ## WIKI-004: Wintage wiki forced-fresh at 1dd24c6 (qq)
 
-- **status:** reviewed
+- **status:** stale
 - **summary:** Complete 8-page maintained wiki re-verified against current HEAD
   (1dd24c6). No page content changed since WIKI-003 (which went stale when T-176
   shipped): version stamps still 1.26.2, install commands still
@@ -184,5 +265,7 @@
   only new target + generated output, no wiki-visible source). Pages re-verified
   byte-identical to WIKI-003's payload. Nothing pushed; main project tree untouched
   (all changes under .saipen/).
+  SUPERSEDED by WIKI-005 (source_head moved to 96a1a62 at T-184/T-183; version
+  stamps + Development.md release section changed).
 
 

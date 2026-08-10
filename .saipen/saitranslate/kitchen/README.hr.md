@@ -91,16 +91,16 @@ Meta `browsers` desktop instalatera otkriva instalirane i prijenosne Chromium pr
 
 ## Izdavanje nove verzije (za održavatelje)
 
-Uredite `wintage.user.js`, zatim pokrenite:
+Prvo dodajte unos `## [x.y.z] - date` na vrh `CHANGELOG.md` — bez njega `release.ps1` odbija raditi. Zatim:
 
 ```powershell
 .\release.ps1 -Message "što se promijenilo"
 ```
 
-Podiže `@version` patch broj, commita i gura — Tampermonkey klijenti automatski preuzimaju ažuriranje. Za veća izdanja proslijedite `-Bump minor` ili `-Bump major`.
+Podiže `@version` patch broj (Tampermonkey zaglavlje i pečat `W95_VERSION` kreću se zajedno), ponovno gradi generirane desktop teme, pokreće cijeli set release gateova te commita, tagira i gura — Tampermonkey klijenti automatski preuzimaju ažuriranje. Za veća izdanja proslijedite `-Bump minor` ili `-Bump major`.
 
 ## Licenca
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

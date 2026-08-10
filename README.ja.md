@@ -91,16 +91,16 @@ Wintageはもはや1つのパレットではない。6つはUI.md自身の構造
 
 ## 新バージョンのリリース (メンテナー向け)
 
-`wintage.user.js` を編集してから実行:
+まず `CHANGELOG.md` の先頭に `## [x.y.z] - date` のエントリを追加してください — これがないと `release.ps1` は実行を拒否します。次に:
 
 ```powershell
 .\release.ps1 -Message "変更内容"
 ```
 
-`@version` のパッチ番号を上げ、コミットしてプッシュする — Tampermonkeyクライアントは自動で更新を取得。大規模リリースには `-Bump minor` か `-Bump major` を渡す。
+`@version` のパッチ番号を上げ（Tampermonkey ヘッダーと `W95_VERSION` スタンプは一緒に動く）、生成したデスクトップテーマを再構築し、リリースゲート一式を実行して、コミット・タグ・プッシュする — Tampermonkeyクライアントは自動で更新を取得。大規模リリースには `-Bump minor` か `-Bump major` を渡す。
 
 ## ライセンス
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

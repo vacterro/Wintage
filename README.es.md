@@ -91,16 +91,16 @@ El objetivo `browsers` del instalador de escritorio detecta los perfiles Chromiu
 
 ## Publicar una nueva versión (mantenedores)
 
-Edita `wintage.user.js` y luego ejecuta:
+Primero añade una entrada `## [x.y.z] - date` al principio de `CHANGELOG.md` — `release.ps1` se niega a ejecutarse sin ella. Luego:
 
 ```powershell
 .\release.ps1 -Message "qué cambió"
 ```
 
-Incrementa el número de parche de `@version`, hace commit y push — los clientes de Tampermonkey recogen la actualización automáticamente. Pasa `-Bump minor` o `-Bump major` para releases mayores.
+Incrementa el número de parche de `@version` (la cabecera de Tampermonkey y el sello `W95_VERSION` se mueven juntos), reconstruye los temas de escritorio generados, ejecuta toda la suite de compuertas de release, y hace commit, tag y push — los clientes de Tampermonkey recogen la actualización automáticamente. Pasa `-Bump minor` o `-Bump major` para releases mayores.
 
 ## Licencia
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

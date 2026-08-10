@@ -1,5 +1,74 @@
 # OUTBOX
 
+## SAIT-004: Wintage full translation bundle — 32 languages × README/desktop/browser-theme/locales (FORCE-FRESH at 96a1a62)
+
+- **status:** reviewed
+- **collected_at:** 2026-08-10T20:14:00Z (eee, T-185)
+- **summary:** Complete 32-language translation bundle re-verified and re-bound to
+  current HEAD 96a1a62 (post-T-184 README release-section rewrite). README
+  digest refreshed ee7c6a2a -> 886c5e27060e7b30 across all 32 kitchen READMEs;
+  desktop/browser-theme surfaces unchanged (digests 1b166ae6 / 056bdd1c
+  already current); locale JSONs unchanged (49-key parity intact).
+- **critical:** false
+- **producer:** saitranslate
+- **source_head:** 96a1a6243e1c63f12d575ffcea959961bdb68938 (project HEAD)
+- **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
+- **role_revision:** sha256:f241e6b83c39e9b46bfa586638efb0374bbb39889646f723b9189bbb4912c0c5
+- **coverage:**
+  - docs — README.md: **32 locales** (en source + ru et ded + 29 bundle), all 32
+    kitchen README.<lang>.md carry the current digest 886c5e27060e7b30 and the
+    post-T-184 release section (CHANGELOG prerequisite named, zero "Edit
+    wintage.user.js" hits).
+  - docs — desktop/README.md: **32 locales**, digest 1b166ae6a7cf8a5c current,
+    targets table + commands preserved.
+  - docs — browser-theme/README.txt: **32 locales**, digest 056bdd1c330ee8c2
+    current, T-171 fixed-legacy preamble everywhere.
+  - UI strings — desktop/locales/*.json: **33 locales** (en ru et ded + 29),
+    49 keys each, exact parity vs en.json, all parse.
+- **payload:** the full 32-language kitchen set (README.<lang>.md at kitchen
+  root, desktop/README.<lang>.md, browser-theme/README.<lang>.txt, 29 locale
+  JSONs) — the only drift vs the live repo is the root README release section
+  (repo root README.ru/et/ded + 29 bundle READMEs still carry digest ee7c6a2a
+  and the old release section; desktop/browser ru/et/ded at repo root already
+  match kitchen).
+- **verified:**
+  - Freshness identity computed with tools/freshness.py at 96a1a62:
+    source_head 96a1a6243e1c63f12d575ffcea959961bdb68938, fingerprint
+    c66baf69 (clean delta, .saipen excluded), role_revision f241e6b8 matches
+    the charter's declared YAML value.
+  - All 32 kitchen READMEs: current digest 886c5e27060e7b30 (programmatic),
+    digest is the FINAL line, switcher bar verbatim in all, zero stale
+    release-section hits, zero <img> leaks.
+  - All 32 desktop kitchen files carry 1b166ae6a7cf8a5c; all 32 browser-theme
+    kitchen files carry 056bdd1c330ee8c2 (programmatic digest match).
+  - All 29 locale JSONs parse (json.load) and have exactly 49 keys; key set
+    identical to desktop/locales/en.json (0 missing, 0 extra).
+  - Root Core-share lag confirmed as expected: repo README.ru/ded still old
+    digest (collect applies kitchen); desktop/browser ru at root == kitchen
+    byte-identical.
+  - TRANSLATION_CONTRACT.md digest constants refreshed to the current values
+    (886c5e27060e7b30 / 1b166ae6a7cf8a5c / 056bdd1c330ee8c2) so a future
+    batch worker stamps correct markers.
+- **instructions:** (1) `eee` collects: apply the 32 kitchen README.<lang>.md
+  to repo-root README.<lang>.md (all 32, ru/et/ded included — their repo-root
+  copies still carry the old release section + digest ee7c6a2a), the 32
+  desktop kitchen files to desktop/README.<lang>.md, the 32 browser-theme
+  kitchen files to browser-theme/README.<lang>.txt (desktop/browser ru/et/ded
+  already byte-identical — skip or re-verify), and the 29 locale JSONs to
+  desktop/locales/ (already live — re-verify parity). (2) After collect, the
+  language switcher bar in each root README must stay intact (T-107). (3)
+  English sources are not shipped — they live in the repo already.
+- **details:**
+  FORCE-FRESH, not reuse: SAIT-003 (source_head 2483b49) went stale when T-184
+  rewrote README.md's release section (CHANGELOG prerequisite, "Edit
+  wintage.user.js" gone) and normalized CRLF->LF, moving the README digest
+  ee7c6a2a -> 886c5e27060e7b30. The kitchen READMEs were regenerated against
+  the new source in a prior ee pass (uncommitted working-tree diff), and this
+  run re-verified the whole bundle programmatically, refreshed the contract
+  digest constants, and re-bound the package to 96a1a62. All work under
+  .saipen/saitranslate/kitchen/; the main repo tree was not touched by this
+  preparation.
+
 ## SAIT-002: Wintage full translation bundle — 29 languages × README/desktop/browser-theme/locales
 
 - **status:** reviewed
@@ -73,7 +142,8 @@
 
 ## SAIT-003: Wintage full translation bundle — 32 languages × README/desktop/browser-theme/locales
 
-- **status:** reviewed
+- **status:** stale
+- **superseded_by:** SAIT-004 (source_head 2483b49 -> 96a1a62 at T-184; README digest moved ee7c6a2a -> 886c5e27060e7b30, release section rewritten)
 - **summary:** Complete 32-language translation bundle across every real surface —
   README, desktop README, browser-theme README, UI locale JSONs. Supersedes
   SAIT-002 (added Core-share ru/et/ded to the desktop and browser-theme surfaces

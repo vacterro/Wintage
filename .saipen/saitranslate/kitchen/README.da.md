@@ -91,16 +91,16 @@ Målet `browsers` i desktopinstalleren registrerer installerede og bærbare Chro
 
 ## Udgive en ny version (for vedligeholdere)
 
-Redigér `wintage.user.js`, kør derefter:
+Tilføj først en `## [x.y.z] - date`-post øverst i `CHANGELOG.md` — `release.ps1` nægter at køre uden den. Kør derefter:
 
 ```powershell
 .\release.ps1 -Message "hvad der ændrede sig"
 ```
 
-Det hæver `@version`-patchnummeret, committer og pusher — Tampermonkey-klienter henter opdateringen automatisk. Til større releases skal du sende `-Bump minor` eller `-Bump major`.
+Det hæver `@version`-patchnummeret (Tampermonkey-headeren og `W95_VERSION`-stemplet følges ad), genopbygger de genererede desktop-temaer, kører hele release-gate-suiten, og committer, tagger og pusher — Tampermonkey-klienter henter opdateringen automatisk. Til større releases skal du sende `-Bump minor` eller `-Bump major`.
 
 ## Licens
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

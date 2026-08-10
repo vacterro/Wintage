@@ -18,16 +18,17 @@
 
 ## Releasing a new version
 
-Edit `wintage.user.js`, then run:
+Add a `## [x.y.z] - date` entry to the top of `CHANGELOG.md` first — `release.ps1`
+refuses to run without it. Then:
 
 ```powershell
 .\release.ps1 -Message "what changed"
 ```
 
-It bumps the `@version` patch number, runs every gate (build `--check`, `check-css`,
-theme packs, repainter polarity, theme switch), commits, and pushes — Tampermonkey
-clients pick the update up automatically. Pass `-Bump minor` or `-Bump major` for
-bigger releases.
+It bumps the `@version` patch number (the Tampermonkey header and the `W95_VERSION`
+stamp both move together), rebuilds the generated desktop themes, runs the whole
+release-gate suite, and commits, tags, and pushes — Tampermonkey clients pick the
+update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases.
 
 ## Gates
 
@@ -41,6 +42,8 @@ bigger releases.
   `tools/test-theme-switch.js` — the behavioural harnesses gated into release.
 - `tools/test-shim-payloads.js`, `tools/test-terminal-font.js` — the Electron
   shim payloads parse, and the terminal colour table stays console-consistent.
+- `tools/check-wiki-mirror.js` — the repository `wiki/` mirror matches the
+  maintained wiki source.
 
 ## Deliberate deviations from UI.md
 

@@ -54,11 +54,11 @@ All paths relative to the project root. Create files with UTF-8, no BOM.
 - Add the source-digest marker as the FINAL line of every doc translation
   (a newline before it if the file does not already end with one):
   - for `README.<code>.md`:
-    `<!-- source-digest: README.md sha256:11d88239959a8c00 -->`
+    `<!-- source-digest: README.md sha256:886c5e27060e7b30 -->`
   - for `desktop/README.<code>.md`:
     `<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->`
   - for `browser-theme/README.<code>.txt`:
-    `<!-- source-digest: browser-theme/README.txt sha256:8656b29d0e5629e9 -->`
+    `<!-- source-digest: browser-theme/README.txt sha256:056bdd1c330ee8c2 -->`
 - JSON rules (`locales/<code>.json`): preserve the EXACT 49 keys from
   `en.json` in the same order, same quoting, same `{0}` placeholders, and the
   same embedded `\r\n` sequences in multi-line strings. Translate only the

@@ -91,16 +91,16 @@ Wintage अब एक पैलेट नहीं है। छह UI.md की
 
 ## नया संस्करण रिलीज़ करना (मेनटेनर के लिए)
 
-`wintage.user.js` संपादित करें, फिर चलाएँ:
+पहले `CHANGELOG.md` के शीर्ष पर `## [x.y.z] - date` प्रविष्टि जोड़ें — इसके बिना `release.ps1` चलने से मना कर देगा। फिर:
 
 ```powershell
 .\release.ps1 -Message "क्या बदला"
 ```
 
-यह `@version` पैच नंबर बढ़ाता है, commit करता है, और push करता है — Tampermonkey क्लाइंट अपडेट अपने आप उठा लेते हैं। बड़े रिलीज़ के लिए `-Bump minor` या `-Bump major` दें।
+यह `@version` पैच नंबर बढ़ाता है (Tampermonkey हेडर और `W95_VERSION` स्टैम्प साथ-साथ चलते हैं), जनरेट किए गए डेस्कटॉप थीम फिर से बनाता है, पूरी रिलीज़-गेट सूट चलाता है, और commit, tag और push करता है — Tampermonkey क्लाइंट अपडेट अपने आप उठा लेते हैं। बड़े रिलीज़ के लिए `-Bump minor` या `-Bump major` दें।
 
 ## लाइसेंस
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

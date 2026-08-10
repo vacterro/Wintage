@@ -91,16 +91,16 @@ Masaüstü kurucusunun `browsers` hedefi yüklü ve taşınabilir Chromium profi
 
 ## Yeni sürüm yayınlama (bakımcılar için)
 
-`wintage.user.js` dosyasını düzenleyin, sonra çalıştırın:
+Önce `CHANGELOG.md`'nin en üstüne bir `## [x.y.z] - date` girişi ekleyin — olmadan `release.ps1` çalışmayı reddeder. Sonra:
 
 ```powershell
 .\release.ps1 -Message "ne değişti"
 ```
 
-`@version` patch numarasını yükseltir, commit'ler ve gönderir — Tampermonkey istemcileri güncellemeyi otomatik alır. Daha büyük sürümler için `-Bump minor` veya `-Bump major` iletin.
+`@version` patch numarasını yükseltir (Tampermonkey başlığı ve `W95_VERSION` damgası birlikte hareket eder), üretilen masaüstü temalarını yeniden oluşturur, sürüm kapısı paketinin tamamını çalıştırır ve commit'ler, etiketler ve gönderir — Tampermonkey istemcileri güncellemeyi otomatik alır. Daha büyük sürümler için `-Bump minor` veya `-Bump major` iletin.
 
 ## Lisans
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

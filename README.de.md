@@ -91,16 +91,16 @@ Das `browsers`-Ziel des Desktop-Installers erkennt installierte und portable Chr
 
 ## Eine neue Version veröffentlichen (für Maintainer)
 
-Bearbeite `wintage.user.js`, dann führe aus:
+Füge zuerst einen `## [x.y.z] - date`-Eintrag oben in `CHANGELOG.md` ein — `release.ps1` weigert sich ohne ihn zu laufen. Dann:
 
 ```powershell
 .\release.ps1 -Message "was sich geändert hat"
 ```
 
-Es erhöht die `@version`-Patch-Nummer, committed und pusht — Tampermonkey-Clients holen das Update automatisch. Für größere Releases `-Bump minor` oder `-Bump major` übergeben.
+Es erhöht die `@version`-Patch-Nummer (der Tampermonkey-Header und der `W95_VERSION`-Stempel bewegen sich zusammen), baut die generierten Desktop-Designs neu, führt die gesamte Release-Gate-Suite aus und committed, taggt und pusht — Tampermonkey-Clients holen das Update automatisch. Für größere Releases `-Bump minor` oder `-Bump major` übergeben.
 
 ## Lizenz
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

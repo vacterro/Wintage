@@ -90,16 +90,16 @@ Wintage ไม่ใช่หนึ่งพาเล็ตอีกต่อไ
 
 ## การปล่อยเวอร์ชันใหม่ (สำหรับผู้ดูแล)
 
-แก้ `wintage.user.js` จากนั้นรัน:
+เพิ่มรายการ `## [x.y.z] - date` ที่ด้านบนของ `CHANGELOG.md` ก่อน — หากไม่มี `release.ps1` จะปฏิเสธไม่ให้ทำงาน จากนั้นรัน:
 
 ```powershell
 .\release.ps1 -Message "what changed"
 ```
 
-มันเพิ่มเลขแพตช์ `@version`, commit และ push — ลูกค้า Tampermonkey ดึงอัปเดตโดยอัตโนมัติ ส่ง `-Bump minor` หรือ `-Bump major` สำหรับรุ่นที่ใหญ่กว่า
+มันเพิ่มเลขแพตช์ `@version` (ส่วนหัว Tampermonkey และสแตมป์ `W95_VERSION` เคลื่อนไปด้วยกัน) สร้างธีมเดสก์ท็อปที่สร้างแล้วใหม่ เรียกใช้ชุดเกตการปล่อยทั้งหมด แล้ว commit, tag แล้ว push — ลูกค้า Tampermonkey ดึงอัปเดตโดยอัตโนมัติ ส่ง `-Bump minor` หรือ `-Bump major` สำหรับรุ่นที่ใหญ่กว่า
 
 ## ใบอนุญาต
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

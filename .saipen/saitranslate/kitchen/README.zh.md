@@ -91,16 +91,16 @@ Wintage 不再只有一个调色板。六个是 UI.md 自身的结构旋转到�
 
 ## 发布新版本（维护者）
 
-编辑 `wintage.user.js`，然后运行：
+首先在 `CHANGELOG.md` 顶部添加一条 `## [x.y.z] - date` 记录 — 没有它 `release.ps1` 会拒绝运行。然后：
 
 ```powershell
 .\release.ps1 -Message "改了什么"
 ```
 
-它会提升 `@version` 补丁号、提交并推送 — Tampermonkey 客户端会自动获取更新。较大的版本传递 `-Bump minor` 或 `-Bump major`。
+它会提升 `@version` 补丁号（Tampermonkey 头部和 `W95_VERSION` 标记一起移动）、重建生成的桌面主题、运行整套发布门禁，然后提交、打标签并推送 — Tampermonkey 客户端会自动获取更新。较大的版本传递 `-Bump minor` 或 `-Bump major`。
 
 ## 许可证
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

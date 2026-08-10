@@ -93,16 +93,16 @@ Az asztali telepítő `browsers` célpontja észleli a telepített és hordozhat
 
 ## Új verzió kiadása (karbantartóknak)
 
-Szerkeszd a `wintage.user.js` fájlt, majd futtasd:
+Először adj hozzá egy `## [x.y.z] - date` bejegyzést a `CHANGELOG.md` tetejére — enélkül a `release.ps1` nem hajlandó futni. Ezután:
 
 ```powershell
 .\release.ps1 -Message "mi változott"
 ```
 
-Ez növeli az `@version` javítás (patch) számát, commitol és pushol — a Tampermonkey-kliensek automatikusan felveszik a frissítést. Nagyobb kiadásokhoz adj `-Bump minor` vagy `-Bump major` paramétert.
+Ez növeli az `@version` javítás (patch) számát (a Tampermonkey-fejléc és a `W95_VERSION` bélyeg együtt mozog), újraépíti a generált asztali témákat, lefuttatja a teljes release-gate csomagot, majd commitol, tagel és pushol — a Tampermonkey-kliensek automatikusan felveszik a frissítést. Nagyobb kiadásokhoz adj `-Bump minor` vagy `-Bump major` paramétert.
 
 ## Licenc
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

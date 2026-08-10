@@ -91,16 +91,16 @@ La cible `browsers` de l'installeur desktop détecte les profils Chromium instal
 
 ## Publier une nouvelle version (mainteneurs)
 
-Modifiez `wintage.user.js`, puis exécutez :
+Ajoutez d'abord une entrée `## [x.y.z] - date` en haut de `CHANGELOG.md` — `release.ps1` refuse de s'exécuter sans elle. Puis :
 
 ```powershell
 .\release.ps1 -Message "ce qui a changé"
 ```
 
-Il incrémente le numéro de patch de `@version`, commit et pousse — les clients Tampermonkey récupèrent la mise à jour automatiquement. Passez `-Bump minor` ou `-Bump major` pour les releases plus importantes.
+Il incrémente le numéro de patch de `@version` (l'en-tête Tampermonkey et le tampon `W95_VERSION` bougent ensemble), reconstruit les thèmes de bureau générés, exécute toute la suite de portes de release, et commit, tag et pousse — les clients Tampermonkey récupèrent la mise à jour automatiquement. Passez `-Bump minor` ou `-Bump major` pour les releases plus importantes.
 
 ## Licence
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

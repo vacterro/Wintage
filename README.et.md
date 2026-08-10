@@ -155,18 +155,16 @@ kasutavad seda teed uuesti.
 
 ## Uue versiooni väljalaskmine (hooldajatele)
 
-Muuda `wintage.user.js`, seejärel käivita:
+Lisa kõigepealt `CHANGELOG.md` algusesse kirje `## [x.y.z] - date` — ilma selleta keeldub `release.ps1` töötamast. Seejärel:
 
 ```powershell
 .\release.ps1 -Message "mis muutus"
 ```
 
-See tõstab `@version` plaaster-numbri, teeb commiti ja pushi — Tampermonkey
-kliendid võtavad uuenduse automaatselt. Suuremate väljalasete jaoks anna
-`-Bump minor` või `-Bump major`.
+See tõstab `@version` plaaster-numbri (Tampermonkey päis ja `W95_VERSION` tempel liiguvad koos), ehitab loodud lauateemade ümber, käivitab kogu väljalaskegate'ide komplekti ning teeb commiti, tag'i ja pushi — Tampermonkey kliendid võtavad uuenduse automaatselt. Suuremate väljalasete jaoks anna `-Bump minor` või `-Bump major`.
 
 ## Litsents
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

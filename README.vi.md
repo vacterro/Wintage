@@ -90,16 +90,16 @@ Target `browsers` của trình cài desktop phát hiện các profile Chromium �
 
 ## Phát hành phiên bản mới (cho maintainer)
 
-Sửa `wintage.user.js`, rồi chạy:
+Đầu tiên thêm mục `## [x.y.z] - date` vào đầu `CHANGELOG.md` — nếu không có thì `release.ps1` sẽ từ chối chạy. Sau đó:
 
 ```powershell
 .\release.ps1 -Message "what changed"
 ```
 
-Nó tăng số patch `@version`, commit và push — client Tampermonkey tự nhận cập nhật. Truyền `-Bump minor` hoặc `-Bump major` cho bản phát hành lớn hơn.
+Nó tăng số patch `@version` (tiêu đề Tampermonkey và dấu `W95_VERSION` di chuyển cùng nhau), dựng lại các theme desktop được tạo, chạy toàn bộ chuỗi cổng phát hành, rồi commit, tag và push — client Tampermonkey tự nhận cập nhật. Truyền `-Bump minor` hoặc `-Bump major` cho bản phát hành lớn hơn.
 
 ## Giấy phép
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

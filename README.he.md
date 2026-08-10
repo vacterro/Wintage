@@ -90,16 +90,16 @@ Wintage הוא לא עוד פלטה אחת. שש מהן הן המבנה של UI.
 
 ## פרסום גרסה חדשה (למתחזקים)
 
-ערכו את `wintage.user.js`, ואז הריצו:
+הוסיפו קודם רשומת `## [x.y.z] - date` בראש `CHANGELOG.md` — `release.ps1` מסרב לרוץ בלעדיה. לאחר מכן:
 
 ```powershell
 .\release.ps1 -Message "what changed"
 ```
 
-הוא מעלה את מספר התיקון של `@version`, מבצע commit ו-dush — לקוחות Tampermonkey קולטים את העדכון אוטומטית. העבירו `-Bump minor` או `-Bump major` ליציאות גדולות יותר.
+הוא מעלה את מספר התיקון של `@version` (כותרת Tampermonkey וחותמת `W95_VERSION` נעות יחד), בונה מחדש את ערכות הנושא השולחניות שנוצרו, מריץ את כל חבילת שערי השחרור, ומבצע commit, tag ו-push — לקוחות Tampermonkey קולטים את העדכון אוטומטית. העבירו `-Bump minor` או `-Bump major` ליציאות גדולות יותר.
 
 ## רישיון
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

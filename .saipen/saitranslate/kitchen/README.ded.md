@@ -152,18 +152,16 @@ OLED, Dracula, Nord, Solarized Dark). Каждая проходит WCAG AA по
 
 ## Релиз новой версии (для сопровождающих)
 
-Правишь `wintage.user.js`, затем:
+Сначала добавь запись `## [x.y.z] - date` в начало `CHANGELOG.md` — без неё `release.ps1` откажется работать. Затем:
 
 ```powershell
 .\release.ps1 -Message "что изменилось"
 ```
 
-Поднимает патч-номер `@version`, коммитит и пушит — клиенты Tampermonkey
-подхватят обновление сами. Для крупных релизов передавай `-Bump minor` или
-`-Bump major`.
+Поднимает патч-номер `@version` (заголовок Tampermonkey и штамп `W95_VERSION` двигаются вместе), пересобирает десктопные темы, прогоняет весь набор релизных гейтов, коммитит, тегает и пушит — клиенты Tampermonkey подхватят обновление сами. Для крупных релизов передавай `-Bump minor` или `-Bump major`.
 
 ## Лицензия
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

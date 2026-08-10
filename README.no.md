@@ -91,16 +91,16 @@ Målet `browsers` i desktop-installatøren registrerer installerte og bærbare C
 
 ## Utgi en ny versjon (for vedlikeholdere)
 
-Rediger `wintage.user.js`, kjør deretter:
+Legg først til en `## [x.y.z] - date`-oppføring øverst i `CHANGELOG.md` — `release.ps1` nekter å kjøre uten den. Kjør deretter:
 
 ```powershell
 .\release.ps1 -Message "hva som endret seg"
 ```
 
-Det hever `@version`-patchnummeret, committer og pusher — Tampermonkey-klienter henter oppdateringen automatisk. For større releaser sender du `-Bump minor` eller `-Bump major`.
+Det hever `@version`-patchnummeret (Tampermonkey-headeren og `W95_VERSION`-stempelet beveger seg sammen), bygger opp de genererte desktop-temaene, kjører hele release-gate-suiten, og committer, tagger og pusher — Tampermonkey-klienter henter oppdateringen automatisk. For større releaser sender du `-Bump minor` eller `-Bump major`.
 
 ## Lisens
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

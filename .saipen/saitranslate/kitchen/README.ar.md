@@ -90,16 +90,16 @@ _كل عنصر يخبر عن الغرض منه بنظرة واحدة، مما ي
 
 ## إصدار نسخة جديدة (للمشرفين)
 
-حرّر `wintage.user.js`، ثم شغّل:
+أضف إدخالاً بالصيغة `## [x.y.z] - date` إلى أعلى `CHANGELOG.md` أولاً — لن يعمل `release.ps1` بدونه. ثم:
 
 ```powershell
 .\release.ps1 -Message "what changed"
 ```
 
-يرفع رقم رقعة `@version`، ويلتزم، ويرفع — يلتقط عملاء Tampermonkey التحديث تلقائياً. مرّر `-Bump minor` أو `-Bump major` للإصدارات الأكبر.
+يرفع رقم رقعة `@version` (رأس Tampermonkey وطابع `W95_VERSION` يتحركان معاً)، ويعيد بناء السمات المكتبية المُولَّدة، ويشغّل كامل مجموعة بوابات الإصدار، ويلتزم، ويوسم، ويرفع — يلتقط عملاء Tampermonkey التحديث تلقائياً. مرّر `-Bump minor` أو `-Bump major` للإصدارات الأكبر.
 
 ## الترخيص
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

@@ -93,16 +93,16 @@ specificitățile pe țintă.
 
 ## Lansarea unei versiuni noi (întreținători)
 
-Editează `wintage.user.js`, apoi rulează:
+Adaugă întâi o intrare `## [x.y.z] - date` în partea de sus a `CHANGELOG.md` — fără ea, `release.ps1` refuză să ruleze. Apoi:
 
 ```powershell
 .\release.ps1 -Message "ce s-a schimbat"
 ```
 
-Aceasta incrementează numărul de patch `@version`, face commit și push — clienții Tampermonkey preiau actualizarea automat. Pentru lansări mai mari, dă `-Bump minor` sau `-Bump major`.
+Incrementează numărul de patch `@version` (antetul Tampermonkey și ștampila `W95_VERSION` se mișcă împreună), reconstruiește temele desktop generate, rulează întreaga suită de release gates, apoi face commit, tag și push — clienții Tampermonkey preiau actualizarea automat. Pentru lansări mai mari, dă `-Bump minor` sau `-Bump major`.
 
 ## Licență
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

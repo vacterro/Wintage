@@ -93,16 +93,16 @@ _Κάθε στοιχείο επικοινωνεί τον σκοπό του με 
 
 ## Κυκλοφορία νέας έκδοσης (συντηρητές)
 
-Επεξεργαστείτε το `wintage.user.js` και μετά εκτελέστε:
+Προσθέστε πρώτα μια καταχώριση `## [x.y.z] - date` στην κορυφή του `CHANGELOG.md` — το `release.ps1` αρνείται να τρέξει χωρίς αυτήν. Μετά:
 
 ```powershell
 .\release.ps1 -Message "τι άλλαξε"
 ```
 
-Αυξάνει τον αριθμό patch του `@version`, κάνει commit και push — οι πελάτες Tampermonkey παραλαμβάνουν την ενημέρωση αυτόματα. Για μεγαλύτερες εκδόσεις δώστε `-Bump minor` ή `-Bump major`.
+Αυξάνει τον αριθμό patch του `@version` (η κεφαλίδα Tampermonkey και η σφραγίδα `W95_VERSION` κινούνται μαζί), ανακατασκευάζει τα παραγόμενα desktop θέματα, τρέχει όλη τη σουίτα release gates και κάνει commit, tag και push — οι πελάτες Tampermonkey παραλαμβάνουν την ενημέρωση αυτόματα. Για μεγαλύτερες εκδόσεις δώστε `-Bump minor` ή `-Bump major`.
 
 ## Άδεια
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

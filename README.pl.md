@@ -91,16 +91,16 @@ Cel `browsers` instalatora desktopowego wykrywa zainstalowane i przenośne profi
 
 ## Wydanie nowej wersji (dla opiekunów)
 
-Edytuj `wintage.user.js`, a następnie uruchom:
+Najpierw dodaj wpis `## [x.y.z] - date` na górze `CHANGELOG.md` — bez niego `release.ps1` odmawia działania. Następnie:
 
 ```powershell
 .\release.ps1 -Message "co się zmieniło"
 ```
 
-Podnosi numer `@version` patch, commituje i wypycha — klienci Tampermonkey pobierają aktualizację automatycznie. Dla większych wydań przekaż `-Bump minor` lub `-Bump major`.
+Podnosi numer `@version` patch (nagłówek Tampermonkey i znacznik `W95_VERSION` poruszają się razem), przebudowuje wygenerowane motywy desktopowe, uruchamia cały zestaw bramek wydania, a następnie commituje, taguje i wypycha — klienci Tampermonkey pobierają aktualizację automatycznie. Dla większych wydań przekaż `-Bump minor` lub `-Bump major`.
 
 ## Licencja
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

@@ -93,16 +93,16 @@ Wintage вече не е една палитра. Шест са собствен
 
 ## Издаване на нова версия (за поддържащи)
 
-Редактирайте `wintage.user.js`, след това изпълнете:
+Първо добавете запис `## [x.y.z] - date` в началото на `CHANGELOG.md` — без него `release.ps1` отказва да работи. След това:
 
 ```powershell
 .\release.ps1 -Message "какво се промени"
 ```
 
-Той вдига номера на `@version` (пач), прави commit и push — клиентите на Tampermonkey поемат актуализацията автоматично. За по-големи издания подайте `-Bump minor` или `-Bump major`.
+Той вдига номера на `@version` (пач) (заглавката на Tampermonkey и щемпелът `W95_VERSION` се движат заедно), преизгражда генерираните десктоп теми, пуска целия пакет от release шлюзове и прави commit, tag и push — клиентите на Tampermonkey поемат актуализацията автоматично. За по-големи издания подайте `-Bump minor` или `-Bump major`.
 
 ## Лиценз
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

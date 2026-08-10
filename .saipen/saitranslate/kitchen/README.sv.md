@@ -91,16 +91,16 @@ Målet `browsers` i skrivbordsinstalleraren detekterar installerade och bärbara
 
 ## Släppa en ny version (för underhållare)
 
-Redigera `wintage.user.js` och kör sedan:
+Lägg först till en `## [x.y.z] - date`-post överst i `CHANGELOG.md` — `release.ps1` vägrar att köra utan den. Kör sedan:
 
 ```powershell
 .\release.ps1 -Message "vad som ändrats"
 ```
 
-Det höjer `@version`-patchnumret, commitar och pushar — Tampermonkey-klienter hämtar uppdateringen automatiskt. För större releaser skicka `-Bump minor` eller `-Bump major`.
+Det höjer `@version`-patchnumret (Tampermonkey-huvudet och `W95_VERSION`-stämpeln rör sig tillsammans), bygger om de genererade skrivbordsteman, kör hela release-gate-sviten, och committar, taggar och pushar — Tampermonkey-klienter hämtar uppdateringen automatiskt. För större releaser skicka `-Bump minor` eller `-Bump major`.
 
 ## Licens
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

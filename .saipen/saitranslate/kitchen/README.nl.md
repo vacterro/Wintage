@@ -91,16 +91,16 @@ De `browsers`-doelgroep van de desktopinstaller detecteert geïnstalleerde en dr
 
 ## Een nieuwe versie uitbrengen (voor onderhouders)
 
-Bewerk `wintage.user.js`, voer daarna uit:
+Voeg eerst een `## [x.y.z] - date`-item toe bovenaan `CHANGELOG.md` — `release.ps1` weigert te draaien zonder. Voer daarna uit:
 
 ```powershell
 .\release.ps1 -Message "wat er veranderd is"
 ```
 
-Het verhoogt het `@version`-patchnummer, commit en pusht — Tampermonkey-clients halen de update automatisch op. Voor grotere releases geef je `-Bump minor` of `-Bump major` door.
+Het verhoogt het `@version`-patchnummer (de Tampermonkey-header en de `W95_VERSION`-stempel bewegen samen), herbouwt de gegenereerde desktopthema's, draait de volledige release-gate-suite, en commit, tagt en pusht — Tampermonkey-clients halen de update automatisch op. Voor grotere releases geef je `-Bump minor` of `-Bump major` door.
 
 ## Licentie
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

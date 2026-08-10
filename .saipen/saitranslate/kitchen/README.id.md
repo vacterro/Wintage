@@ -91,16 +91,16 @@ Target `browsers` di penginstal desktop mendeteksi profil Chromium terpasang dan
 
 ## Merilis versi baru (untuk pemelihara)
 
-Edit `wintage.user.js`, lalu jalankan:
+Tambahkan dulu entri `## [x.y.z] - date` di bagian atas `CHANGELOG.md` — `release.ps1` menolak berjalan tanpanya. Lalu:
 
 ```powershell
 .\release.ps1 -Message "apa yang berubah"
 ```
 
-Ini menaikkan nomor patch `@version`, melakukan commit, dan push — klien Tampermonkey mengambil pembaruan secara otomatis. Berikan `-Bump minor` atau `-Bump major` untuk rilis yang lebih besar.
+Ini menaikkan nomor patch `@version` (header Tampermonkey dan stempel `W95_VERSION` bergerak bersama), membangun ulang tema desktop yang dihasilkan, menjalankan seluruh rangkaian gerbang rilis, lalu commit, tag, dan push — klien Tampermonkey mengambil pembaruan secara otomatis. Berikan `-Bump minor` atau `-Bump major` untuk rilis yang lebih besar.
 
 ## Lisensi
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->

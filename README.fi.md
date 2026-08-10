@@ -91,16 +91,16 @@ Työpöytäasentajan `browsers`-kohde havaitsee asennetut ja kannettavat Chromiu
 
 ## Uuden version julkaiseminen (ylläpitäjille)
 
-Muokkaa `wintage.user.js`-tiedostoa ja suorita sitten:
+Lisää ensin `## [x.y.z] - date` -merkintä `CHANGELOG.md`-tiedoston alkuun — `release.ps1` kieltäytyy ajautumasta ilman sitä. Suorita sitten:
 
 ```powershell
 .\release.ps1 -Message "mitä muuttui"
 ```
 
-Se nostaa `@version`-patch-numeroa, tekee commitin ja pushaa — Tampermonkey-asiakkaat hakevat päivityksen automaattisesti. Suurempia julkaisuja varten anna `-Bump minor` tai `-Bump major`.
+Se nostaa `@version`-patch-numeroa (Tampermonkey-otsikko ja `W95_VERSION`-leima liikkuvat yhdessä), rakentaa luodut työpöytäteemat uudelleen, ajaa koko release-gate-paketin sekä tekee commitin, tagin ja pushin — Tampermonkey-asiakkaat hakevat päivityksen automaattisesti. Suurempia julkaisuja varten anna `-Bump minor` tai `-Bump major`.
 
 ## Lisenssi
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:ee7c6a2a1626faed -->
+<!-- source-digest: README.md sha256:886c5e27060e7b30 -->
