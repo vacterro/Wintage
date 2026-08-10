@@ -1,3 +1,3 @@
-done: full 29-language translation bundle SHIPPED (26e1d74, T-177 eee) — README/desktop/browser-theme/locales all live
+done: v1.26.3 RELEASED and pushed (953061f + tag) -- BetterDiscord theme, 29-language bundle, installer load fix, module split; sc circuit complete
 remaining: nothing on TODO
-awaiting: user triage of T-173/T-174 (MARKHUNT findings); T-065 (needs authed Studio DOM)
+awaiting: user triage of T-173/T-174 (untriaged MARKHUNT findings in ## BLOCKED)
