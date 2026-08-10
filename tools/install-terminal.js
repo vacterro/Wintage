@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { writeAtomic } = require('./write-atomic');
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -99,9 +100,7 @@ function readJsonc(file) {
 }
 
 function replaceFile(file, content) {
-  const temp = `${file}.wintage-tmp`;
-  fs.writeFileSync(temp, content, 'utf8');
-  fs.renameSync(temp, file);
+  writeAtomic(file, content);
 }
 
 function restoreFile(backup, file) {

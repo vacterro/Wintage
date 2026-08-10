@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { writeAtomic } = require('./write-atomic');
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -28,13 +29,6 @@ const markerFile = path.join(configDir, '.wintage-obs-palette');
 
 function pathsFor(file) {
   return { backup: `${file}.wintage.bak`, created: `${file}.wintage-created` };
-}
-
-function writeAtomic(file, content) {
-  const temp = `${file}.wintage-tmp`;
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(temp, content);
-  fs.renameSync(temp, file);
 }
 
 function backupOnce(file) {

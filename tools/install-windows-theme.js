@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { writeAtomic } = require('./write-atomic');
 
 function fail(message) { console.error('install-windows-theme: ' + message); process.exit(1); }
 
@@ -39,12 +40,6 @@ const paletteMarker = path.join(themesDir, '.wintage-windows-palette');
 const activePathMarker = path.join(themesDir, '.wintage-active-theme-path');
 
 function read(file) { return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''); }
-function writeAtomic(file, content) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = file + '.wintage-tmp-' + process.pid;
-  fs.writeFileSync(temp, content, 'utf8');
-  fs.renameSync(temp, file);
-}
 function remove(file) { if (fs.existsSync(file)) fs.unlinkSync(file); }
 
 function parseIni(text) {
