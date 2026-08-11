@@ -91,6 +91,16 @@ function Get-FreeBuffHealth([switch]$DesiredSound) {
 
 # Byte-exact snapshot of an Electron target's owned files, used to restore the
 # EXACT pre-operation state if the second (FreeBuff) layer fails (T-190).
+function Get-ElectronExe([string]$key) {
+    if (-not $ELECTRON.ContainsKey($key)) { return $null }
+    $appDir = Split-Path $ELECTRON[$key].Resources -Parent
+    if (-not (Test-Path $appDir)) { return $null }
+    # Mirror install-electron.js resolveExe: the ONE exe that is not an installer.
+    $exes = @(Get-ChildItem $appDir -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^(uninstall|elevate|squirrel|update)' })
+    if ($exes.Count -eq 1) { return $exes[0].FullName }
+    return $null
+}
+
 function Save-ElectronStateSnapshot([string]$key) {
     $e = $ELECTRON[$key]
     $snap = Join-Path $env:TEMP ("wintage-elstate-" + [guid]::NewGuid().ToString('N'))
@@ -100,17 +110,52 @@ function Save-ElectronStateSnapshot([string]$key) {
         $src = Join-Path $r $f
         if (Test-Path $src) { Copy-Item $src (Join-Path $snap $f) -Recurse -Force }
     }
+    # T-191 P0#3: the app EXE lives OUTSIDE resources/ (the app root), and the
+    # fuse values live inside it. The Electron layer can flip the runAsNode fuse
+    # during apply, so the snapshot must carry the exe byte-exactly AND the fuse
+    # backup file the defuse writes, otherwise a failed FreeBuff second layer
+    # would leave a half-defused exe behind.
+    $exe = Get-ElectronExe $key
+    if ($exe) {
+        Copy-Item $exe (Join-Path $snap ([IO.Path]::GetFileName($exe))) -Force
+        $fuseBak = $exe + '.wintage-fuse.bak'
+        if (Test-Path $fuseBak) { Copy-Item $fuseBak (Join-Path $snap ([IO.Path]::GetFileName($fuseBak))) -Force }
+    }
     return $snap
 }
 
 function Restore-ElectronStateSnapshot([string]$key, [string]$snap) {
     $e = $ELECTRON[$key]
     $r = $e.Resources
+    # T-191 P0#12: copy-over FIRST, delete leftovers AFTER. A restore that removes
+    # the live file and then fails to copy leaves the app broken; overwriting in
+    # place never does. Directories cannot be overwritten in place (Copy-Item would
+    # nest them), so they are swapped through a temp sibling via Restore-DirPreState
+    # - the live dir is only touched once the restored copy is fully materialised.
     foreach ($f in @('app', 'app.asar', 'app.asar.unpacked', 'wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt')) {
         $src = Join-Path $snap $f
         $dst = Join-Path $r $f
-        if (Test-Path $dst) { Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $src) { Copy-Item $src $dst -Recurse -Force }
+        if (Test-Path $src) {
+            if ((Get-Item $src -ErrorAction SilentlyContinue).PSIsContainer) {
+                Restore-DirPreState $dst $src
+            } else {
+                Copy-Item $src $dst -Force
+            }
+        } elseif (Test-Path $dst) { Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+    $exe = Get-ElectronExe $key
+    if ($exe) {
+        $snapExe = Join-Path $snap ([IO.Path]::GetFileName($exe))
+        $fuseBak = $exe + '.wintage-fuse.bak'
+        $snapFuse = Join-Path $snap ([IO.Path]::GetFileName($fuseBak))
+        if (Test-Path $snapExe) { Copy-Item $snapExe $exe -Force }
+        elseif (Test-Path $exe) { Remove-Item $exe -Force -ErrorAction SilentlyContinue }
+        # A snapshot WITHOUT a fuse bak means the exe was never defused before the
+        # operation: the stale bak from the failed transaction is removed only
+        # AFTER the exe itself is back, so a later --revert cannot restore a
+        # defused exe over the pristine one.
+        if (Test-Path $snapFuse) { Copy-Item $snapFuse $fuseBak -Force }
+        elseif (Test-Path $fuseBak) { Remove-Item $fuseBak -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -163,6 +208,33 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                 $canon = [IO.Path]::GetFullPath($r).TrimEnd('\')
                 if ($canon -notin $current) { $reasons += "recorded $key item gone or moved: $canon" }
             }
+            # T-191 P0#8: a passing SET is not enough - probe the EFFECTIVE owned
+            # state of every item (marker presence AND the recorded palette value).
+            # A marker that was deleted or rewritten to another palette is just as
+            # unhealthy as a vanished vault, and must trigger Reapply.
+            if ($key -eq 'terminal') {
+                $paths = @(Get-WindowsTerminalSettingsPaths)
+                $markers = @($paths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ })
+                if ($markers.Count -lt $paths.Count) { $reasons += 'terminal theme marker(s) missing' }
+                else { foreach ($marker in $markers) { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "terminal marker palette mismatch ($mv)" } } }
+            } else {
+                $builtRoot = Join-Path $out 'obsidian'
+                $activeName = $null
+                $activeManifest = Join-Path $builtRoot "$($data.palette)/manifest.json"
+                if (Test-Path $activeManifest) {
+                    try { $activeName = (Read-Utf8 $activeManifest | ConvertFrom-Json).name } catch { }
+                }
+                foreach ($r in $recorded) {
+                    $themesDir = Join-Path $r '.obsidian/themes'
+                    $hasTheme = (Test-Path $themesDir) -and @(Get-ChildItem $themesDir -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue).Count -gt 0
+                    if (-not $hasTheme) { $reasons += "obsidian vault has no Wintage theme: $r" }
+                    $appearance = Join-Path $r '.obsidian/appearance.json'
+                    if (Test-Path $appearance) {
+                        $css = (Read-Utf8 $appearance | ConvertFrom-Json).cssTheme
+                        if ($activeName -and $css -ne $activeName) { $reasons += "obsidian vault not set active ('$css' != '$activeName'): $r" }
+                    } else { $reasons += "obsidian appearance.json missing: $r" }
+                }
+            }
         }
         return [pscustomobject]@{ Needs = ($reasons.Count -gt 0); Reasons = ($reasons -join '; '); Path = ($recorded -join '; ') }
     }
@@ -177,7 +249,6 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
         $palTokens = if (Test-Path $palFile) { Get-PaletteTokens $palFile } else { $null }
         switch ($key) {
             'windows'   { if (Test-Path $WINDOWS_THEME_MARKER) { $m = (Read-Utf8 $WINDOWS_THEME_MARKER).Trim(); if ($m -ne $data.palette) { $reasons += "windows marker palette mismatch ($m)" } } else { $reasons += 'windows theme marker missing' } }
-            'terminal'  { $paths = @(Get-WindowsTerminalSettingsPaths); $markers = @($paths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ }); if ($markers.Count -lt $paths.Count) { $reasons += 'terminal theme marker(s) missing' } else { foreach ($marker in $markers) { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "terminal marker palette mismatch ($mv)" } } } }
             'obs'       { $obsTheme = Join-Path $OBS_CONFIG 'themes\Wintage.ovt'; $obsMarker = Join-Path $OBS_CONFIG '.wintage-obs-palette'; if (-not (Test-Path $obsTheme) -or -not (Test-Path $obsMarker)) { $reasons += 'obs theme/marker missing' } else { $mv = (Read-Utf8 $obsMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "obs marker palette mismatch ($mv)" } } }
             'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" } }
             'browsers'  { $marker = Join-Path $BrowserStageRoot '.wintage-palette'; if (-not (Test-Path $marker)) { $reasons += 'browser stage marker missing' } else { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "browser marker palette mismatch ($mv)" } } }
@@ -378,6 +449,67 @@ function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [
 
 # The 23 SMART VAC owned assignment names (the anchors the apply patches).
 $script:SV_ANCHOR_NAMES = @('WIN95_BG','WIN95_BG_SOFT','WIN95_SURFACE','WIN95_SURFACE_RAISED','WIN95_SURFACE_ALT','WIN95_BEVEL_HI','WIN95_BEVEL_SH','WIN95_BORDER_MUTED','WIN95_TEXT','WIN95_TEXT_DIM','WIN95_TEXT_MUTED','WIN95_GOLD','WIN95_GOLD_LIGHT','WIN95_GOLD_DIM','WIN95_GOLD_DARK','WIN95_RED','WIN95_DANGER','WIN95_GREEN','WIN95_BUTTON','WIN95_BUTTON_HOVER','WIN95_ENTRY','WIN95_SCROLL','WIN95_SCROLL_HOVER')
+
+# --- T-191 P0#1: target-level commit transactions -------------------------------
+# A target's manifest commit is the LAST step of its operation. If that commit
+# fails AFTER the target was mutated, the target must return to its exact
+# pre-operation state (the old manifest entry - if any - is untouched because
+# Set/Remove-ManifestEntry writes atomically and fails whole). Save-FilePreState
+# captures byte-exact snapshots before any mutation; Invoke-TargetCommit pairs a
+# commit with the restore that undoes it.
+function Save-FilePreState([string]$file, [string]$bakFile) {
+    $bakOk = $bakFile -and (Test-Path $bakFile)
+    return [pscustomobject]@{
+        fileBytes = if ($file -and (Test-Path $file)) { [System.IO.File]::ReadAllBytes($file) } else { $null }
+        bakExists = [bool]$bakOk
+        bakBytes  = if ($bakOk) { [System.IO.File]::ReadAllBytes($bakFile) } else { $null }
+    }
+}
+function Restore-FilePreState($pre, [string]$file, [string]$bakFile) {
+    if ($pre -and $null -ne $pre.fileBytes -and $file) { [System.IO.File]::WriteAllBytes($file, $pre.fileBytes) }
+    elseif ($file -and (Test-Path $file)) { Remove-Item $file -Force }
+    if ($pre -and $pre.bakExists -and $bakFile) { [System.IO.File]::WriteAllBytes($bakFile, $pre.bakBytes) }
+    elseif ($bakFile -and (Test-Path $bakFile)) { Remove-Item $bakFile -Force }
+}
+function Invoke-TargetCommit([string]$target, [string]$label, [scriptblock]$commit, [scriptblock]$restore) {
+    try {
+        & $commit
+    } catch {
+        if ($restore) {
+            try {
+                & $restore
+                Say "$label`: manifest commit failed - target restored to its exact pre-operation state." 'Yellow'
+            } catch {
+                Say "$label`: manifest commit failed AND rollback failed - $($_.Exception.Message)" 'Red'
+            }
+        }
+        throw
+    }
+}
+
+# Whole-directory snapshots for targets whose mutation is directory-shaped (the
+# browser stage root, the VS Code extension dirs). Byte-exact, recursive.
+function Save-DirPreState([string]$dir) {
+    if (-not $dir -or -not (Test-Path $dir)) { return $null }
+    $snap = Join-Path $env:TEMP ("wintage-dirstate-" + [guid]::NewGuid().ToString('N'))
+    Copy-Item $dir $snap -Recurse -Force
+    return $snap
+}
+function Restore-DirPreState([string]$dir, [string]$snap) {
+    if (-not $snap -or -not (Test-Path $snap)) { return }
+    # T-191 P0#12: materialise the restore in a temp sibling FIRST, then swap it
+    # in. A failed copy never touches the live dir; the temp is dropped on error.
+    $tmp = Join-Path (Split-Path $dir) ('.wintage-restore-' + [guid]::NewGuid().ToString('N'))
+    try {
+        Copy-Item $snap $tmp -Recurse -Force
+        if ($dir -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Force -Path (Split-Path $dir) | Out-Null
+        Rename-Item $tmp ([IO.Path]::GetFileName($dir))
+    } catch {
+        if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+}
 
 function Invoke-WindowsTerminal {
     param([switch]$DoRevert, [string]$PaletteSlug)
@@ -828,10 +960,13 @@ function Invoke-SmartVac {
     if ($DoRevert) {
         Assert-RevertSource 'smartvac' $bakFile 'SMART VAC CLEANER'
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore SMART VAC CLEANER from backup')) {
+            $pre = Save-FilePreState $pyFile $bakFile
             Copy-Item $bakFile $pyFile -Force
             Remove-Item $bakFile -Force
             Say "SMART VAC CLEANER: restored from backup" 'Green'
-            Remove-ManifestEntry 'smartvac'
+            Invoke-TargetCommit 'smartvac' 'SMART VAC CLEANER' {
+                Remove-ManifestEntry 'smartvac'
+            } { Restore-FilePreState $pre $pyFile $bakFile }
         }
         return
     }
@@ -924,11 +1059,13 @@ function Invoke-SmartVac {
     # (T-187). If the UPSTREAM source changes after a Wintage touch, the backup is
     # re-based from the current source so Revert restores the new version, never
     # the obsolete one (T-189).
+    $pre = Save-FilePreState $pyFile $bakFile
     Sync-SourceBackup $pyFile $bakFile 'smartvac' 'SMART VAC CLEANER'
-    
     Write-Utf8 $pyFile $code
     Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
-    Set-ManifestEntry 'smartvac' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
+    Invoke-TargetCommit 'smartvac' 'SMART VAC CLEANER' {
+        Set-ManifestEntry 'smartvac' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
+    } { Restore-FilePreState $pre $pyFile $bakFile }
 }
 
 function Invoke-WildRift {
@@ -943,10 +1080,13 @@ function Invoke-WildRift {
     if ($DoRevert) {
         Assert-RevertSource 'wildrift' $bakFile 'WildRiftAssistant'
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore WildRiftAssistant from backup')) {
+            $pre = Save-FilePreState $pyFile $bakFile
             Copy-Item $bakFile $pyFile -Force
             Remove-Item $bakFile -Force
             Say "WildRiftAssistant: restored from backup" 'Green'
-            Remove-ManifestEntry 'wildrift'
+            Invoke-TargetCommit 'wildrift' 'WildRiftAssistant' {
+                Remove-ManifestEntry 'wildrift'
+            } { Restore-FilePreState $pre $pyFile $bakFile }
         }
         return
     }
@@ -956,6 +1096,7 @@ function Invoke-WildRift {
     # The rollback base follows the upstream source (T-189): a repaint must never
     # rebuild the live file from an obsolete pre-update backup. The backup is
     # re-based when the live file changed in non-Wintage content.
+    $pre = Save-FilePreState $pyFile $bakFile
     Sync-SourceBackup $pyFile $bakFile 'wildrift' 'WildRiftAssistant'
     $json = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json")) | ConvertFrom-Json
     $pyTokens = "TOKENS = {`r`n"
@@ -981,7 +1122,9 @@ function Invoke-WildRift {
     }
     Write-Utf8 $pyFile $code
     Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
-    Set-ManifestEntry 'wildrift' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
+    Invoke-TargetCommit 'wildrift' 'WildRiftAssistant' {
+        Set-ManifestEntry 'wildrift' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
+    } { Restore-FilePreState $pre $pyFile $bakFile }
 }
 
 function Invoke-Saipenview {
@@ -995,10 +1138,13 @@ function Invoke-Saipenview {
     if ($DoRevert) {
         Assert-RevertSource 'saipenview' $bakFile 'SAIPENVIEW'
         if ($PSCmdlet.ShouldProcess($cssFile, 'Restore SAIPENVIEW original CSS')) {
+            $pre = Save-FilePreState $cssFile $bakFile
             Copy-Item $bakFile $cssFile -Force
             Remove-Item $bakFile -Force
             Say "SAIPENVIEW: restored from backup" 'Green'
-            Remove-ManifestEntry 'saipenview'
+            Invoke-TargetCommit 'saipenview' 'SAIPENVIEW' {
+                Remove-ManifestEntry 'saipenview'
+            } { Restore-FilePreState $pre $cssFile $bakFile }
         }
         return
     }
@@ -1093,17 +1239,20 @@ function Invoke-Saipenview {
             $missing = @($missing | Where-Object { $_ -ne 'dangerText' })
         }
 
-        Write-Utf8 $cssFile $text
-
-        # Zero tokens recoloured means the write was a no-op wearing an install's
-        # clothes: same bytes on disk, "installed" in the log, manifest advanced.
-        # That is the exact silent-false-success the patch gates exist to stop.
+        # Zero tokens recoloured would be a no-op wearing an install's clothes:
+        # same bytes on disk, "installed" in the log, manifest advanced. Fail
+        # BEFORE any write so a doomed run mutates nothing (T-191 P0#1).
         if ($applied.Count -eq 0) {
             throw 'SAIPENVIEW: no --token declarations matched in style.css - refusing to write an unchanged file as an install; check that the CSS is the one this theme expects.'
         }
 
+        $pre = Save-FilePreState $cssFile $bakFile
+        Write-Utf8 $cssFile $text
+
         Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
-        Set-ManifestEntry 'saipenview' $PaletteSlug $cssFile 'n/a' (Get-PayloadVersion)
+        Invoke-TargetCommit 'saipenview' 'SAIPENVIEW' {
+            Set-ManifestEntry 'saipenview' $PaletteSlug $cssFile 'n/a' (Get-PayloadVersion)
+        } { Restore-FilePreState $pre $cssFile $bakFile }
         if ($missing.Count) {
             # Reported, not silently dropped: a token SAIPENVIEW does not declare is a
             # gap in coverage the next person should know about.
@@ -1123,9 +1272,12 @@ function Invoke-BetterDiscord {
     if ($DoRevert) {
         if (Test-Path $bdCss) {
             if ($PSCmdlet.ShouldProcess($bdCss, 'Remove Wintage theme')) {
+                $pre = Save-FilePreState $bdCss $null
                 Remove-Item $bdCss -Force
                 Say "BetterDiscord: removed $bdCss" 'Green'
-                Remove-ManifestEntry 'discord'
+                Invoke-TargetCommit 'discord' 'BetterDiscord' {
+                    Remove-ManifestEntry 'discord'
+                } { Restore-FilePreState $pre $bdCss $null }
             }
         } else { Say "BetterDiscord: nothing installed, nothing to revert." }
         return
@@ -1134,14 +1286,58 @@ function Invoke-BetterDiscord {
     if ($PSCmdlet.ShouldProcess($bdCss, 'Install Wintage theme')) {
         $built = Join-Path $out "betterdiscord/$PaletteSlug/wintage.theme.css"
         if (-not (Test-Path $built)) { throw "Built BetterDiscord output missing for '$PaletteSlug'. Run 'node tools/build-desktop.js'." }
+        $pre = Save-FilePreState $bdCss $null
         Copy-Item $built $bdCss -Force
         Say "BetterDiscord: installed theme -> $bdCss" 'Green'
-        Set-ManifestEntry 'discord' $PaletteSlug $bdCss 'n/a' (Get-PayloadVersion)
+        Invoke-TargetCommit 'discord' 'BetterDiscord' {
+            Set-ManifestEntry 'discord' $PaletteSlug $bdCss 'n/a' (Get-PayloadVersion)
+        } { Restore-FilePreState $pre $bdCss $null }
     }
 }
 
 function Invoke-Obsidian {
     param([switch]$DoRevert, [string]$PaletteSlug)
+
+    # T-191 P0#1: Obsidian mutates whole theme trees + appearance.json per vault,
+    # so a manifest-commit failure needs a full per-vault byte snapshot to roll
+    # back. Save-VaultPreState captures the Wintage-* dirs + appearance + the
+    # cssTheme snapshot file's existence; Restore-VaultPreState re-materialises it.
+    function Save-VaultPreState([string]$vault) {
+        $themesDir = Join-Path $vault '.obsidian/themes'
+        $appearance = Join-Path $vault '.obsidian/appearance.json'
+        $dirs = @{}
+        if (Test-Path $themesDir) {
+            foreach ($d in (Get-ChildItem $themesDir -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue)) {
+                $files = @{}
+                Get-ChildItem $d.FullName -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+                    $files[$_.FullName.Substring($d.FullName.Length)] = [System.IO.File]::ReadAllBytes($_.FullName)
+                }
+                $dirs[$d.FullName] = $files
+            }
+        }
+        $apBytes = if (Test-Path $appearance) { [System.IO.File]::ReadAllBytes($appearance) } else { $null }
+        $bakPath = (Get-VaultBackupPath $vault)
+        return [pscustomobject]@{ vault = $vault; dirs = $dirs; appearance = $apBytes; bakExists = (Test-Path $bakPath) }
+    }
+    function Restore-VaultPreState($pre) {
+        $themesDir = Join-Path $pre.vault '.obsidian/themes'
+        if (Test-Path $themesDir) {
+            Get-ChildItem $themesDir -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue | ForEach-Object {
+                Remove-Item $_.FullName -Recurse -Force
+            }
+        }
+        foreach ($dir in $pre.dirs.Keys) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            foreach ($rel in $pre.dirs[$dir].Keys) {
+                [System.IO.File]::WriteAllBytes((Join-Path $dir $rel), $pre.dirs[$dir][$rel])
+            }
+        }
+        $appearance = Join-Path $pre.vault '.obsidian/appearance.json'
+        if ($null -ne $pre.appearance) { [System.IO.File]::WriteAllBytes($appearance, $pre.appearance) }
+        elseif (Test-Path $appearance) { Remove-Item $appearance -Force }
+        $bakPath = Get-VaultBackupPath $pre.vault
+        if (-not $pre.bakExists -and (Test-Path $bakPath)) { Remove-Item $bakPath -Force }
+    }
 
     $vaults = Get-ObsidianVaults
     if (-not $vaults) { Assert-TargetResolvable 'Obsidian' $false; return }
@@ -1174,6 +1370,7 @@ function Invoke-Obsidian {
         $m = Read-Manifest
         $recorded = if ($m.ContainsKey('obsidian')) { @(Get-ManifestItems $m['obsidian']) } else { @() }
         if (-not $recorded.Count) { $recorded = @($vaults) }
+        $preStates = @($recorded | ForEach-Object { Save-VaultPreState $_ })
         $failedVaults = @()
         foreach ($vault in $recorded) {
             try {
@@ -1205,10 +1402,13 @@ function Invoke-Obsidian {
         # Remove the manifest ONLY after every RECORDED vault reverted; a partial
         # revert keeps it as recovery evidence (T-189/T-190).
         if ($failedVaults.Count) { throw "Obsidian revert INCOMPLETE for: $($failedVaults -join '; ') - manifest kept." }
-        Remove-ManifestEntry 'obsidian'
+        Invoke-TargetCommit 'obsidian' 'Obsidian' {
+            Remove-ManifestEntry 'obsidian'
+        } { foreach ($p in $preStates) { Restore-VaultPreState $p } }
         return
     }
 
+    $preStates = @($vaults | ForEach-Object { Save-VaultPreState $_ })
     $failedVaults = @()
     foreach ($vault in $vaults) {
         try {
@@ -1247,7 +1447,9 @@ function Invoke-Obsidian {
     if ($failedVaults.Count) {
         throw "Obsidian apply INCOMPLETE for: $($failedVaults -join '; ') - manifest NOT advanced; re-run after fixing the failing vault(s)."
     }
-    Set-ManifestEntryMulti 'obsidian' $PaletteSlug (@($vaults | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
+    Invoke-TargetCommit 'obsidian' 'Obsidian' {
+        Set-ManifestEntryMulti 'obsidian' $PaletteSlug (@($vaults | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
+    } { foreach ($p in $preStates) { Restore-VaultPreState $p } }
 }
 
 function Invoke-Obs {
@@ -1267,10 +1469,18 @@ function Invoke-Obs {
     $action = if ($DoRevert) { 'Restore previous OBS theme and selection' } else { "Install and activate Wintage $PaletteSlug" }
     if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'OBS Studio dry-run FAILED - see the message above.' }; return }
     if ($PSCmdlet.ShouldProcess($OBS_CONFIG, $action)) {
+        $pre = Save-FilePreState $OBS_CONFIG $null
         & node $args
         if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
-        if ($DoRevert) { Remove-ManifestEntry 'obs' }
-        else { Set-ManifestEntry 'obs' $PaletteSlug $OBS_CONFIG 'n/a' (Get-PayloadVersion) }
+        if ($DoRevert) {
+            Invoke-TargetCommit 'obs' 'OBS Studio' {
+                Remove-ManifestEntry 'obs'
+            } { Restore-FilePreState $pre $OBS_CONFIG $null }
+        } else {
+            Invoke-TargetCommit 'obs' 'OBS Studio' {
+                Set-ManifestEntry 'obs' $PaletteSlug $OBS_CONFIG 'n/a' (Get-PayloadVersion)
+            } { Restore-FilePreState $pre $OBS_CONFIG $null }
+        }
     }
 }
 
@@ -1281,6 +1491,19 @@ function Invoke-MpcHc {
 
     $bakDir = Join-Path $here 'backup'
     $bak = Join-Path $bakDir 'mpc-hc-settings.reg'
+
+    # MPCTheme 1 = the dark UI. ModernThemeMode 2 = dark title bar too.
+    # OSD: Verdana per UI.md law 1, a size on its ladder, zero transparency
+    # (law 2 forbids it outright), and a border so it reads as a raised surface.
+    $vals = @{
+        MPCTheme         = 1
+        ModernThemeMode  = 2
+        OSDFont          = 'Verdana'
+        OSDSize          = 16
+        OSDTransparency  = 0
+        OSDBorder        = 1
+        TitleBarTextStyle = 1
+    }
 
     if ($DoRevert) {
         Assert-RevertSource 'mpchc' $bak 'MPC-HC'
@@ -1293,7 +1516,14 @@ function Invoke-MpcHc {
                 throw "MPC-HC: reg import failed ($LASTEXITCODE) -- values were NOT restored. The manifest and backup are kept so a retry or manual reg import can still recover."
             }
             Say "MPC-HC: restored the captured values from $bak" 'Green'
-            Remove-ManifestEntry 'mpchc'
+            Invoke-TargetCommit 'mpchc' 'MPC-HC' {
+                Remove-ManifestEntry 'mpchc'
+            } {
+                foreach ($k in $vals.Keys) {
+                    $type = if ($vals[$k] -is [string]) { 'String' } else { 'DWord' }
+                    Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
+                }
+            }
         }
         return
     }
@@ -1311,24 +1541,17 @@ function Invoke-MpcHc {
         }
         else { Say "MPC-HC: keeping the existing backup at $bak (it holds the pre-Wintage state)" 'DarkGray' }
 
-        # MPCTheme 1 = the dark UI. ModernThemeMode 2 = dark title bar too.
-        # OSD: Verdana per UI.md law 1, a size on its ladder, zero transparency
-        # (law 2 forbids it outright), and a border so it reads as a raised surface.
-        $vals = @{
-            MPCTheme         = 1
-            ModernThemeMode  = 2
-            OSDFont          = 'Verdana'
-            OSDSize          = 16
-            OSDTransparency  = 0
-            OSDBorder        = 1
-            TitleBarTextStyle = 1
-        }
         foreach ($k in $vals.Keys) {
             $type = if ($vals[$k] -is [string]) { 'String' } else { 'DWord' }
             Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
         }
         Say 'MPC-HC: dark theme on, OSD set to Verdana 16, zero transparency, bordered.' 'Green'
-        Set-ManifestEntry 'mpchc' 'n/a' $MPC_KEY 'n/a' (Get-PayloadVersion)
+        Invoke-TargetCommit 'mpchc' 'MPC-HC' {
+            Set-ManifestEntry 'mpchc' 'n/a' $MPC_KEY 'n/a' (Get-PayloadVersion)
+        } {
+            # The backup holds the EXACT pre-apply values; re-import restores them.
+            & reg import $bak 2>&1 | Out-Null
+        }
         Say '  NOT reachable: the player chrome colours are compiled into MPC-HC and no' 'Yellow'
         Say '  registry value exposes them, so this target cannot take a palette. Only the' 'Yellow'
         Say '  built-in dark theme and the OSD typography are settable.' 'Yellow'

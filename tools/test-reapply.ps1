@@ -590,6 +590,7 @@ check 'token-tamper: Reapply repaired the owned token' ($after23 -match [regex]:
 # ---- Test 24: BetterDiscord css tamper is detected and repaired by Reapply (P1#16) ----
 Clean-TestState
 $prevApp24 = $env:APPDATA
+$prevWintageApp24 = $env:WINTAGE_APPDATA
 try {
     $fakeApp24 = Join-Path $testRoot 'bdappdata'
     New-Item -ItemType Directory -Path (Join-Path $fakeApp24 'BetterDiscord\themes'), (Join-Path $fakeApp24 'Wintage') -Force | Out-Null
@@ -604,12 +605,13 @@ try {
     check 'discord-tamper: Reapply exits 0' ($LASTEXITCODE -eq 0)
     $after24 = [System.IO.File]::ReadAllText($bdCss24, $utf8NoBom)
     check 'discord-tamper: Reapply repaired the css' ($after24 -match [regex]::Escape($pack23.tokens.background))
-} finally { $env:APPDATA = $prevApp24 }
+} finally { $env:APPDATA = $prevApp24; $env:WINTAGE_APPDATA = $prevWintageApp24 }
 
 # ---- Test 25: browser stage marker tamper is detected and repaired by Reapply (P1#16) ----
 Clean-TestState
 $prevLocal25 = $env:LOCALAPPDATA
 $prevApp25 = $env:APPDATA
+$prevWintageApp25 = $env:WINTAGE_APPDATA
 try {
     $browserRoot25 = Join-Path $testRoot 'browsers'
     $fakeBrowser25 = Join-Path $browserRoot25 'Portable Browser'
@@ -626,16 +628,142 @@ try {
     @([ordered]@{ Name = 'Fixture'; Exe = $fakeExe25; UserData = $fakeData25 }) | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText($catalog25, $_, $utf8NoBom) }
     $fakeApp25 = Join-Path $testRoot 'winappdata25'
     New-Item -ItemType Directory -Path (Join-Path $fakeApp25 'Wintage') -Force | Out-Null
+    $fakeLocal25 = Join-Path $testRoot 'localappdata25'
+    New-Item -ItemType Directory -Path $fakeLocal25 -Force | Out-Null
+    $env:LOCALAPPDATA = $fakeLocal25
     $env:APPDATA = $fakeApp25
     $env:WINTAGE_APPDATA = Join-Path $fakeApp25 'Wintage'
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target browsers -Palette goldendefault -BrowserCatalog $catalog25 -BrowserStageRoot $stage25 -NoBrowserLaunch 2>&1
     check 'browser-tamper: apply exits 0' ($LASTEXITCODE -eq 0)
     [System.IO.File]::WriteAllText((Join-Path $stage25 '.wintage-palette'), 'dracula', $utf8NoBom)
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply -BrowserStageRoot $stage25 2>&1
+    # T-191: the Reapply child must inherit the catalog (never discover real
+    # Edge/Chrome) and must NEVER reopen a browser over a repaint.
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply -BrowserCatalog $catalog25 -BrowserStageRoot $stage25 2>&1
     check 'browser-tamper: Reapply exits 0' ($LASTEXITCODE -eq 0)
     $after25 = ([System.IO.File]::ReadAllText((Join-Path $stage25 '.wintage-palette'), $utf8NoBom)).Trim()
     check 'browser-tamper: Reapply repaired the marker' ($after25 -eq 'goldendefault')
-} finally { $env:LOCALAPPDATA = $prevLocal25; $env:APPDATA = $prevApp25 }
+} finally { $env:LOCALAPPDATA = $prevLocal25; $env:APPDATA = $prevApp25; $env:WINTAGE_APPDATA = $prevWintageApp25 }
+
+# ---- Test 26: corrupt manifest aborts BEFORE any target mutation (T-191 P0#1) ----
+Clean-TestState
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+$py26 = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
+$pre26 = [System.IO.File]::ReadAllBytes($py26)
+$garbage26 = '{"this is ::: not valid json'
+[System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $garbage26, $utf8NoBom)
+$out26 = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1
+check 'corrupt-precheck: install exits nonzero' ($LASTEXITCODE -ne 0)
+$post26 = [System.IO.File]::ReadAllBytes($py26)
+$bytesSame26 = $true
+if ($post26.Length -ne $pre26.Length) { $bytesSame26 = $false }
+else { for ($i = 0; $i -lt $post26.Length; $i++) { if ($post26[$i] -ne $pre26[$i]) { $bytesSame26 = $false; break } } }
+check 'corrupt-precheck: target file byte-identical (no mutation)' $bytesSame26
+check 'corrupt-precheck: no backup created' (-not (Test-Path (Join-Path $svDirB '_SMART_VAC_CLEANER.py.bak')))
+check 'corrupt-precheck: corrupt manifest still present (not overwritten)' ((Test-Path (Join-Path $appData 'installed.json')) -and ([System.IO.File]::ReadAllText((Join-Path $appData 'installed.json'), $utf8NoBom) -eq $garbage26))
+
+# ---- Test 27: manifest-commit failure rolls the target back (T-191 P0#1) ----
+Clean-TestState
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+$py27 = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
+$pre27 = [System.IO.File]::ReadAllBytes($py27)
+$prevFail27 = $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE
+$env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = '1'
+$out27 = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1
+$env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = $prevFail27
+check 'commit-rollback: install exits nonzero' ($LASTEXITCODE -ne 0)
+$post27 = [System.IO.File]::ReadAllBytes($py27)
+$bytesSame27 = $true
+if ($post27.Length -ne $pre27.Length) { $bytesSame27 = $false }
+else { for ($i = 0; $i -lt $post27.Length; $i++) { if ($post27[$i] -ne $pre27[$i]) { $bytesSame27 = $false; break } } }
+check 'commit-rollback: target restored to exact pre-operation state' $bytesSame27
+check 'commit-rollback: no backup left behind' (-not (Test-Path (Join-Path $svDirB '_SMART_VAC_CLEANER.py.bak')))
+check 'commit-rollback: old manifest unchanged (still absent)' (-not (Test-Path (Join-Path $appData 'installed.json')))
+check 'commit-rollback: rollback message surfaced' ($out27 -match 'restored to its exact pre-operation state')
+
+# ---- Test 28: concurrent same-target installs serialize (T-191 P0#2) ----
+Clean-TestState
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+$p1 = Start-Process powershell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$installer,'-Target','smartvac','-Palette','goldendefault') -PassThru -WindowStyle Hidden
+$p2 = Start-Process powershell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$installer,'-Target','smartvac','-Palette','goldendefault') -PassThru -WindowStyle Hidden
+$null = $p1.WaitForExit(60000)
+$null = $p2.WaitForExit(60000)
+check 'lock-serialize: both concurrent installs exited' ($p1.HasExited -and $p2.HasExited)
+$exitSum = ($p1.ExitCode + $p2.ExitCode)
+check 'lock-serialize: both installs succeeded (serialized, not corrupted)' ($p1.HasExited -and $p2.HasExited -and $exitSum -eq 0)
+$py28 = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
+$after28 = [System.IO.File]::ReadAllText($py28, $utf8NoBom)
+$pack28 = [System.IO.File]::ReadAllText((Join-Path $root 'themes\goldendefault.json'), $utf8NoBom) | ConvertFrom-Json
+check 'lock-serialize: final file is a valid palette' ($after28 -match [regex]::Escape($pack28.tokens.background))
+check 'lock-serialize: manifest recorded once, sane' ((Read-TestManifest).smartvac.path -eq $py28)
+
+# ---- Test 29: browser stage rollback on manifest-commit failure (T-191 P0#10) ----
+Clean-TestState
+$prevLocal29 = $env:LOCALAPPDATA
+$prevApp29 = $env:APPDATA
+$prevWintage29 = $env:WINTAGE_APPDATA
+try {
+    $browserRoot29 = Join-Path $testRoot 'browsers29'
+    $fakeBrowser29 = Join-Path $browserRoot29 'Portable Browser'
+    $fakeExe29 = Join-Path $fakeBrowser29 'chrome.exe'
+    $fakeData29 = Join-Path $fakeBrowser29 'User Data'
+    $fakeProfile29 = Join-Path $fakeData29 'Default'
+    $tmDir29 = Join-Path $fakeProfile29 'Extensions\dhdgffkkebhmkfjojejmpbldmpobfkfo\5.5.0_0'
+    $stage29 = Join-Path $browserRoot29 'stage'
+    New-Item -ItemType Directory -Path $tmDir29 -Force | Out-Null
+    [System.IO.File]::WriteAllBytes($fakeExe29, [byte[]]@())
+    [System.IO.File]::WriteAllText((Join-Path $fakeProfile29 'Preferences'), '{}', $utf8NoBom)
+    [System.IO.File]::WriteAllText((Join-Path $fakeData29 'Local State'), '{}', $utf8NoBom)
+    $catalog29 = Join-Path $browserRoot29 'catalog.json'
+    @([ordered]@{ Name = 'Fixture'; Exe = $fakeExe29; UserData = $fakeData29 }) | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText($catalog29, $_, $utf8NoBom) }
+    $fakeApp29 = Join-Path $testRoot 'winappdata29'
+    New-Item -ItemType Directory -Path (Join-Path $fakeApp29 'Wintage') -Force | Out-Null
+    $fakeLocal29 = Join-Path $testRoot 'localappdata29'
+    New-Item -ItemType Directory -Path $fakeLocal29 -Force | Out-Null
+    $env:LOCALAPPDATA = $fakeLocal29
+    $env:APPDATA = $fakeApp29
+    $env:WINTAGE_APPDATA = Join-Path $fakeApp29 'Wintage'
+    New-Item -ItemType Directory -Path $stage29 -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $stage29 '.wintage-palette'), 'goldendefault', $utf8NoBom)
+    [System.IO.File]::WriteAllText((Join-Path $stage29 'manifest.json'), '{"name":"old"}', $utf8NoBom)
+    $prevFail29 = $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE
+    $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = '1'
+    $out29 = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target browsers -Palette dracula -BrowserCatalog $catalog29 -BrowserStageRoot $stage29 -NoBrowserLaunch 2>&1
+    $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = $prevFail29
+    check 'browser-stage-rollback: install exits nonzero' ($LASTEXITCODE -ne 0)
+    check 'browser-stage-rollback: stage marker restored to the pre-state palette' ([System.IO.File]::ReadAllText((Join-Path $stage29 '.wintage-palette'), $utf8NoBom) -eq 'goldendefault')
+    check 'browser-stage-rollback: stage manifest restored' ([System.IO.File]::ReadAllText((Join-Path $stage29 'manifest.json'), $utf8NoBom) -match 'old')
+} finally { $env:LOCALAPPDATA = $prevLocal29; $env:APPDATA = $prevApp29; $env:WINTAGE_APPDATA = $prevWintage29 }
+
+# ---- Test 30: VS Code extension revert restores the apply-time backup (T-191 P0#11) ----
+Clean-TestState
+$prevHome30 = $env:HOME
+$prevBakRoot30 = $env:WINTAGE_BACKUP_ROOT
+$prevWintage30 = $env:WINTAGE_APPDATA
+try {
+    $fakeHome30 = Join-Path $testRoot 'fakehome30'
+    $extDir30 = Join-Path $fakeHome30 '.vscode\extensions'
+    $dest30 = Join-Path $extDir30 'wintage-themes'
+    New-Item -ItemType Directory -Path (Join-Path $dest30 'themes') -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $dest30 'themes\stock.json'), '{"name":"stock"}', $utf8NoBom)
+    $fakeApp30 = Join-Path $testRoot 'winappdata30'
+    New-Item -ItemType Directory -Path $fakeApp30 -Force | Out-Null
+    $env:HOME = $fakeHome30
+    $env:WINTAGE_BACKUP_ROOT = Join-Path $testRoot 'backup30'
+    $env:WINTAGE_APPDATA = $fakeApp30
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target vscode -Palette goldendefault 2>&1
+    check 'vscode-backup: apply exits 0' ($LASTEXITCODE -eq 0)
+    check 'vscode-backup: Wintage themes installed' (Test-Path (Join-Path $dest30 'themes'))
+    $m30 = Join-Path $fakeApp30 'installed.json'
+    check 'vscode-backup: manifest recorded' ((Test-Path $m30) -and ((Get-Content $m30 -Raw | ConvertFrom-Json).vscode.palette -eq 'goldendefault'))
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target vscode -Revert 2>&1
+    check 'vscode-backup: revert exits 0' ($LASTEXITCODE -eq 0)
+    check 'vscode-backup: revert restored from backup (dest present, never deleted)' (Test-Path (Join-Path $dest30 'themes\stock.json'))
+    $m30After = if (Test-Path $m30) { Get-Content $m30 -Raw | ConvertFrom-Json } else { $null }
+    check 'vscode-backup: manifest entry removed' ((-not $m30After) -or -not $m30After.vscode)
+} finally { $env:HOME = $prevHome30; $env:WINTAGE_BACKUP_ROOT = $prevBakRoot30; $env:WINTAGE_APPDATA = $prevWintage30 }
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

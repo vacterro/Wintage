@@ -340,25 +340,56 @@ function baselines() {
 
 function currentBaseline() { return baselines()[0] || null; }
 
-// A fresh STOCK owned bundle (no patch markers AND no old strings) means the
-// upstream shipped a new generation -- the baseline must follow it.
+// A new generation means the CURRENT owned files are no longer the baseline's
+// stock. Detected by content, not by string presence: a patched file is still
+// this generation; a live file that is not patched AND differs from the
+// baseline's own stock snapshot is a new generation whether or not it happens to
+// still carry the old matcher strings (T-191). The old heuristic only caught
+// matcher-less restructures, which the patch cannot apply to at all - so a real
+// app update that kept the ad strings kept the stale baseline too.
 function upstreamReplacedOwnedFile() {
-  for (const f of TARGET_FILES) {
-    const { allNew, anyOld } = isPatched(f.abs, f.patches);
-    if (!allNew && !anyOld) return true;
+  const b = currentBaseline();
+  if (!b) return true;
+  for (const rel of b.meta.files) {
+    const t = TARGET_FILES.find(f => f.rel === rel);
+    if (!t) continue; // generation-neutral files (chime) are skipped
+    const live = path.join(target, rel);
+    if (!fs.existsSync(live)) continue;
+    const { allNew } = isPatched(live, t.patches);
+    if (allNew) continue; // still carries this generation's Wintage patch
+    const orig = path.join(b.dir, rel);
+    if (!fs.existsSync(orig)) return true;
+    if (!fs.readFileSync(live).equals(fs.readFileSync(orig))) return true;
   }
   return false;
 }
 
 function ensureBaseline() {
   const cur = currentBaseline();
-  if (cur && !upstreamReplacedOwnedFile()) return cur;
+  if (cur && !upstreamReplacedOwnedFile()) {
+    pruneBaselines();
+    return cur;
+  }
   if (cur && upstreamReplacedOwnedFile()) {
     console.log('detected a new app generation - establishing a fresh baseline from the current stock files.');
   }
   const dir = createBaseline(ownedFileList());
+  pruneBaselines();
   console.log('baseline -> ' + path.relative(target, dir));
   return { dir, meta: JSON.parse(fs.readFileSync(path.join(dir, 'wintage-baseline.json'), 'utf8')) };
+}
+
+// T-191 P1#16: baselines accumulate one per app generation forever. Each holds a
+// full copy of every owned file, so keep only the newest few generations as
+// recovery sources and drop the rest. Old generations are unreachable through
+// currentBaseline() anyway - they can never be the revert target.
+function pruneBaselines() {
+  const all = baselines();
+  if (all.length <= 3) return;
+  for (const old of all.slice(3)) {
+    try { fs.rmSync(old.dir, { recursive: true, force: true }); console.log('pruned stale baseline ' + path.basename(old.dir)); }
+    catch (e) { }
+  }
 }
 
 // One transaction backup (T-189): ALL files THIS OPERATION writes go into a
@@ -450,9 +481,41 @@ if (has('status-json')) {
 // ---------------------------------------------------------------------------
 // --revert  (restores ONLY the current-generation baseline; partial dirs refused)
 // ---------------------------------------------------------------------------
+const TARGET_FILES = [
+  { abs: bundlePath, rel: path.relative(target, bundlePath), patches: RENDERER_PATCHES, label: 'renderer bundle' },
+  { abs: orchestratorPath, rel: path.relative(target, orchestratorPath), patches: ORCHESTRATOR_PATCHES, label: 'orchestrator' },
+];
 if (doRevert) {
   const b = currentBaseline();
   if (!b) die('no COMPLETE baseline found in ' + target + ' - nothing to restore. A baseline is only ever captured from stock files, so its absence means no verified pristine state exists.');
+  // T-191 P0#4: generation reconciliation. Never restore an OLD baseline over a
+  // NEW generation's files: a live owned file that is fresh stock (no patch
+  // markers AND no old strings) and does NOT match the baseline's own stock
+  // snapshot means upstream shipped a new generation whose pristine state this
+  // baseline does not hold. Restoring it would silently replace the new app
+  // files with an outdated snapshot. A live file that is NOT a plausible build
+  // (torn/truncated/garbage) is damage within the current generation, not a new
+  // one - the baseline restore is exactly the repair it needs.
+  const plausibleBuild = (buf) => buf && buf.length >= 64 && !buf.includes(0);
+  let mismatch = null;
+  for (const rel of b.meta.files) {
+    const t = TARGET_FILES.find(f => f.rel === rel);
+    if (!t) continue; // generation-neutral files (e.g. the chime) are skipped
+    const live = path.join(target, rel);
+    if (!fs.existsSync(live)) { mismatch = rel; break; }
+    const liveBuf = fs.readFileSync(live);
+    const { allNew, anyOld } = isPatched(live, t.patches);
+    if (allNew || anyOld) continue; // still carries this generation's Wintage state
+    if (!plausibleBuild(liveBuf)) continue; // damage, not a new generation
+    const orig = path.join(b.dir, rel);
+    if (!fs.existsSync(orig) || !liveBuf.equals(fs.readFileSync(orig))) { mismatch = rel; break; }
+  }
+  if (mismatch) {
+    console.error('REVERT REFUSED: ' + mismatch + ' belongs to a DIFFERENT app generation than the baseline (' + path.basename(b.dir) + ').');
+    console.error('Restoring this baseline would overwrite the current app files with an outdated snapshot.');
+    console.error('Run Apply once on the current generation (it establishes a matching baseline), or accept the loss and delete the stale _orig-baseline-* directories manually.');
+    process.exit(1);
+  }
   for (const rel of b.meta.files) {
     const orig = path.join(b.dir, rel);
     const live = path.join(target, rel);
@@ -480,10 +543,6 @@ if (doVerify) {
 // written or backed up (T-189). A missing matcher in any file, a missing sound
 // file, or an incompatible build exits 1 with ZERO mutations.
 // ---------------------------------------------------------------------------
-const TARGET_FILES = [
-  { abs: bundlePath, rel: path.relative(target, bundlePath), patches: RENDERER_PATCHES, label: 'renderer bundle' },
-  { abs: orchestratorPath, rel: path.relative(target, orchestratorPath), patches: ORCHESTRATOR_PATCHES, label: 'orchestrator' },
-];
 
 function preflight() {
   const files = [];

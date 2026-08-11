@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.26.7] - 2026-08-11
+
+- A target's mutation and its manifest commit are now ONE transaction: the manifest is validated before any real mutation (a corrupt `installed.json` aborts with zero target changes), and a failed manifest commit rolls every target back to its exact pre-operation state instead of leaving a mutated target with an old manifest. Each target also runs its whole DISCOVER..COMMIT under a named per-target mutex, so two concurrent applies of the same target serialize and can never tear each other's files.
+- FreeBuff recovery is tighter: the transaction snapshot now includes the app EXE and its fuse backup (a failed second layer restores a half-defused executable too), and Revert refuses to restore an old-generation baseline over a new app build. A new app generation is detected by content (not just missing patch strings) and re-bases the baseline, which is pruned to the newest three generations.
+- Electron repaint and revert are now transactions with their own failure seams: a failed repaint restores the previous palette, a failed revert restores the themed pre-state, and `--status-json` reports fuse health so Reapply can detect and repair a re-fused EXE.
+- Reapply never reopens a browser: a browsers re-apply runs with launch suppressed (the theme already loads from a stable stage path), and a stub/empty browser executable is never "launched". This also stops the regression suite from yanking real Edge/Chrome windows open mid-session.
+- Windows Terminal and Obsidian health now probe the EFFECTIVE owned state (markers and active-theme values) after the recorded item set passes, so a deleted or drifted marker triggers Reapply rather than being skipped.
+- VS Code / Antigravity extension revert restores the apply-time backup instead of deleting the theme dir and leaving the user theme-less, and the browser stage root is snapshotted so a failed commit restores the exact pre-operation stage.
+- The single release gate now runs every tool regression suite (reapply, freebuff, ownership, electron state machine) from `tests/Run-Tests.ps1`, and release publishing verifies the remote actually received the commit before tagging, so a half-published version is impossible.
+- paths.json is schema-validated and saved atomically; remembered paths outside the known target set or with non-string values are dropped instead of later blowing up a `Join-Path`.
+
 ## [1.26.6] - 2026-08-11
 
 - FreeBuff recovery is now a persistent per-generation BASELINE: every Wintage-owned file (renderer bundle, orchestrator, completion sound) is snapshotted as pristine stock, and Revert restores the current generation consistently — a later sound-only or subset Apply can never shadow the earlier recovery source, and an upstream app update starts a fresh generation baseline. The FreeBuff target is also atomic as a whole: both the Electron layer and the ad/sound patch are preflighted before any mutation, and a second-layer failure restores the exact pre-operation Electron state (a repaint rolls back to the old palette, never an uninstall). A configured-but-missing completion sound now fails closed in both `-WhatIf` and Apply, and the Reapply health probe checks the patch layer (renderer/orchestrator/sound) directly instead of assuming it.

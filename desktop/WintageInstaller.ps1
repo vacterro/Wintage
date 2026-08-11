@@ -238,7 +238,17 @@ function Save-CustomPaths {
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
         $o = [ordered]@{}
         foreach ($k in $PATH_TARGETS) { if ($script:customPaths.ContainsKey($k)) { $o[$k] = $script:customPaths[$k] } }
-        [System.IO.File]::WriteAllText($script:pathsFile, ($o | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))
+        $json = ($o | ConvertTo-Json)
+        # Atomic write, same contract as the CLI manifest: a half-written
+        # paths.json must never replace a good one, so the new content lands in a
+        # sibling and is moved into place only after it is fully on disk (T-191).
+        $tmp = Join-Path $dir ("paths.json.tmp-" + [guid]::NewGuid().ToString('N'))
+        try {
+            [System.IO.File]::WriteAllText($tmp, $json, (New-Object System.Text.UTF8Encoding $false))
+            Move-Item -LiteralPath $tmp -Destination $script:pathsFile -Force
+        } finally {
+            if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+        }
     }
     catch {
         $message = "could not save paths.json: $($_.Exception.Message)"

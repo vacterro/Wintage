@@ -495,6 +495,41 @@ $saveBody = if ($saveStart -ge 0 -and $saveEnd -gt $saveStart) { $guiSource.Subs
 Assert-True ($saveBody -notmatch 'catch\s*\{\s*\}') 'GUI custom-path save no longer swallows errors'
 
 Write-Host "
+--- Tool Regression Suites (T-191 P1#14 single entrypoint) ---"
+# This file is the CANONICAL gate: release.ps1 runs only this, so every tool
+# suite must be reachable from here or a release can ship a broken transaction
+# path while the theme gates stay green.
+$toolSuites = @(
+    @{ Name = 'test-reapply.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-reapply.ps1"' },
+    @{ Name = 'test-freebuff.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-freebuff.ps1"' },
+    @{ Name = 'test-ownership.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-ownership.ps1"' },
+    @{ Name = 'test-electron-state.js'; Cmd = 'node "{0}\tools\test-electron-state.js"' }
+)
+foreach ($s in $toolSuites) {
+    $invokeLine = ($s.Cmd -f $root)
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $suiteOut = (& cmd /c $invokeLine 2>&1 | Out-String)
+    $suiteCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($suiteCode -eq 0) {
+        Assert-True $true "$($s.Name) suite exits 0"
+    } else {
+        Assert-True $false "$($s.Name) suite exits 0"
+        $tails = @($suiteOut -split "`r?`n" | Where-Object { $_ -match 'FAIL|failure|Error' } | Select-Object -Last 4)
+        foreach ($line in $tails) { Write-Host "       $line" -ForegroundColor Red }
+    }
+}
+# Do the JS gates exist? Every gate release.ps1 runs must be reachable as a file,
+# so a renamed/removed gate fails this check instead of being silently skipped.
+$releaseCode = [System.IO.File]::ReadAllText("$root\release.ps1")
+$gateRefs = [regex]::Matches($releaseCode, "Join-Path [$]PSScriptRoot '([^']+\.js)'") |
+    ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+foreach ($g in $gateRefs) {
+    Assert-True (Test-Path "$root\$g") "release gate exists: $g"
+}
+
+Write-Host "
 ======================="
 if ($script:errors -gt 0) {
     Write-Host "TESTS FAILED ($script:errors errors)" -ForegroundColor Red

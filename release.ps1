@@ -147,6 +147,19 @@ function Git-Safe {
 if ((Git-Safe add -A) -ne 0) { throw "git add failed" }
 if ((Git-Safe commit -m "v${new}: $Message") -ne 0) { throw "git commit failed (nothing to commit, or a hook rejected it)" }
 if ((Git-Safe push origin main) -ne 0) { throw "git push failed - commit is local; fix the remote and 'git push' by hand" }
+# T-191 P1#15: a release must be published WHOLE or not at all. Tagging a commit
+# the remote never received creates a half-published version (branch live, tag
+# pointing at an unpushed sha). Verify the remote actually converged to the local
+# HEAD before the tag exists.
+if ((Git-Safe fetch origin main) -ne 0) { throw "git fetch failed - the commit is pushed but the release is NOT tagged; verify the remote state and tag by hand" }
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$remoteSha = (& git -C $PSScriptRoot rev-parse "origin/main" 2>$null).Trim()
+$localSha = (& git -C $PSScriptRoot rev-parse "HEAD" 2>$null).Trim()
+$ErrorActionPreference = $prevEap
+if (-not $remoteSha -or $remoteSha -ne $localSha) {
+    throw "remote main is not at the local HEAD ($remoteSha != $localSha) - the branch push is NOT verified, so the release is NOT tagged. Push 'origin main' by hand, verify, then run: git tag -a v$new -m 'Wintage v$new' && git push origin refs/tags/v$new"
+}
 if ((Git-Safe tag -a "v$new" -m "Wintage v$new") -ne 0) { throw "git tag failed - branch is already pushed" }
-if ((Git-Safe push origin "refs/tags/v${new}:refs/tags/v${new}") -ne 0) { throw "git tag push failed - branch and local tag already exist" }
+if ((Git-Safe push origin "refs/tags/v${new}:refs/tags/v${new}") -ne 0) { throw "git tag push failed - branch and local tag already exist; run 'git push origin refs/tags/v$new' by hand" }
 Write-Host "Released Wintage v$new - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green

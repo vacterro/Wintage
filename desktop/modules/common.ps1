@@ -33,6 +33,9 @@ function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllL
 # chain; one helper (T-143).
 function Get-PaletteTokens([string]$jsonPath) { (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens }
 
+# Known paths.json keys: the source-tree targets whose folders the GUI can remember.
+$script:PATHS_KEYS = @('saipenview', 'smartvac', 'wildrift', 'codenomad', 'portable')
+
 function Read-PathsJson {
     if (-not (Test-Path $PathsPath)) { return @{} }
     try {
@@ -40,7 +43,14 @@ function Read-PathsJson {
         if (-not $json) { return @{} }
         $obj = $json | ConvertFrom-Json
         $ht = @{}
-        foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
+        foreach ($prop in $obj.PSObject.Properties) {
+            # T-191 P2#19: schema-validate the remembered paths. A key outside the
+            # known target set or a non-string value is garbage a later
+            # Join-Path would throw on - it is dropped here, never trusted.
+            if ($prop.Name -notin $script:PATHS_KEYS) { continue }
+            if ($prop.Value -isnot [string] -or -not $prop.Value) { continue }
+            $ht[$prop.Name] = $prop.Value
+        }
         return $ht
     } catch {
         Write-Warning "could not read ${PathsPath}: $($_.Exception.Message) -- remembered paths ignored"
@@ -114,6 +124,41 @@ function Enter-ManifestLock {
 }
 
 function Exit-ManifestLock($mutex) {
+    if (-not $mutex) { return }
+    try { $mutex.ReleaseMutex() } catch { }
+    try { $mutex.Dispose() } catch { }
+}
+
+# Named PER-TARGET mutation lock (T-191): two processes applying the same target
+# concurrently must serialize DISCOVER..COMMIT, not just the manifest write. The
+# lock name is derived from the app-data root + the target name (ASCII-safe hash
+# hex), so different targets on the same machine run concurrently while the same
+# target serializes. Lock ORDER is always TARGET -> MANIFEST (Set-ManifestEntry
+# acquires the manifest lock inside), never the reverse.
+function Enter-TargetLock([string]$target) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $base = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($WintageAppData))).Replace('-', '').Substring(0, 16)
+    $tHash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($target))).Replace('-', '').Substring(0, 16)
+    $mutex = New-Object System.Threading.Mutex($false, "Local\Wintage-Target-$base-$tHash")
+    $got = $false
+    try {
+        $null = $mutex.WaitOne(60000)
+        $got = $true
+    } catch [System.Threading.AbandonedMutexException] {
+        # Ownership is acquired; the previous owner died mid-operation. Proceed,
+        # but the caller's own preflight/validation still fails closed on bad state.
+        $got = $true
+    } catch {
+        $got = $false
+    }
+    if (-not $got) {
+        try { $mutex.Dispose() } catch { }
+        throw "could not acquire the $target mutation lock within 60s - another operation is stuck; retry."
+    }
+    return $mutex
+}
+
+function Exit-TargetLock($mutex) {
     if (-not $mutex) { return }
     try { $mutex.ReleaseMutex() } catch { }
     try { $mutex.Dispose() } catch { }

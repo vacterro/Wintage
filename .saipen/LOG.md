@@ -26,3 +26,5 @@
 - 11.08.26 15:55 [E-661] [parent: E-660] [T-190] DEC: saipen ship T-190 -- REVIEW passed, bump v1.26.5 -> v1.26.6, stage reviewed scope, --gate ship, commit, push, tag.
 - 11.08.26 15:57 [E-662] [parent: E-661] [T-190] [agent: claude] [op: finish-d23961a1] DEC: ticket finished via SAIOPS -- completion (from SHIP)
 - 11.08.26 15:58 [E-663] [parent: E-662] [T-190] RUN: ship v1.26.6 -> pushed d1c3706 -- staged T-190 scope (17 files), --gate ship PASS, branch ac5a6cf..d1c3706, tag v1.26.6 pushed.
+- 11.08.26 16:05 [E-664] [parent: E-663] [T-191] DEC: user T-191 audit claimed; P0 manifest-commit transaction + per-target mutex + FreeBuff EXE/baseline + Electron repaint/revert/health + Terminal/Obsidian health first; then P1 ownership/release/gui, P2; regressions first.
+- 11.08.26 17:05 [E-665] [parent: E-664] [T-191] checkpoint: P0#1-#8+#10-#12 + P1#13/#14/#15/#16/#18 + P2#19 implemented; browser-launch-in-tests fixed (reapply child no catalog/NoLaunch, LOCALAPPDATA isolation, Open-Profile stub guard); suites 124/72/39/electron PASS + Run-Tests ALL PASSED; VERIFY/REPORT pending; waiting saipen ship.

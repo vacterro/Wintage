@@ -44,7 +44,9 @@ $here = $PSScriptRoot
 $root = Split-Path $here -Parent
 $out = Join-Path $here 'out'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$backupRoot = Join-Path $here "backup/$stamp"
+# Test seam: WINTAGE_BACKUP_ROOT lets fixtures isolate the apply-time backup
+# location; the real root stays desktop/backup/<stamp>.
+$backupRoot = if ($env:WINTAGE_BACKUP_ROOT) { Join-Path $env:WINTAGE_BACKUP_ROOT $stamp } else { Join-Path $here "backup/$stamp" }
 
 # Shared helpers + per-target implementations, split out at T-169. Dot-sourced so they
 # resolve install.ps1 scoped variables and the i18n T() loader at call time. Load
@@ -205,6 +207,8 @@ if ($Reapply) {
     if ($Force) { $passArgs['-Force'] = $Force }
     if ($PortableBrowserRoot) { $passArgs['-PortableBrowserRoot'] = $PortableBrowserRoot }
     if ($BrowserStageRoot) { $passArgs['-BrowserStageRoot'] = $BrowserStageRoot }
+    if ($BrowserCatalog) { $passArgs['-BrowserCatalog'] = $BrowserCatalog }
+    if ($NoBrowserLaunch) { $passArgs['-NoBrowserLaunch'] = $NoBrowserLaunch }
     $sorted = @($manifest.Keys | Sort-Object)
     foreach ($key in $sorted) {
         $data = $manifest[$key]
@@ -218,6 +222,11 @@ if ($Reapply) {
         $callArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
             '-Target', $key, '-Palette', $data.palette)
         foreach ($pk in $passArgs.Keys) { $callArgs += $pk; $callArgs += $passArgs[$pk] }
+        # A browsers RE-APPLY must never reopen the browser: the theme loads from a
+        # stable stage path that is already registered in the profile, so a repaint
+        # has nothing to set up. Reopening here is how a background -Reapply can
+        # yank a browser window over a fullscreen game (T-191).
+        if ($key -eq 'browsers' -and $callArgs -notcontains '-NoBrowserLaunch') { $callArgs += '-NoBrowserLaunch' }
         if ($WhatIfPreference) {
             # Planned work, no mutation: run the child with -WhatIf so ITS real
             # preflight executes (dry-runs, anchor checks, helper validation).
@@ -517,7 +526,17 @@ $script:StrictTarget = $Target -and $Target -ne 'all'
 $dispatchFailures = @()
 
 foreach ($name in $names) {
+    $targetLock = $null
     try {
+        # T-191: the WHOLE DISCOVER..COMMIT for one target lives under a named
+        # per-target mutex, so two processes cannot mutate the same target
+        # concurrently. Lock order is TARGET -> MANIFEST (never reversed).
+        $targetLock = Enter-TargetLock $name
+
+        # P0#1: validate the manifest BEFORE any real mutation. A corrupt
+        # installed.json must abort with ZERO target changes, not mutate the
+        # target and then fail the manifest commit.
+        $null = Read-Manifest
 
     # T-190: for `-Target all`, a PRESENT build-consuming target needs a
     # verifiable current build; absent build-consuming targets are skipped by
@@ -540,13 +559,26 @@ foreach ($name in $names) {
         if ($NoBrowserLaunch) { $browserArgs += '-NoLaunch' }
         if ($Revert) { $browserArgs += '-Revert' }
         if ($WhatIfPreference) { $browserArgs += '-WhatIf' }
+        # T-191 P0#10: the stage root is a directory the target OWNS wholesale
+        # (manifest.json + .wintage-palette + any subdirectories the tool stages).
+        # Snapshot it before the tool runs so a failed manifest commit can restore
+        # the exact pre-operation stage, never a half-written one.
+        $preStage = Save-DirPreState $BrowserStageRoot
         $browserOut = & powershell @browserArgs 2>&1
         if ($LASTEXITCODE -ne 0) { throw 'Browser theme installer failed.' }
         if (-not $Revert -and $script:StrictTarget -and ($browserOut -match 'no installed or portable profiles')) {
             throw 'browsers: no Chromium profiles found - expected to be present (strict target), refusing to record an install.'
         }
-        if ($Revert) { Remove-ManifestEntry 'browsers' }
-        else { Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion) }
+        if ($Revert) {
+            Invoke-TargetCommit 'browsers' 'Chromium browsers' {
+                Remove-ManifestEntry 'browsers'
+            } { Restore-DirPreState $BrowserStageRoot $preStage }
+        } else {
+            Invoke-TargetCommit 'browsers' 'Chromium browsers' {
+                Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion)
+            } { Restore-DirPreState $BrowserStageRoot $preStage }
+        }
+        if ($preStage) { Remove-Item $preStage -Recurse -Force -ErrorAction SilentlyContinue }
         continue
     }
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
@@ -672,10 +704,26 @@ foreach ($name in $names) {
 
     if ($Revert) {
         if (Test-Path $dest) {
-            if ($PSCmdlet.ShouldProcess($dest, 'Remove installed Wintage themes')) {
-                Remove-Item $dest -Recurse -Force
-                Say "$($t.Name): removed $dest" 'Green'
-                Remove-ManifestEntry $name
+            if ($PSCmdlet.ShouldProcess($dest, 'Restore the previous Wintage install')) {
+                $preDest = Save-DirPreState $dest
+                $bak = Join-Path $backupRoot $name
+                # T-191 P0#11: the apply-time backup IS the revert source. Reverting
+                # must never leave the user theme-less by deleting the only copy of
+                # their pre-Wintage theme folder. With no backup present (never
+                # applied through a version that backs up), removal is the only
+                # honest fallback and the message says so.
+                if (Test-Path $bak) {
+                    Remove-Item $dest -Recurse -Force
+                    New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+                    Copy-Item $bak $dest -Recurse -Force
+                    Say "$($t.Name): restored the previous install from $bak" 'Green'
+                } else {
+                    Remove-Item $dest -Recurse -Force
+                    Say "$($t.Name): removed $dest (no apply-time backup existed to restore)" 'Green'
+                }
+                Invoke-TargetCommit $name $t.Name {
+                    Remove-ManifestEntry $name
+                } { Restore-DirPreState $dest $preDest }
             }
         }
         else { Say "$($t.Name): nothing installed, nothing to revert." }
@@ -700,12 +748,15 @@ foreach ($name in $names) {
     }
 
     if ($PSCmdlet.ShouldProcess($dest, 'Install Wintage themes')) {
+        $preDest = Save-DirPreState $dest
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
         Copy-Item (Join-Path $t.Built '*') -Destination $dest -Recurse -Force
         $count = (Get-ChildItem (Join-Path $dest 'themes') -Filter '*.json').Count
         Say "$($t.Name): installed $count themes -> $dest" 'Green'
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
-        Set-ManifestEntry $name $Palette $dest 'n/a' (Get-PayloadVersion)
+        Invoke-TargetCommit $name $t.Name {
+            Set-ManifestEntry $name $Palette $dest 'n/a' (Get-PayloadVersion)
+        } { Restore-DirPreState $dest $preDest }
     }
 
     }
@@ -714,6 +765,9 @@ foreach ($name in $names) {
         # applying the remaining siblings, and leave the exit code nonzero.
         Say "$name`: FAILED - $($_.Exception.Message)" 'Red'
         $dispatchFailures += $name
+    }
+    finally {
+        if ($targetLock) { Exit-TargetLock $targetLock }
     }
 }
 

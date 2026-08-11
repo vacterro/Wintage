@@ -205,9 +205,12 @@ function health() {
   };
 }
 
+const SIDECAR_FILES = ['wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt'];
+
 if (has('status-json')) {
   const h = health();
   h.resources = resources;
+  h.fuses = fuseHealth();
   console.log(JSON.stringify(h));
   process.exit(0);
 }
@@ -225,15 +228,26 @@ if (has('version')) {
 // restore is only ever called on the real mutating path.
 if (has('revert')) {
   const c = classifyState();
+  const exeNow = resolveExe();
   if (inPlace) {
     const bak = asar + '.bak';
     if (c.state === 'themed-inplace') {
       if (dryRun) { console.log('install-electron: would restore ' + bak + ' -> ' + asar + ' and remove Wintage sidecars'); process.exit(0); }
-      restoreFuseBackupForRevert(resolveExe());
-      fs.copyFileSync(bak, asar);
-      fs.unlinkSync(bak);
-      for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
-        try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
+      // T-191 P0#6: transactional revert. Snapshot the patched archive, the .bak,
+      // the sidecars and the exe/fuse bytes; a mid-revert failure puts them all back.
+      const pre = captureRevertPreState(asar, bak, exeNow);
+      try {
+        restoreFuseBackupForRevert(exeNow);
+        fs.copyFileSync(bak, asar);
+        fs.unlinkSync(bak);
+        for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
+          try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
+        }
+        if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
+        if (asarIsPatched() === true) throw new Error('verification failed: archive still patched after revert');
+      } catch (e) {
+        restoreRevertPreState(pre, asar, bak, exeNow);
+        die('in-place revert failed (' + e.message + ') - restored the exact pre-operation state.');
       }
       console.log('install-electron: restored original ' + path.basename(asar) + ' from backup');
       process.exit(0);
@@ -244,11 +258,18 @@ if (has('revert')) {
       // leaving the current stock asar alone. (Covers both the stock-no-sidecars
       // case, which is trivially a no-op, and the stale-sidecar case.)
       if (dryRun) { console.log('install-electron: would remove stale Wintage sidecars (current asar is stock, nothing to restore)'); process.exit(0); }
-      restoreFuseBackupForRevert(resolveExe());
-      for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
-        try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
+      const pre = captureRevertPreState(asar, bak, exeNow);
+      try {
+        restoreFuseBackupForRevert(exeNow);
+        for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
+          try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
+        }
+        if (fs.existsSync(bak)) { try { fs.unlinkSync(bak); } catch (e) { } }
+        if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
+      } catch (e) {
+        restoreRevertPreState(pre, asar, bak, exeNow);
+        die('revert failed (' + e.message + ') - restored the exact pre-operation state.');
       }
-      if (fs.existsSync(bak)) { try { fs.unlinkSync(bak); } catch (e) { } }
       console.log('install-electron: current app.asar is stock — removed stale Wintage sidecars, nothing restored');
       process.exit(0);
     }
@@ -256,13 +277,30 @@ if (has('revert')) {
   } else {
     if (c.state === 'themed-relocated') {
       if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
-      restoreFuseBackupForRevert(resolveExe());
-      if (fs.existsSync(movedAsar)) {
-        if (fs.existsSync(asar)) die('both ' + asar + ' and ' + movedAsar + ' exist and the archive is ours — delete ' + appDir + ' by hand');
-        fs.renameSync(movedAsar, asar);
-        if (fs.existsSync(movedUnpacked)) fs.renameSync(movedUnpacked, unpacked);
+      const pre = captureRevertPreState(asar, asar + '.bak', exeNow);
+      pre.movedAsar = fs.existsSync(movedAsar) ? fs.readFileSync(movedAsar) : null;
+      const appPre = captureAppDir();
+      try {
+        restoreFuseBackupForRevert(exeNow);
+        if (fs.existsSync(movedAsar)) {
+          if (fs.existsSync(asar)) die('both ' + asar + ' and ' + movedAsar + ' exist and the archive is ours — delete ' + appDir + ' by hand');
+          fs.renameSync(movedAsar, asar);
+          if (fs.existsSync(movedUnpacked)) fs.renameSync(movedUnpacked, unpacked);
+        }
+        fs.rmSync(appDir, { recursive: true, force: true });
+        if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
+        if (appDirIsOurs() || !fs.existsSync(asar)) throw new Error('verification failed after relocation revert');
+      } catch (e) {
+        // Re-roll the relocation back onto the archive and re-create app/.
+        if (pre.movedAsar !== null && fs.existsSync(asar)) {
+          try { fs.writeFileSync(movedAsar, pre.movedAsar); } catch (e2) { }
+          try { if (fs.existsSync(asar)) fs.unlinkSync(asar); } catch (e2) { }
+        }
+        if (pre.movedAsar === null && fs.existsSync(asar)) { try { fs.renameSync(asar, movedAsar); } catch (e2) { } }
+        restoreAppDir(appPre);
+        restoreRevertPreState(pre, asar, asar + '.bak', exeNow);
+        die('relocation revert failed (' + e.message + ') - restored the exact pre-operation state.');
       }
-      fs.rmSync(appDir, { recursive: true, force: true });
       console.log('install-electron: restored ' + path.basename(asar) + ' and removed ' + appDir);
       process.exit(0);
     }
@@ -271,8 +309,17 @@ if (has('revert')) {
       // Removing it leaves the current version stock — never restore the old move.
       if (!appDirIsOurs() && c.state === 'updated-relocated') die('app/ is not ours — refusing to remove it');
       if (dryRun) { console.log('install-electron: would remove stale Wintage relocation (fresh stock ' + path.basename(asar) + ' stays live)'); process.exit(0); }
-      restoreFuseBackupForRevert(resolveExe());
-      fs.rmSync(appDir, { recursive: true, force: true });
+      const pre = captureRevertPreState(asar, asar + '.bak', exeNow);
+      const appPre = captureAppDir();
+      try {
+        restoreFuseBackupForRevert(exeNow);
+        fs.rmSync(appDir, { recursive: true, force: true });
+        if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
+      } catch (e) {
+        restoreAppDir(appPre);
+        restoreRevertPreState(pre, asar, asar + '.bak', exeNow);
+        die('revert failed (' + e.message + ') - restored the exact pre-operation state.');
+      }
       console.log('install-electron: removed stale Wintage relocation; fresh stock ' + path.basename(asar) + ' is now live');
       process.exit(0);
     }
@@ -337,8 +384,6 @@ function calculateInPlacePatch(asarPath) {
   } finally { fs.closeSync(fd); }
 }
 
-const SIDECAR_FILES = ['wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt'];
-
 function snapshotSidecars() {
   const snap = {};
   for (const f of SIDECAR_FILES) {
@@ -353,6 +398,71 @@ function restoreSidecars(snap) {
     const p = path.join(resources, f);
     try {
       if (snap[f].existed) fs.writeFileSync(p, snap[f].buf);
+      else if (fs.existsSync(p)) fs.unlinkSync(p);
+    } catch (e) { }
+  }
+}
+
+// T-191 P0#7: fuse health for --status-json. One probe, machine-readable, so the
+// listing/Reapply layer can distinguish "themed and defused" from "themed but
+// fused shut" without re-reading the binary itself.
+function fuseHealth() {
+  const exe = resolveExe();
+  if (!exe) return { exe: null, fusedShut: false, reasons: [], pendingRestore: false };
+  const b = blockers(exe);
+  return {
+    exe,
+    fusedShut: b.reasons.length > 0,
+    reasons: b.reasons,
+    pendingRestore: fs.existsSync(exe + '.wintage-fuse.bak'),
+    detail: (b.detail && b.detail.error) ? b.detail.error : undefined
+  };
+}
+
+// T-191 P0#6: revert is a transaction. captureRevertPreState snapshots EVERYTHING
+// a revert branch may touch (the archive, the .bak, the sidecars, the exe and its
+// fuse backup); restoreRevertPreState puts it all back if the restore fails part
+// way. Without this a failure between "copy backup over the live archive" and
+// "delete the sidecars" leaves a torn install.
+function captureRevertPreState(asarPath, bakPath, exePath) {
+  const s = {
+    asar: fs.existsSync(asarPath) ? fs.readFileSync(asarPath) : null,
+    bak: fs.existsSync(bakPath) ? fs.readFileSync(bakPath) : null,
+    sidecars: snapshotSidecars(),
+    exe: null, fuseBak: null,
+  };
+  if (exePath && fs.existsSync(exePath)) {
+    s.exe = fs.readFileSync(exePath);
+    const fb = exePath + '.wintage-fuse.bak';
+    if (fs.existsSync(fb)) s.fuseBak = fs.readFileSync(fb);
+  }
+  return s;
+}
+function restoreRevertPreState(pre, asarPath, bakPath, exePath) {
+  if (pre.asar !== null) { try { fs.writeFileSync(asarPath, pre.asar); } catch (e) { } }
+  if (pre.bak !== null) { try { fs.writeFileSync(bakPath, pre.bak); } catch (e) { } }
+  else { try { if (fs.existsSync(bakPath)) fs.unlinkSync(bakPath); } catch (e) { } }
+  restoreSidecars(pre.sidecars);
+  if (exePath && pre.exe !== null) {
+    try { fs.writeFileSync(exePath, pre.exe); } catch (e) { }
+    const fb = exePath + '.wintage-fuse.bak';
+    if (pre.fuseBak !== null) { try { fs.writeFileSync(fb, pre.fuseBak); } catch (e) { } }
+    else { try { if (fs.existsSync(fb)) fs.unlinkSync(fb); } catch (e) { } }
+  }
+}
+function captureAppDir() {
+  const snap = {};
+  for (const f of ['package.json', 'shim.cjs', 'wintage.css', 'wintage-status.txt']) {
+    const p = path.join(appDir, f);
+    snap[f] = fs.existsSync(p) ? { existed: true, buf: fs.readFileSync(p) } : { existed: false };
+  }
+  return snap;
+}
+function restoreAppDir(snap) {
+  for (const f of Object.keys(snap)) {
+    const p = path.join(appDir, f);
+    try {
+      if (snap[f].existed) { fs.mkdirSync(appDir, { recursive: true }); fs.writeFileSync(p, snap[f].buf); }
       else if (fs.existsSync(p)) fs.unlinkSync(p);
     } catch (e) { }
   }
@@ -537,13 +647,25 @@ function installRelocation() {
 // ─── Repaint (already themed) ───────────────────────────────────────────────
 function repaintInPlace() {
   if (dryRun) { console.log('install-electron: would repaint ' + asar + ' to "' + palette + '"'); process.exit(0); }
-  let shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
-  const original = asarPackageJson(asar + '.bak');
-  shimCode = shimCode.replace("require(ASAR);", "require(path.join(ASAR, '" + original.main + "'));");
-  fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
-  fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
-  fs.writeFileSync(path.join(resources, 'wintage-palette.txt'), palette + '\n');
-  try { fs.unlinkSync(path.join(resources, 'wintage-status.txt')); } catch (e) { }
+  // T-191 P0#5: repaint is a transaction - snapshot the sidecars, write, verify,
+  // roll back on any failure so a torn repaint can never advertise a palette the
+  // files do not carry.
+  const preSidecars = snapshotSidecars();
+  try {
+    let shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
+    const original = asarPackageJson(asar + '.bak');
+    shimCode = shimCode.replace("require(ASAR);", "require(path.join(ASAR, '" + original.main + "'));");
+    fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
+    fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
+    fs.writeFileSync(path.join(resources, 'wintage-palette.txt'), palette + '\n');
+    try { fs.unlinkSync(path.join(resources, 'wintage-status.txt')); } catch (e) { }
+    if (process.env.WINTAGE_TEST_FAIL_AFTER_REPAINT) throw new Error('simulated post-repaint failure (WINTAGE_TEST_FAIL_AFTER_REPAINT)');
+    const pf = path.join(resources, 'wintage-palette.txt');
+    if (!fs.existsSync(pf) || fs.readFileSync(pf, 'utf8').trim() !== palette) throw new Error('verification failed: palette marker not written');
+  } catch (e) {
+    restoreSidecars(preSidecars);
+    die('in-place repaint failed (' + e.message + ') - restored the exact pre-operation state.');
+  }
   console.log('install-electron: repainted ' + asar + ' in-place to "' + palette + '"');
   console.log('  restart the app to see it');
   process.exit(0);
@@ -556,11 +678,21 @@ function repaintRelocation() {
     console.log('install-electron: would repaint ' + appDir + ' from "' + from + '" to "' + palette + '"');
     process.exit(0);
   }
-  pkg.wintagePalette = palette;
-  fs.writeFileSync(pkgPath(), JSON.stringify(pkg, null, 2) + '\n');
-  fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(appDir, 'shim.cjs'));
-  fs.copyFileSync(path.join(built, 'wintage.css'), path.join(appDir, 'wintage.css'));
-  try { fs.unlinkSync(path.join(appDir, 'wintage-status.txt')); } catch (e) { }
+  // T-191 P0#5: transactional repaint of the owned app/ files.
+  const preApp = captureAppDir();
+  try {
+    pkg.wintagePalette = palette;
+    fs.writeFileSync(pkgPath(), JSON.stringify(pkg, null, 2) + '\n');
+    fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(appDir, 'shim.cjs'));
+    fs.copyFileSync(path.join(built, 'wintage.css'), path.join(appDir, 'wintage.css'));
+    try { fs.unlinkSync(path.join(appDir, 'wintage-status.txt')); } catch (e) { }
+    if (process.env.WINTAGE_TEST_FAIL_AFTER_REPAINT) throw new Error('simulated post-repaint failure (WINTAGE_TEST_FAIL_AFTER_REPAINT)');
+    const check = JSON.parse(fs.readFileSync(pkgPath(), 'utf8').replace(/^\uFEFF/, ''));
+    if (check.wintagePalette !== palette) throw new Error('verification failed: palette not recorded');
+  } catch (e) {
+    restoreAppDir(preApp);
+    die('relocation repaint failed (' + e.message + ') - restored the exact pre-operation state.');
+  }
   console.log('install-electron: repainted ' + (from === palette ? '' : '"' + from + '" -> ') + '"' + palette + '" in ' + appDir);
   console.log('  restart the app to see it');
   process.exit(0);

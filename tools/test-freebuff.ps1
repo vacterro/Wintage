@@ -12,6 +12,8 @@ param([switch]$List)
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $root = Split-Path $here -Parent
+$common = Join-Path $here '..\desktop\modules\common.ps1'
+$targets = Join-Path $here '..\desktop\modules\targets.ps1'
 $pass = 0; $fail = 0
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 
@@ -312,6 +314,68 @@ check 'health: Reapply after renderer tamper exits 0' ($r.Code -eq 0)
 check 'health: Reapply repaired the renderer' (([System.IO.File]::ReadAllText($bundlePath)) -match 'adSlot:\(\)=>Promise\.resolve\(null\)')
 $mHealth = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
 check 'health: manifest entry preserved after repair' ([bool]$mHealth.freebuff)
+
+# ---- Test 11: Electron snapshot carries the EXE + fuse backup and restores them (T-191 P0#3) ----
+Clean-Fixture
+Write-StockFixture
+[System.IO.File]::WriteAllText((Join-Path $app 'Freebuff.exe'), 'ORIGINAL-EXE-BYTES', $utf8)
+. $common
+. $targets
+$script:WintageAppData = Join-Path $fakeAppData 'Wintage'
+$script:ManifestPath = Join-Path $fakeAppData 'Wintage\installed.json'
+$ELECTRON = @{ freebuff = @{ Name = 'Freebuff'; Resources = (Join-Path $app 'resources'); Note = '' } }
+$snap11 = Save-ElectronStateSnapshot 'freebuff'
+check 'exe-snapshot: snapshot carries the exe' (Test-Path (Join-Path $snap11 'Freebuff.exe'))
+[System.IO.File]::WriteAllText((Join-Path $app 'Freebuff.exe'), 'DEFUSED-EXE-BYTES', $utf8)
+[System.IO.File]::WriteAllText((Join-Path $app 'Freebuff.exe.wintage-fuse.bak'), 'FUSE-BACKUP', $utf8)
+Restore-ElectronStateSnapshot 'freebuff' $snap11
+check 'exe-snapshot: exe restored byte-exact' (([System.IO.File]::ReadAllText((Join-Path $app 'Freebuff.exe'), $utf8)) -eq 'ORIGINAL-EXE-BYTES')
+check 'exe-snapshot: stale fuse backup removed with the transaction' (-not (Test-Path (Join-Path $app 'Freebuff.exe.wintage-fuse.bak')))
+Remove-Item $snap11 -Recurse -Force
+
+# ---- Test 12: Revert refuses to restore an OLD baseline over a NEW generation (T-191 P0#4) ----
+Clean-Fixture
+Write-StockFixture
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+check 'gen-reconcile: Apply exits 0' ($r.Code -eq 0)
+$stockBundle12 = [System.IO.File]::ReadAllBytes($bundlePath)
+$stockOrch12 = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
+# Upstream ships a NEW generation: fresh stock with NO old Wintage strings.
+$newGenBundle = 'const app = {}; function render(r) { return r; } module.exports = { app, render }; // generation 2 build with a full-length plausible body'
+$newGenOrch = 'module.exports = { render: 2, plugin: (app) => app }; // generation 2 orchestrator with a full-length plausible body'
+[System.IO.File]::WriteAllText($bundlePath, $newGenBundle, $utf8)
+[System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', $newGenOrch, $utf8)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
+check 'gen-reconcile: Revert REFUSED (nonzero)' ($r.Code -ne 0)
+check 'gen-reconcile: refusal names the file' (($r.Out -join ' ') -match 'REVERT REFUSED')
+check 'gen-reconcile: new-generation bundle NOT overwritten' (-not (Compare-Object ([System.IO.File]::ReadAllBytes($bundlePath)) ([System.Text.Encoding]::UTF8.GetBytes($newGenBundle))))
+check 'gen-reconcile: new-generation orchestrator NOT overwritten' (-not (Compare-Object ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')) ([System.Text.Encoding]::UTF8.GetBytes($newGenOrch))))
+# The refusal is deterministic: a second Revert over the same new generation is
+# refused again (still no matching baseline), never a silent partial restore.
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
+check 'gen-reconcile: repeated Revert is refused again (no silent partial restore)' ($r.Code -ne 0)
+
+# ---- Test 13: new generations re-base the baseline AND pruning caps it (T-191 P1#16) ----
+Clean-Fixture
+Write-StockFixture
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+check 'prune: gen1 apply exits 0' ($r.Code -eq 0)
+for ($g = 2; $g -le 5; $g++) {
+    # A REAL new generation: full stock (every matcher present, so the patch
+    # applies) but with non-owned bytes that differ from the previous baseline's
+    # stock snapshot -- the case the old string-presence heuristic missed.
+    $genBundle = $BUNDLE + "`n// generation $g build"
+    $genOrch = $FULL_ORCH + "`n// generation $g"
+    [System.IO.File]::WriteAllText($bundlePath, $genBundle, $utf8)
+    [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', $genOrch, $utf8)
+    $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+    check "prune: gen$g apply exits 0" ($r.Code -eq 0)
+}
+$bCount = @(Get-ChildItem $app -Directory -Filter '_orig-baseline-*').Count
+check 'prune: at most 3 baselines kept' ($bCount -le 3)
+check 'prune: at least 1 baseline kept' ($bCount -ge 1)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
+check 'prune: Revert still works after pruning' ($r.Code -eq 0)
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

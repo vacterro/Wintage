@@ -1,3 +1,2 @@
-done: T-190 state/transaction audit shipped as v1.26.6 (d1c3706) - FreeBuff baseline + atomic target, transactional Electron, multi-item ownership, health depth, concurrency hardening.
-remaining: nothing (board empty).
-avaiting: nothing.
+done: T-191 third-pass audit implementation at c1535fc+fixes - P0 manifest-precheck+commit-failure rollback, per-target mutex, FreeBuff EXE+fuse snapshot + baseline reconciliation/pruning, Electron repaint/revert transactions + fuse health, Terminal/Obsidian effective health, browser stage ownership, VSCode backup-as-revert, revert copy-over ordering, reapply no-browser-reopen; P1 GUI atomic paths, single release gate, atomic publish, status multi-item; P2 paths schema. Suites 124/72/39/electron PASS, Run-Tests ALL PASSED. Browser-launch-in-tests root cause fixed (reapply child no catalog/NoLaunch + LOCALAPPDATA + stub guard).
+remaining: T-191 VERIFY/REPORT pending; P1#9 effective-state partial (windows/obs/conhost marker-level), P2#20 docs via saiwiki flow; await saipen ship before commit/push.

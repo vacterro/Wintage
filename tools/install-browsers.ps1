@@ -131,6 +131,15 @@ function Get-Summary {
 }
 
 function Open-Profile($profile, [string[]]$urls) {
+    # A real browser executable is always > 100 KB. A stub (empty fixture file,
+    # a corrupt install) must never be "launched": Start-Process on it can pop
+    # the shell's own error UI or, worse, be caught silently - so a launch that
+    # is clearly pointless is refused with a warning instead (T-191).
+    try { $len = (Get-Item -LiteralPath $profile.Exe -ErrorAction Stop).Length } catch { $len = 0 }
+    if ($len -lt 102400) {
+        Write-Warning "Open-Profile: refusing to launch $($profile.Exe) - it is only $len bytes and cannot be a real browser executable."
+        return
+    }
     $arguments = @("--user-data-dir=`"$($profile.UserData)`"")
     if ($profile.Profile) { $arguments += "--profile-directory=`"$($profile.Profile)`"" }
     $arguments += $urls

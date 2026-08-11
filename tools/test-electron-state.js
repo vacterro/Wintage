@@ -47,8 +47,8 @@ function buildFusedExe() {
   head[0] = 1; head[1] = 8;
   const fuses = Buffer.alloc(8);
   fuses.fill(0x30);
-  fuses[6] = 0x31;   // EnableEmbeddedAsarIntegrityValidation
-  fuses[7] = 0x31;   // OnlyLoadAppFromAsar
+  fuses[5] = 0x31;   // EnableEmbeddedAsarIntegrityValidation
+  fuses[6] = 0x31;   // OnlyLoadAppFromAsar
   return Buffer.concat([Buffer.from('MZ fake exe '), FUSE_SENTINEL, head, fuses, Buffer.from(' padding')]);
 }
 
@@ -256,6 +256,62 @@ for (const seam of INPLACE_FAIL_SEAMS) {
   check('inplace ' + seam + ': exits NONZERO', r.code !== 0, true);
   check('inplace ' + seam + ': asar byte-exact', fs.readFileSync(path.join(R, 'app.asar')).equals(pre), true);
   check('inplace ' + seam + ': no sidecars left', !['wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt'].some(f => fs.existsSync(path.join(R, f))), true);
+}
+
+// ---- T-191 P0#5: repaint is a transaction - failure rolls back the palette ----
+for (const mode of ['relocation', 'in-place']) {
+  const R = mk('repaint-' + mode);
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'), true);
+  const args = '--resources "' + R + '"' + (mode === 'in-place' ? ' --in-place' : '') + ' --palette goldendefault';
+  let r = run(args);
+  check('repaint-' + mode + ': initial apply exits 0', r.code, 0);
+  const before = mode === 'in-place'
+    ? fs.readFileSync(path.join(R, 'wintage-palette.txt'), 'utf8')
+    : JSON.parse(fs.readFileSync(path.join(R, 'app', 'package.json'), 'utf8')).wintagePalette;
+  r = run(args.replace('goldendefault', 'dracula'), { WINTAGE_TEST_FAIL_AFTER_REPAINT: '1' });
+  check('repaint-' + mode + ': failing repaint exits NONZERO', r.code !== 0, true);
+  const after = mode === 'in-place'
+    ? fs.readFileSync(path.join(R, 'wintage-palette.txt'), 'utf8')
+    : JSON.parse(fs.readFileSync(path.join(R, 'app', 'package.json'), 'utf8')).wintagePalette;
+  check('repaint-' + mode + ': palette rolled back to the exact pre-state', after, before);
+}
+
+// ---- T-191 P0#6: revert is a transaction - failure restores the themed state ----
+{
+  const R = mk('revert-tx');
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'), true);
+  const preApply = fs.readFileSync(path.join(R, 'app.asar'));
+  let r = run('--resources "' + R + '" --in-place --palette goldendefault');
+  check('revert-tx: apply exits 0', r.code, 0);
+  const themedAsar = fs.readFileSync(path.join(R, 'app.asar'));
+  check('revert-tx: apply really patched the asar', !themedAsar.equals(preApply), true);
+  check('revert-tx: backup exists after apply', fs.existsSync(path.join(R, 'app.asar.bak')), true);
+  r = run('--resources "' + R + '" --in-place --revert', { WINTAGE_TEST_FAIL_AFTER_REVERT: '1' });
+  check('revert-tx: failing revert exits NONZERO', r.code !== 0, true);
+  check('revert-tx: archive still themed (not half-reverted)', fs.readFileSync(path.join(R, 'app.asar')).equals(themedAsar), true);
+  check('revert-tx: backup restored', fs.existsSync(path.join(R, 'app.asar.bak')), true);
+  check('revert-tx: sidecars still present', fs.existsSync(path.join(R, 'wintage-shim.cjs')) && fs.existsSync(path.join(R, 'wintage-palette.txt')), true);
+  // A clean revert afterwards still succeeds from the intact themed state.
+  r = run('--resources "' + R + '" --in-place --revert');
+  check('revert-tx: clean revert exits 0', r.code, 0);
+  check('revert-tx: clean revert restores stock', fs.readFileSync(path.join(R, 'app.asar')).equals(preApply), true);
+}
+
+// ---- T-191 P0#7: --status-json reports fuse health ----
+{
+  const R = mk('fuse-health');
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'), true);
+  const exe = path.join(R, '..', 'FakeApp.exe');
+  fs.writeFileSync(exe, buildFusedExe());
+  let st = status(R, true);
+  check('fuse-health: status carries a fuses block', st && typeof st.fuses === 'object', true);
+  check('fuse-health: fused app reported fusedShut', st.fuses.fusedShut, true);
+  check('fuse-health: no pending fuse restore on stock', st.fuses.pendingRestore, false);
+  let r = run('--resources "' + R + '" --in-place --palette goldendefault');
+  check('fuse-health: apply defused and exits 0', r.code, 0);
+  st = status(R, true);
+  check('fuse-health: after apply the exe is no longer fusedShut', st.fuses.fusedShut, false);
+  check('fuse-health: fuse restore backup pending (revert must put it back)', st.fuses.pendingRestore, true);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
