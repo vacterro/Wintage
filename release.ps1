@@ -146,20 +146,18 @@ function Git-Safe {
 
 if ((Git-Safe add -A) -ne 0) { throw "git add failed" }
 if ((Git-Safe commit -m "v${new}: $Message") -ne 0) { throw "git commit failed (nothing to commit, or a hook rejected it)" }
-if ((Git-Safe push origin main) -ne 0) { throw "git push failed - commit is local; fix the remote and 'git push' by hand" }
-# T-191 P1#15: a release must be published WHOLE or not at all. Tagging a commit
-# the remote never received creates a half-published version (branch live, tag
-# pointing at an unpushed sha). Verify the remote actually converged to the local
-# HEAD before the tag exists.
-if ((Git-Safe fetch origin main) -ne 0) { throw "git fetch failed - the commit is pushed but the release is NOT tagged; verify the remote state and tag by hand" }
-$prevEap = $ErrorActionPreference
-$ErrorActionPreference = 'Continue'
-$remoteSha = (& git -C $PSScriptRoot rev-parse "origin/main" 2>$null).Trim()
-$localSha = (& git -C $PSScriptRoot rev-parse "HEAD" 2>$null).Trim()
-$ErrorActionPreference = $prevEap
-if (-not $remoteSha -or $remoteSha -ne $localSha) {
-    throw "remote main is not at the local HEAD ($remoteSha != $localSha) - the branch push is NOT verified, so the release is NOT tagged. Push 'origin main' by hand, verify, then run: git tag -a v$new -m 'Wintage v$new' && git push origin refs/tags/v$new"
+# T-192 P1#25: a release is published WHOLE or NOT AT ALL. The branch and the tag
+# are pushed in ONE `git push --atomic` refspec: if either ref is rejected the
+# remote receives NEITHER, so no half-published version can ever exist. The tag
+# is created locally first, and its availability is checked on both sides BEFORE
+# anything is pushed.
+$tagRef = "refs/tags/v$new"
+$branchRef = 'refs/heads/main'
+$tagExists = ((& git -C $PSScriptRoot tag -l "v$new") -join '').Trim()
+if ($tagExists) { throw "local tag v$new already exists - release aborted BEFORE publishing anything." }
+if ((Git-Safe ls-remote --exit-code origin $tagRef) -eq 0) { throw "remote already has $tagRef - release aborted BEFORE publishing anything." }
+if ((Git-Safe tag -a "v$new" -m "Wintage v$new") -ne 0) { throw "git tag failed - release aborted BEFORE publishing anything." }
+if ((Git-Safe push --atomic origin "${branchRef}:${branchRef}" "${tagRef}:${tagRef}") -ne 0) {
+    throw "atomic push FAILED - the remote received NEITHER the branch NOR the tag (git push --atomic). The local commit and annotated tag are ready; fix the remote and re-run: git push --atomic origin refs/heads/main refs/tags/v$new"
 }
-if ((Git-Safe tag -a "v$new" -m "Wintage v$new") -ne 0) { throw "git tag failed - branch is already pushed" }
-if ((Git-Safe push origin "refs/tags/v${new}:refs/tags/v${new}") -ne 0) { throw "git tag push failed - branch and local tag already exist; run 'git push origin refs/tags/v$new' by hand" }
 Write-Host "Released Wintage v$new - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green

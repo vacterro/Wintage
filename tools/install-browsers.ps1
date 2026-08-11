@@ -178,8 +178,32 @@ if (-not $before.ProfileCount) {
 }
 Assert-SafeStageRoot $StageRoot $before.Profiles
 
+# ─── Stage ownership (T-192 P0#14) ──────────────────────────────────────────
+# A "safe filesystem location" is NOT permission to recursively delete the path.
+# Only a directory carrying the Wintage ownership marker may be replaced or
+# removed. An unowned existing stage is user data and is never touched.
+$OWNER_MARKER = '.wintage-owner.json'
+
+function Get-StageOwner([string]$path) {
+    $m = Join-Path $path $OWNER_MARKER
+    if (-not (Test-Path -LiteralPath $m)) { return $null }
+    try {
+        $o = ([System.IO.File]::ReadAllText($m)) | ConvertFrom-Json
+        if ($o.owner -ne 'Wintage') { return $null }
+        return $o
+    } catch { return $null }
+}
+
+function Write-OwnerMarker([string]$path, [string]$palette) {
+    $o = [ordered]@{ owner = 'Wintage'; schema = 1; palette = $palette; created = (Get-Date).ToUniversalTime().ToString('o') }
+    [System.IO.File]::WriteAllText((Join-Path $path $OWNER_MARKER), ($o | ConvertTo-Json), (New-Object System.Text.UTF8Encoding($false)))
+}
+
 if ($Revert) {
     if (Test-Path -LiteralPath $StageRoot) {
+        if (-not (Get-StageOwner $StageRoot)) {
+            throw "Browser theme staging path exists but is not Wintage-owned ($StageRoot) - refusing to delete it. Remove the folder by hand or pick a different -StageRoot."
+        }
         if ($PSCmdlet.ShouldProcess($StageRoot, 'Remove staged Wintage browser theme')) {
             Remove-Item -LiteralPath $StageRoot -Recurse -Force
         }
@@ -202,10 +226,34 @@ if (-not (Test-Path -LiteralPath (Join-Path $source 'manifest.json'))) {
     throw "Built browser theme missing: $source"
 }
 if ($PSCmdlet.ShouldProcess($StageRoot, "Stage Wintage $Palette browser theme")) {
-    if (Test-Path -LiteralPath $StageRoot) { Remove-Item -LiteralPath $StageRoot -Recurse -Force }
-    New-Item -ItemType Directory -Path $StageRoot -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $source 'manifest.json') -Destination (Join-Path $StageRoot 'manifest.json') -Force
-    [System.IO.File]::WriteAllText((Join-Path $StageRoot '.wintage-palette'), $Palette, (New-Object System.Text.UTF8Encoding($false)))
+    if (Test-Path -LiteralPath $StageRoot) {
+        $owner = Get-StageOwner $StageRoot
+        if (-not $owner) {
+            throw "Browser theme staging path exists but is not Wintage-owned ($StageRoot) - refusing to replace it and destroy whatever is inside. Pick a different -StageRoot or move the folder aside."
+        }
+    }
+    # Build the new stage in a sibling temp, verify, then swap atomically.
+    $parent = Split-Path -Parent $StageRoot
+    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    $staging = Join-Path $parent ('.wintage-stage-' + [guid]::NewGuid().ToString('N'))
+    $oldStage = Join-Path $parent ('.wintage-old-' + [guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Path $staging -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $source 'manifest.json') -Destination (Join-Path $staging 'manifest.json') -Force
+        [System.IO.File]::WriteAllText((Join-Path $staging '.wintage-palette'), $Palette, (New-Object System.Text.UTF8Encoding($false)))
+        Write-OwnerMarker $staging $Palette
+        if (-not (Test-Path -LiteralPath (Join-Path $staging 'manifest.json'))) { throw 'staged manifest.json missing after copy - aborting' }
+        if (Test-Path -LiteralPath $StageRoot) { Move-Item -LiteralPath $StageRoot -Destination $oldStage -Force }
+        Move-Item -LiteralPath $staging -Destination $StageRoot
+        if (Test-Path -LiteralPath $oldStage) { Remove-Item -LiteralPath $oldStage -Recurse -Force }
+    } catch {
+        if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $oldStage) {
+            if (Test-Path -LiteralPath $StageRoot) { Remove-Item -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue }
+            Move-Item -LiteralPath $oldStage -Destination $StageRoot -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    }
 }
 
 if ($WhatIfPreference) {

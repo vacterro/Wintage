@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.26.8] - 2026-08-11
+
+- The browser theme stage is now OWNED, not merely "in a safe location": a directory carrying the Wintage owner marker is the only one Apply replaces or Revert deletes. An unowned stage with user data is never touched - Apply and Revert refuse instead of recursively deleting it, and the stage is swapped atomically through a temp sibling.
+- VS Code / Antigravity extension recovery moved to a persistent, non-pruned authority (`WINTAGE_APPDATA/recovery/<target>`): the first apply records whether the folder was created by Wintage or replaced a pre-existing one, a repaint never overwrites that pristine snapshot, and Revert restores the original directory byte-for-byte.
+- SAIPENVIEW backup refreshes are now a REBASE, not a wholesale copy: the current CSS's Wintage-owned `--token` values always come from the old pristine, so a themed live file can never become the "pristine" authority and Revert restores stock colours, not Wintage's.
+- The manifest is now schema-validated on every read and write: a syntax-valid but semantically broken file (top-level array, non-object entry, wrong-typed fields, non-array or duplicate-path `items`) is rejected like corrupt JSON and never overwritten, while unknown future target keys are preserved.
+- Windows theme applies capture the exact owned pre-state (DWM inactive accent + Wintage theme artifacts) before mutating, and an activation failure restores it instead of leaving a half-applied theme. The DWM recovery backup survives until the manifest transition succeeds.
+- Windows Terminal, Electron and Total Commander manifest commits are now part of their transactions: a failed commit rolls the target back (or keeps the recovery source for an idempotent retry), so a themed target can never be left with a manifest that does not describe it.
+- The release helper now publishes the branch and the tag in ONE atomic push (`git push --atomic`): a rejected ref means neither lands, so a half-published version is impossible. The tag's availability is checked locally and on the remote before anything is pushed.
+- The GUI custom theme Save/Delete are transactional: if a generator fails, the previous custom pack is restored and the generated outputs regenerated, so source and generated state never diverge.
+- test-reapply now enumerates its full 34-test catalog and adds regressions for every fix above.
+
 ## [1.26.7] - 2026-08-11
 
 - A target's mutation and its manifest commit are now ONE transaction: the manifest is validated before any real mutation (a corrupt `installed.json` aborts with zero target changes), and a failed manifest commit rolls every target back to its exact pre-operation state instead of leaving a mutated target with an old manifest. Each target also runs its whole DISCOVER..COMMIT under a named per-target mutex, so two concurrent applies of the same target serialize and can never tear each other's files.

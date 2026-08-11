@@ -356,7 +356,7 @@ function Save-TotalCmdSnapshot([string[]]$lines, [int[]]$recentFilterIds) {
     @{ owned = $owned } | ConvertTo-Json -Depth 6
 }
 
-function Restore-TotalCmdOwned([string]$ini, [string]$iniBak) {
+function Restore-TotalCmdOwned([string]$ini, [string]$iniBak, [switch]$Keep) {
     $snapshot = $null
     if (Test-Path $iniBak) {
         try {
@@ -394,7 +394,9 @@ function Restore-TotalCmdOwned([string]$ini, [string]$iniBak) {
         }
     }
     Write-Utf8BomLines $ini $current
-    Remove-Item $iniBak -Force
+    # T-192 P2/C: the backup is consumed only when no manifest transition is
+    # still pending; a failed Remove-ManifestEntry must keep it for a retry.
+    if (-not $Keep) { Remove-Item $iniBak -Force }
     return $true
 }
 
@@ -539,7 +541,20 @@ function Invoke-WindowsTerminal {
             } catch { $failedItems += $settings }
         }
         if ($failedItems.Count) { throw "Windows Terminal revert INCOMPLETE for: $($failedItems -join '; ') - manifest kept." }
-        Remove-ManifestEntry 'terminal'
+        # T-192 P2/B: the manifest transition is part of the revert transaction.
+        # A failed Remove-ManifestEntry re-themes the recorded settings from the
+        # recorded palette so state and ledger never disagree.
+        Invoke-TargetCommit 'terminal' 'Windows Terminal' {
+            Remove-ManifestEntry 'terminal'
+        } {
+            $m = Read-Manifest
+            if ($m.ContainsKey('terminal') -and $m['terminal'].palette) {
+                $palFile = Join-Path $root "themes/$($m['terminal'].palette).json"
+                foreach ($settings in $recorded) {
+                    if (Test-Path $settings) { & node $helper --settings $settings --palette $palFile 2>$null | Out-Null }
+                }
+            }
+        }
         return
     }
 
@@ -564,7 +579,14 @@ function Invoke-WindowsTerminal {
         }
     }
     if ($applied.Count) {
-        Set-ManifestEntryMulti 'terminal' $PaletteSlug (@($applied | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
+        # T-192 P2/B: a manifest-commit failure must roll back the applied settings
+        # (the same revert each failed item triggers), never leave them themed with
+        # an old manifest.
+        Invoke-TargetCommit 'terminal' 'Windows Terminal' {
+            Set-ManifestEntryMulti 'terminal' $PaletteSlug (@($applied | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
+        } {
+            foreach ($done in $applied) { & node $helper --settings $done --revert 2>$null | Out-Null }
+        }
     }
 }
 
@@ -572,6 +594,40 @@ function Invoke-Conhost {
     param([switch]$DoRevert, [string]$PaletteSlug)
     $keys = @(Get-ConhostKeys)
     if (-not $keys.Count) { Assert-TargetResolvable 'Console Host' $false; return }
+
+    # The full set of Wintage-owned console values for a palette. Shared by Apply,
+    # the revert rollback (rebuild the themed state after a failed manifest
+    # removal) and the health probe, so the "owned state" is defined ONCE.
+    function Get-ConhostThemeValues([string]$paletteSlug) {
+        $t = Get-PaletteTokens (Join-Path $root "themes/$paletteSlug.json")
+        return [ordered]@{
+            FaceName       = @{ Value = $CONSOLE_FONT; Type = 'String' }
+            FontFamily     = @{ Value = 54; Type = 'DWord' }
+            FontWeight     = @{ Value = 400; Type = 'DWord' }
+            FontSize       = @{ Value = 1048576; Type = 'DWord' }
+            ScreenColors   = @{ Value = 15; Type = 'DWord' }
+            PopupColors    = @{ Value = 240; Type = 'DWord' }
+            CursorColor    = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
+            WindowAlpha    = @{ Value = 255; Type = 'DWord' }
+            ColorTable00   = @{ Value = (Convert-HexToBgr $t.background); Type = 'DWord' }
+            ColorTable01   = @{ Value = (Convert-HexToBgr $t.accentTealDeep); Type = 'DWord' }
+            ColorTable02   = @{ Value = (Convert-HexToBgr $t.success); Type = 'DWord' }
+            ColorTable03   = @{ Value = (Convert-HexToBgr $t.accentTeal); Type = 'DWord' }
+            ColorTable04   = @{ Value = (Convert-HexToBgr $t.danger); Type = 'DWord' }
+            ColorTable05   = @{ Value = (Convert-HexToBgr $t.surfaceAlt); Type = 'DWord' }
+            ColorTable06   = @{ Value = (Convert-HexToBgr $t.warning); Type = 'DWord' }
+            ColorTable07   = @{ Value = (Convert-HexToBgr $t.textSecondary); Type = 'DWord' }
+            ColorTable08   = @{ Value = (Convert-HexToBgr $t.borderMuted); Type = 'DWord' }
+            ColorTable09   = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
+            ColorTable10   = @{ Value = (Convert-HexToBgr $t.success); Type = 'DWord' }
+            ColorTable11   = @{ Value = (Convert-HexToBgr $t.accentTeal); Type = 'DWord' }
+            ColorTable12   = @{ Value = (Convert-HexToBgr $t.dangerText); Type = 'DWord' }
+            ColorTable13   = @{ Value = (Convert-HexToBgr $t.surfaceAlt); Type = 'DWord' }
+            ColorTable14   = @{ Value = (Convert-HexToBgr $t.textPrimary); Type = 'DWord' }
+            ColorTable15   = @{ Value = (Convert-HexToBgr $t.textPrimary); Type = 'DWord' }
+            WintagePalette = @{ Value = $paletteSlug; Type = 'String' }
+        }
+    }
 
     if ($DoRevert) {
         Assert-RevertSource 'conhost' $CONHOST_BACKUP 'Console Host'
@@ -589,43 +645,34 @@ function Invoke-Conhost {
                     Remove-ItemProperty -LiteralPath $item.Path -Name $item.Name -ErrorAction SilentlyContinue
                 }
             }
-            Remove-Item $CONHOST_BACKUP -Force
             Say 'Console Host: restored pre-Wintage registry values.' 'Green'
-            Remove-ManifestEntry 'conhost'
+            # P0#4: the recovery backup is consumed ONLY AFTER the manifest
+            # transition succeeds. A failed Remove-ManifestEntry must not destroy
+            # the only recovery authority - the rollback puts the THEMED values
+            # back (rebuilt from the recorded palette) and leaves the backup for
+            # an idempotent retry. Never: target reverted + recovery deleted +
+            # manifest still says installed.
+            Invoke-TargetCommit 'conhost' 'Console Host' {
+                Remove-ManifestEntry 'conhost'
+            } {
+                $m = Read-Manifest
+                if ($m.ContainsKey('conhost') -and $m['conhost'].palette) {
+                    $tv = Get-ConhostThemeValues ([string]$m['conhost'].palette)
+                    foreach ($key in $keys) {
+                        foreach ($name in $tv.Keys) {
+                            New-ItemProperty -LiteralPath $key.PSPath -Name $name -Value $tv[$name].Value -PropertyType $tv[$name].Type -Force | Out-Null
+                        }
+                    }
+                }
+            }
+            Remove-Item $CONHOST_BACKUP -Force
         }
         return
     }
 
     $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
     if (-not (Test-Path $paletteFile)) { throw "Console Host: theme file not found ($PaletteSlug.json)" }
-    $t = Get-PaletteTokens $paletteFile
-    $values = [ordered]@{
-        FaceName      = @{ Value = $CONSOLE_FONT; Type = 'String' }
-        FontFamily    = @{ Value = 54; Type = 'DWord' }
-        FontWeight    = @{ Value = 400; Type = 'DWord' }
-        FontSize      = @{ Value = 1048576; Type = 'DWord' }
-        ScreenColors  = @{ Value = 15; Type = 'DWord' }
-        PopupColors   = @{ Value = 240; Type = 'DWord' }
-        CursorColor   = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
-        WindowAlpha   = @{ Value = 255; Type = 'DWord' }
-        ColorTable00  = @{ Value = (Convert-HexToBgr $t.background); Type = 'DWord' }
-        ColorTable01  = @{ Value = (Convert-HexToBgr $t.accentTealDeep); Type = 'DWord' }
-        ColorTable02  = @{ Value = (Convert-HexToBgr $t.success); Type = 'DWord' }
-        ColorTable03  = @{ Value = (Convert-HexToBgr $t.accentTeal); Type = 'DWord' }
-        ColorTable04  = @{ Value = (Convert-HexToBgr $t.danger); Type = 'DWord' }
-        ColorTable05  = @{ Value = (Convert-HexToBgr $t.surfaceAlt); Type = 'DWord' }
-        ColorTable06  = @{ Value = (Convert-HexToBgr $t.warning); Type = 'DWord' }
-        ColorTable07  = @{ Value = (Convert-HexToBgr $t.textSecondary); Type = 'DWord' }
-        ColorTable08  = @{ Value = (Convert-HexToBgr $t.borderMuted); Type = 'DWord' }
-        ColorTable09  = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
-        ColorTable10  = @{ Value = (Convert-HexToBgr $t.success); Type = 'DWord' }
-        ColorTable11  = @{ Value = (Convert-HexToBgr $t.accentTeal); Type = 'DWord' }
-        ColorTable12  = @{ Value = (Convert-HexToBgr $t.dangerText); Type = 'DWord' }
-        ColorTable13  = @{ Value = (Convert-HexToBgr $t.surfaceAlt); Type = 'DWord' }
-        ColorTable14  = @{ Value = (Convert-HexToBgr $t.textPrimary); Type = 'DWord' }
-        ColorTable15  = @{ Value = (Convert-HexToBgr $t.textPrimary); Type = 'DWord' }
-        WintagePalette = @{ Value = $PaletteSlug; Type = 'String' }
-    }
+    $values = Get-ConhostThemeValues $PaletteSlug
 
     if ($PSCmdlet.ShouldProcess($CONHOST_KEY, "Apply $PaletteSlug + $CONSOLE_FONT to defaults and existing console profiles")) {
         # Keep the first-seen value for every path/name pair. A console profile can
@@ -669,7 +716,23 @@ function Invoke-Conhost {
         }
         Say "Console Host: applied $PaletteSlug + $CONSOLE_FONT to $($keys.Count) registry profile(s)." 'Green'
         Say '  Restart cmd/PowerShell windows to replace the old proportional-font cells.' 'Yellow'
-        Set-ManifestEntry 'conhost' $PaletteSlug $CONHOST_KEY 'n/a' (Get-PayloadVersion)
+        Invoke-TargetCommit 'conhost' 'Console Host' {
+            Set-ManifestEntry 'conhost' $PaletteSlug $CONHOST_KEY 'n/a' (Get-PayloadVersion)
+        } {
+            # Manifest commit failed: restore every owned value to the exact
+            # pre-Wintage snapshot (the backup holds it) and KEEP the backup.
+            if (Test-Path $CONHOST_BACKUP) {
+                $snap = @(Read-Utf8 $CONHOST_BACKUP | ConvertFrom-Json)
+                foreach ($item in $snap) {
+                    if (-not (Test-Path -LiteralPath $item.Path)) { continue }
+                    if ($item.Existed) {
+                        New-ItemProperty -LiteralPath $item.Path -Name $item.Name -Value $item.Value -PropertyType $item.Kind -Force | Out-Null
+                    } else {
+                        Remove-ItemProperty -LiteralPath $item.Path -Name $item.Name -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -696,8 +759,25 @@ function Invoke-WindowsTheme {
     if ($LASTEXITCODE -ne 0) { throw 'Windows theme preparation failed.' }
     $payload = $helperOutput[-1] | ConvertFrom-Json
 
+    # T-192 P1#27: capture the exact owned pre-state BEFORE any mutation, so an
+    # activation failure can restore it instead of leaving a half-applied theme.
+    $preAccentItem = Get-Item $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
+    $preAccentExists = $preAccentItem -and ($preAccentItem.GetValueNames() -contains 'AccentColorInactive')
+    $preAccent = if ($preAccentExists) { $preAccentItem.GetValue('AccentColorInactive', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { $null }
+    $preWintageThemes = @(Get-ChildItem $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue | ForEach-Object { [IO.Path]::GetFullPath($_.FullName) })
+    function Restore-WindowsApplyPreState {
+        if ($preAccentExists) {
+            New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $preAccent -PropertyType DWord -Force | Out-Null
+        } else {
+            Remove-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -ErrorAction SilentlyContinue
+        }
+        foreach ($t in @(Get-ChildItem $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue)) {
+            if ([IO.Path]::GetFullPath($t.FullName) -notin $preWintageThemes) { Remove-Item -LiteralPath $t.FullName -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
     $expectedAccent = $null
-    if ($DoRevert) { Restore-WindowsInactiveAccent }
+    if ($DoRevert) { Restore-WindowsInactiveAccent -Keep }
     else {
         Backup-WindowsInactiveAccent
         $tokens = Get-PaletteTokens (Join-Path $root "themes/$PaletteSlug.json")
@@ -742,7 +822,13 @@ function Invoke-WindowsTheme {
             }
         }
     }
-    if (-not $activated) { throw 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts - the palette may be only partly applied, so the manifest was NOT updated. Re-run to retry.' }
+    if (-not $activated) {
+        # P1#27: activation was not confirmed - restore the exact owned pre-state
+        # (DWM accent + any Wintage*.theme this run created) and keep the DWM
+        # backup as the recovery authority. Never throw after partial mutation.
+        if (-not $DoRevert) { Restore-WindowsApplyPreState }
+        throw 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts - the owned pre-state was restored, so the manifest was NOT updated. Re-run to retry.'
+    }
     foreach ($oldTheme in @($payload.cleanup)) {
         if (-not $oldTheme) { continue }
         $fullOld = [IO.Path]::GetFullPath([string]$oldTheme)
@@ -754,8 +840,28 @@ function Invoke-WindowsTheme {
             Remove-Item -LiteralPath $fullOld -Force -ErrorAction SilentlyContinue
         }
     }
-    if ($DoRevert) { Say 'Windows: restored the saved pre-Wintage theme.' 'Green'; Remove-ManifestEntry 'windows' }
-    else { Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'; Set-ManifestEntry 'windows' $PaletteSlug $WINDOWS_THEMES_DIR 'n/a' (Get-PayloadVersion) }
+    if ($DoRevert) {
+        Say 'Windows: restored the saved pre-Wintage theme.' 'Green'
+        # P1#27: the DWM backup is consumed ONLY after the manifest transition
+        # succeeded. A failed Remove-ManifestEntry keeps it for an idempotent retry.
+        Invoke-TargetCommit 'windows' 'Windows system theme' {
+            Remove-ManifestEntry 'windows'
+        } {
+            $m = Read-Manifest
+            if ($m.ContainsKey('windows') -and $m['windows'].palette) {
+                $t = Get-PaletteTokens (Join-Path $root "themes/$($m['windows'].palette).json")
+                $inactiveAccent = ([uint32](Convert-HexToBgr $t.surfaceRaised)) -bor [uint32]4278190080
+                New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $inactiveAccent -PropertyType DWord -Force | Out-Null
+            }
+        }
+        if (Test-Path $WINDOWS_DWM_BACKUP) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
+    }
+    else {
+        Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'
+        Invoke-TargetCommit 'windows' 'Windows system theme' {
+            Set-ManifestEntry 'windows' $PaletteSlug $WINDOWS_THEMES_DIR 'n/a' (Get-PayloadVersion)
+        } { Restore-WindowsApplyPreState }
+    }
 }
 
 function Invoke-TotalCmd {
@@ -801,10 +907,17 @@ function Invoke-TotalCmd {
             if (Test-Path $iniBak) {
                 # Ownership merge (T-189): restore ONLY the Wintage-owned keys into
                 # the CURRENT ini; unrelated user edits made after Apply survive.
-                $restored = Restore-TotalCmdOwned $ini $iniBak
+                # T-192 P2/C: the backup is kept until the manifest transition wins.
+                $restored = Restore-TotalCmdOwned $ini $iniBak -Keep
                 if (-not $restored) { throw "$($appName): backup exists but could not be parsed - nothing restored." }
                 Say "$($appName): restored the Wintage-owned keys into the current wincmd.ini" 'Green'
-                Remove-ManifestEntry $manifestName
+                Invoke-TargetCommit $manifestName $appName {
+                    Remove-ManifestEntry $manifestName
+                } {
+                    # Manifest removal failed: the backup is still present (kept
+                    # above), so an idempotent retry can finish the revert.
+                }
+                if (Test-Path $iniBak) { Remove-Item $iniBak -Force }
             }
             else {
                 # No backup. Only an ini that WE themed (manifest says so) may be
@@ -944,7 +1057,11 @@ function Invoke-TotalCmd {
         Write-Utf8BomLines $ini $finalLines
         $recentNote = if ($recentFilterIds.Count) { "; recent-file indicator themed ($($recentFilterIds.Count) filter(s))" } else { '; no existing recent-file filter found' }
         Say "$($appName): applied $PaletteSlug$recentNote" 'Green'
-        Set-ManifestEntry $manifestName $PaletteSlug $ini 'n/a' (Get-PayloadVersion)
+        # T-192 P2/B: a manifest-commit failure restores the exact pre-mutation ini.
+        $preIni = Save-FilePreState $ini $iniBak
+        Invoke-TargetCommit $manifestName $appName {
+            Set-ManifestEntry $manifestName $PaletteSlug $ini 'n/a' (Get-PayloadVersion)
+        } { Restore-FilePreState $preIni $ini $iniBak }
     }
 }
 
@@ -1173,8 +1290,17 @@ function Invoke-Saipenview {
         if (Test-Path $bakFile) {
             if ((Get-CssShape (Read-Utf8 $bakFile)) -ne (Get-CssShape (Read-Utf8 $cssFile))) {
                 Copy-Item $bakFile "$bakFile.stale" -Force
-                Copy-Item $cssFile $bakFile -Force
-                Say "SAIPENVIEW: style.css has changed since the backup was taken - backup refreshed (previous kept as style.css.bak.stale)" 'DarkYellow'
+                # T-192 P1#18: REBASE, never a wholesale copy. The live CSS may
+                # already carry Wintage palette values (theme still applied while
+                # SAIPENVIEW/upstream added unrelated selectors). Copying it
+                # wholesale into the pristine authority would make Revert restore
+                # Wintage colours. The new pristine = current non-owned CSS with
+                # every Wintage-owned --token VALUE taken from the OLD pristine.
+                $oldPristine = Read-Utf8 $bakFile
+                $live = Read-Utf8 $cssFile
+                $newPristine = Rebase-CssTokens $live $oldPristine
+                Write-Utf8 $bakFile $newPristine
+                Say "SAIPENVIEW: style.css has changed since the backup was taken - backup rebased (previous kept as style.css.bak.stale)" 'DarkYellow'
             }
         } else {
             Copy-Item $cssFile $bakFile -Force
@@ -1350,7 +1476,7 @@ function Invoke-Obsidian {
     if (-not (Test-Path $activeManifest)) { throw "No Obsidian build for palette '$PaletteSlug'." }
         $activeName = (Read-Utf8 $activeManifest | ConvertFrom-Json).name
 
-    $bakDir = Join-Path $here 'backup'
+    $bakDir = $backupBase
     New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
     # Canonical per-vault identity: two different vault paths must never hash to
     # the same backup name, and the same path must always name the same backup.
@@ -1489,7 +1615,7 @@ function Invoke-MpcHc {
 
     if (-not (Test-Path $MPC_KEY)) { Assert-TargetResolvable 'MPC-HC' $false; return }
 
-    $bakDir = Join-Path $here 'backup'
+    $bakDir = $backupBase
     $bak = Join-Path $bakDir 'mpc-hc-settings.reg'
 
     # MPCTheme 1 = the dark UI. ModernThemeMode 2 = dark title bar too.

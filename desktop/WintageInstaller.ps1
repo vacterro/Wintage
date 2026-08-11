@@ -932,38 +932,58 @@ function Invoke-NodeTool([string[]]$argsList) {
     $code
 }
 
+# T-192 P1#26: Save/Delete-Custom are ONE transaction. The pack is mutated, then
+# the generators run; if EITHER generator fails, the previous custom.json is
+# restored and the generated outputs are regenerated from it - source and
+# generated state can never diverge, and a failed save never leaves a broken
+# half-generated theme behind.
+function Invoke-CustomMutation([scriptblock]$mutate, [string]$label) {
+    $file = Join-Path $themeDir 'custom.json'
+    $hadOld = Test-Path $file
+    $oldBytes = if ($hadOld) { [System.IO.File]::ReadAllBytes($file) } else { $null }
+    try {
+        & $mutate
+        $code1 = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
+        if ($code1 -ne 0) { throw 'apply-themes.js failed - theme packs are stale.' }
+        $code2 = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
+        if ($code2 -ne 0) { throw 'build-desktop.js failed - desktop/out is stale.' }
+        Load-Packs
+    } catch {
+        # Roll back the pack mutation, then regenerate the outputs from the
+        # restored state so source and generated outputs agree again.
+        if ($hadOld) { [System.IO.File]::WriteAllBytes($file, $oldBytes) }
+        elseif (Test-Path $file) { Remove-Item $file -Force }
+        try {
+            $null = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
+            $null = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
+            Load-Packs
+            Say-Log "$label FAILED - the previous custom theme was restored and the generated outputs regenerated."
+        } catch {
+            Say-Log "$label FAILED and the rollback regeneration ALSO failed: $($_.Exception.Message) - run apply-themes.js/build-desktop.js by hand."
+        }
+        throw "$label FAILED: $($_.Exception.Message) - nothing was installed."
+    }
+}
+
 function Save-Custom {
     $t = Get-ActiveTokens
     $pack = [ordered]@{ slug = 'custom'; label = 'Custom'; order = 99; source = 'built in the Wintage Theme Installer'; tokens = [ordered]@{} }
     foreach ($k in $TOKENS) { $pack.tokens[$k] = $t.$k }
     $file = Join-Path $themeDir 'custom.json'
     $json = ($pack | ConvertTo-Json -Depth 5)
-    [System.IO.File]::WriteAllText($file, $json, (New-Object System.Text.UTF8Encoding $false))
-    Say-Log "saved themes/custom.json"
-    # Fail-closed: if either generator fails, the pack OR the built output is
-    # stale, and Apply MUST NOT install it. Throwing here aborts Apply before
-    # install.ps1 ever runs, so a stale custom theme can never be installed
-    # while the log claims a successful save (T-187).
-    $code1 = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
-    if ($code1 -ne 0) { throw 'apply-themes.js failed - theme packs are stale. Nothing was installed.' }
-    $code2 = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
-    if ($code2 -ne 0) { throw 'build-desktop.js failed - desktop/out is stale. Nothing was installed.' }
-    Load-Packs
+    Invoke-CustomMutation {
+        [System.IO.File]::WriteAllText($file, $json, (New-Object System.Text.UTF8Encoding $false))
+        Say-Log "saved themes/custom.json"
+    } 'Save-Custom'
 }
 
 function Delete-Custom {
     $file = Join-Path $themeDir 'custom.json'
     if (Test-Path $file) {
-        Remove-Item $file -Force
-        Say-Log "deleted themes/custom.json"
-        # Same fail-closed contract as Save-Custom: after deleting the pack the
-        # generated outputs MUST be regenerated before the theme list and the
-        # installers agree on what exists.
-        $code1 = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
-        if ($code1 -ne 0) { throw 'apply-themes.js failed after deleting custom.json - the theme block is stale. Run it by hand before applying.' }
-        $code2 = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
-        if ($code2 -ne 0) { throw 'build-desktop.js failed after deleting custom.json - desktop/out is stale. Run it by hand before applying.' }
-        Load-Packs
+        Invoke-CustomMutation {
+            Remove-Item $file -Force
+            Say-Log "deleted themes/custom.json"
+        } 'Delete-Custom'
         $script:current = 'goldendefault'
         $lstThemes.SelectedItem = $script:packs[$script:current].label
     } else {

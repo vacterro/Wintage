@@ -58,6 +58,54 @@ function Read-PathsJson {
     }
 }
 
+# T-192 P1#20: semantic manifest validation. JSON syntax is NOT the contract: a
+# top-level array, a scalar, a non-object entry, a wrongly-typed palette/path/
+# version field, or a non-array/duplicate-path `items` set must be rejected just
+# like corrupt JSON. Unknown target keys are PRESERVED (never destroyed) - they
+# are reported, not dropped. Returns an error string array (empty = valid).
+function Test-ManifestSchema($m) {
+    $errors = @()
+    if ($null -eq $m) { return @('manifest is null') }
+    if ($m -is [System.Array] -or $m -is [string] -or $m -is [int] -or $m -is [bool]) {
+        return @('top-level manifest is not an object')
+    }
+    if ($m -isnot [System.Collections.IDictionary] -and $m -isnot [PSCustomObject]) {
+        return @('top-level manifest is not an object')
+    }
+    # A Hashtable exposes Count/Keys/Values/etc. as adapted PSProperties - those
+    # are NOT manifest entries. Enumerate the real keys explicitly.
+    $entryNames = if ($m -is [System.Collections.IDictionary]) { @($m.Keys) } else { @($m.PSObject.Properties.Name) }
+    foreach ($key in $entryNames) {
+        $e = $m.$key
+        if ($e -isnot [PSCustomObject] -and $e -isnot [System.Collections.IDictionary]) {
+            $errors += "${key}: entry is not an object"
+            continue
+        }
+        foreach ($field in @('palette', 'path', 'appVersion', 'payloadVersion', 'applied')) {
+            if ($null -ne $e.$field -and $e.$field -isnot [string]) { $errors += "${key}.${field}: not a string" }
+        }
+        if ($null -ne $e.items) {
+            if ($e.items -isnot [System.Array] -and $e.items -isnot [System.Collections.IList]) {
+                $errors += "${key}.items: not an array"
+            } else {
+                $seen = @{}
+                foreach ($item in $e.items) {
+                    if ($item -isnot [PSCustomObject] -and $item -isnot [System.Collections.IDictionary]) {
+                        $errors += "${key}.items: item is not an object"
+                    } elseif ($null -eq $item.path -or $item.path -isnot [string] -or -not ([string]$item.path).Trim()) {
+                        $errors += "${key}.items: item has no nonempty path"
+                    } else {
+                        try { $canon = [IO.Path]::GetFullPath([string]$item.path).TrimEnd('\').ToLowerInvariant() } catch { $canon = ([string]$item.path).TrimEnd('\').ToLowerInvariant() }
+                        if ($seen.ContainsKey($canon)) { $errors += "${key}.items: duplicate canonical path $canon" }
+                        $seen[$canon] = $true
+                    }
+                }
+            }
+        }
+    }
+    return $errors
+}
+
 function Read-Manifest {
     # Missing or empty manifest = "nothing installed", a normal state. A file that
     # EXISTS and does not parse is a DISTINCT corrupt state (T-187): the mutation
@@ -65,10 +113,14 @@ function Read-Manifest {
     # with `{}`, so this throws instead of silently returning empty. Callers that
     # only report (Status, listing) catch and say what is wrong; callers that would
     # write (Set/Remove-ManifestEntry) let the throw abort before any mutation.
+    # T-192 P1#20: syntax-valid but schema-invalid content (top-level array, wrong
+    # types, non-array items) is treated the same as corrupt - never mutated over.
     if (-not (Test-Path $ManifestPath)) { return @{} }
     $json = (Read-Utf8 $ManifestPath).Trim()
     if (-not $json) { return @{} }
     $obj = $json | ConvertFrom-Json
+    $schemaErrs = Test-ManifestSchema $obj
+    if ($schemaErrs.Count) { throw "manifest schema invalid: $($schemaErrs -join '; ')" }
     $ht = @{}
     foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
     return $ht
@@ -76,8 +128,11 @@ function Read-Manifest {
 
 function Write-Manifest($manifest) {
     if ($WhatIfPreference) { return }
+    # Refuse to write a schema-invalid manifest BEFORE touching the file.
+    $schemaErrs = Test-ManifestSchema $manifest
+    if ($schemaErrs.Count) { throw "refusing to write a schema-invalid manifest: $($schemaErrs -join '; ')" }
     New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
-    $content = (($manifest | ConvertTo-Json -Depth 3) + "`n")
+    $content = (($manifest | ConvertTo-Json -Depth 5) + "`n")
     # Atomic replace with a UNIQUE temp name per writer (T-189): a fixed
     # installed.json.tmp would let two writers collide on the temp path itself.
     # The temp is always cleaned up, even when validation or the rename fails
@@ -373,7 +428,7 @@ function Backup-WindowsInactiveAccent {
     Write-Utf8 $WINDOWS_DWM_BACKUP ($snapshot | ConvertTo-Json)
 }
 
-function Restore-WindowsInactiveAccent {
+function Restore-WindowsInactiveAccent([switch]$Keep) {
     if (-not (Test-Path $WINDOWS_DWM_BACKUP)) { return }
     $snapshot = Read-Utf8 $WINDOWS_DWM_BACKUP | ConvertFrom-Json
     if ($snapshot.Existed) {
@@ -381,7 +436,10 @@ function Restore-WindowsInactiveAccent {
     } else {
         Remove-ItemProperty -Path $WINDOWS_DWM_KEY -Name $snapshot.Name -ErrorAction SilentlyContinue
     }
-    Remove-Item $WINDOWS_DWM_BACKUP -Force
+    # T-192 P1#27: the backup is the ONLY recovery authority for the accent value.
+    # Callers that still face a manifest transition pass -Keep and delete it only
+    # after the transition succeeded; a failed transition must not lose it.
+    if (-not $Keep) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
 }
 
 function Get-CssShape {
@@ -400,6 +458,21 @@ function Get-CssShape {
     $t = $t -replace 'var\(--dangerText\)', 'var(--danger)'
     $t = $t -replace '\s+', ' '
     return $t.Trim()
+}
+
+# T-192 P1#18: rebuild a "new pristine" stylesheet from a possibly-THEMED live
+# file + the OLD pristine authority. Every Wintage-owned `--token:` VALUE comes
+# from the old pristine (stock); every other byte (new selectors, new tokens,
+# comments) comes from the current live file. A known-themed live CSS is never
+# allowed to become the pristine authority wholesale.
+function Rebase-CssTokens([string]$live, [string]$oldPristine) {
+    $result = $live
+    foreach ($m in [regex]::Matches($oldPristine, '(--[A-Za-z0-9_-]+\s*:\s*)#[0-9A-Fa-f]{6}')) {
+        $name = $m.Groups[1].Value
+        $value = [regex]::Match($m.Value, '#[0-9A-Fa-f]{6}').Value
+        $result = [regex]::Replace($result, ([regex]::Escape($name) + '#[0-9A-Fa-f]{6}'), ($name + $value))
+    }
+    return $result
 }
 
 function Get-ObsidianVaults {

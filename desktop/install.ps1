@@ -46,7 +46,8 @@ $out = Join-Path $here 'out'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 # Test seam: WINTAGE_BACKUP_ROOT lets fixtures isolate the apply-time backup
 # location; the real root stays desktop/backup/<stamp>.
-$backupRoot = if ($env:WINTAGE_BACKUP_ROOT) { Join-Path $env:WINTAGE_BACKUP_ROOT $stamp } else { Join-Path $here "backup/$stamp" }
+$backupBase = if ($env:WINTAGE_BACKUP_ROOT) { $env:WINTAGE_BACKUP_ROOT } else { Join-Path $here 'backup' }
+$backupRoot = Join-Path $backupBase $stamp
 
 # Shared helpers + per-target implementations, split out at T-169. Dot-sourced so they
 # resolve install.ps1 scoped variables and the i18n T() loader at call time. Load
@@ -141,14 +142,17 @@ $TERMINAL_DIRS = @(
 # already approved by conhost's TrueTypeFont registry.
 $CONSOLE_FONT = 'Consolas'
 
-$CONHOST_KEY = 'HKCU:\Console'
-$CONHOST_BACKUP = Join-Path $here 'backup/conhost-settings.json'
+# Fixed-name recovery files (conhost-settings.json, windows-dwm-settings.json)
+# share the backup base with the timestamped apply backups; the env seam lets
+# fixtures isolate BOTH. Timestamped dirs are pruned, fixed-name files are not.
+$CONHOST_KEY = if ($env:WINTAGE_TEST_CONHOST_KEY) { $env:WINTAGE_TEST_CONHOST_KEY } else { 'HKCU:\Console' }
+$CONHOST_BACKUP = Join-Path $backupBase 'conhost-settings.json'
 
 $WINDOWS_THEME_KEY = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes'
 $WINDOWS_THEMES_DIR = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Themes'
 $WINDOWS_THEME_MARKER = Join-Path $WINDOWS_THEMES_DIR '.wintage-windows-palette'
 $WINDOWS_DWM_KEY = 'HKCU:\Software\Microsoft\Windows\DWM'
-$WINDOWS_DWM_BACKUP = Join-Path $here 'backup/windows-dwm-settings.json'
+$WINDOWS_DWM_BACKUP = Join-Path $backupBase 'windows-dwm-settings.json'
 
 $MPC_KEY = 'HKCU:\Software\MPC-HC\MPC-HC\Settings'
 $MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
@@ -618,6 +622,10 @@ foreach ($name in $names) {
             # the bundle), so Revert must undo both before the manifest goes away
             # (T-189). Any failure keeps the manifest and returns nonzero.
             if ($PSCmdlet.ShouldProcess($e.Resources, 'Remove the Wintage shim and (for FreeBuff) the ad/sound patch')) {
+                # T-192 P2/B: snapshot the THEMED state before the revert so a failed
+                # manifest transition can restore it instead of leaving the app
+                # unthemed while the manifest still claims an install.
+                $elSnap = Save-ElectronStateSnapshot $name
                 $revertFailures = @()
                 if ($name -eq 'freebuff') {
                     if (Test-Path $adPatch) {
@@ -630,9 +638,15 @@ foreach ($name in $names) {
                 & node $nodeArgs --revert
                 if ($LASTEXITCODE -ne 0) { $revertFailures += 'install-electron --revert' }
                 if ($revertFailures.Count) {
+                    if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
                     throw "$($e.Name): revert INCOMPLETE ($($revertFailures -join ', ')) - the manifest and recovery evidence are kept."
                 }
-                Remove-ManifestEntry $name
+                Invoke-TargetCommit $name $e.Name {
+                    Remove-ManifestEntry $name
+                } {
+                    if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
+                }
+                if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
             }
             continue
         }
@@ -665,7 +679,10 @@ foreach ($name in $names) {
                 & node $adPatch @fbPatchArgs --dry-run
                 if ($LASTEXITCODE -ne 0) { throw "FreeBuff: ad/sound patch dry-run FAILED ($LASTEXITCODE) - nothing was changed." }
             }
-            $elSnap = if ($name -eq 'freebuff') { Save-ElectronStateSnapshot $name } else { $null }
+            # T-192 P2/B: snapshot the EXACT owned pre-state for EVERY Electron
+            # target (not just FreeBuff) so a failed manifest commit rolls the app
+            # back instead of leaving it themed with an old manifest.
+            $elSnap = Save-ElectronStateSnapshot $name
             & node $nodeArgs --palette $Palette
             if ($LASTEXITCODE -ne 0) {
                 if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
@@ -678,7 +695,6 @@ foreach ($name in $names) {
                     Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue
                     throw 'FreeBuff: shim applied but the ad/sound patch FAILED - the Electron layer was restored to its exact pre-operation state; the manifest was NOT updated. Run patch-freebuff-ads.js --scan to see what this build carries.'
                 }
-                Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue
             }
             Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray'
             $appVer = 'n/a'
@@ -686,7 +702,12 @@ foreach ($name in $names) {
                 $verOut = & node $nodeArgs --version 2>$null
                 if ($LASTEXITCODE -eq 0 -and $verOut) { $appVer = $verOut.Trim() }
             } catch {}
-            Set-ManifestEntry $name $Palette $e.Resources $appVer (Get-PayloadVersion)
+            Invoke-TargetCommit $name $e.Name {
+                Set-ManifestEntry $name $Palette $e.Resources $appVer (Get-PayloadVersion)
+            } {
+                if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
+            }
+            if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
             Say "  Recorded in $ManifestPath" 'DarkGray'
         }
         continue
@@ -702,28 +723,41 @@ foreach ($name in $names) {
 
     $dest = Join-Path $t.Dir 'wintage-themes'
 
+    # T-192 P1#15: persistent recovery under WINTAGE_APPDATA/recovery/<target>,
+    # NEVER under the pruned timestamped backup tree. recovery.json records WHO
+    # the directory is: 'replaced' (a pre-existing user folder was swapped) or
+    # 'created' (Wintage made it from nothing). Revert restores 'replaced' exactly
+    # and removes 'created'; repaint never overwrites the captured pristine.
+    $recoveryDir = Join-Path $WintageAppData "recovery\$name"
+    $recoveryMeta = Join-Path $recoveryDir 'recovery.json'
+    $pristineDir = Join-Path $recoveryDir 'pristine'
+
     if ($Revert) {
         if (Test-Path $dest) {
             if ($PSCmdlet.ShouldProcess($dest, 'Restore the previous Wintage install')) {
                 $preDest = Save-DirPreState $dest
-                $bak = Join-Path $backupRoot $name
-                # T-191 P0#11: the apply-time backup IS the revert source. Reverting
-                # must never leave the user theme-less by deleting the only copy of
-                # their pre-Wintage theme folder. With no backup present (never
-                # applied through a version that backs up), removal is the only
-                # honest fallback and the message says so.
-                if (Test-Path $bak) {
-                    Remove-Item $dest -Recurse -Force
-                    New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
-                    Copy-Item $bak $dest -Recurse -Force
-                    Say "$($t.Name): restored the previous install from $bak" 'Green'
+                if (Test-Path $recoveryMeta) {
+                    $meta = Read-Utf8 $recoveryMeta | ConvertFrom-Json
+                    if ($meta.mode -eq 'replaced' -and (Test-Path $pristineDir)) {
+                        Remove-Item $dest -Recurse -Force
+                        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+                        Copy-Item (Join-Path $pristineDir '*') $dest -Recurse -Force
+                        Say "$($t.Name): restored the pre-Wintage directory from $pristineDir" 'Green'
+                    } else {
+                        Remove-Item $dest -Recurse -Force
+                        Say "$($t.Name): removed $dest (Wintage-created, nothing pre-existed to restore)" 'Green'
+                    }
+                    Invoke-TargetCommit $name $t.Name {
+                        Remove-ManifestEntry $name
+                    } { Restore-DirPreState $dest $preDest }
                 } else {
+                    # Never applied through a version with persistent recovery.
                     Remove-Item $dest -Recurse -Force
-                    Say "$($t.Name): removed $dest (no apply-time backup existed to restore)" 'Green'
+                    Say "$($t.Name): removed $dest (no recovery snapshot existed to restore)" 'Green'
+                    Invoke-TargetCommit $name $t.Name {
+                        Remove-ManifestEntry $name
+                    } { Restore-DirPreState $dest $preDest }
                 }
-                Invoke-TargetCommit $name $t.Name {
-                    Remove-ManifestEntry $name
-                } { Restore-DirPreState $dest $preDest }
             }
         }
         else { Say "$($t.Name): nothing installed, nothing to revert." }
@@ -732,19 +766,18 @@ foreach ($name in $names) {
 
     if (-not (Test-Path $t.Built)) { throw "Built output missing: $($t.Built). Run 'node tools/build-desktop.js'." }
 
-    # Replacing a directory wholesale is how a stale theme file from a previous
-    # version survives forever, so the old one is removed - but only after it has
-    # been copied out, because "the installer ate my hand-edited theme" is exactly
-    # the failure a backup exists for.
-    if (Test-Path $dest) {
-        if ($PSCmdlet.ShouldProcess($dest, "Back up to $backupRoot and replace")) {
-            $bak = Join-Path $backupRoot $name
-            New-Item -ItemType Directory -Force -Path $bak | Out-Null
-            Copy-Item $dest -Destination $bak -Recurse -Force
-            Remove-Item $dest -Recurse -Force
-            Say "$($t.Name): previous install backed up to $bak" 'DarkGray'
-            Prune-Backups
+    # Capture the pristine ONLY on the first-ever apply of this target. A repaint
+    # (dest exists, recovery already captured) must never overwrite the pristine
+    # snapshot with Wintage output (P1#15).
+    if (-not (Test-Path $recoveryMeta)) {
+        New-Item -ItemType Directory -Force -Path $recoveryDir | Out-Null
+        $mode = if (Test-Path $dest) { 'replaced' } else { 'created' }
+        if ($mode -eq 'replaced') {
+            New-Item -ItemType Directory -Force -Path $pristineDir | Out-Null
+            Copy-Item (Join-Path $dest '*') $pristineDir -Recurse -Force
+            Say "$($t.Name): captured the pre-Wintage folder at $pristineDir (persistent recovery)" 'DarkGray'
         }
+        Write-Utf8 $recoveryMeta (@{ mode = $mode; target = $name } | ConvertTo-Json)
     }
 
     if ($PSCmdlet.ShouldProcess($dest, 'Install Wintage themes')) {

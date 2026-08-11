@@ -24,10 +24,10 @@ function check($label, $cond) {
 }
 
 if ($List) {
-    Write-Host "test-reapply.ps1:"
+    Write-Host "test-reapply.ps1 (34 tests):"
     Write-Host "  1. semver-compare-is-semantic-not-string"
     Write-Host "  2. up-to-date-payload-is-skipped"
-    Write-Host "  3. outdated-payload-is-detected-under-whatif"
+    Write-Host "  3. unhealthy-target-detected-under-whatif-child-preflight"
     Write-Host "  4. empty-manifest-reports-nothing-to-do"
     Write-Host "  5. corrupt-manifest-is-not-overwritten"
     Write-Host "  6. manifest-atomic-round-trip"
@@ -38,6 +38,27 @@ if ($List) {
     Write-Host " 11. full-chain-apply-reapply-repaint-revert"
     Write-Host " 12. corrupt-manifest-status-reports-clearly"
     Write-Host " 13. electron-helper-failure-bubbles-and-dryrun"
+    Write-Host " 14. electron-same-payload-app-update-triggers-reapply"
+    Write-Host " 15. recorded-vanished-target-fails-reapply-entry-kept"
+    Write-Host " 16. strict-vs-bulk-absence-semantics"
+    Write-Host " 17. upstream-v2-change-survives-repaint-revert"
+    Write-Host " 18. concurrent-manifest-writers-keep-both-entries"
+    Write-Host " 19. provenance-rebase-never-absorbs-themed-live-file"
+    Write-Host " 20. native-target-applies-without-node"
+    Write-Host " 21. present-generated-consumer-fails-without-node"
+    Write-Host " 22. write-manifest-failure-cleans-tmp-keeps-old-manifest"
+    Write-Host " 23. owned-token-tamper-repaired-by-reapply"
+    Write-Host " 24. betterdiscord-css-tamper-repaired-by-reapply"
+    Write-Host " 25. browser-stage-marker-tamper-repaired-by-reapply"
+    Write-Host " 26. corrupt-manifest-aborts-before-target-mutation"
+    Write-Host " 27. manifest-commit-failure-rolls-target-back"
+    Write-Host " 28. concurrent-same-target-installs-serialize"
+    Write-Host " 29. browser-stage-rollback-on-commit-failure"
+    Write-Host " 30. vscode-extension-revert-restores-apply-time-recovery"
+    Write-Host " 31. conhost-revert-keeps-backup-until-manifest-transition"
+    Write-Host " 32. browser-stage-ownership-unowned-never-deleted"
+    Write-Host " 33. saipenview-provenance-rebase"
+    Write-Host " 34. manifest-schema-validation-rejects-syntax-valid-garbage"
     exit 0
 }
 
@@ -728,6 +749,7 @@ try {
     New-Item -ItemType Directory -Path $stage29 -Force | Out-Null
     [System.IO.File]::WriteAllText((Join-Path $stage29 '.wintage-palette'), 'goldendefault', $utf8NoBom)
     [System.IO.File]::WriteAllText((Join-Path $stage29 'manifest.json'), '{"name":"old"}', $utf8NoBom)
+    [System.IO.File]::WriteAllText((Join-Path $stage29 '.wintage-owner.json'), '{"owner":"Wintage","schema":1,"palette":"goldendefault"}', $utf8NoBom)
     $prevFail29 = $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE
     $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = '1'
     $out29 = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target browsers -Palette dracula -BrowserCatalog $catalog29 -BrowserStageRoot $stage29 -NoBrowserLaunch 2>&1
@@ -758,12 +780,179 @@ try {
     check 'vscode-backup: Wintage themes installed' (Test-Path (Join-Path $dest30 'themes'))
     $m30 = Join-Path $fakeApp30 'installed.json'
     check 'vscode-backup: manifest recorded' ((Test-Path $m30) -and ((Get-Content $m30 -Raw | ConvertFrom-Json).vscode.palette -eq 'goldendefault'))
+    # T-192 P1#15: recovery lives under WINTAGE_APPDATA/recovery (non-pruned authority).
+    $rec30 = Join-Path $fakeApp30 'recovery\vscode'
+    $pristine30 = Join-Path $rec30 'pristine'
+    check 'vscode-backup: recovery mode recorded as replaced' (((Get-Content (Join-Path $rec30 'recovery.json') -Raw | ConvertFrom-Json).mode -eq 'replaced'))
+    check 'vscode-backup: pristine snapshot captured under recovery/' (Test-Path (Join-Path $pristine30 'themes\stock.json'))
+    $pristineBytes30 = [System.IO.File]::ReadAllBytes((Join-Path $pristine30 'themes\stock.json'))
+    # Repaint to another palette must NOT overwrite the pristine snapshot.
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target vscode -Palette dracula 2>&1
+    check 'vscode-backup: repaint exits 0' ($LASTEXITCODE -eq 0)
+    $pristineAfter30 = [System.IO.File]::ReadAllBytes((Join-Path $pristine30 'themes\stock.json'))
+    $same30 = $pristineAfter30.Length -eq $pristineBytes30.Length
+    if ($same30) { for ($i = 0; $i -lt $pristineAfter30.Length; $i++) { if ($pristineAfter30[$i] -ne $pristineBytes30[$i]) { $same30 = $false; break } } }
+    check 'vscode-backup: repaint never overwrites the pristine snapshot' $same30
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target vscode -Revert 2>&1
     check 'vscode-backup: revert exits 0' ($LASTEXITCODE -eq 0)
-    check 'vscode-backup: revert restored from backup (dest present, never deleted)' (Test-Path (Join-Path $dest30 'themes\stock.json'))
+    check 'vscode-backup: revert restores the ORIGINAL pre-Wintage tree' (Test-Path (Join-Path $dest30 'themes\stock.json'))
+    check 'vscode-backup: repainted artifact gone after revert' (-not (Test-Path (Join-Path $dest30 'themes\dracula.json')))
     $m30After = if (Test-Path $m30) { Get-Content $m30 -Raw | ConvertFrom-Json } else { $null }
     check 'vscode-backup: manifest entry removed' ((-not $m30After) -or -not $m30After.vscode)
 } finally { $env:HOME = $prevHome30; $env:WINTAGE_BACKUP_ROOT = $prevBakRoot30; $env:WINTAGE_APPDATA = $prevWintage30 }
+
+# ---- Test 31: conhost revert keeps its backup until the manifest transition succeeds (T-192 P0#4) ----
+Clean-TestState
+$prevKey31 = $env:WINTAGE_TEST_CONHOST_KEY
+$prevBakBase31 = $env:WINTAGE_BACKUP_ROOT
+$prevWintage31 = $env:WINTAGE_APPDATA
+try {
+    $conRoot31 = 'HKCU:\Software\Wintage-Test-Conhost-' + [guid]::NewGuid().ToString('N')
+    $env:WINTAGE_TEST_CONHOST_KEY = $conRoot31
+    $fakeBak31 = Join-Path $testRoot 'backup31'
+    $env:WINTAGE_BACKUP_ROOT = $fakeBak31
+    $fakeApp31 = Join-Path $testRoot 'winappdata31'
+    $env:WINTAGE_APPDATA = $fakeApp31
+    New-Item -Path $conRoot31 -Force | Out-Null
+    New-Item -Path (Join-Path $conRoot31 'Console') -Force | Out-Null
+    New-ItemProperty -Path $conRoot31 -Name ColorTable00 -Value 0x00999999 -PropertyType DWord -Force | Out-Null
+    $mPath31 = Join-Path $fakeApp31 'installed.json'
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target conhost -Palette goldendefault 2>&1
+    check 'conhost-recovery: apply exits 0' ($LASTEXITCODE -eq 0)
+    check 'conhost-recovery: WintagePalette recorded' ((Get-ItemProperty $conRoot31 -Name WintagePalette).WintagePalette -eq 'goldendefault')
+    $bak31 = Join-Path $fakeBak31 'conhost-settings.json'
+    check 'conhost-recovery: apply-time backup exists' (Test-Path $bak31)
+    # Inject a manifest-remove failure during Revert.
+    $prevFail31 = $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE
+    $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = '1'
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target conhost -Revert 2>&1
+    $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = $prevFail31
+    check 'conhost-recovery: failing revert exits NONZERO' ($LASTEXITCODE -ne 0)
+    check 'conhost-recovery: recovery backup still valid after failure' (Test-Path $bak31)
+    check 'conhost-recovery: manifest still recorded after failure' ((Test-Path $mPath31) -and (Get-Content $mPath31 -Raw | ConvertFrom-Json).conhost)
+    check 'conhost-recovery: themed state restored after failure (matches manifest)' ((Get-ItemProperty $conRoot31 -Name WintagePalette).WintagePalette -eq 'goldendefault')
+    # Clean retry Revert must succeed and consume the backup.
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target conhost -Revert 2>&1
+    check 'conhost-recovery: retry revert exits 0' ($LASTEXITCODE -eq 0)
+    check 'conhost-recovery: retry consumes the backup' (-not (Test-Path $bak31))
+    check 'conhost-recovery: manifest removed on retry' (-not ((Test-Path $mPath31) -and (Get-Content $mPath31 -Raw | ConvertFrom-Json).conhost))
+    check 'conhost-recovery: pre-Wintage value restored' ((Get-ItemProperty $conRoot31 -Name ColorTable00).ColorTable00 -eq 0x00999999)
+    check 'conhost-recovery: no mixed state (marker gone)' (-not ((Get-ItemProperty $conRoot31 -ErrorAction SilentlyContinue).PSObject.Properties.Name -contains 'WintagePalette'))
+} finally {
+    Remove-Item $conRoot31 -Recurse -Force -ErrorAction SilentlyContinue
+    $env:WINTAGE_TEST_CONHOST_KEY = $prevKey31
+    $env:WINTAGE_BACKUP_ROOT = $prevBakBase31
+    $env:WINTAGE_APPDATA = $prevWintage31
+}
+
+# ---- Test 32: browser stage ownership - unowned dir is NEVER deleted (T-192 P0#14) ----
+Clean-TestState
+$prevLocal32 = $env:LOCALAPPDATA
+$prevApp32 = $env:APPDATA
+$prevWintage32 = $env:WINTAGE_APPDATA
+try {
+    $browserRoot32 = Join-Path $testRoot 'browsers32'
+    $fakeBrowser32 = Join-Path $browserRoot32 'Portable Browser'
+    $fakeExe32 = Join-Path $fakeBrowser32 'chrome.exe'
+    $fakeData32 = Join-Path $fakeBrowser32 'User Data'
+    $fakeProfile32 = Join-Path $fakeData32 'Default'
+    $tmDir32 = Join-Path $fakeProfile32 'Extensions\dhdgffkkebhmkfjojejmpbldmpobfkfo\5.5.0_0'
+    $stage32 = Join-Path $browserRoot32 'stage'
+    New-Item -ItemType Directory -Path $tmDir32 -Force | Out-Null
+    [System.IO.File]::WriteAllBytes($fakeExe32, [byte[]]@())
+    [System.IO.File]::WriteAllText((Join-Path $fakeProfile32 'Preferences'), '{}', $utf8NoBom)
+    [System.IO.File]::WriteAllText((Join-Path $fakeData32 'Local State'), '{}', $utf8NoBom)
+    $catalog32 = Join-Path $browserRoot32 'catalog.json'
+    @([ordered]@{ Name = 'Fixture'; Exe = $fakeExe32; UserData = $fakeData32 }) | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText($catalog32, $_, $utf8NoBom) }
+    $fakeApp32 = Join-Path $testRoot 'winappdata32'
+    New-Item -ItemType Directory -Path (Join-Path $fakeApp32 'Wintage') -Force | Out-Null
+    $fakeLocal32 = Join-Path $testRoot 'localappdata32'
+    New-Item -ItemType Directory -Path $fakeLocal32 -Force | Out-Null
+    $env:LOCALAPPDATA = $fakeLocal32
+    $env:APPDATA = $fakeApp32
+    $env:WINTAGE_APPDATA = Join-Path $fakeApp32 'Wintage'
+    # Unowned stage with real user data - no owner marker.
+    New-Item -ItemType Directory -Path $stage32 -Force | Out-Null
+    $important32 = 'user data that must survive'
+    [System.IO.File]::WriteAllText((Join-Path $stage32 'important.txt'), $important32, $utf8NoBom)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target browsers -Palette goldendefault -BrowserCatalog $catalog32 -BrowserStageRoot $stage32 -NoBrowserLaunch 2>&1
+    check 'browser-ownership: unowned Apply REFUSED (nonzero)' ($LASTEXITCODE -ne 0)
+    check 'browser-ownership: important.txt preserved byte-identical' ([System.IO.File]::ReadAllText((Join-Path $stage32 'important.txt'), $utf8NoBom) -eq $important32)
+    check 'browser-ownership: no owner marker written over user data' (-not (Test-Path (Join-Path $stage32 '.wintage-owner.json')))
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target browsers -Revert -BrowserCatalog $catalog32 -BrowserStageRoot $stage32 -NoBrowserLaunch 2>&1
+    check 'browser-ownership: unowned Revert REFUSED (nonzero)' ($LASTEXITCODE -ne 0)
+    check 'browser-ownership: important.txt still intact after refused Revert' ([System.IO.File]::ReadAllText((Join-Path $stage32 'important.txt'), $utf8NoBom) -eq $important32)
+    check 'browser-ownership: no manifest entry recorded' (-not ((Test-Path (Join-Path $fakeApp32 'Wintage\installed.json')) -and (Get-Content (Join-Path $fakeApp32 'Wintage\installed.json') -Raw | ConvertFrom-Json).browsers))
+} finally { $env:LOCALAPPDATA = $prevLocal32; $env:APPDATA = $prevApp32; $env:WINTAGE_APPDATA = $prevWintage32 }
+
+# ---- Test 33: SAIPENVIEW provenance rebase - themed live CSS never becomes pristine (T-192 P1#18) ----
+Clean-TestState
+$prevSv33 = $env:WINTAGE_APPDATA
+try {
+    $svPath33 = Join-Path $testRoot 'saipenview33'
+    $cssDir33 = Join-Path $svPath33 'saipenview\ui\static'
+    $cssFile33 = Join-Path $cssDir33 'style.css'
+    New-Item -ItemType Directory -Path $cssDir33 -Force | Out-Null
+    $stockCss33 = ":root { --background: #010203; --textPrimary: #040506; --surface: #0a0b0c; --danger: #070809; }`n.banner { width: 100%; }`n"
+    [System.IO.File]::WriteAllText($cssFile33, $stockCss33, $utf8NoBom)
+    $fakeApp33 = Join-Path $testRoot 'winappdata33'
+    New-Item -ItemType Directory -Path $fakeApp33 -Force | Out-Null
+    $env:WINTAGE_APPDATA = $fakeApp33
+    [System.IO.File]::WriteAllText((Join-Path $fakeApp33 'paths.json'), (@{ saipenview = $svPath33 } | ConvertTo-Json), $utf8NoBom)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target saipenview -Palette goldendefault 2>&1
+    check 'saipen-provenance: Apply A exits 0' ($LASTEXITCODE -eq 0)
+    $bak33 = Join-Path $cssDir33 'style.css.bak'
+    check 'saipen-provenance: backup created' (Test-Path $bak33)
+    # Unrelated selector added WHILE the theme is applied.
+    $themed33 = [System.IO.File]::ReadAllText($cssFile33, $utf8NoBom) + "`n.new-selector { margin: 3px; }`n"
+    [System.IO.File]::WriteAllText($cssFile33, $themed33, $utf8NoBom)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target saipenview -Palette goldendefault 2>&1
+    check 'saipen-provenance: Apply B (repaint) exits 0' ($LASTEXITCODE -eq 0)
+    # The backup must have been REBASED: stock token values, not the themed ones.
+    $rebaseBak33 = [System.IO.File]::ReadAllText($bak33, $utf8NoBom)
+    check 'saipen-provenance: rebased backup keeps stock token values' ($rebaseBak33 -match '--background: #010203')
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target saipenview -Revert 2>&1
+    check 'saipen-provenance: Revert exits 0' ($LASTEXITCODE -eq 0)
+    $after33 = [System.IO.File]::ReadAllText($cssFile33, $utf8NoBom)
+    check 'saipen-provenance: unrelated selector survives the Revert' ($after33 -match '\.new-selector')
+    check 'saipen-provenance: stock token values return' ($after33 -match '--background: #010203' -and $after33 -match '--textPrimary: #040506')
+    $pack33 = [System.IO.File]::ReadAllText((Join-Path $root 'themes\goldendefault.json'), $utf8NoBom) | ConvertFrom-Json
+    check 'saipen-provenance: no Wintage palette value remains' ($after33 -notmatch [regex]::Escape($pack33.tokens.background))
+} finally { $env:WINTAGE_APPDATA = $prevSv33 }
+
+# ---- Test 34: manifest schema validation rejects syntax-valid garbage (T-192 P1#20) ----
+Clean-TestState
+$prevW34 = $env:WINTAGE_APPDATA
+try {
+    $fakeApp34 = Join-Path $testRoot 'winappdata34'
+    New-Item -ItemType Directory -Path $fakeApp34 -Force | Out-Null
+    $env:WINTAGE_APPDATA = $fakeApp34
+    $m34 = Join-Path $fakeApp34 'installed.json'
+    $cases34 = @(
+        @{ Name = 'non-array items'; Body = '{"terminal":{"palette":"a","path":"x","appVersion":"1","payloadVersion":"1","applied":"z","items":"oops"}}' },
+        @{ Name = 'top-level array'; Body = '[]' },
+        @{ Name = 'scalar manifest'; Body = '"hello"' },
+        @{ Name = 'non-object entry'; Body = '{"smartvac":42}' },
+        @{ Name = 'wrong-typed field'; Body = '{"conhost":{"palette":5,"path":"x","appVersion":"1","payloadVersion":"1","applied":"z"}}' }
+    )
+    foreach ($c in $cases34) {
+        [System.IO.File]::WriteAllText($m34, $c.Body, $utf8NoBom)
+        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Status 2>&1
+        check "manifest-schema: $($c.Name) reported by -Status (nonzero)" ($LASTEXITCODE -ne 0)
+        check "manifest-schema: $($c.Name) message says schema" ($out -match 'schema')
+        check "manifest-schema: $($c.Name) file NOT overwritten by the read" ([System.IO.File]::ReadAllText($m34, $utf8NoBom) -eq $c.Body)
+    }
+    # Set-ManifestEntry must refuse to overwrite schema-invalid content.
+    [System.IO.File]::WriteAllText($m34, '{"terminal":{"palette":"a","path":"x","appVersion":"1","payloadVersion":"1","applied":"z","items":"oops"}}', $utf8NoBom)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1
+    check 'manifest-schema: Apply over schema-invalid manifest exits NONZERO' ($LASTEXITCODE -ne 0)
+    check 'manifest-schema: schema-invalid manifest preserved byte-exact' ([System.IO.File]::ReadAllText($m34, $utf8NoBom) -eq '{"terminal":{"palette":"a","path":"x","appVersion":"1","payloadVersion":"1","applied":"z","items":"oops"}}')
+    # Unknown target keys are preserved + readable (never destroyed).
+    $future34 = '{"futuretarget":{"palette":"a","path":"x","appVersion":"1","payloadVersion":"1","applied":"z"}}'
+    [System.IO.File]::WriteAllText($m34, $future34, $utf8NoBom)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Status 2>&1
+    check 'manifest-schema: unknown future target key is readable (Status exits 0)' ($LASTEXITCODE -eq 0)
+} finally { $env:WINTAGE_APPDATA = $prevW34 }
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.26.7
+// @version      1.26.8
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -381,7 +381,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.26.7';
+  const W95_VERSION = '1.26.8';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
