@@ -23,6 +23,11 @@ Cached Theme.pak
 # SAIPEN verification scratch stays local; durable results live in LOG/BOARD.
 .saipen/kitchen/T-*-verify.*
 
+# SAIPEN engine transaction/lock state -- transient per-operation bookkeeping,
+# never release content (recovery STATE copies under .saipen/recovery/ excepted).
+.saipen/locks/
+.saipen/recovery/ops/
+
 # throwaway probes from the Claude transparency debugging session (superseded)
 /fix.js
 /fix-claude-final.js

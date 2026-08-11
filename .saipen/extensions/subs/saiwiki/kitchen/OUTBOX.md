@@ -1,8 +1,67 @@
 # OUTBOX
 
-## WIKI-006: Wintage wiki fresh QQ at 83d3d1e, payload already live (converge closure)
+## WIKI-007: Wintage wiki fresh QQ at 8867967, v1.26.4 restamp (converge closure)
 
 - **status:** ready
+- **summary:** Converge stage-L fresh QQ bound to the current HEAD (8867967,
+  v1.26.4 T-187 ship). The 8-page maintained wiki was version-restamped
+  1.26.3 -> 1.26.4 (Home.md current-version line + _Footer.md) and re-verified
+  against the new identity. The payload is NOT yet live in the repo mirror —
+  collect via qqq applies it (repo wiki/ still carries 1.26.3 stamps until
+  then). Freshness identity: source_head 8867967, fingerprint a7d2ffe1 (clean
+  delta, .saipen excluded), role_revision 54a42475 (unchanged charter).
+- **critical:** false
+- **severity:** P3
+- **producer:** saiwiki
+- **source_head:** 88679679000435dedb61393f89ccac971e9e0072 (project HEAD)
+- **source_tree_fingerprint:** git-delta-v1:a7d2ffe1d350186aa7c2577b767eb5af8e3625e4ce75c0e9ef500759e9bc959b
+- **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
+- **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
+  Known-Behaviors, Development, _Sidebar, _Footer). Source invariants cross-checked:
+  wintage.user.js @version 1.26.4 + W95_VERSION, CHANGELOG.md [1.26.4] - 2026-08-11,
+  README.md (post-T-184 release section, sixteen palettes), desktop/README.md,
+  16-palette THEMES registry in wintage.user.js, release.ps1 gate list (incl.
+  check-wiki-mirror).
+- **payload:** the 8 kitchen/wiki/*.md pages (Home.md + _Footer.md restamped to
+  1.26.4; all other pages unchanged from WIKI-006 and re-verified faithful).
+  The repo wiki/ mirror still carries 1.26.3 stamps — collect applies the
+  restamp; Wintage.wiki master currently at 9260021 (1.26.3).
+- **verified:**
+  - Freshness identity recomputed with tools/freshness.py at 8867967:
+    source_head 88679679000435dedb61393f89ccac971e9e0072, fingerprint
+    a7d2ffe1 (clean delta, .saipen excluded), role_revision 54a42475 matches
+    the charter's declared YAML value.
+  - Version stamps: Home.md + _Footer.md carry 1.26.4 (2026-08-11), zero 1.26.3
+    remains in any page; matches wintage.user.js @version 1.26.4 and CHANGELOG
+    [1.26.4] - 2026-08-11.
+  - All other pages byte-identical to WIKI-006's payload (the T-187 audit touched
+    no wiki-visible source: installer internals + tools only; README.md and
+    desktop/README.md unchanged).
+  - Development.md release section matches the post-T-184 README contract: zero
+    "Edit wintage.user.js" hits across all pages; CHANGELOG head-entry
+    prerequisite named; check-wiki-mirror listed in the Gates section and wired
+    at release.ps1:107.
+  - Palettes.md token-table hexes byte-match themes/goldendefault.json (10/10).
+- **instructions:** (1) This is a closure-bar package (CONVERGE.md stage L): it
+  exists so `--gate converge` sees QQ fresh+ready at the final HEAD. (2) Collect
+  via `qqq` applies the 8 pages to the repo wiki/ mirror with .md-adapted links
+  (kitchen pages link as [Home](Home); the mirror carries [Home](Home.md) per
+  T-105 precedent — adapt at injection, never edit kitchen), re-syncs the mirror
+  (check-wiki-mirror goes green again) and pushes Wintage.wiki master. (3) If
+  any future source change lands before collect, re-run `qq` first.
+- **details:**
+  Fresh QQ, not reuse: WIKI-006 was bound to 83d3d1e; the T-187 audit ship
+  moved HEAD to 8867967 (v1.26.4) and bumped the version stamps, so the closure
+  bar (CONVERGE.md stage M: "bound to the current source identity") demanded a
+  fresh ready package AND a real content change (the 1.26.4 restamp). All other
+  pages re-verified byte-identical to WIKI-006. All work under
+  .saipen/extensions/subs/saiwiki/kitchen/; the main repo tree and wiki remote
+  were not touched by this preparation.
+
+## WIKI-006: Wintage wiki fresh QQ at 83d3d1e, payload already live (converge closure)
+
+- **status:** stale
+- **superseded_by:** WIKI-007 (source_head 83d3d1e -> 8867967 at the T-187 v1.26.4 ship; version stamps lifted to 1.26.4)
 - **summary:** Converge stage-L fresh QQ bound to the post-closure HEAD (83d3d1e).
   Complete 8-page maintained wiki re-verified against the current identity; the
   payload is already integrated (qqq shipped it at 83d3d1e: repo wiki/ mirror
