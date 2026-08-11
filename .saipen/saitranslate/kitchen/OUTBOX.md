@@ -1,8 +1,75 @@
 # OUTBOX
 
+## SAIT-007: Wintage full translation bundle — fresh EE at cdbe140, payload already live (eee collect)
+
+- **status:** reviewed
+- **collected_at:** 2026-08-11T13:20:00Z (eee, T-188)
+- **summary:** Fresh EE bound to the current HEAD (cdbe140, v1.26.4 T-187 ship +
+  converge closure checkpoint). SAIT-006 went stale when the closure checkpoint
+  moved HEAD (8867967 -> cdbe140), so this package is the re-prepared handoff
+  for the explicit `eee` collect. Full 32-language bundle re-verified against
+  the current identity; the payload is already integrated (eee shipped it at
+  fd53d63, nothing touched the translation surfaces since), so collect is a
+  content-equivalent no-op: all repo surfaces are byte-identical to the
+  kitchen. Freshness identity: source_head cdbe140, fingerprint c66baf69
+  (clean delta, .saipen excluded), role_revision f241e6b8 (unchanged charter).
+- **critical:** false
+- **severity:** P3
+- **producer:** saitranslate
+- **source_head:** cdbe140278d1ad0fdf8701b351893d810971ae65 (project HEAD)
+- **source_tree_fingerprint:** git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195
+- **role_revision:** sha256:f241e6b83c39e9b46bfa586638efb0374bbb39889646f723b9189bbb4912c0c5
+- **coverage:**
+  - docs — README.md: **32 locales** (en source + ru et ded + 29 bundle), all 32
+    kitchen README.<lang>.md carry the current digest 886c5e27060e7b30 and the
+    post-T-184 release section (CHANGELOG prerequisite named, zero "Edit
+    wintage.user.js" hits, switcher bar verbatim).
+  - docs — desktop/README.md: **32 locales**, digest 1b166ae6a7cf8a5c current,
+    targets table + commands preserved.
+  - docs — browser-theme/README.txt: **32 locales**, digest 056bdd1c330ee8c2
+    current, T-171 fixed-legacy preamble everywhere.
+  - UI strings — desktop/locales/*.json: **33 locales** (en ru et ded + 29),
+    49 keys each, exact parity vs en.json, all parse.
+- **payload:** the full 32-language kitchen set (README.<lang>.md at kitchen
+  root, desktop/README.<lang>.md, browser-theme/README.<lang>.txt, 29 locale
+  JSONs) — already live in the repo byte-identical (eee applied at fd53d63; the
+  T-187 audit + closure checkpoint touched none of these surfaces). Collect =
+  verify only; no file needs copying.
+- **verified:**
+  - Freshness identity recomputed with tools/freshness.py at cdbe140 (clean
+    tree): source_head cdbe140278d1ad0fdf8701b351893d810971ae65, fingerprint
+    c66baf69 (empty delta, .saipen excluded), role_revision f241e6b8 matches
+    the charter's declared YAML value.
+  - All 32 kitchen READMEs: current digest 886c5e27060e7b30 (programmatic),
+    zero stale release-section hits, switcher bar verbatim in all.
+  - All 32 desktop kitchen files carry 1b166ae6a7cf8a5c; all 32 browser-theme
+    kitchen files carry 056bdd1c330ee8c2 (programmatic digest match).
+  - All 29 locale JSONs parse (json.load) and have exactly 49 keys; key set
+    identical to desktop/locales/en.json (0 missing, 0 extra).
+  - Byte-identity kitchen vs repo re-confirmed across all three md surfaces
+    (root README.<lang>.md 32/32, desktop 32/32, browser-theme 32/32) and all
+    29 locale JSONs — zero diffs; the eee collect already applied everything.
+  - TRANSLATION_CONTRACT.md digest constants current (886c5e27060e7b30 /
+    1b166ae6a7cf8a5c / 056bdd1c330ee8c2).
+- **instructions:** (1) `eee` collects: run the hard collect gate
+  (`validate.py --gate collect:saitranslate`), verify byte-identity (proven
+  here), mark this package reviewed, create/claim the Core collect ticket and
+  ship it. No repo mutation is required — every payload file is already live
+  byte-identical. (2) If any future source change lands before collect, re-run
+  `ee` first.
+- **details:**
+  Fresh EE, not reuse: SAIT-006 (bound to 8867967) went stale when the converge
+  closure checkpoint commit moved HEAD to cdbe140 — the collect gate correctly
+  refused it (PROTOCOL.md § 6). The checkpoint touched only .saipen/ and
+  .gitignore, so regeneration against all three freshness inputs is
+  byte/content-equivalent — a legal no-op with the rerun verification recorded
+  above. All work under .saipen/saitranslate/kitchen/; the main repo tree was
+  not touched by this preparation.
+
 ## SAIT-006: Wintage full translation bundle — fresh EE at 8867967, payload already live (converge closure)
 
-- **status:** ready
+- **status:** stale
+- **superseded_by:** SAIT-007 (source_head 8867967 -> cdbe140 at the converge closure checkpoint)
 - **summary:** Converge stage-K fresh EE bound to the current HEAD (8867967,
   v1.26.4 T-187 ship). Full 32-language bundle re-verified against the new
   identity; the payload is already integrated (eee shipped it at fd53d63, the
