@@ -675,7 +675,7 @@ function Load-Targets {
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'install.ps1') 2>&1
     $ErrorActionPreference = $prev
     foreach ($line in $out) {
-        if ($line -match '^\s{2}(\S+)\s{2,}(.+?)\s{2,}(not installed|themed|found, not themed|fused shut)\s{2,}(.+)$') {
+        if ($line -match '^\s{2}(\S+)\s{2,}(.+?)\s{2,}(not installed|themed|found, not themed|fused shut|listing failed)\s{2,}(.+)$') {
             $t = [pscustomobject]@{ Key = $Matches[1]; Name = $Matches[2].Trim(); State = $Matches[3]; Palette = $Matches[4].Trim() }
             if ($t.Key -eq 'target') { continue }
             $list = if ($t.Key -in $MY_APP_KEYS) { $clbMyApps } else { $clbPopularApps }
@@ -688,12 +688,13 @@ function Load-Targets {
             # Everything that CAN be themed starts ticked -- the overwhelmingly common
             # intent is "put this palette on all of it", and unticking two rows is less
             # work than ticking eleven. An app that is absent or fused shut is never
-            # ticked, because Apply would only print a refusal for it.
+            # ticked, because Apply would only print a refusal for it. A listing that
+            # FAILED is likewise not ticked: we do not know what is there (T-189).
             #
             # The three source-tree targets are ticked only when their folder is already
             # remembered: ticking them otherwise would fire the folder dialog from
             # startup, three times, before the window is even usable.
-            $selectable = $t.State -ne 'not installed' -and $t.State -ne 'fused shut'
+            $selectable = $t.State -ne 'not installed' -and $t.State -ne 'fused shut' -and $t.State -ne 'listing failed'
             if ($selectable -and $t.Key -in $PATH_TARGETS) { $selectable = $script:customPaths.ContainsKey($t.Key) }
             if ($selectable) { $list.SetItemChecked($i, $true) }
         }
@@ -992,7 +993,10 @@ $btnApply.Add_Click({
                 $status.Text = "Applied '$slug' with $($failed.Count) failure(s): $($failed -join ', '). See the log - nothing more was installed for those targets."
                 $status.ForeColor = [System.Drawing.Color]::Firebrick
             } else {
+                # A later success must visibly reset the failure colour (T-189).
                 $status.Text = "Applied '$slug'. Restart any app that was themed."
+                $tokensNow = Get-ActiveTokens
+                if ($tokensNow) { $status.ForeColor = C $tokensNow.textPrimary }
             }
         }
         catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message); $status.Text = 'Apply failed - see the log.' }
@@ -1032,7 +1036,10 @@ $btnRevert.Add_Click({
             $status.Text = "Revert incomplete: $($failed.Count) target(s) failed ($($failed -join ', ')). See the log."
             $status.ForeColor = [System.Drawing.Color]::Firebrick
         } else {
+            # A later success must visibly reset the failure colour (T-189).
             $status.Text = 'Revert done - the marked targets are back to their pre-Wintage state.'
+            $tokensNow = Get-ActiveTokens
+            if ($tokensNow) { $status.ForeColor = C $tokensNow.textPrimary }
         }
     })
 

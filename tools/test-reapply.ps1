@@ -115,6 +115,26 @@ function Reset-SmartVacDir([string]$dir = $svDirB) {
     [System.IO.File]::WriteAllText((Join-Path $dir '_SMART_VAC_CLEANER.py'), $svSource, $utf8NoBom)
 }
 
+# Minimal valid asar so install-electron can read a package.json version.
+function Build-FakeAsar([string]$path, [string]$version) {
+    $pkgJson = '{"name":"FakeApp","version":"' + $version + '","main":"' + ('x'.PadRight(40, 'x')) + '"}'
+    $data = [System.Text.Encoding]::UTF8.GetBytes($pkgJson)
+    $jsonStr = '{"files":{"package.json":{"size":' + $data.Length + ',"offset":"0"}}}'
+    $json = [System.Text.Encoding]::UTF8.GetBytes($jsonStr)
+    $jsonLen = $json.Length
+    $pickleSize = 8 + $jsonLen + (4 - ((8 + $jsonLen) % 4))
+    if ((8 + $jsonLen) % 4 -eq 0) { $pickleSize = 8 + $jsonLen }
+    $base = 8 + $pickleSize
+    $w = [System.IO.BinaryWriter]::new([System.IO.File]::Open($path, 'Create'))
+    try {
+        $w.Write([uint32]4); $w.Write([uint32]$pickleSize); $w.Write([uint32]$jsonLen); $w.Write([uint32]$jsonLen)
+        $w.Write($json)
+        $pad = New-Object byte[] ($base - 16 - $jsonLen)
+        $w.Write($pad)
+        $w.Write($data)
+    } finally { $w.Dispose() }
+}
+
 try {
 
 # ---- Test 1: version comparison is semantic, never string ----
@@ -126,20 +146,30 @@ check 'semver malformed recorded version is never up to date' (-not (Test-Payloa
 check 'semver malformed current version is never up to date' (-not (Test-PayloadUpToDate '1.26.3' 'garbage'))
 check 'semver missing recorded version is never up to date' (-not (Test-PayloadUpToDate '' '1.26.3'))
 
-# ---- Test 2: up-to-date payload is skipped ----
+# ---- Test 2: a HEALTHY target with an up-to-date payload is skipped ----
 Clean-TestState
-@{windows=@{palette='goldendefault';path='C:\nonexistent';appVersion='n/a';payloadVersion='99.99.99';applied='2026-01-01T00:00:00Z'}} | ConvertTo-Json |
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+$svHealthy = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
+# A themed target has its backup marker; the health probe requires it.
+Copy-Item $svHealthy ($svHealthy + '.bak') -Force
+# The health probe requires the recorded path to resolve AND the theming marker
+# (backup) to exist; a fake C:\nonexistent path is now correctly a FAIL signal.
+@{smartvac=@{palette='goldendefault';path=$svHealthy;appVersion='n/a';payloadVersion='99.99.99';applied='2026-01-01T00:00:00Z'}} | ConvertTo-Json |
     ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
-check 'up-to-date version is skipped' ($out -match 'up to date')
-check 'reapply of an up-to-date manifest exits 0' ($LASTEXITCODE -eq 0)
+check 'up-to-date healthy target is skipped' ($out -match 'up to date')
+check 'reapply of an up-to-date healthy manifest exits 0' ($LASTEXITCODE -eq 0)
 
-# ---- Test 3: outdated version is detected under -WhatIf ----
+# ---- Test 3: unhealthy target detected under -WhatIf, child preflight runs ----
 Clean-TestState
-@{windows=@{palette='goldendefault';path='C:\nonexistent';appVersion='n/a';payloadVersion='1.9.0';applied='2020-01-01T00:00:00Z'}} | ConvertTo-Json |
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+@{smartvac=@{palette='goldendefault';path=(Join-Path $svDirB '_SMART_VAC_CLEANER.py');appVersion='n/a';payloadVersion='1.9.0';applied='2020-01-01T00:00:00Z'}} | ConvertTo-Json |
     ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply -WhatIf 2>&1
-check 'outdated version is detected via -WhatIf' ($out -match 'What if')
+check 'unhealthy target detected via -WhatIf' ($out -match 'WOULD re-apply')
+check 'reapply -WhatIf does not claim "all recorded targets are up to date"' ($out -notmatch 'all recorded targets are up to date')
 check '-WhatIf reapply exits 0' ($LASTEXITCODE -eq 0)
 
 # ---- Test 4: empty manifest reports nothing to do ----
@@ -188,19 +218,18 @@ $mAfterApply = Read-TestManifest
 check 'initial apply records path A in the manifest' ($mAfterApply.smartvac.path -eq $svFileA)
 
 # Simulate the app moving: A is gone, B is where it lives now. The manifest still
-# says A. The user's remembered path (paths.json) is updated to B. A payload bump
-# makes the recorded version outdated, which is what triggers -Reapply.
+# says A (with the CURRENT payload version - no fake bump). The user's remembered
+# path (paths.json) is updated to B. The health probe must detect the path move
+# and trigger -Reapply WITHOUT any Wintage payload version change (T-189).
 Copy-Item $svDirA $svDirB -Recurse -Force
 Remove-Item $svDirA -Recurse -Force
 Write-PathsJson @{ smartvac = $svDirB }
-$mStale = Read-TestManifest
-$mStale.smartvac.payloadVersion = '1.9.0'
-$mStale | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
 
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
 check 'reapply after move exits 0' ($LASTEXITCODE -eq 0)
 $mAfterReapply = Read-TestManifest
 check 'reapply records the NEW path B, not the stale manifest path A' ($mAfterReapply.smartvac.path -eq (Join-Path $svDirB '_SMART_VAC_CLEANER.py'))
+check 'reapply kept the CURRENT payload version (no fake bump)' ($mAfterReapply.smartvac.payloadVersion -ne '1.9.0')
 $themedB = [System.IO.File]::ReadAllText((Join-Path $svDirB '_SMART_VAC_CLEANER.py'), $utf8NoBom)
 $pack = [System.IO.File]::ReadAllText((Join-Path $root 'themes\goldendefault.json'), $utf8NoBom) | ConvertFrom-Json
 check 'the moved target file at B is actually themed' ($themedB -match [regex]::Escape($pack.tokens.background))
@@ -317,9 +346,119 @@ try {
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target 'antigravity-app' -WhatIf 2>&1
     $ErrorActionPreference = $prevEap
     check 'electron dry-run helper failure exits NONZERO' ($LASTEXITCODE -ne 0)
+    # And at the REAPPLY level: a planned target whose dry-run fails makes the
+    # whole -Reapply -WhatIf exit nonzero (P0#2).
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply -WhatIf 2>&1
+    check 'Reapply -WhatIf child dry-run failure exits NONZERO' ($LASTEXITCODE -ne 0)
 } finally {
     $env:LOCALAPPDATA = $prevLocalAppData
 }
+
+# ---- Test 14: an ELECTRON app update with the SAME payload triggers Reapply ----
+Clean-TestState
+$prevLocalAppData = $env:LOCALAPPDATA
+try {
+    $fakeLocal = Join-Path $testRoot 'localappdata2'
+    $agRes = Join-Path $fakeLocal 'Programs\Antigravity\resources'
+    New-Item -ItemType Directory -Path $agRes -Force | Out-Null
+    Build-FakeAsar (Join-Path $agRes 'app.asar') '1.0.0'
+    $env:LOCALAPPDATA = $fakeLocal
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target 'antigravity-app' -Palette goldendefault 2>&1
+    check 'electron apply v1 exits 0' ($LASTEXITCODE -eq 0)
+    $m1 = Read-TestManifest
+    check 'manifest records app version 1.0.0' ($m1.'antigravity-app'.appVersion -eq '1.0.0')
+    # Simulate the app updating: v2 stock asar lands at root, old relocation remains.
+    Build-FakeAsar (Join-Path $agRes 'app.asar') '2.0.0'
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
+    check 'app update with SAME payload triggers reapply (exit 0)' ($LASTEXITCODE -eq 0)
+    $m2 = Read-TestManifest
+    check 'reapply refreshed the manifest to app v2' ($m2.'antigravity-app'.appVersion -eq '2.0.0')
+    check 'manifest payload stayed current (no version fake)' ($m2.'antigravity-app'.payloadVersion -ne '1.9.0')
+    # Revert must restore v2 stock, never v1.
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target 'antigravity-app' -Revert 2>&1
+    check 'electron revert after update exits 0' ($LASTEXITCODE -eq 0)
+    $vAfter = (& node (Join-Path $root 'tools/install-electron.js') --resources $agRes --version 2>$null | Out-String).Trim()
+    check 'revert restores v2, never v1' ($vAfter -eq '2.0.0')
+} finally {
+    $env:LOCALAPPDATA = $prevLocalAppData
+}
+
+# ---- Test 15: a manifest-recorded target that VANISHED fails Reapply, entry kept ----
+Clean-TestState
+# smartvac dir recorded in the manifest is deleted; paths.json says nothing.
+$goneDir = Join-Path $testRoot 'smartvac-gone'
+New-Item -ItemType Directory -Path $goneDir -Force | Out-Null
+$gonePy = Join-Path $goneDir '_SMART_VAC_CLEANER.py'
+[System.IO.File]::WriteAllText($gonePy, $svSource, $utf8NoBom)
+@{smartvac=@{palette='goldendefault';path=$gonePy;appVersion='n/a';payloadVersion='99.99.99';applied='2026-01-01T00:00:00Z'}} | ConvertTo-Json |
+    ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
+Remove-Item $goneDir -Recurse -Force
+$out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
+check 'recorded-but-vanished target makes reapply exit NONZERO' ($LASTEXITCODE -ne 0)
+check 'recorded-but-vanished target named as FAILED' ($out -match 'smartvac' -and $out -match 'FAILED')
+$mGone = Read-TestManifest
+check 'recorded-but-vanished manifest entry is PRESERVED' ($mGone.smartvac.path -eq $gonePy)
+
+# ---- Test 16: strict vs bulk absence semantics (P0#3) ----
+# `-Target all` treats genuine absence as SKIP (nonfatal); an explicit/recorded
+# target that cannot be fulfilled FAILS. Tested at the dispatch-contract helper
+# level because a full `-Target all` run on a real host legitimately touches
+# every installed target (e.g. windows may fail on a host with no active .theme).
+. (Join-Path $root 'desktop\modules\targets.ps1')
+$script:StrictTarget = $false
+$skipThrew = $false
+try { Assert-TargetResolvable 'FakeBulkTarget' $false } catch { $skipThrew = $true }
+check 'bulk (non-strict) absent target SKIPs, does not throw' (-not $skipThrew)
+$script:StrictTarget = $true
+$strictThrew = $false
+try { Assert-TargetResolvable 'FakeExplicitTarget' $false } catch { $strictThrew = $true }
+check 'explicit (strict) absent target THROWS' $strictThrew
+
+# ---- Test 17: upstream source v2 change survives repaint/revert (P1#16) ----
+Clean-TestState
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+$svPristine = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
+$v1Bytes = [System.IO.File]::ReadAllBytes($svPristine)
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1 | Out-Null
+check 'provenance: apply v1 exits 0' ($LASTEXITCODE -eq 0)
+# Upstream ships v2: same anchors, new hexes, an unrelated new function.
+$v2 = ($svSource -replace "'#010203'", "'#0A0B0C'") + "`ndef helper_v2():`n    return 'unrelated v2 code'`n"
+[System.IO.File]::WriteAllText($svPristine, $v2, $utf8NoBom)
+$v2Bytes = [System.IO.File]::ReadAllBytes($svPristine)
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette dracula 2>&1 | Out-Null
+check 'provenance: repaint onto v2 exits 0' ($LASTEXITCODE -eq 0)
+$afterRepaint = [System.IO.File]::ReadAllText($svPristine, $utf8NoBom)
+check 'provenance: unrelated v2 code survives the repaint' ($afterRepaint -match 'helper_v2')
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Revert 2>&1 | Out-Null
+check 'provenance: revert exits 0' ($LASTEXITCODE -eq 0)
+$reverted = [System.IO.File]::ReadAllBytes($svPristine)
+check 'provenance: revert restores pristine v2, NOT v1' ((Compare-Object $v2Bytes $reverted).Count -eq 0)
+check 'provenance: revert does NOT restore the obsolete v1' ((Compare-Object $v1Bytes $reverted).Count -ne 0)
+
+# ---- Test 18: concurrent manifest writers keep BOTH entries (P1#18) ----
+Clean-TestState
+$mPath = Join-Path $appData 'installed.json'
+$commonPath = Join-Path $root 'desktop\modules\common.ps1'
+function Start-ManifestWriter([string]$target) {
+    $childScript = Join-Path $appData ("writer-$target.ps1")
+    $childContent = @"
+. "$commonPath"
+`$WintageAppData = "$appData"
+`$ManifestPath = "$mPath"
+`$script:Utf8NoBom = New-Object System.Text.UTF8Encoding(`$false)
+Set-ManifestEntry "$target" 'golden' 'C:\x' '1' '2'
+"@
+    [System.IO.File]::WriteAllText($childScript, $childContent, $utf8NoBom)
+    Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $childScript) -WindowStyle Hidden
+}
+Start-ManifestWriter 'alpha'
+Start-ManifestWriter 'beta'
+# Give both writers time to run; the mutex serializes them.
+Start-Sleep -Seconds 4
+$mConc = Read-TestManifest
+check 'concurrent writers preserve BOTH entries' ($mConc.ContainsKey('alpha') -and $mConc.ContainsKey('beta'))
+check 'concurrent writers leave no temp garbage' (-not (Get-ChildItem $appData -Filter 'installed.json.tmp-*' -ErrorAction SilentlyContinue))
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

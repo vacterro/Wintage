@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.26.5] - 2026-08-11
+
+- `-Reapply` now decides by TARGET HEALTH, not just the Wintage payload version: an application update or a moved install (same payload, new app version / new path / lost theme) triggers a re-apply, and an unhealthy recorded target is reported instead of skipped. `-Reapply -WhatIf` runs each child's real preflight so a broken helper surfaces as a nonzero exit, and an explicit or manifest-recorded target that cannot be resolved is a hard failure (bulk `-Target all` keeps treating genuine absence as a skip).
+- Electron installs are now a real state machine: `stock / themed-relocated / updated-relocated / themed-inplace / updated-inplace / ambiguous` are classified from the actual layout, an app update leaves the NEW archive as the rollback source (Revert restores the current version, never the old one), the relocation move is a rollback-protected transaction, and a machine-readable `--status-json` plus a working `--version` after relocation feed the health probe.
+- FreeBuff is one transaction: top-level Revert undoes the shim AND the ad/sound patch, the missing patch helper is a hard failure, `-WhatIf` validates both layers, and the patch is preflight-first with a single complete-transaction backup that Revert refuses to split.
+- Revert now restores ONLY the fields Wintage owns, merged into the current config: Windows Terminal, OBS, Obsidian and Total Commander no longer restore whole old files, so unrelated edits made after Apply survive a revert. Obsidian advances/removes its manifest entry only after every vault succeeds.
+- Source-tree targets (SMART VAC CLEANER, WildRift) re-base their rollback backup when the upstream source changes, so an update survives repaint and revert never restores an obsolete version.
+- Manifest writes are serialized across processes (named lock + unique temp), so a GUI, CLI and logon task can no longer overwrite each other's entries.
+- GUI polish: the status line visibly resets its failure colour on a later success, a failed target listing is preserved instead of dropped, and malformed app version directories no longer crash discovery.
+
 ## [1.26.4] - 2026-08-11
 
 - Correctness pass over the installer's failure and rollback paths. `-Reapply` now exits nonzero when any target fails (a broken sibling no longer reads as a green run), payload versions are compared semantically (`1.9.0 < 1.26.3` instead of lexically), Electron apply/revert/`-WhatIf` helper failures abort the target instead of printing and continuing, the FreeBuff ad/sound patch runs before the manifest is written, and the GUI reports PASS/FAIL per target and only claims success when every requested operation succeeded. Saving or deleting the custom theme now aborts the Apply when the generators fail, so a stale build can never be installed.

@@ -170,7 +170,11 @@ if (-not $WildRiftPath -and $pathsJson.ContainsKey('wildrift')) { $WildRiftPath 
 if (-not $CodeNomadPath -and $pathsJson.ContainsKey('codenomad')) { $CodeNomadPath = $pathsJson['codenomad'] }
 if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $PortableBrowserRoot = $pathsJson['portable'] }
 
-# ---- Reapply mode: read manifest, rediscover paths, re-apply outdated payloads ----
+# ---- Reapply mode: read manifest, probe TARGET health, re-apply unhealthy targets ----
+# The decision is target health, not just the Wintage payload version (T-189):
+# an application update or a moved install leaves payloadVersion unchanged while
+# the theme is gone, so needsReapply fires on any of payload-outdated, resolved
+# path moved, app version changed, marker/theme state missing, or unresolved.
 if ($Reapply) {
     $currentVer = Get-PayloadVersion
     try {
@@ -181,7 +185,14 @@ if ($Reapply) {
         exit 1
     }
     if ($manifest.Count -eq 0) { Say 'Nothing to do -- the manifest is empty (no targets have been installed).' 'Green'; exit 0 }
-    $didWork = $false
+    # plannedWork = a target needs re-apply (decided by health probe).
+    # mutatedWork  = a child was actually invoked for real (not -WhatIf).
+    # The two are deliberately separate: under -WhatIf the child MUST run its own
+    # preflight so a broken helper surfaces as a nonzero exit, and the "all up to
+    # date" message must never be printed merely because ShouldProcess suppressed
+    # a mutation (T-189).
+    $plannedWork = $false
+    $mutatedWork = $false
     $failedTargets = @()
     $passArgs = @{}
     if ($CodeNomadPath) { $passArgs['-CodeNomadPath'] = $CodeNomadPath }
@@ -196,23 +207,27 @@ if ($Reapply) {
     $sorted = @($manifest.Keys | Sort-Object)
     foreach ($key in $sorted) {
         $data = $manifest[$key]
-        # Semantic version comparison: a recorded payload that is older than the
-        # repo's needs re-applying. A recorded OR current value that does not
-        # parse as a version is never silently "up to date" -- it is treated as
-        # needing reapply, because an unknown version is exactly the state that
-        # used to skip the refresh forever (1.9.0 vs 1.26.3 compared as strings).
-        if (Test-PayloadUpToDate $data.payloadVersion $currentVer) {
-            if (-not $Quiet) { Say "$key`: up to date (manifest v$($data.payloadVersion), repo v$currentVer)." 'DarkGray' }
+        $health = Test-TargetNeedsReapply $key $data $currentVer
+        if (-not $health.Needs) {
+            if (-not $Quiet) { Say "$key`: up to date (payload v$($data.payloadVersion), path $($data.path))." 'DarkGray' }
             continue
         }
-        $action = "Re-apply $key @ $($data.palette) (v$($data.payloadVersion) -> v$currentVer)"
-        if (-not $PSCmdlet.ShouldProcess("$key ($($data.palette))", $action)) { continue }
-        $didWork = $true
+        $plannedWork = $true
+        $action = "Re-apply $key @ $($data.palette) ($($health.Reasons))"
         $callArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
             '-Target', $key, '-Palette', $data.palette)
         foreach ($pk in $passArgs.Keys) { $callArgs += $pk; $callArgs += $passArgs[$pk] }
-        if ($WhatIfPreference) { $callArgs += '-WhatIf' }
-        if (-not $Quiet) { Say "$key`: re-applying $($data.palette) ..." 'Cyan' }
+        if ($WhatIfPreference) {
+            # Planned work, no mutation: run the child with -WhatIf so ITS real
+            # preflight executes (dry-runs, anchor checks, helper validation).
+            $callArgs += '-WhatIf'
+            if (-not $Quiet) { Say "$key`: WOULD re-apply $($data.palette) - $($health.Reasons)" 'Cyan' }
+        } elseif (-not $PSCmdlet.ShouldProcess("$key ($($data.palette))", $action)) {
+            continue
+        } else {
+            $mutatedWork = $true
+            if (-not $Quiet) { Say "$key`: re-applying $($data.palette) - $($health.Reasons)" 'Cyan' }
+        }
         # A failing child can emit native stderr (a node stack trace, a reg
         # error). Under EAP=Stop the 2>&1 merge turns each line into a
         # terminating error and aborts the WHOLE reapply loop mid-target --
@@ -234,8 +249,10 @@ if ($Reapply) {
             $failedTargets += $key
         }
     }
-    if (-not $didWork) {
+    if (-not $plannedWork) {
         if (-not $Quiet) { Say 'Nothing to do -- all recorded targets are up to date.' 'Green' }
+    } elseif (-not $mutatedWork -and -not $failedTargets.Count) {
+        if (-not $Quiet) { Say 'Reapply planned: no real mutation happened (-WhatIf dry-run complete).' 'Cyan' }
     }
     if ($failedTargets.Count) {
         Say "Reapply incomplete: $($failedTargets.Count) target(s) failed ($($failedTargets -join ', '))." 'Red'
@@ -437,16 +454,25 @@ if (-not $Target) {
 }
 
 # The built output is generated, not committed by hand -- refuse to install a stale
-# or missing build rather than silently shipping last week's colours.
-if ($node) {
-    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        if (-not $Force) { throw (T 'BuildStale') }
-        Say (T 'BuildStaleForce') 'Yellow'
+# or missing build rather than silently shipping last week's colours. This is
+# TARGET-AWARE (T-189): only targets that CONSUME desktop/out need the build
+# verified, and a missing Node is then a FAIL unless -Force (the user explicitly
+# accepted unverified/stale generated output). Native/config targets that patch
+# the user's own files (mpchc, terminal, conhost, source-tree) are never blocked
+# needlessly by an absent Node.
+$BUILD_CONSUMING = @($TARGETS.Keys) + @($ELECTRON.Keys) + @('windows', 'browsers', 'obs', 'discord', 'obsidian')
+$needsGeneratedBuild = ($Target -eq 'all') -or ($Target -in $BUILD_CONSUMING)
+if ($needsGeneratedBuild) {
+    if ($node) {
+        & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            if (-not $Force) { throw (T 'BuildStale') }
+            Say (T 'BuildStaleForce') 'Yellow'
+        }
     }
-}
-elseif (-not $Force) {
-    Say (T 'NodeNotFoundBuild') 'Yellow'
+    elseif (-not $Force) {
+        throw (T 'NodeNotFoundBuild')
+    }
 }
 
 # Every target that is neither a VS Code extension nor an Electron app -- i.e. one
@@ -471,6 +497,12 @@ if ($orphans.Count) {
 
 $names = if ($Target -eq 'all') { $known } else { @($Target) }
 
+# Strict-target semantics (T-189): an explicitly-requested target (or a
+# manifest-recorded one reached via -Reapply) must not silently skip an absent
+# prerequisite — absence is a FAIL there, while `-Target all` legitimately SKIPs
+# software that simply is not installed. Handlers consult $script:StrictTarget.
+$script:StrictTarget = $Target -and $Target -ne 'all'
+
 $dispatchFailures = @()
 
 foreach ($name in $names) {
@@ -485,8 +517,11 @@ foreach ($name in $names) {
         if ($NoBrowserLaunch) { $browserArgs += '-NoLaunch' }
         if ($Revert) { $browserArgs += '-Revert' }
         if ($WhatIfPreference) { $browserArgs += '-WhatIf' }
-        & powershell @browserArgs
+        $browserOut = & powershell @browserArgs 2>&1
         if ($LASTEXITCODE -ne 0) { throw 'Browser theme installer failed.' }
+        if (-not $Revert -and $script:StrictTarget -and ($browserOut -match 'no installed or portable profiles')) {
+            throw 'browsers: no Chromium profiles found - expected to be present (strict target), refusing to record an install.'
+        }
         if ($Revert) { Remove-ManifestEntry 'browsers' }
         else { Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion) }
         continue
@@ -508,6 +543,9 @@ foreach ($name in $names) {
         $e = $ELECTRON[$name]
         if ($name -eq 'codenomad') { Remove-DeadCodeNomadCss }
         if (-not (Test-ElectronApp $e.Resources)) {
+            # Absent app: SKIP under `-Target all`, FAIL for an explicit/recorded
+            # target that is expected to exist (T-189).
+            if ($script:StrictTarget) { throw "$($e.Name): expected to be present but its archive cannot be found - refusing to continue." }
             Say "$($e.Name): not installed on this machine - skipped." 'DarkYellow'
             continue
         }
@@ -516,21 +554,45 @@ foreach ($name in $names) {
         $script = Join-Path $root 'tools/install-electron.js'
         $nodeArgs = @($script, '--resources', $e.Resources)
         if ($e.InPlace) { $nodeArgs += '--in-place' }
+        # Test seam: an env override lets fixtures point the mandatory FreeBuff
+        # post-step at a fake app or at a deliberately missing path.
+        $adPatch = if ($env:WINTAGE_FREEBUFF_PATCH_PATH) { $env:WINTAGE_FREEBUFF_PATCH_PATH } else { Join-Path $root 'desktop/patch-freebuff-ads.js' }
         
         if ($Revert) {
-            if ($PSCmdlet.ShouldProcess($e.Resources, 'Remove the Wintage shim')) {
+            # FreeBuff owns TWO layers (the Electron shim AND the ad/sound patch on
+            # the bundle), so Revert must undo both before the manifest goes away
+            # (T-189). Any failure keeps the manifest and returns nonzero.
+            if ($PSCmdlet.ShouldProcess($e.Resources, 'Remove the Wintage shim and (for FreeBuff) the ad/sound patch')) {
+                $revertFailures = @()
+                if ($name -eq 'freebuff') {
+                    if (Test-Path $adPatch) {
+                        & node $adPatch --revert
+                        if ($LASTEXITCODE -ne 0) { $revertFailures += 'patch-freebuff-ads --revert' }
+                    } else {
+                        $revertFailures += 'missing patch-freebuff-ads helper'
+                    }
+                }
                 & node $nodeArgs --revert
-                if ($LASTEXITCODE -ne 0) { throw "$($e.Name): revert FAILED ($LASTEXITCODE) - manifest kept, see the message above." }
+                if ($LASTEXITCODE -ne 0) { $revertFailures += 'install-electron --revert' }
+                if ($revertFailures.Count) {
+                    throw "$($e.Name): revert INCOMPLETE ($($revertFailures -join ', ')) - the manifest and recovery evidence are kept."
+                }
                 Remove-ManifestEntry $name
             }
             continue
         }
-        $action = "Install Wintage ($Palette) shim"
         if ($WhatIfPreference) {
             # Dry-run is a validation pass too: a failing helper must fail the
             # parent, or -WhatIf reports a plan the real apply cannot honour.
             & node $nodeArgs --palette $Palette --dry-run
             if ($LASTEXITCODE -ne 0) { throw "$($e.Name): dry-run FAILED ($LASTEXITCODE) - see the message above." }
+            if ($name -eq 'freebuff') {
+                # FreeBuff WhatIf validates BOTH layers (T-189): a stale ad-patch
+                # matcher or missing sound must fail the plan, not just warn.
+                if (-not (Test-Path $adPatch)) { throw 'FreeBuff: patch-freebuff-ads.js is missing - the mandatory post-step cannot be validated.' }
+                & node $adPatch --dry-run
+                if ($LASTEXITCODE -ne 0) { throw "FreeBuff: ad/sound patch dry-run FAILED ($LASTEXITCODE) - see the message above." }
+            }
             continue
         }
         if ($PSCmdlet.ShouldProcess($e.Resources, $action)) {
@@ -541,27 +603,24 @@ foreach ($name in $names) {
             # A custom completion sound is a per-machine preference written by
             # the GUI (WintageInstaller.ps1 -> %APPDATA%\Wintage\freebuff-sound.txt):
             # if one is set, hand it to the same patch run so the ads and the
-            # sound are applied together. The patch keeps the stock file as
-            # chime-*.mp3.bak and --revert restores it.
+            # sound are applied together.
             #
             # The manifest is written only AFTER both the shim AND the mandatory
             # FreeBuff post-step succeeded. A partial apply (shim in, ads not cut)
             # must never record the target as current -- it stays incomplete so
             # the next -Reapply actually retries it.
             if ($name -eq 'freebuff') {
-                $adPatch = Join-Path $root 'desktop/patch-freebuff-ads.js'
-                if (Test-Path $adPatch) {
-                    if ($PSCmdlet.ShouldProcess($e.Resources, 'Cut FreeBuff ads')) {
-                        $patchArgs = @()
-                        $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
-                        if (Test-Path $soundPref) {
-                            $wav = (Read-Utf8 $soundPref).Trim()
-                            if ($wav -and (Test-Path $wav)) { $patchArgs = @('--sound', $wav) }
-                        }
-                        & node $adPatch @patchArgs
-                        if ($LASTEXITCODE -ne 0) {
-                            throw 'FreeBuff: shim applied but the ad/sound patch FAILED - run patch-freebuff-ads.js --scan to see what this build carries, then update the strings. The manifest was NOT updated, so -Reapply will retry.'
-                        }
+                if (-not (Test-Path $adPatch)) { throw 'FreeBuff: patch-freebuff-ads.js is missing - the mandatory ad/sound post-step cannot run, so the target is NOT recorded as installed.' }
+                if ($PSCmdlet.ShouldProcess($e.Resources, 'Cut FreeBuff ads')) {
+                    $patchArgs = @()
+                    $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
+                    if (Test-Path $soundPref) {
+                        $wav = (Read-Utf8 $soundPref).Trim()
+                        if ($wav -and (Test-Path $wav)) { $patchArgs = @('--sound', $wav) }
+                    }
+                    & node $adPatch @patchArgs
+                    if ($LASTEXITCODE -ne 0) {
+                        throw 'FreeBuff: shim applied but the ad/sound patch FAILED - run patch-freebuff-ads.js --scan to see what this build carries, then update the strings. The manifest was NOT updated, so -Reapply will retry.'
                     }
                 }
             }
@@ -580,6 +639,7 @@ foreach ($name in $names) {
     $t = $TARGETS[$name]
 
     if (-not (Test-Path $t.Dir)) {
+        if ($script:StrictTarget) { throw "$($t.Name): extensions directory not found ($($t.Dir)) - refusing to continue (strict target)." }
         Say "$($t.Name): extensions directory not found ($($t.Dir)) - skipped." 'DarkYellow'
         continue
     }

@@ -28,6 +28,40 @@ const markerPath = `${settingsPath}.wintage-palette`;
 // to the renderer about glyph width.
 const TERMINAL_FONT = 'Consolas';
 
+// The ONLY fields Wintage owns in settings.json (T-189). Revert merges these
+// back into the CURRENT file and preserves every unrelated key/profile/setting
+// the user changed after Apply - it never restores a whole old file.
+const OWNED_FIELDS = {
+  colorScheme: 'profiles.defaults.colorScheme',
+  font: 'profiles.defaults.font',
+  antialiasingMode: 'profiles.defaults.antialiasingMode'
+};
+const OWNED_FONT_KEYS = ['face', 'size', 'weight'];
+
+function getIn(obj, pathStr) {
+  return pathStr.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+function setIn(obj, pathStr, value) {
+  const parts = pathStr.split('.');
+  let o = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const k = parts[i];
+    if (o[k] == null || typeof o[k] !== 'object') o[k] = {};
+    o = o[k];
+  }
+  o[parts[parts.length - 1]] = value;
+  return obj;
+}
+function delIn(obj, pathStr) {
+  const parts = pathStr.split('.');
+  let o = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (o[parts[i]] == null) return;
+    o = o[parts[i]];
+  }
+  delete o[parts[parts.length - 1]];
+}
+
 function stripJsonComments(source) {
   let out = '';
   let quote = false;
@@ -103,29 +137,76 @@ function replaceFile(file, content) {
   writeAtomic(file, content);
 }
 
-function restoreFile(backup, file) {
-  const temp = `${file}.wintage-tmp`;
-  fs.copyFileSync(backup, temp);
-  fs.renameSync(temp, file);
+// A legacy whole-file backup (pre-T-189) is still usable: parse it and extract
+// only the owned fields, so an old install reverts without time-travelling the
+// rest of the file.
+function readOwnedSnapshot(backupPathOrObject) {
+  if (backupPathOrObject && typeof backupPathOrObject === 'object') {
+    if (backupPathOrObject.__wintage_owned) return backupPathOrObject;
+    // legacy whole-file backup
+    return {
+      __wintage_owned: true,
+      colorScheme: getIn(backupPathOrObject, OWNED_FIELDS.colorScheme) || null,
+      font: getIn(backupPathOrObject, OWNED_FIELDS.font) || null,
+      antialiasingMode: getIn(backupPathOrObject, OWNED_FIELDS.antialiasingMode) || null
+    };
+  }
+  if (fs.existsSync(backupPathOrObject)) {
+    return readOwnedSnapshot(readJsonc(backupPathOrObject));
+  }
+  return null;
+}
+
+// Merge the owned fields from the snapshot into the CURRENT settings, removing
+// the Wintage scheme. Everything else in the current file survives untouched.
+function mergeOwnedIntoCurrent(current, snap) {
+  const ownedColorScheme = snap.colorScheme;
+  if (ownedColorScheme) setIn(current, OWNED_FIELDS.colorScheme, ownedColorScheme);
+  else delIn(current, OWNED_FIELDS.colorScheme);
+  const curFont = getIn(current, OWNED_FIELDS.font);
+  if (snap.font && typeof snap.font === 'object') {
+    const merged = (curFont && typeof curFont === 'object' && !Array.isArray(curFont)) ? curFont : {};
+    for (const k of OWNED_FONT_KEYS) {
+      if (k in snap.font) merged[k] = snap.font[k];
+      else delete merged[k];
+    }
+    setIn(current, OWNED_FIELDS.font, merged);
+  } else {
+    if (curFont && typeof curFont === 'object') {
+      for (const k of OWNED_FONT_KEYS) delete curFont[k];
+      if (Object.keys(curFont).length === 0) delIn(current, OWNED_FIELDS.font);
+    }
+  }
+  const ownedAa = snap.antialiasingMode;
+  if (ownedAa) setIn(current, OWNED_FIELDS.antialiasingMode, ownedAa);
+  else delIn(current, OWNED_FIELDS.antialiasingMode);
+  if (Array.isArray(current.schemes)) {
+    current.schemes = current.schemes.filter((s) => !s || s.name !== 'Wintage');
+    if (current.schemes.length === 0) delete current.schemes;   // the apply created it
+  }
+  return current;
 }
 
 if (revert) {
   if (dryRun) {
-    console.log(`Windows Terminal: would restore ${settingsPath}`);
+    console.log(`Windows Terminal: would restore the Wintage-owned fields into ${settingsPath}`);
     process.exit(0);
   }
   if (fs.existsSync(createdPath)) {
     if (fs.existsSync(settingsPath)) fs.unlinkSync(settingsPath);
     fs.unlinkSync(createdPath);
   } else if (fs.existsSync(backupPath)) {
-    restoreFile(backupPath, settingsPath);
+    const snap = readOwnedSnapshot(backupPath);
+    const current = fs.existsSync(settingsPath) ? readJsonc(settingsPath) : {};
+    mergeOwnedIntoCurrent(current, snap);
+    replaceFile(settingsPath, `${JSON.stringify(current, null, 4)}\n`);
     fs.unlinkSync(backupPath);
   } else {
     console.log('Windows Terminal: no Wintage backup to restore.');
     process.exit(0);
   }
   if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
-  console.log(`Windows Terminal: restored ${settingsPath}`);
+  console.log(`Windows Terminal: restored the Wintage-owned fields into ${settingsPath}`);
   process.exit(0);
 }
 
@@ -141,6 +222,14 @@ for (const key of required) {
 }
 
 const settings = fs.existsSync(settingsPath) ? readJsonc(settingsPath) : {};
+// Owned-field snapshot captured from the ORIGINAL file before any mutation, so
+// Revert can restore exactly these fields into whatever the file has become.
+const ownedSnapshot = {
+  __wintage_owned: true,
+  colorScheme: getIn(settings, OWNED_FIELDS.colorScheme) || null,
+  font: getIn(settings, OWNED_FIELDS.font) || null,
+  antialiasingMode: getIn(settings, OWNED_FIELDS.antialiasingMode) || null
+};
 if (Array.isArray(settings.profiles)) {
   settings.profiles = { defaults: {}, list: settings.profiles };
 } else if (!settings.profiles || typeof settings.profiles !== 'object') {
@@ -196,8 +285,12 @@ if (dryRun) {
 
 fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
 if (!fs.existsSync(backupPath) && !fs.existsSync(createdPath)) {
-  if (fs.existsSync(settingsPath)) fs.copyFileSync(settingsPath, backupPath);
-  else fs.writeFileSync(createdPath, '', 'utf8');
+  if (fs.existsSync(settingsPath)) {
+    // Snapshot ONLY the owned fields, never the whole file (T-189).
+    fs.writeFileSync(backupPath, `${JSON.stringify(ownedSnapshot, null, 2)}\n`, 'utf8');
+  } else {
+    fs.writeFileSync(createdPath, '', 'utf8');
+  }
 }
 replaceFile(settingsPath, `${JSON.stringify(settings, null, 4)}\n`);
 fs.writeFileSync(markerPath, `${palette.slug}\n`, 'utf8');

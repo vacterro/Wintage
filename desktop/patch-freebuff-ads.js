@@ -43,23 +43,26 @@
 // no-op patch.
 //
 // Usage:
-//   node desktop/patch-freebuff-ads.js                  # patch (asks nothing, backs up first)
+//   node desktop/patch-freebuff-ads.js                  # patch (asks nothing, one transaction backup first)
 //   node desktop/patch-freebuff-ads.js --sound "C:\...\my.mp3"   # also install a custom completion sound (wav/mp3/ogg/flac/m4a/aac)
 //   node desktop/patch-freebuff-ads.js --scan           # list ad markers present in this install
-//   node desktop/patch-freebuff-ads.js --dry-run        # say what would change, touch nothing
+//   node desktop/patch-freebuff-ads.js --dry-run        # validate everything, exit nonzero on any missing/incompatible input, touch nothing
 //   node desktop/patch-freebuff-ads.js --verify         # report patched / not / unknown
-//   node desktop/patch-freebuff-ads.js --revert         # restore newest _orig-backup-*
+//   node desktop/patch-freebuff-ads.js --revert         # restore the newest COMPLETE transaction
 //   node desktop/patch-freebuff-ads.js --target "D:\...\@codebufffreebuff-desktop"
 //
 // The completion sound is the file the renderer plays when a turn finishes
 // (chime-<hash>.mp3 in the same assets dir). It is discovered the same way the
 // bundle is - the name embeds the build hash, so a version-locked filename would
 // die on the first update. --sound <path> copies the given audio file (wav,
-// mp3, ogg, flac, m4a, aac) over it, keeping the stock file as
-// chime-*.mp3.bak; --revert restores it.
+// mp3, ogg, flac, m4a, aac) over it.
 //
-// Any file overwritten is copied to _orig-backup-<timestamp>/ inside the install
-// dir first. Run it again after every FreeBuff update - updates restore stock files.
+// Apply is preflight-first (T-189): ALL files are read and ALL required matchers
+// and inputs are validated BEFORE anything is written or backed up. Every owned
+// file is then captured into ONE _orig-backup-<stamp>-<pid> transaction with a
+// metadata file; --revert restores only a COMPLETE transaction and refuses
+// partial/crashed dirs. Run it again after every FreeBuff update - updates
+// restore stock files.
 //
 // NOTE on shim.cjs: this file is the byte-level layer. Wintage's shared
 // Electron shim additionally blocks /api/ad/* fetches and hides .sponsored-ad
@@ -282,38 +285,66 @@ function isPatched(filePath, patches) {
   return { allNew, anyOld };
 }
 
-function backup(filePath) {
+// One transaction backup (T-189): ALL files this operation owns go into a SINGLE
+// _orig-backup-<stamp>-<pid> dir with a metadata file listing them. The metadata
+// is written LAST (complete:true only after every original is captured), so a
+// crash mid-backup leaves a dir that Revert REFUSES instead of silently restoring
+// a partial snapshot. `newestBackup` never selects an arbitrary newest dir.
+function transactionDir() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupDir = path.join(target, '_orig-backup-' + stamp);
-  fs.mkdirSync(backupDir, { recursive: true });
-  const rel = path.relative(target, filePath);
-  const dst = path.join(backupDir, rel);
-  fs.mkdirSync(path.dirname(dst), { recursive: true });
-  fs.copyFileSync(filePath, dst);
-  return backupDir;
+  return path.join(target, '_orig-backup-' + stamp + '-' + process.pid);
 }
 
-function newestBackup() {
-  const dirs = fs.readdirSync(target).filter(d => /^_orig-backup-/.test(d)).sort();
-  return dirs.length ? path.join(target, dirs[dirs.length - 1]) : null;
+function createTransaction(files, extraText) {
+  // files: [{ abs, rel }]
+  const dir = transactionDir();
+  fs.mkdirSync(path.join(dir, 'orchestrator', 'ui', 'assets'), { recursive: true });
+  const meta = { files: files.map(f => f.rel), complete: false, created: new Date().toISOString(), target };
+  for (const f of files) {
+    const dst = path.join(dir, f.rel);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(f.abs, dst);
+  }
+  if (extraText) fs.writeFileSync(path.join(dir, extraText.rel), extraText.text, 'utf8');
+  meta.files = meta.files.concat(extraText ? [extraText.rel] : []);
+  fs.writeFileSync(path.join(dir, 'wintage-backup.json'), JSON.stringify(meta, null, 2), 'utf8');
+  meta.complete = true;
+  fs.writeFileSync(path.join(dir, 'wintage-backup.json'), JSON.stringify(meta, null, 2), 'utf8');
+  return dir;
+}
+
+function completeTransactions() {
+  const dirs = fs.readdirSync(target).filter(d => /^_orig-backup-/.test(d));
+  const complete = [];
+  for (const d of dirs) {
+    const dir = path.join(target, d);
+    const metaPath = path.join(dir, 'wintage-backup.json');
+    if (!fs.existsSync(metaPath)) continue;                 // partial/crash -> never selectable
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      if (meta.complete !== true || !Array.isArray(meta.files) || !meta.files.length) continue;
+      if (meta.files.some(rel => !fs.existsSync(path.join(dir, rel)))) continue;  // listed file missing -> partial
+      complete.push({ dir, meta });
+    } catch (e) { continue; }
+  }
+  return complete.sort((a, b) => b.dir.localeCompare(a.dir)); // newest stamp first
 }
 
 // ---------------------------------------------------------------------------
-// --revert
+// --revert  (restores ONLY a complete transaction; partial dirs are refused)
 // ---------------------------------------------------------------------------
 if (doRevert) {
-  const bk = newestBackup();
-  if (!bk) die('no _orig-backup-* found in ' + target);
-  for (const p of [bundlePath, orchestratorPath]) {
-    const orig = path.join(bk, path.relative(target, p));
-    if (fs.existsSync(orig)) { fs.copyFileSync(orig, p); console.log('restored ' + path.relative(target, p)); }
+  const txs = completeTransactions();
+  if (!txs.length) {
+    die('no COMPLETE _orig-backup-* transaction found in ' + target + ' (partial/crashed backups are deliberately not restored)');
   }
-  // The stock sound is kept as chime-*.mp3.bak, so it survives --revert too.
-  if (chimePath && fs.existsSync(chimePath + '.bak')) {
-    fs.copyFileSync(chimePath + '.bak', chimePath);
-    console.log('restored sound ' + path.relative(target, chimePath));
+  const tx = txs[0];
+  for (const rel of tx.meta.files) {
+    const orig = path.join(tx.dir, rel);
+    const live = path.join(target, rel);
+    if (fs.existsSync(live)) { fs.copyFileSync(orig, live); console.log('restored ' + rel); }
   }
-  console.log('reverted from ' + path.basename(bk));
+  console.log('reverted from complete transaction ' + path.basename(tx.dir));
   process.exit(0);
 }
 
@@ -336,73 +367,108 @@ if (doVerify) {
 }
 
 // ---------------------------------------------------------------------------
-// Apply
+// Preflight: classify EVERY file and validate EVERY input BEFORE anything is
+// written or backed up (T-189). A missing matcher in any file, a missing sound
+// file, or an incompatible build exits 1 with ZERO mutations.
 // ---------------------------------------------------------------------------
-if (dryRun) {
-  console.log('target: ' + target);
-  for (const [filePath, patches, label] of [[bundlePath, RENDERER_PATCHES, 'renderer bundle'], [orchestratorPath, ORCHESTRATOR_PATCHES, 'orchestrator']]) {
-    const { allNew } = isPatched(filePath, patches);
-    if (allNew) { console.log('--- ' + label + ': already patched, nothing to do.'); continue; }
-    const r = applyPatches(filePath, patches, label);
-    console.log('--- ' + label + ': ' + path.relative(target, filePath));
-    for (const a of r.applied) console.log('  would apply: ' + a);
-    for (const m of r.missing) console.log('  WARNING not found (build changed?): ' + m);
+const TARGET_FILES = [
+  { abs: bundlePath, rel: path.relative(target, bundlePath), patches: RENDERER_PATCHES, label: 'renderer bundle' },
+  { abs: orchestratorPath, rel: path.relative(target, orchestratorPath), patches: ORCHESTRATOR_PATCHES, label: 'orchestrator' },
+];
+
+function preflight() {
+  const files = [];
+  const problems = [];
+  let soundAlready = false;
+  for (const f of TARGET_FILES) {
+    const { allNew } = isPatched(f.abs, f.patches);
+    if (allNew) { files.push({ ...f, state: 'already' }); continue; }
+    const r = applyPatches(f.abs, f.patches, f.label);
+    if (r.missing.length) {
+      problems.push('--- ' + f.label + ': ' + r.missing.length + ' required matcher(s) not found in ' + f.rel + ':' +
+        r.missing.map(m => '\n    ' + m).join(''));
+      continue;
+    }
+    files.push({ ...f, state: 'apply', result: r });
   }
   if (soundArg) {
-    if (!chimePath) console.log('--- sound: ' + soundStatus() + ' - cannot install custom sound');
-    else if (!fs.existsSync(soundArg)) console.log('--- sound: WARNING file not found: ' + soundArg);
-    else if (!isAudio(soundArg)) console.log('--- sound: WARNING not a recognized audio file: ' + soundArg);
-    else if (fs.readFileSync(chimePath).equals(fs.readFileSync(soundArg))) console.log('--- sound: already installed, nothing to do.');
-    else console.log('--- sound: would install ' + soundArg + ' -> ' + path.relative(target, chimePath) + ' (stock kept as .bak)');
+    if (!chimePath) problems.push('--- sound: no chime-*.mp3 found - cannot install a custom sound');
+    else if (!fs.existsSync(soundArg)) problems.push('--- sound: file not found: ' + soundArg);
+    else if (!isAudio(soundArg)) problems.push('--- sound: not a recognized audio file (wav/mp3/ogg/flac/m4a/aac): ' + soundArg);
+    else if (fs.readFileSync(chimePath).equals(fs.readFileSync(soundArg))) soundAlready = true;
+  }
+  return { files, problems, soundAlready: !!soundAlready };
+}
+
+const plan = preflight();
+if (dryRun) {
+  console.log('target: ' + target);
+  if (plan.problems.length) {
+    console.error(plan.problems.join('\n'));
+    console.error('\nDry-run FAILED: the patch cannot be applied to this build without mutation. Nothing was changed.');
+    process.exit(1);
+  }
+  for (const f of plan.files) {
+    if (f.state === 'already') { console.log('--- ' + f.label + ': already patched, nothing to do.'); continue; }
+    console.log('--- ' + f.label + ': ' + f.rel);
+    for (const a of f.result.applied) console.log('  would apply: ' + a);
+  }
+  if (soundArg) {
+    if (fs.readFileSync(chimePath).equals(fs.readFileSync(soundArg))) console.log('--- sound: already installed, nothing to do.');
+    else console.log('--- sound: would install ' + soundArg + ' -> ' + path.relative(target, chimePath) + ' (stock kept in the transaction)');
   } else {
     console.log('--- sound: ' + soundStatus() + ' (no --sound given)');
   }
   process.exit(0);
 }
 
-let ok = true;
-for (const [filePath, patches, label] of [[bundlePath, RENDERER_PATCHES, 'renderer bundle'], [orchestratorPath, ORCHESTRATOR_PATCHES, 'orchestrator']]) {
-  const { allNew } = isPatched(filePath, patches);
-  if (allNew) { console.log(label + ': already patched, nothing to do.'); continue; }
-  const r = applyPatches(filePath, patches, label);
-  if (r.missing.length) {
-    console.error('--- ' + label + ': ' + r.missing.length + ' target(s) not found in ' + path.relative(target, filePath) + ':');
-    for (const m of r.missing) console.error('    ' + m);
-    ok = false;
-    continue;
-  }
-  const bk = backup(filePath);
-  writeText(filePath, r.text);
-  console.log('--- ' + label + ': ' + path.relative(target, filePath));
-  for (const a of r.applied) console.log('  ' + a);
-  console.log('  backup -> ' + path.relative(target, bk));
-}
-
-// The sound is independent of the ad strings, so it applies even if the bundle
-// changed shape - a renamed build has a renamed chime-*.mp3, which the glob finds.
-if (soundArg) {
-  if (!chimePath) {
-    console.error('sound: ' + soundStatus() + ' - cannot install custom sound');
-  } else if (!fs.existsSync(soundArg)) {
-    console.error('sound: file not found: ' + soundArg);
-  } else if (!isAudio(soundArg)) {
-    console.error('sound: not a recognized audio file (wav/mp3/ogg/flac/m4a/aac): ' + soundArg + ' - leaving the sound alone');
-  } else if (fs.readFileSync(chimePath).equals(fs.readFileSync(soundArg))) {
-    console.log('sound: already installed, nothing to do.');
-  } else {
-    // A previous custom audio may already be in place - the .bak guard keeps
-    // the ORIGINAL stock file, so swapping one custom sound for another is safe.
-    const bak = chimePath + '.bak';
-    if (!fs.existsSync(bak)) fs.copyFileSync(chimePath, bak);
-    fs.copyFileSync(soundArg, chimePath);
-    console.log('sound: installed ' + soundArg + ' -> ' + path.relative(target, chimePath) + ' (stock kept at ' + path.basename(bak) + ')');
-  }
-}
-
-if (!ok) {
-  console.error('\nNothing was changed. The bundle changed shape - run --scan and update the patch strings.');
+if (plan.problems.length) {
+  console.error(plan.problems.join('\n'));
+  console.error('\nNothing was changed. The build changed shape or a required input is missing - run --scan and update the patch strings.');
   process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// Apply: ONE transaction, then write, then verify, with rollback on failure.
+// ---------------------------------------------------------------------------
+const toWrite = plan.files.filter(f => f.state === 'apply');
+if (!toWrite.length && !(soundArg && !plan.soundAlready)) {
+  console.log('Already patched, nothing to do.');
+  process.exit(0);
+}
+
+const owned = [];
+for (const f of toWrite) owned.push({ abs: f.abs, rel: f.rel });
+if (soundArg && chimePath && !plan.soundAlready) owned.push({ abs: chimePath, rel: path.relative(target, chimePath) });
+const tx = createTransaction(owned);
+
+try {
+  for (const f of toWrite) {
+    writeText(f.abs, f.result.text);
+    console.log('--- ' + f.label + ': ' + f.rel);
+    for (const a of f.result.applied) console.log('  ' + a);
+  }
+  if (soundArg && chimePath && !plan.soundAlready) {
+    fs.copyFileSync(soundArg, chimePath);
+    console.log('sound: installed ' + soundArg + ' -> ' + path.relative(target, chimePath));
+  }
+  // Verify every output before reporting success.
+  for (const f of toWrite) {
+    const { allNew } = isPatched(f.abs, f.patches);
+    if (!allNew) throw new Error('verification failed after writing ' + f.rel + ' - patched strings not present');
+  }
+} catch (e) {
+  // Rollback: restore every owned original from the transaction, then drop it.
+  console.error('write/verify failed (' + e.message + ') - rolling back.');
+  let rolledBack = true;
+  for (const f of owned) {
+    const orig = path.join(tx, f.rel);
+    try { fs.copyFileSync(orig, f.abs); } catch (e2) { rolledBack = false; }
+  }
+  try { fs.rmSync(tx, { recursive: true, force: true }); } catch (e2) { }
+  die(rolledBack ? 'rollback complete; nothing changed.' : 'ROLLBACK INCOMPLETE - originals remain in ' + tx);
+}
+
+console.log('backup transaction -> ' + path.relative(target, tx));
 console.log('\nDone. Restart FreeBuff for the changes to load.');
-console.log('Re-run after every FreeBuff update. --scan shows what the new build still carries. --revert restores the last backup.');
+console.log('Re-run after every FreeBuff update. --scan shows what the new build still carries. --revert restores the complete transaction.');

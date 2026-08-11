@@ -68,14 +68,59 @@ function Write-Manifest($manifest) {
     if ($WhatIfPreference) { return }
     New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
     $content = (($manifest | ConvertTo-Json -Depth 3) + "`n")
-    # Atomic replace: write a temp sibling in the SAME directory, validate it by
-    # reading it back, then rename over the live file. A crash between the two
-    # leaves the original intact and a .tmp to sweep, never a half-written
-    # installed.json that the next run would misread.
-    $tmp = $ManifestPath + '.tmp'
+    # Atomic replace with a UNIQUE temp name per writer (T-189): a fixed
+    # installed.json.tmp would let two writers collide on the temp path itself.
+    $tmp = $ManifestPath + '.tmp-' + [guid]::NewGuid().ToString('N')
     Write-Utf8 $tmp $content
     $null = Read-Utf8 $tmp | ConvertFrom-Json
     Move-Item $tmp $ManifestPath -Force
+}
+
+# Serialize the FULL read-modify-write of the manifest across processes (T-189).
+# The atomic rename protects the FILE, not the read->mutate->write cycle: two
+# independent writers (GUI + CLI + logon task) can read the same old state and
+# overwrite each other's entry. A named mutex scoped to the app-data root covers
+# exactly the transaction. The mutex is abandoned (auto-released) if a writer
+# crashes mid-write.
+function Enter-ManifestLock {
+    $hash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($WintageAppData))).Replace('-', '').Substring(0, 20)
+    $mutex = New-Object System.Threading.Mutex($false, "Local\Wintage-Manifest-$hash")
+    $got = $false
+    try { $got = $mutex.WaitOne(15000) } catch { }
+    if (-not $got) { throw 'could not acquire the manifest lock within 15s - another writer is stuck; retry.' }
+    return $mutex
+}
+
+function Exit-ManifestLock($mutex) {
+    if (-not $mutex) { return }
+    try { $mutex.ReleaseMutex() } catch { }
+    try { $mutex.Dispose() } catch { }
+}
+
+function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $payloadVersion) {
+    $lock = Enter-ManifestLock
+    try {
+        $m = Read-Manifest
+        $m[$target] = @{
+            palette       = $palette
+            path          = $resolvedPath
+            appVersion    = $appVersion
+            payloadVersion = $payloadVersion
+            applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        }
+        Write-Manifest $m
+    } finally { Exit-ManifestLock $lock }
+}
+
+function Remove-ManifestEntry($target) {
+    $lock = Enter-ManifestLock
+    try {
+        $m = Read-Manifest
+        if ($m.ContainsKey($target)) {
+            $m.Remove($target)
+            Write-Manifest $m
+        }
+    } finally { Exit-ManifestLock $lock }
 }
 
 # Semver comparison for the payload/version manifest check. String comparison
@@ -90,23 +135,42 @@ function Test-PayloadUpToDate([string]$recorded, [string]$current) {
 }
 
 function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $payloadVersion) {
-    $m = Read-Manifest
-    $m[$target] = @{
-        palette       = $palette
-        path          = $resolvedPath
-        appVersion    = $appVersion
-        payloadVersion = $payloadVersion
-        applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-    }
-    Write-Manifest $m
+    $lock = Enter-ManifestLock
+    try {
+        $m = Read-Manifest
+        $m[$target] = @{
+            palette       = $palette
+            path          = $resolvedPath
+            appVersion    = $appVersion
+            payloadVersion = $payloadVersion
+            applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        }
+        Write-Manifest $m
+    } finally { Exit-ManifestLock $lock }
 }
 
 function Remove-ManifestEntry($target) {
+    $lock = Enter-ManifestLock
+    try {
+        $m = Read-Manifest
+        if ($m.ContainsKey($target)) {
+            $m.Remove($target)
+            Write-Manifest $m
+        }
+    } finally { Exit-ManifestLock $lock }
+}
+
+# Revert-with-recovery contract (T-189): when the manifest says a target was
+# installed but the restore source is gone, that is a FAIL, not a happy
+# "nothing to revert" — the user is left with half a theme and no undo. Only a
+# target with NO recovery state (never installed by us) is a legitimate NOOP.
+function Assert-RevertSource([string]$key, [string]$sourcePath, [string]$label) {
+    if (Test-Path $sourcePath) { return }
     $m = Read-Manifest
-    if ($m.ContainsKey($target)) {
-        $m.Remove($target)
-        Write-Manifest $m
+    if ($m.ContainsKey($key)) {
+        throw "$label : manifest says $key is installed but the restore source is missing ($sourcePath) - cannot restore. The manifest entry is kept as recovery evidence; fix the backup or remove the entry by hand."
     }
+    Say "$label : nothing to revert (no Wintage recovery state)." 'DarkYellow'
 }
 
 function Get-PayloadVersion {
@@ -168,9 +232,12 @@ function Test-ElectronApp($resources) {
 
 function Get-ClaudeResources {
     # Squirrel keeps every version side by side; only the newest is the live one.
+    # A malformed app-* dir (e.g. app-beta) must be ignored, never crash the sort
+    # with a [version] cast (T-189).
     $root = Join-Path $env:LOCALAPPDATA 'AnthropicClaude'
     if (-not (Test-Path $root)) { return $null }
     $app = Get-ChildItem $root -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Where-Object { $v = $null; [version]::TryParse(($_.Name -replace '^app-', ''), [ref]$v) } |
         Sort-Object { [version]($_.Name -replace '^app-', '') } | Select-Object -Last 1
     if (-not $app) { return $null }
     Join-Path $app.FullName 'resources'
@@ -252,12 +319,14 @@ function Get-CssShape {
     # A stylesheet reduced to everything this patch is NOT allowed to touch, so
     # two files can be compared for "same stylesheet, different colours".
     #
-    # Removed: every #rrggbb literal (the token rewrite), the --dangerText
-    # declaration this function's caller inserts, and the var(--dangerText)
-    # substitutions it makes. Whitespace is collapsed last so a CRLF/LF or
-    # re-indent difference does not read as a content change.
+    # ONLY the hex values of Wintage-owned `--token:` declarations are erased
+    # (T-189). A blanket `#rrggbb -> #` strip used to erase EVERY hard-coded
+    # colour in the file, so a legitimate upstream colour outside :root was
+    # silently treated as "same shape" and lost when the backup was refreshed.
+    # Whitespace is collapsed last so a CRLF/LF or re-indent difference does not
+    # read as a content change.
     param([string]$Text)
-    $t = $Text -replace '#[0-9A-Fa-f]{6}', '#'
+    $t = $Text -replace '(--[A-Za-z0-9_-]+\s*:\s*)#[0-9A-Fa-f]{6}', '$1#'
     $t = $t -replace '\s*--dangerText\s*:\s*#\s*;', ''
     $t = $t -replace 'var\(--dangerText\)', 'var(--danger)'
     $t = $t -replace '\s+', ' '
