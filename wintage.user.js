@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.26.3
+// @version      1.26.4
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -72,7 +72,7 @@
   // These are the only colours this file is allowed to emit. If a value below
   // does not appear in a theme's token block, it is a bug.
   //
-  // Every theme MUST carry all 18 token names. That is not stylistic tidiness:
+  // Every theme MUST carry all 21 token names. That is not stylistic tidiness:
   // PALETTE_RGB, semanticToken() and the repainter all read the table by key, so
   // a missing token surfaces as `undefined` inside a CSS declaration, which the
   // browser drops silently — the same class of invisible failure that made
@@ -381,7 +381,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.26.3';
+  const W95_VERSION = '1.26.4';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';

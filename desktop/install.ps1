@@ -66,7 +66,11 @@ $backupRoot = Join-Path $here "backup/$stamp"
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)
 
-$WintageAppData = Join-Path $env:APPDATA 'Wintage'
+# Manifest/paths live in the user's %APPDATA%\Wintage. Tests override the whole
+# root through WINTAGE_APPDATA so fixtures never touch the live manifest; the env
+# var propagates through the child powershell instances -Reapply spawns, which is
+# why it is an env var and not a param.
+$WintageAppData = if ($env:WINTAGE_APPDATA) { $env:WINTAGE_APPDATA } else { Join-Path $env:APPDATA 'Wintage' }
 $ManifestPath = Join-Path $WintageAppData 'installed.json'
 $PathsPath = Join-Path $WintageAppData 'paths.json'
 
@@ -169,9 +173,16 @@ if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $Portab
 # ---- Reapply mode: read manifest, rediscover paths, re-apply outdated payloads ----
 if ($Reapply) {
     $currentVer = Get-PayloadVersion
-    $manifest = Read-Manifest
+    try {
+        $manifest = Read-Manifest
+    } catch {
+        Say "installed.json at ${ManifestPath} is CORRUPT and cannot be read: $($_.Exception.Message)" 'Red'
+        Say 'Nothing was re-applied. Fix or remove the file by hand, then run -Reapply again.' 'Yellow'
+        exit 1
+    }
     if ($manifest.Count -eq 0) { Say 'Nothing to do -- the manifest is empty (no targets have been installed).' 'Green'; exit 0 }
     $didWork = $false
+    $failedTargets = @()
     $passArgs = @{}
     if ($CodeNomadPath) { $passArgs['-CodeNomadPath'] = $CodeNomadPath }
     if ($TotalCmdIni)  { $passArgs['-TotalCmdIni'] = $TotalCmdIni }
@@ -185,7 +196,12 @@ if ($Reapply) {
     $sorted = @($manifest.Keys | Sort-Object)
     foreach ($key in $sorted) {
         $data = $manifest[$key]
-        if ($data.payloadVersion -ge $currentVer) {
+        # Semantic version comparison: a recorded payload that is older than the
+        # repo's needs re-applying. A recorded OR current value that does not
+        # parse as a version is never silently "up to date" -- it is treated as
+        # needing reapply, because an unknown version is exactly the state that
+        # used to skip the refresh forever (1.9.0 vs 1.26.3 compared as strings).
+        if (Test-PayloadUpToDate $data.payloadVersion $currentVer) {
             if (-not $Quiet) { Say "$key`: up to date (manifest v$($data.payloadVersion), repo v$currentVer)." 'DarkGray' }
             continue
         }
@@ -197,14 +213,33 @@ if ($Reapply) {
         foreach ($pk in $passArgs.Keys) { $callArgs += $pk; $callArgs += $passArgs[$pk] }
         if ($WhatIfPreference) { $callArgs += '-WhatIf' }
         if (-not $Quiet) { Say "$key`: re-applying $($data.palette) ..." 'Cyan' }
+        # A failing child can emit native stderr (a node stack trace, a reg
+        # error). Under EAP=Stop the 2>&1 merge turns each line into a
+        # terminating error and aborts the WHOLE reapply loop mid-target --
+        # exactly the sibling-loss this mode must not have. Read the child with
+        # EAP=Continue and judge it by $LASTEXITCODE alone.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         $result = & powershell @callArgs 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $childCode = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+        if ($childCode -eq 0) {
             if (-not $Quiet) { Say "$key`: re-applied successfully." 'Green' }
         }
-        else { Say "$key`: FAILED ($LASTEXITCODE)." 'Red'; Write-Warning ($result -join "`n") }
+        else {
+            # Failures are NEVER suppressed by -Quiet: a silent reapply loop that
+            # reports green while a target stays broken is how a logon task lies.
+            Say "$key`: FAILED ($childCode)." 'Red'
+            Write-Warning ($result -join "`n")
+            $failedTargets += $key
+        }
     }
     if (-not $didWork) {
         if (-not $Quiet) { Say 'Nothing to do -- all recorded targets are up to date.' 'Green' }
+    }
+    if ($failedTargets.Count) {
+        Say "Reapply incomplete: $($failedTargets.Count) target(s) failed ($($failedTargets -join ', '))." 'Red'
+        exit 1
     }
     exit 0
 }
@@ -213,7 +248,13 @@ if ($RegisterLogonTask) { Register-WintageLogonTask; exit 0 }
 if ($UnregisterLogonTask) { Unregister-WintageLogonTask; exit 0 }
 
 if ($Status) {
-    $manifest = Read-Manifest
+    try {
+        $manifest = Read-Manifest
+    } catch {
+        Say "installed.json at ${ManifestPath} is CORRUPT and cannot be read: $($_.Exception.Message)" 'Red'
+        Say 'No target will be listed or re-applied until the file is fixed or removed by hand.' 'Yellow'
+        exit 1
+    }
     if ($manifest.Count -eq 0) { Say 'Nothing installed -- the manifest is empty.' 'Green'; exit 0 }
     Say ('{0,-14} {1,-18} {2,-17} {3}' -f 'target', 'palette', 'payload ver', 'path') 'DarkGray'
     $sorted = @($manifest.Keys | Sort-Object)
@@ -321,12 +362,21 @@ if (-not $Target) {
     $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-ListJson', '-StageRoot', $BrowserStageRoot)
     if ($PortableBrowserRoot) { $browserArgs += @('-PortableRoot', $PortableBrowserRoot) }
     if ($BrowserCatalog) { $browserArgs += @('-Catalog', $BrowserCatalog) }
-    $browserInfo = (& powershell @browserArgs 2>$null | Out-String).Trim() | ConvertFrom-Json
-    $browserState = if (-not $browserInfo.ProfileCount) { 'not installed' }
-                    elseif ($browserInfo.ThemeLoadedCount -eq $browserInfo.ProfileCount) { 'themed' }
-                    else { 'found, not themed' }
-    $browserName = "Chromium browsers ($($browserInfo.ProfileCount)p/TM$($browserInfo.TampermonkeyCount))"
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'browsers', $browserName, $browserState, $browserInfo.Palette)
+    $browserOut = (& powershell @browserArgs 2>$null | Out-String).Trim()
+    $browserInfo = $null
+    if ($LASTEXITCODE -eq 0 -and $browserOut) {
+        try { $browserInfo = $browserOut | ConvertFrom-Json } catch { $browserInfo = $null }
+    }
+    if (-not $browserInfo) {
+        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'browsers', 'Chromium browsers', 'listing failed', '-')
+        Say "  install-browsers.ps1 did not return a listing ($LASTEXITCODE) - install it directly to see why." 'DarkGray'
+    } else {
+        $browserState = if (-not $browserInfo.ProfileCount) { 'not installed' }
+                        elseif ($browserInfo.ThemeLoadedCount -eq $browserInfo.ProfileCount) { 'themed' }
+                        else { 'found, not themed' }
+        $browserName = "Chromium browsers ($($browserInfo.ProfileCount)p/TM$($browserInfo.TampermonkeyCount))"
+        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'browsers', $browserName, $browserState, $browserInfo.Palette)
+    }
 
     Say ""
 
@@ -421,7 +471,10 @@ if ($orphans.Count) {
 
 $names = if ($Target -eq 'all') { $known } else { @($Target) }
 
+$dispatchFailures = @()
+
 foreach ($name in $names) {
+    try {
 
     if ($name -eq 'windows') { Invoke-WindowsTheme -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'browsers') {
@@ -458,7 +511,7 @@ foreach ($name in $names) {
             Say "$($e.Name): not installed on this machine - skipped." 'DarkYellow'
             continue
         }
-        if (-not $node) { Say "$($e.Name): needs node to read the app's package.json out of app.asar - skipped." 'Yellow'; continue }
+        if (-not $node) { throw "$($e.Name): needs node to read the app's package.json out of app.asar." }
 
         $script = Join-Path $root 'tools/install-electron.js'
         $nodeArgs = @($script, '--resources', $e.Resources)
@@ -467,47 +520,59 @@ foreach ($name in $names) {
         if ($Revert) {
             if ($PSCmdlet.ShouldProcess($e.Resources, 'Remove the Wintage shim')) {
                 & node $nodeArgs --revert
-                if ($LASTEXITCODE -eq 0) { Remove-ManifestEntry $name }
+                if ($LASTEXITCODE -ne 0) { throw "$($e.Name): revert FAILED ($LASTEXITCODE) - manifest kept, see the message above." }
+                Remove-ManifestEntry $name
             }
             continue
         }
         $action = "Install Wintage ($Palette) shim"
-        if ($WhatIfPreference) { & node $nodeArgs --palette $Palette --dry-run; continue }
+        if ($WhatIfPreference) {
+            # Dry-run is a validation pass too: a failing helper must fail the
+            # parent, or -WhatIf reports a plan the real apply cannot honour.
+            & node $nodeArgs --palette $Palette --dry-run
+            if ($LASTEXITCODE -ne 0) { throw "$($e.Name): dry-run FAILED ($LASTEXITCODE) - see the message above." }
+            continue
+        }
         if ($PSCmdlet.ShouldProcess($e.Resources, $action)) {
             & node $nodeArgs --palette $Palette
-            if ($LASTEXITCODE -ne 0) { Say "$($e.Name): FAILED - see the message above." 'Red' }
-            else {
-                # FreeBuff ships its own ad network (renderer + orchestrator routes).
-                # The shim themes it; this cuts the ads out of the bundle and routes.
-                # A custom completion sound is a per-machine preference written by
-                # the GUI (WintageInstaller.ps1 -> %APPDATA%\Wintage\freebuff-sound.txt):
-                # if one is set, hand it to the same patch run so the ads and the
-                # sound are applied together. The patch keeps the stock file as
-                # chime-*.mp3.bak and --revert restores it.
-                if ($name -eq 'freebuff') {
-                    $adPatch = Join-Path $root 'desktop/patch-freebuff-ads.js'
-                    if (Test-Path $adPatch) {
-                        if ($PSCmdlet.ShouldProcess($e.Resources, 'Cut FreeBuff ads')) {
-                            $patchArgs = @()
-                            $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
-                            if (Test-Path $soundPref) {
-                                $wav = (Read-Utf8 $soundPref).Trim()
-                                if ($wav -and (Test-Path $wav)) { $patchArgs = @('--sound', $wav) }
-                            }
-                            & node $adPatch @patchArgs
-                            if ($LASTEXITCODE -ne 0) { Say 'FreeBuff ads: FAILED - bundle strings may have changed; run patch-freebuff-ads.js --scan to see what this build carries, then update the strings.' 'Red' }
+            if ($LASTEXITCODE -ne 0) { throw "$($e.Name): apply FAILED ($LASTEXITCODE) - see the message above." }
+            # FreeBuff ships its own ad network (renderer + orchestrator routes).
+            # The shim themes it; this cuts the ads out of the bundle and routes.
+            # A custom completion sound is a per-machine preference written by
+            # the GUI (WintageInstaller.ps1 -> %APPDATA%\Wintage\freebuff-sound.txt):
+            # if one is set, hand it to the same patch run so the ads and the
+            # sound are applied together. The patch keeps the stock file as
+            # chime-*.mp3.bak and --revert restores it.
+            #
+            # The manifest is written only AFTER both the shim AND the mandatory
+            # FreeBuff post-step succeeded. A partial apply (shim in, ads not cut)
+            # must never record the target as current -- it stays incomplete so
+            # the next -Reapply actually retries it.
+            if ($name -eq 'freebuff') {
+                $adPatch = Join-Path $root 'desktop/patch-freebuff-ads.js'
+                if (Test-Path $adPatch) {
+                    if ($PSCmdlet.ShouldProcess($e.Resources, 'Cut FreeBuff ads')) {
+                        $patchArgs = @()
+                        $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
+                        if (Test-Path $soundPref) {
+                            $wav = (Read-Utf8 $soundPref).Trim()
+                            if ($wav -and (Test-Path $wav)) { $patchArgs = @('--sound', $wav) }
+                        }
+                        & node $adPatch @patchArgs
+                        if ($LASTEXITCODE -ne 0) {
+                            throw 'FreeBuff: shim applied but the ad/sound patch FAILED - run patch-freebuff-ads.js --scan to see what this build carries, then update the strings. The manifest was NOT updated, so -Reapply will retry.'
                         }
                     }
                 }
-                Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray'
-                $appVer = 'n/a'
-                try {
-                    $verOut = & node $nodeArgs --version 2>$null
-                    if ($LASTEXITCODE -eq 0 -and $verOut) { $appVer = $verOut.Trim() }
-                } catch {}
-                Set-ManifestEntry $name $Palette $e.Resources $appVer (Get-PayloadVersion)
-                Say "  Recorded in $ManifestPath" 'DarkGray'
             }
+            Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray'
+            $appVer = 'n/a'
+            try {
+                $verOut = & node $nodeArgs --version 2>$null
+                if ($LASTEXITCODE -eq 0 -and $verOut) { $appVer = $verOut.Trim() }
+            } catch {}
+            Set-ManifestEntry $name $Palette $e.Resources $appVer (Get-PayloadVersion)
+            Say "  Recorded in $ManifestPath" 'DarkGray'
         }
         continue
     }
@@ -558,5 +623,18 @@ foreach ($name in $names) {
         Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
         Set-ManifestEntry $name $Palette $dest 'n/a' (Get-PayloadVersion)
     }
+
+    }
+    catch {
+        # A target that threw must never read as a green run. Record it, keep
+        # applying the remaining siblings, and leave the exit code nonzero.
+        Say "$name`: FAILED - $($_.Exception.Message)" 'Red'
+        $dispatchFailures += $name
+    }
+}
+
+if ($dispatchFailures.Count) {
+    Say "Install incomplete: $($dispatchFailures.Count) target(s) failed ($($dispatchFailures -join ', '))." 'Red'
+    exit 1
 }
 

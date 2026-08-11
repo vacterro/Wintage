@@ -15,7 +15,12 @@ function Read-I18n($locale) {
     try {
         $obj = (Read-Utf8 $file) | ConvertFrom-Json
         foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
-    } catch { }
+    } catch {
+        # A corrupt locale file must not silently degrade to key names with no
+        # trace -- the strings fall back to English defaults, but the corruption
+        # gets reported instead of hidden (same class as Read-Manifest T-187).
+        Write-Warning "could not read $file : $($_.Exception.Message) -- falling back to English strings"
+    }
     return $ht
 }
 

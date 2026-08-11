@@ -6,7 +6,7 @@ function Invoke-WindowsTerminal {
     param([switch]$DoRevert, [string]$PaletteSlug)
     $settingsPaths = @(Get-WindowsTerminalSettingsPaths)
     if (-not $settingsPaths.Count) { Say 'Windows Terminal: not installed on this machine - skipped.' 'DarkYellow'; return }
-    if (-not $node) { Say 'Windows Terminal: node is required to patch JSON-with-comments safely - skipped.' 'Yellow'; return }
+    if (-not $node) { throw 'Windows Terminal: node is required to patch JSON-with-comments safely.' }
 
     $helper = Join-Path $root 'tools/install-terminal.js'
     $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
@@ -14,7 +14,7 @@ function Invoke-WindowsTerminal {
         $args = @($helper, '--settings', $settings)
         if ($DoRevert) { $args += '--revert' } else { $args += @('--palette', $paletteFile) }
         $action = if ($DoRevert) { 'Restore the pre-Wintage settings' } else { "Apply $PaletteSlug + $CONSOLE_FONT to every profile" }
-        if ($WhatIfPreference) { & node ($args + '--dry-run'); continue }
+        if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw "Windows Terminal dry-run FAILED ($LASTEXITCODE) - see the message above." }; continue }
         if ($PSCmdlet.ShouldProcess($settings, $action)) {
             & node $args
             if ($LASTEXITCODE -ne 0) { throw "Windows Terminal patch failed for $settings" }
@@ -56,7 +56,7 @@ function Invoke-Conhost {
     }
 
     $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
-    if (-not (Test-Path $paletteFile)) { Say "Console Host: theme file not found ($PaletteSlug.json)" 'Red'; return }
+    if (-not (Test-Path $paletteFile)) { throw "Console Host: theme file not found ($PaletteSlug.json)" }
     $t = Get-PaletteTokens $paletteFile
     $values = [ordered]@{
         FaceName      = @{ Value = $CONSOLE_FONT; Type = 'String' }
@@ -135,21 +135,20 @@ function Invoke-Conhost {
 function Invoke-WindowsTheme {
     param([switch]$DoRevert, [string]$PaletteSlug)
 
-    if (-not $node) { Say 'Windows theme: node is required to preserve and merge the active .theme safely - skipped.' 'Yellow'; return }
+    if (-not $node) { throw 'Windows theme: node is required to preserve and merge the active .theme safely.' }
     $current = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
     $helper = Join-Path $root 'tools/install-windows-theme.js'
     $built = Join-Path $out "windows/$PaletteSlug/Wintage.theme"
     if (-not $DoRevert -and -not (Test-Path $built)) { throw "No Windows theme build for palette '$PaletteSlug'." }
     if (-not $DoRevert -and (-not $current -or -not (Test-Path $current))) {
-        Say 'Windows theme: active .theme file was not found - skipped to avoid losing wallpaper/cursor settings.' 'Yellow'
-        return
+        throw 'Windows theme: the active .theme file was not found - refusing to apply because the wallpaper/cursor merge would have nothing to preserve.'
     }
 
     $args = @($helper, '--themes-dir', $WINDOWS_THEMES_DIR)
     if ($DoRevert) { $args += '--revert' }
     else { $args += @('--theme', $built, '--current-theme', $current, '--palette', $PaletteSlug) }
     $action = if ($DoRevert) { 'Restore the exact pre-Wintage Windows theme snapshot' } else { "Merge and activate Wintage $PaletteSlug, preserving wallpaper/sounds and selecting ___CURRENT___ cursors" }
-    if ($WhatIfPreference) { & node ($args + '--dry-run'); return }
+    if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'Windows theme dry-run FAILED - see the message above.' }; return }
     if (-not $PSCmdlet.ShouldProcess($WINDOWS_THEMES_DIR, $action)) { return }
 
     $helperOutput = @(& node $args)
@@ -202,7 +201,7 @@ function Invoke-WindowsTheme {
             }
         }
     }
-    if (-not $activated) { Say 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts.' 'Yellow'; return }
+    if (-not $activated) { throw 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts - the palette may be only partly applied, so the manifest was NOT updated. Re-run to retry.' }
     foreach ($oldTheme in @($payload.cleanup)) {
         if (-not $oldTheme) { continue }
         $fullOld = [IO.Path]::GetFullPath([string]$oldTheme)
@@ -294,7 +293,7 @@ function Invoke-TotalCmd {
             Say "$($appName): backed up wincmd.ini -> $(Split-Path $iniBak -Leaf)" 'DarkGray'
         }
         $jsonPath = Join-Path $root "themes\$PaletteSlug.json"
-        if (-not (Test-Path $jsonPath)) { Say "$($appName): theme file not found ($PaletteSlug.json)" 'Red'; return }
+        if (-not (Test-Path $jsonPath)) { throw "$($appName): theme file not found ($PaletteSlug.json)" }
         $t = Get-PaletteTokens $jsonPath
 
         $bg = Convert-HexToBgr $t.background
@@ -417,34 +416,94 @@ function Invoke-SmartVac {
 
     if (-not $PSCmdlet.ShouldProcess($pyFile, "Apply $PaletteSlug theme")) { return }
     
-    Copy-Item $pyFile $bakFile -Force
     $json = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json")) | ConvertFrom-Json
     $t = $json.tokens
     $code = Read-Utf8 $pyFile
     
-    $code = $code -replace '(?m)^WIN95_BG\s*=\s*''[^'']+''', "WIN95_BG           = '$($t.background)'"
-    $code = $code -replace '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+''', "WIN95_BG_SOFT      = '$($t.backgroundSoft)'"
-    $code = $code -replace '(?m)^WIN95_SURFACE\s*=\s*''[^'']+''', "WIN95_SURFACE      = '$($t.surface)'"
-    $code = $code -replace '(?m)^WIN95_SURFACE_RAISED\s*=\s*''[^'']+''', "WIN95_SURFACE_RAISED = '$($t.surfaceRaised)'"
-    $code = $code -replace '(?m)^WIN95_SURFACE_ALT\s*=\s*''[^'']+''', "WIN95_SURFACE_ALT  = '$($t.surfaceAlt)'"
-    $code = $code -replace '(?m)^WIN95_BEVEL_HI\s*=\s*''[^'']+''', "WIN95_BEVEL_HI     = '$($t.bevelLight)'"
-    $code = $code -replace '(?m)^WIN95_BEVEL_SH\s*=\s*''[^'']+''', "WIN95_BEVEL_SH     = '$($t.borderDark)'"
-    $code = $code -replace '(?m)^WIN95_BORDER_MUTED\s*=\s*''[^'']+''', "WIN95_BORDER_MUTED = '$($t.borderMuted)'"
-    $code = $code -replace '(?m)^WIN95_TEXT\s*=\s*''[^'']+''', "WIN95_TEXT         = '$($t.textPrimary)'"
-    $code = $code -replace '(?m)^WIN95_TEXT_DIM\s*=\s*''[^'']+''', "WIN95_TEXT_DIM     = '$($t.textSecondary)'"
-    $code = $code -replace '(?m)^WIN95_TEXT_MUTED\s*=\s*''[^'']+''', "WIN95_TEXT_MUTED   = '$($t.textMuted)'"
-    $code = $code -replace '(?m)^WIN95_GOLD\s*=\s*''[^'']+''', "WIN95_GOLD         = '$($t.textPrimary)'"
-    $code = $code -replace '(?m)^WIN95_GOLD_LIGHT\s*=\s*''[^'']+''', "WIN95_GOLD_LIGHT   = '$($t.borderHighlight)'"
-    $code = $code -replace '(?m)^WIN95_GOLD_DIM\s*=\s*''[^'']+''', "WIN95_GOLD_DIM     = '$($t.textSecondary)'"
-    $code = $code -replace '(?m)^WIN95_GOLD_DARK\s*=\s*''[^'']+''', "WIN95_GOLD_DARK    = '$($t.textMuted)'"
-    $code = $code -replace '(?m)^WIN95_RED\s*=\s*''[^'']+''', "WIN95_RED          = '$($t.danger)'"
-    $code = $code -replace '(?m)^WIN95_DANGER\s*=\s*''[^'']+''', "WIN95_DANGER       = '$($t.danger)'"
-    $code = $code -replace '(?m)^WIN95_GREEN\s*=\s*''[^'']+''', "WIN95_GREEN        = '$($t.success)'"
-    $code = $code -replace '(?m)^WIN95_BUTTON\s*=\s*''[^'']+''', "WIN95_BUTTON       = '$($t.surfaceRaised)'"
-    $code = $code -replace '(?m)^WIN95_BUTTON_HOVER\s*=\s*''[^'']+''', "WIN95_BUTTON_HOVER = '$($t.surfaceAlt)'"
-    $code = $code -replace '(?m)^WIN95_ENTRY\s*=\s*''[^'']+''', "WIN95_ENTRY        = '$($t.background)'"
-    $code = $code -replace '(?m)^WIN95_SCROLL\s*=\s*''[^'']+''', "WIN95_SCROLL       = '$($t.surfaceRaised)'"
-    $code = $code -replace '(?m)^WIN95_SCROLL_HOVER\s*=\s*''[^'']+''', "WIN95_SCROLL_HOVER = '$($t.surfaceAlt)'"
+    # Every anchor must be matched exactly once before anything is written. A
+    # regex that matches nothing would otherwise produce a byte-identical file,
+    # be reported as "installed" and advance the manifest -- a no-op patch sold
+    # as an install. Requiring exactly one hit per anchor also proves the
+    # non-colour shape of each assignment survived (T-187).
+    $anchors = [ordered]@{
+        'WIN95_BG'           = '(?m)^WIN95_BG\s*=\s*''[^'']+'''
+        'WIN95_BG_SOFT'      = '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+'''
+        'WIN95_SURFACE'      = '(?m)^WIN95_SURFACE\s*=\s*''[^'']+'''
+        'WIN95_SURFACE_RAISED' = '(?m)^WIN95_SURFACE_RAISED\s*=\s*''[^'']+'''
+        'WIN95_SURFACE_ALT'  = '(?m)^WIN95_SURFACE_ALT\s*=\s*''[^'']+'''
+        'WIN95_BEVEL_HI'     = '(?m)^WIN95_BEVEL_HI\s*=\s*''[^'']+'''
+        'WIN95_BEVEL_SH'     = '(?m)^WIN95_BEVEL_SH\s*=\s*''[^'']+'''
+        'WIN95_BORDER_MUTED' = '(?m)^WIN95_BORDER_MUTED\s*=\s*''[^'']+'''
+        'WIN95_TEXT'         = '(?m)^WIN95_TEXT\s*=\s*''[^'']+'''
+        'WIN95_TEXT_DIM'     = '(?m)^WIN95_TEXT_DIM\s*=\s*''[^'']+'''
+        'WIN95_TEXT_MUTED'   = '(?m)^WIN95_TEXT_MUTED\s*=\s*''[^'']+'''
+        'WIN95_GOLD'         = '(?m)^WIN95_GOLD\s*=\s*''[^'']+'''
+        'WIN95_GOLD_LIGHT'   = '(?m)^WIN95_GOLD_LIGHT\s*=\s*''[^'']+'''
+        'WIN95_GOLD_DIM'     = '(?m)^WIN95_GOLD_DIM\s*=\s*''[^'']+'''
+        'WIN95_GOLD_DARK'    = '(?m)^WIN95_GOLD_DARK\s*=\s*''[^'']+'''
+        'WIN95_RED'          = '(?m)^WIN95_RED\s*=\s*''[^'']+'''
+        'WIN95_DANGER'       = '(?m)^WIN95_DANGER\s*=\s*''[^'']+'''
+        'WIN95_GREEN'        = '(?m)^WIN95_GREEN\s*=\s*''[^'']+'''
+        'WIN95_BUTTON'       = '(?m)^WIN95_BUTTON\s*=\s*''[^'']+'''
+        'WIN95_BUTTON_HOVER' = '(?m)^WIN95_BUTTON_HOVER\s*=\s*''[^'']+'''
+        'WIN95_ENTRY'        = '(?m)^WIN95_ENTRY\s*=\s*''[^'']+'''
+        'WIN95_SCROLL'       = '(?m)^WIN95_SCROLL\s*=\s*''[^'']+'''
+        'WIN95_SCROLL_HOVER' = '(?m)^WIN95_SCROLL_HOVER\s*=\s*''[^'']+'''
+    }
+    $values = [ordered]@{
+        'WIN95_BG'           = $t.background
+        'WIN95_BG_SOFT'      = $t.backgroundSoft
+        'WIN95_SURFACE'      = $t.surface
+        'WIN95_SURFACE_RAISED' = $t.surfaceRaised
+        'WIN95_SURFACE_ALT'  = $t.surfaceAlt
+        'WIN95_BEVEL_HI'     = $t.bevelLight
+        'WIN95_BEVEL_SH'     = $t.borderDark
+        'WIN95_BORDER_MUTED' = $t.borderMuted
+        'WIN95_TEXT'         = $t.textPrimary
+        'WIN95_TEXT_DIM'     = $t.textSecondary
+        'WIN95_TEXT_MUTED'   = $t.textMuted
+        'WIN95_GOLD'         = $t.textPrimary
+        'WIN95_GOLD_LIGHT'   = $t.borderHighlight
+        'WIN95_GOLD_DIM'     = $t.textSecondary
+        'WIN95_GOLD_DARK'    = $t.textMuted
+        'WIN95_RED'          = $t.danger
+        'WIN95_DANGER'       = $t.danger
+        'WIN95_GREEN'        = $t.success
+        'WIN95_BUTTON'       = $t.surfaceRaised
+        'WIN95_BUTTON_HOVER' = $t.surfaceAlt
+        'WIN95_ENTRY'        = $t.background
+        'WIN95_SCROLL'       = $t.surfaceRaised
+        'WIN95_SCROLL_HOVER' = $t.surfaceAlt
+    }
+    $appliedHexes = @{}
+    foreach ($anchor in $anchors.Keys) {
+        $count = ([regex]::Matches($code, $anchors[$anchor])).Count
+        if ($count -ne 1) {
+            throw "SMART VAC CLEANER: anchor $anchor matched $count time(s) (expected exactly 1) - the source file shape has changed; refusing to patch and leaving the manifest untouched."
+        }
+        $replacement = "$anchor = '$($values[$anchor])'"
+        $code = [regex]::Replace($code, $anchors[$anchor], $replacement)
+        $appliedHexes[$values[$anchor]] = $true
+    }
+    # Verify the output really carries the intended palette before writing.
+    if ($appliedHexes.Count -lt 2) { throw 'SMART VAC CLEANER: internal error - the patched output was not verified to contain the palette block.' }
+    if (-not ($appliedHexes.Keys | Where-Object { $code.Contains($_) })) {
+        throw 'SMART VAC CLEANER: patched output does not contain the intended palette values - refusing to write.'
+    }
+    # And re-verify the shape survived the patch (each anchor still exactly once).
+    foreach ($anchor in $anchors.Keys) {
+        $count = ([regex]::Matches($code, $anchors[$anchor])).Count
+        if ($count -ne 1) {
+            throw "SMART VAC CLEANER: anchor $anchor no longer matches exactly once after patching - source shape corrupted; refusing to write."
+        }
+    }
+
+    # The pre-Wintage backup is taken ONCE and never overwritten (same discipline
+    # as WildRift and TotalCmd). Copying the live file over it on every Apply
+    # destroyed the rollback snapshot after the first repaint, so A -> B -> Revert
+    # restored B, not the original (T-187). Taken AFTER validation so a rejected
+    # patch leaves no trace at all.
+    if (-not (Test-Path $bakFile)) { Copy-Item $pyFile $bakFile -Force }
     
     Write-Utf8 $pyFile $code
     Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
@@ -486,7 +545,21 @@ function Invoke-WildRift {
     }
     $pyTokens += "}"
     $code = Read-Utf8 $bakFile
-    $code = $code -replace '(?s)TOKENS\s*=\s*\{.*?\}', $pyTokens
+    # The TOKENS block must exist exactly once. Zero matches means the source has
+    # no such block (a different theme.py) and a silent no-op write would look
+    # like a successful install; more than one is a shape this patch never wrote.
+    $tokPattern = '(?s)TOKENS\s*=\s*\{.*?\}'
+    $tokCount = ([regex]::Matches($code, $tokPattern)).Count
+    if ($tokCount -ne 1) {
+        throw "WildRiftAssistant: TOKENS block matched $tokCount time(s) (expected exactly 1) - the source file shape has changed; refusing to patch and leaving the manifest untouched."
+    }
+    $code = [regex]::Replace($code, $tokPattern, $pyTokens)
+    if (-not $code.Contains('"' + $json.tokens.background + '"') -or -not $code.Contains('"' + $json.tokens.textPrimary + '"')) {
+        throw 'WildRiftAssistant: patched output does not contain the intended palette tokens - refusing to write.'
+    }
+    if (([regex]::Matches($code, $tokPattern)).Count -ne 1) {
+        throw 'WildRiftAssistant: TOKENS block no longer matches exactly once after patching - refusing to write.'
+    }
     Write-Utf8 $pyFile $code
     Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
     Set-ManifestEntry 'wildrift' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
@@ -555,7 +628,7 @@ function Invoke-Saipenview {
         # correct patch is to rewrite the token VALUES and nothing else -- no selector,
         # no font, no padding, no border width. Colours change, geometry cannot.
         $jsonPath = Join-Path $root "themes\$PaletteSlug.json"
-        if (-not (Test-Path $jsonPath)) { Say "SAIPENVIEW: theme file not found ($PaletteSlug.json)" 'Red'; return }
+        if (-not (Test-Path $jsonPath)) { throw "SAIPENVIEW: theme file not found ($PaletteSlug.json)" }
         $t = Get-PaletteTokens $jsonPath
 
         # Always recolour from the pristine backup, never from the current file: patching
@@ -605,6 +678,13 @@ function Invoke-Saipenview {
         }
 
         Write-Utf8 $cssFile $text
+
+        # Zero tokens recoloured means the write was a no-op wearing an install's
+        # clothes: same bytes on disk, "installed" in the log, manifest advanced.
+        # That is the exact silent-false-success the patch gates exist to stop.
+        if ($applied.Count -eq 0) {
+            throw 'SAIPENVIEW: no --token declarations matched in style.css - refusing to write an unchanged file as an install; check that the CSS is the one this theme expects.'
+        }
 
         Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
         Set-ManifestEntry 'saipenview' $PaletteSlug $cssFile 'n/a' (Get-PayloadVersion)
@@ -713,10 +793,9 @@ function Invoke-Obs {
 
     if (-not (Test-Path $OBS_CONFIG)) { Say 'OBS Studio: not installed (no obs-studio profile) - skipped.' 'DarkYellow'; return }
     if (Get-Process obs64 -ErrorAction SilentlyContinue) {
-        Say 'OBS Studio: close OBS and Apply again so it cannot overwrite user.ini on exit.' 'Yellow'
-        return
+        throw 'OBS Studio: close OBS and Apply again so it cannot overwrite user.ini on exit.'
     }
-    if (-not $node) { Say 'OBS Studio: node is required to patch user.ini safely - skipped.' 'Yellow'; return }
+    if (-not $node) { throw 'OBS Studio: node is required to patch user.ini safely.' }
 
     $helper = Join-Path $root 'tools/install-obs.js'
     $theme = Join-Path $out "obs/$PaletteSlug/Wintage.ovt"
@@ -724,7 +803,7 @@ function Invoke-Obs {
     $args = @($helper, '--config', $OBS_CONFIG)
     if ($DoRevert) { $args += '--revert' } else { $args += @('--theme', $theme, '--palette', $PaletteSlug) }
     $action = if ($DoRevert) { 'Restore previous OBS theme and selection' } else { "Install and activate Wintage $PaletteSlug" }
-    if ($WhatIfPreference) { & node ($args + '--dry-run'); return }
+    if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'OBS Studio dry-run FAILED - see the message above.' }; return }
     if ($PSCmdlet.ShouldProcess($OBS_CONFIG, $action)) {
         & node $args
         if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
@@ -748,7 +827,9 @@ function Invoke-MpcHc {
             # anything created since. That is the honest limit of a .reg backup and
             # it is stated rather than glossed.
             & reg import $bak 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) { Write-Warning "MPC-HC: reg import failed ($LASTEXITCODE) -- values not restored." }
+            if ($LASTEXITCODE -ne 0) {
+                throw "MPC-HC: reg import failed ($LASTEXITCODE) -- values were NOT restored. The manifest and backup are kept so a retry or manual reg import can still recover."
+            }
             Say "MPC-HC: restored the captured values from $bak" 'Green'
             Remove-ManifestEntry 'mpchc'
         }
@@ -758,9 +839,13 @@ function Invoke-MpcHc {
     if ($PSCmdlet.ShouldProcess($MPC_REG, 'Back up and apply the Wintage/UI.md settings')) {
         New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
         if (-not (Test-Path $bak)) {
+            # The backup IS the revert source. If it cannot be exported, the registry
+            # must not be touched: mutating MPC-HC now and advertising a reversible
+            # install that has no rollback file is exactly the false success this
+            # pass removes.
             & reg export $MPC_REG $bak /y 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) { Write-Warning "MPC-HC: reg export failed ($LASTEXITCODE) -- backup not created, revert will be unavailable." }
-            else { Say "MPC-HC: settings backed up to $bak" 'DarkGray' }
+            if ($LASTEXITCODE -ne 0) { throw "MPC-HC: reg export failed ($LASTEXITCODE) -- backup not created, so the registry was NOT changed. Fix reg export and re-run." }
+            Say "MPC-HC: settings backed up to $bak" 'DarkGray'
         }
         else { Say "MPC-HC: keeping the existing backup at $bak (it holds the pre-Wintage state)" 'DarkGray' }
 

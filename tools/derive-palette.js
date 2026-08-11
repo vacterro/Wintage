@@ -5,7 +5,7 @@
 // three surface steps a few percent apart, a highlight around 56% lightness that
 // doubles as the bevel edge and the link, a text ladder at roughly 9.4 / 6.3 / 3.3
 // to one, and desaturated semantic colours that never carry text. Hand-picking a
-// second palette reproduces the hues and quietly loses the structure вЂ” which is
+// second palette reproduces the hues and quietly loses the structure — which is
 // exactly how a theme ends up looking "close enough" while its headings sit at the
 // wrong step and its muted text turns unreadable.
 //
@@ -14,8 +14,8 @@
 // in the hue, which is the only thing that should differ.
 //
 // Fixed across every theme, deliberately:
-//   accentTeal / accentTealDeep  вЂ” UI.md names one accent and it is teal.
-//   success / warning / danger   вЂ” semantic, not decorative. A green that means
+//   accentTeal / accentTealDeep  — UI.md names one accent and it is teal.
+//   success / warning / danger   — semantic, not decorative. A green that means
 //                                  "ok" must not become a project's brand colour,
 //                                  and re-tinting them per theme is how a status
 //                                  stops reading as a status.
@@ -35,9 +35,9 @@ const THEME_DIR = path.join(ROOT, 'themes');
 // slate while its brand is teal, and collapsing the two loses the thing that
 // makes a theme recognisable.
 //
-//   hue / sat        вЂ” the surface ladder (background through surfaceAlt, borders)
-//   accentHue / accentSat вЂ” borderHighlight and the text ladder
-//   source           вЂ” where the colours came from, recorded in the pack itself so
+//   hue / sat        — the surface ladder (background through surfaceAlt, borders)
+//   accentHue / accentSat — borderHighlight and the text ladder
+//   source           — where the colours came from, recorded in the pack itself so
 //                      the next person does not have to re-derive the archaeology
 const SPECS = {
   claudecode: {
@@ -107,7 +107,7 @@ function hslToRgb(h, s, l) {
 }
 
 const golden = JSON.parse(fs.readFileSync(path.join(THEME_DIR, 'golden.json'), 'utf8').replace(/^\uFEFF/, ''));
-// Golden's own base hue, measured rather than assumed вЂ” its surfaces average ~30В°.
+// Golden's own base hue, measured rather than assumed — its surfaces average ~30°.
 const GOLDEN_BASE = 30;
 
 function relLum(r, g, b) {
@@ -141,7 +141,7 @@ function dangerTextFor(colour, backdrop) {
 // Rotating a hue does not preserve contrast: at golden's lightness a violet is far
 // darker than an amber, so CodeNomad's indigo came out at 4.02:1 while the amber it
 // was derived from sits at 7.28:1. Structure is the thing being preserved, and a
-// text token that fails AA is not the same structure вЂ” so the three tokens that
+// text token that fails AA is not the same structure — so the three tokens that
 // carry text get lifted in lightness until they clear the floor. It is a small,
 // bounded correction (a few percent of L) and it is reported, never silent.
 const AA_GATED = ['borderHighlight', 'textPrimary', 'textSecondary'];
@@ -162,7 +162,7 @@ function liftToAA(h, s, l, bgLum, name, slug) {
 function derive(slug, spec) {
   const tokens = {};
   // backgroundSoft is what every contrast in this file is measured against, so it
-  // is resolved first вЂ” the AA lift below needs it before the text tokens exist.
+  // is resolved first — the AA lift below needs it before the text tokens exist.
   const gsoft = rgbToHsl(...hexToRgb(golden.tokens.backgroundSoft));
   const softRgb = hslToRgb(spec.hue + (gsoft[0] - GOLDEN_BASE), Math.min(1, gsoft[1] * spec.sat), gsoft[2]);
   const bgLum = relLum(...softRgb);
@@ -212,4 +212,4 @@ for (const [slug, spec] of Object.entries(SPECS)) {
   console.log('derive-palette: wrote ' + slug + '.json (hue ' + spec.hue + ', saturation x' + spec.sat + ')');
 }
 
-if (stale) { console.error('\n' + stale + ' pack(s) out of date вЂ” run `node tools/derive-palette.js`'); process.exit(1); }
+if (stale) { console.error('\n' + stale + ' pack(s) out of date — run `node tools/derive-palette.js`'); process.exit(1); }

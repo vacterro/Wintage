@@ -49,24 +49,44 @@ function Read-PathsJson {
 }
 
 function Read-Manifest {
+    # Missing or empty manifest = "nothing installed", a normal state. A file that
+    # EXISTS and does not parse is a DISTINCT corrupt state (T-187): the mutation
+    # paths must refuse to work on it rather than overwrite every target's history
+    # with `{}`, so this throws instead of silently returning empty. Callers that
+    # only report (Status, listing) catch and say what is wrong; callers that would
+    # write (Set/Remove-ManifestEntry) let the throw abort before any mutation.
     if (-not (Test-Path $ManifestPath)) { return @{} }
     $json = (Read-Utf8 $ManifestPath).Trim()
     if (-not $json) { return @{} }
-    try {
-        $obj = $json | ConvertFrom-Json
-        $ht = @{}
-        foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
-        return $ht
-    } catch {
-        Write-Warning "could not read ${ManifestPath}: $($_.Exception.Message) -- treating as empty"
-        return @{}
-    }
+    $obj = $json | ConvertFrom-Json
+    $ht = @{}
+    foreach ($prop in $obj.PSObject.Properties) { $ht[$prop.Name] = $prop.Value }
+    return $ht
 }
 
 function Write-Manifest($manifest) {
     if ($WhatIfPreference) { return }
     New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
-    Write-Utf8 $ManifestPath (($manifest | ConvertTo-Json -Depth 3) + "`n")
+    $content = (($manifest | ConvertTo-Json -Depth 3) + "`n")
+    # Atomic replace: write a temp sibling in the SAME directory, validate it by
+    # reading it back, then rename over the live file. A crash between the two
+    # leaves the original intact and a .tmp to sweep, never a half-written
+    # installed.json that the next run would misread.
+    $tmp = $ManifestPath + '.tmp'
+    Write-Utf8 $tmp $content
+    $null = Read-Utf8 $tmp | ConvertFrom-Json
+    Move-Item $tmp $ManifestPath -Force
+}
+
+# Semver comparison for the payload/version manifest check. String comparison
+# reports 1.9.0 as newer than 1.26.3, so a repo that bumped 1.9 -> 1.26 was
+# silently "up to date" and never re-applied (T-187). A value either side cannot
+# parse is treated as needing reapply -- an unknown version is never "current".
+function Test-PayloadUpToDate([string]$recorded, [string]$current) {
+    $rv = $null; $cv = $null
+    if (-not [version]::TryParse($recorded, [ref]$rv)) { return $false }
+    if (-not [version]::TryParse($current, [ref]$cv)) { return $false }
+    return $rv -ge $cv
 }
 
 function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $payloadVersion) {

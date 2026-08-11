@@ -16,6 +16,8 @@
 const fs = require('fs');
 const path = require('path');
 
+const { REQUIRED_TOKENS, WCAG_ROLES } = require('./theme-schema.js');
+
 const file = path.join(__dirname, '..', 'wintage.user.js');
 const src = fs.readFileSync(file, 'utf8');
 
@@ -133,15 +135,8 @@ for (const name of ['GLOBAL_CSS', 'SHADOW_CSS']) {
 // repainter all index the table by key, so `undefined` lands inside a CSS
 // declaration and the browser drops the whole line without a word — the same
 // silent-discard failure class this file was written to catch.
-const REQUIRED_TOKENS = [
-  'background', 'backgroundSoft',
-  'surface', 'surfaceRaised', 'surfaceAlt',
-  'borderDark', 'borderHighlight', 'bevelLight', 'borderMuted',
-  'textPrimary', 'textSecondary', 'textMuted',
-  'accentTeal', 'accentTealDeep',
-  'success', 'warning', 'danger', 'dangerText',
-  'selection', 'compareBack', 'link'
-];
+// REQUIRED_TOKENS and WCAG_ROLES are imported from tools/theme-schema.js, the
+// single canonical owner — no second copy to drift.
 
 function checkThemes() {
   const i = src.indexOf('const THEMES = {');
@@ -197,21 +192,26 @@ function checkThemes() {
       .filter(m => !REQUIRED_TOKENS.includes(m[1]));
     for (const m of stray) fail('theme ' + slug + ': unknown token ' + m[1]);
 
-    // WCAG AA on the three tokens that actually carry text, measured against the
-    // backdrop this theme paints. A new palette is the easiest place in this
-    // project to ship something unreadable: it looks fine in a swatch, and the
-    // failure only shows up as squinting on a real page. Golden measures 9.44 /
-    // 6.29 / 7.28, so the floor costs it nothing.
+    // WCAG AA on the roles that actually carry text, measured against the
+    // backdrop this theme paints. The role list is the shared WCAG_ROLES from
+    // theme-schema.js — the same roles the GUI warns about, so what the editor
+    // predicts and what the gate enforces can never disagree again. A new
+    // palette is the easiest place in this project to ship something unreadable:
+    // it looks fine in a swatch, and the failure only shows up as squinting on a
+    // real page. Golden measures 9.44 / 6.29 / 7.28, so the floor costs it nothing.
     //
     // textMuted (3.34 on golden) and accentTeal (3.80) are deliberately NOT gated:
     // both are non-text roles — placeholder/disabled and an accent surface — and
     // the file already documents why accentTeal must never be used as link text.
+    // borderHighlight is also deliberately absent: it is a decorative bevel edge,
+    // near-white on light palettes, and gating it made every light palette FAIL
+    // on a token that is never text (T-187).
     const tok = {};
     for (const m of body.matchAll(/(\w+)\s*:\s*'(#[0-9A-Fa-f]{6})'/g)) tok[m[1]] = m[2];
     const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
     const L = h => 0.2126 * lin(parseInt(h.slice(1, 3), 16)) + 0.7152 * lin(parseInt(h.slice(3, 5), 16)) + 0.0722 * lin(parseInt(h.slice(5, 7), 16));
     if (tok.backgroundSoft) {
-      for (const role of ['textPrimary', 'textSecondary', 'link']) {
+      for (const role of WCAG_ROLES) {
         if (!tok[role]) continue;
         const a = L(tok[role]), b = L(tok.backgroundSoft);
         const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);

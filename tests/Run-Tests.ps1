@@ -15,21 +15,149 @@ function Assert-True($condition, $message) {
 
 Write-Host "
 --- Testing Palette Consistency ---" -ForegroundColor Cyan
-$golden = Get-Content "$root\themes\golden.json" -Raw | ConvertFrom-Json
-$goldenKeys = $golden.tokens.PSObject.Properties.Name | Sort-Object
+# The schema authority is tools/theme-schema.json (mirrored from
+# theme-schema.js), NOT golden.json: golden is one pack, i.e. data, and a pack
+# can never be the specification that judges the other packs (T-187).
+$schemaFile = "$root\tools\theme-schema.json"
+Assert-True (Test-Path $schemaFile) "canonical theme schema exists"
+$schema = Get-Content $schemaFile -Raw | ConvertFrom-Json
+$requiredKeys = @($schema.tokens)
 
 foreach ($file in Get-ChildItem "$root\themes\*.json") {
     $theme = Get-Content $file.FullName -Raw | ConvertFrom-Json
     $themeKeys = $theme.tokens.PSObject.Properties.Name | Sort-Object
     
-    $missing = $goldenKeys | Where-Object { $_ -notin $themeKeys }
-    $extra = $themeKeys | Where-Object { $_ -notin $goldenKeys }
+    $missing = $requiredKeys | Where-Object { $_ -notin $themeKeys }
+    $extra = $themeKeys | Where-Object { $_ -notin $requiredKeys }
     
-    Assert-True (@($missing).Count -eq 0) "$($file.Name) has all required token keys"
+    Assert-True (@($missing).Count -eq 0) "$($file.Name) has all $($requiredKeys.Count) required token keys"
     if (@($missing).Count -gt 0) { Write-Host "       Missing: $($missing -join ', ')" -ForegroundColor Red }
     
     Assert-True (@($extra).Count -eq 0) "$($file.Name) has no undocumented extra keys"
     if (@($extra).Count -gt 0) { Write-Host "       Extra: $($extra -join ', ')" -ForegroundColor Red }
+
+    Assert-True ($file.BaseName -eq $theme.slug) "$($file.Name) filename matches its pack.slug"
+    Assert-True ([bool]$theme.label) "$($file.Name) has a label"
+}
+
+# Duplicate slug/label collision fixture: two packs sharing a slug or a label
+# must be rejected by the generators' shared validator (tools/theme-schema.js).
+$schemaSync = (& node "$root\tools\theme-schema.js" --json | Out-String).Trim()
+Assert-True ($LASTEXITCODE -eq 0) "theme-schema.js --json runs clean"
+$schemaExpected = ((Get-Content $schemaFile -Raw) -replace '\s', '')
+$schemaActual = ($schemaSync -replace '\s', '')
+Assert-True ($schemaExpected -eq $schemaActual) "theme-schema.json mirrors theme-schema.js (tokens + WCAG roles)"
+if ($schemaExpected -ne $schemaActual) {
+    Write-Host "       JS  : $schemaActual" -ForegroundColor Red
+    Write-Host "       JSON: $schemaExpected" -ForegroundColor Red
+}
+
+$wcagRoles = @($schema.wcagRoles)
+Assert-True ($wcagRoles.Count -eq 3 -and $wcagRoles -contains 'link') "WCAG role list is the shared text-role set (textPrimary/textSecondary/link)"
+
+# Vintage Classic regression fixture (T-187): the shared roles are the text
+# roles. borderHighlight on this LIGHT palette is a near-white decorative bevel
+# and MUST NOT be in the role list -- gating it is how the old GUI produced a
+# false FAIL for every light palette while the build gate accepted them.
+function Get-RelLum([double]$v) { if ($v -le 0.03928) { $v / 12.92 } else { [Math]::Pow(($v + 0.055) / 1.055, 2.4) } }
+function Get-Contrast([string]$hexA, [string]$hexB) {
+    $toRgb = { param($h) @([Convert]::ToInt32($h.Substring(1,2),16), [Convert]::ToInt32($h.Substring(3,2),16), [Convert]::ToInt32($h.Substring(5,2),16)) }
+    $ra = & $toRgb $hexA; $rb = & $toRgb $hexB
+    $lumA = 0.2126 * (Get-RelLum ($ra[0]/255)) + 0.7152 * (Get-RelLum ($ra[1]/255)) + 0.0722 * (Get-RelLum ($ra[2]/255))
+    $lumB = 0.2126 * (Get-RelLum ($rb[0]/255)) + 0.7152 * (Get-RelLum ($rb[1]/255)) + 0.0722 * (Get-RelLum ($rb[2]/255))
+    ([Math]::Max($lumA,$lumB) + 0.05) / ([Math]::Min($lumA,$lumB) + 0.05)
+}
+$vc = Get-Content "$root\themes\vintageclassic.json" -Raw | ConvertFrom-Json
+$vcBg = $vc.tokens.backgroundSoft
+foreach ($role in $wcagRoles) {
+    $ratio = Get-Contrast $vc.tokens.$role $vcBg
+    Assert-True ($ratio -ge 4.5) "vintageclassic $role passes WCAG AA on backgroundSoft ($([Math]::Round($ratio,2)):1)"
+}
+$vcBevel = Get-Contrast $vc.tokens.borderHighlight $vcBg
+Assert-True ($vcBevel -lt 4.5) "vintageclassic borderHighlight is decorative (<4.5:1) and therefore must NOT be a WCAG text role"
+
+Write-Host "
+--- Theme Identity Validation ---" -ForegroundColor Cyan
+# The generators must reject duplicate slug, duplicate label and
+# filename/slug mismatch. Probed through the shared validator directly with a
+# throwaway themes/ clone so the real pack dir is never at risk.
+$identRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-identity-" + [guid]::NewGuid().ToString('N'))
+try {
+    New-Item -ItemType Directory -Path $identRoot -Force | Out-Null
+    function New-IdentityPack([string]$slug, [string]$label, [int]$order) {
+        $tokens = @{}
+        foreach ($k in $requiredKeys) { $tokens[$k] = '#112233' }
+        @{ slug = $slug; label = $label; order = $order; tokens = $tokens }
+    }
+    $schemaJsPath = $root.Replace('\', '/') + '/tools/theme-schema.js'
+
+    # duplicate slug is structurally impossible to reach directly: the
+    # filename==slug invariant means two packs sharing a slug would need the same
+    # filename, so the collision guard is exercised through a second file that
+    # CLAIMS an already-used slug -- the validator must reject it hard, and the
+    # filename guard is the mechanism that makes the collision impossible.
+    $dupRoot = Join-Path $identRoot 'dupslug'
+    New-Item -ItemType Directory -Path $dupRoot -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $dupRoot 'alpha.json'), ((New-IdentityPack 'alpha' 'Alpha' 1) | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $dupRoot 'alpha-copy.json'), ((New-IdentityPack 'alpha' 'Beta' 2) | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+    $dupOut = (& node -e "const {loadAndValidatePacks}=require('$schemaJsPath'); try{loadAndValidatePacks('$($dupRoot.Replace('\','/'))');console.log('NO-ERROR')}catch(e){console.log('REJECTED: '+e.message)}")
+    Assert-True ($dupOut -match 'REJECTED:') "a second pack claiming an already-used slug is rejected"
+
+    # duplicate label (same label, different slug -> the label collision must fire)
+    $labRoot = Join-Path $identRoot 'duplabel'
+    New-Item -ItemType Directory -Path $labRoot -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $labRoot 'alpha.json'), ((New-IdentityPack 'alpha' 'Alpha' 1) | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $labRoot 'beta.json'), ((New-IdentityPack 'beta' 'Alpha' 2) | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+    $labOut = (& node -e "const {loadAndValidatePacks}=require('$schemaJsPath'); try{loadAndValidatePacks('$($labRoot.Replace('\','/'))');console.log('NO-ERROR')}catch(e){console.log('REJECTED: '+e.message)}")
+    Assert-True ($labOut -match 'REJECTED:.*duplicate label') "duplicate label is rejected"
+
+    # filename/slug mismatch (gamma.json claims slug alpha)
+    $misRoot = Join-Path $identRoot 'mismatch'
+    New-Item -ItemType Directory -Path $misRoot -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $misRoot 'gamma.json'), ((New-IdentityPack 'alpha' 'Gamma' 1) | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+    $misOut = (& node -e "const {loadAndValidatePacks}=require('$schemaJsPath'); try{loadAndValidatePacks('$($misRoot.Replace('\','/'))');console.log('NO-ERROR')}catch(e){console.log('REJECTED: '+e.message)}")
+    Assert-True ($misOut -match 'REJECTED:.*filename does not match') "filename/slug mismatch is rejected"
+} finally {
+    if (Test-Path $identRoot) { Remove-Item $identRoot -Recurse -Force }
+}
+
+Write-Host "
+--- GUI Shares the Build Gate's WCAG Roles ---" -ForegroundColor Cyan
+# The GUI must read its token list and WCAG roles from the shared schema, never
+# carry a second hardcoded list (the borderHighlight drift that produced false
+# FAILs in the editor). The read is the contract; a resurrected hardcoded copy
+# is what this gate fails on.
+$guiSource = [System.IO.File]::ReadAllText("$root\desktop\WintageInstaller.ps1")
+Assert-True ($guiSource -match 'theme-schema\.json') 'GUI reads the canonical theme-schema.json'
+Assert-True ($guiSource -notmatch "['""]textPrimary['""]\s*,\s*['""]textSecondary['""]\s*,\s*['""]borderHighlight['""]") 'GUI does not carry the stale hardcoded WCAG role list'
+Assert-True ($guiSource -match '\$script:wcagRoles') 'GUI consumes wcagRoles from the schema'
+
+Write-Host "
+--- Mojibake Gate ---" -ForegroundColor Cyan
+# Double-encoded UTF-8 punctuation (em-dashes/box-drawing read as cp1251 and
+# re-saved) is impossible in this codebase's ASCII source files and is caught
+# here by the Cyrillic codepoints it leaves behind (T-187).
+$mojibakeFiles = @(
+    "$root\tools\build-desktop.js", "$root\tools\install-electron.js",
+    "$root\tools\derive-palette.js", "$root\tools\apply-themes.js",
+    "$root\tools\check-css.js", "$root\tools\theme-schema.js",
+    "$root\desktop\install.ps1", "$root\desktop\WintageInstaller.ps1",
+    "$root\desktop\modules\common.ps1", "$root\desktop\modules\targets.ps1",
+    "$root\desktop\i18n.ps1", "$root\tests\Run-Tests.ps1",
+    "$root\tools\test-reapply.ps1", "$root\release.ps1"
+)
+foreach ($f in $mojibakeFiles) {
+    $text = [System.IO.File]::ReadAllText($f)
+    $bad = @()
+    foreach ($ch in $text.ToCharArray()) {
+        $cp = [int]$ch
+        if (($cp -ge 0x0400 -and $cp -le 0x04FF) -or ($cp -ge 0x2018 -and $cp -le 0x201F)) { $bad += ("U+{0:X4}" -f $cp) }
+    }
+    Assert-True ($bad.Count -eq 0) "$($f | Split-Path -Leaf) carries no mojibake signatures ($($bad -join ' '))"
+}
+$vscodePkg = "$root\desktop\out\vscode\wintage-themes\package.json"
+if (Test-Path $vscodePkg) {
+    Assert-True (([System.IO.File]::ReadAllText($vscodePkg)) -notmatch '[\u0400-\u04FF]') 'generated VS Code package.json carries no mojibake'
 }
 
 Write-Host "
@@ -51,20 +179,25 @@ if (-not $validateSetMatch.Success) {
     # ELECTRON keys stopped being found and this gate went red on code it had no
     # complaint about. Same failure the Save-CustomPaths check had: a gate that
     # goes red for reasons unrelated to what it tests gets ignored, then trusted.
-    $targetsMatches = [regex]::Matches($installCode, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{\s*?
+    $targetsMatches = [regex]::Matches($installCode, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{\s*
+?
 \s+(Dir|Name)")
     $hashTargets = @()
     foreach ($m in $targetsMatches) { $hashTargets += $m.Groups[1].Value }
+    # $TARGETS keys ONLY (the generic pattern above also swallows $ELECTRON keys,
+    # which the ownership gate needs separated).
+    $tBlock = [regex]::Match($installCode, '(?s)\$TARGETS\s*=\s*@\{(.*?)\n\s*\}').Groups[1].Value
+    $targetsKeys = @([regex]::Matches($tBlock, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{") | ForEach-Object { $_.Groups[1].Value })
     
     # Extract $ELECTRON keys
     $regex = '(?s)\$ELECTRON\s*=\s*@\{(.*?)\n\s*\}'
     $electronMatches = [regex]::Matches($installCode, $regex)
+    $electronKeys = @()
     if ($electronMatches.Count -gt 0) {
         $eBlock = $electronMatches[0].Groups[1].Value
         $eKeysMatches = [regex]::Matches($eBlock, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@{")
-        foreach ($m in $eKeysMatches) { $hashTargets += $m.Groups[1].Value }
+        foreach ($m in $eKeysMatches) { $hashTargets += $m.Groups[1].Value; $electronKeys += $m.Groups[1].Value }
     }
-
     # Add hardcoded custom handlers
     $hardcodedMatches = [regex]::Matches($installCode, 'if \(\$name -eq ''([a-z0-9\-]+)''\)')
     $hardcoded = @()
@@ -80,6 +213,16 @@ if (-not $validateSetMatch.Success) {
 
     Assert-True (@($missingVal).Count -eq 0) "All implemented targets are exposed in ValidateSet"
     if (@($missingVal).Count -gt 0) { Write-Host "       Missing from ValidateSet: $($missingVal -join ', ')" -ForegroundColor Red }
+
+    # Every non-all target must live in exactly ONE dispatch collection. A name
+    # in two collections would be attempted twice under -Target all (the $known
+    # concatenation) and shadowed by whichever branch matches first (T-187).
+    $simpleDecl = [regex]::Match($installCode, '\$SIMPLE\s*=\s*@\((.*?)\)', 'Singleline').Groups[1].Value
+    $simpleList = if ($simpleDecl) { @([regex]::Matches($simpleDecl, "'([a-z0-9\-]+)'") | ForEach-Object { $_.Groups[1].Value }) } else { @() }
+    $ownerCount = @{}
+    foreach ($t in @($targetsKeys + $electronKeys + $simpleList)) { $ownerCount[$t] = ($ownerCount[$t] + 1) }
+    $dupeOwner = @($ownerCount.Keys | Where-Object { $ownerCount[$_] -gt 1 })
+    Assert-True ($dupeOwner.Count -eq 0) "no target belongs to more than one dispatch collection ($($dupeOwner -join ', '))"
 }
 
 Write-Host "

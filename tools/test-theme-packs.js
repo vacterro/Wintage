@@ -80,6 +80,9 @@ const packSandbox = path.join(tmp, 'sandbox');
 fs.mkdirSync(path.join(packSandbox, 'themes'), { recursive: true });
 fs.mkdirSync(path.join(packSandbox, 'tools'), { recursive: true });
 fs.copyFileSync(GEN, path.join(packSandbox, 'tools', 'apply-themes.js'));
+// apply-themes now requires the shared schema module; the sandbox needs it too
+// or every fixture run dies with MODULE_NOT_FOUND before testing anything.
+fs.copyFileSync(path.join(__dirname, 'theme-schema.js'), path.join(packSandbox, 'tools', 'theme-schema.js'));
 fs.copyFileSync(path.join(ROOT, 'wintage.user.js'), path.join(packSandbox, 'wintage.user.js'));
 const goodPack = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'golden.json'), 'utf8').replace(/^\uFEFF/, ''));
 
@@ -103,11 +106,14 @@ for (const [label, mutate] of Object.entries(mutations)) {
 }
 
 // 7. Menu order comes from the pack, not from the filesystem's sort order.
+//    Filenames match slugs (the identity invariant), so the alphabetical
+//    filesystem order differs from the pack-declared `order` and the emitted
+//    order proves the sort used `order`, not the filename.
 fs.writeFileSync(path.join(packSandbox, 'themes', 'golden.json'), JSON.stringify(goodPack, null, 2));
-fs.writeFileSync(path.join(packSandbox, 'themes', 'aaa.json'), JSON.stringify({
+fs.writeFileSync(path.join(packSandbox, 'themes', 'zeta.json'), JSON.stringify({
   slug: 'zeta', label: 'Zeta', order: 5, tokens: goodPack.tokens
 }, null, 2));
-fs.writeFileSync(path.join(packSandbox, 'themes', 'zzz.json'), JSON.stringify({
+fs.writeFileSync(path.join(packSandbox, 'themes', 'alpha.json'), JSON.stringify({
   slug: 'alpha', label: 'Alpha', order: 2, tokens: goodPack.tokens
 }, null, 2));
 cp.execSync('node tools/apply-themes.js', { cwd: packSandbox, stdio: 'pipe' });

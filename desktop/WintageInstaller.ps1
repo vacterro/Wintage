@@ -42,6 +42,8 @@ $themeDir = Join-Path $root 'themes'
 $script:packs = @{}
 function Load-Packs {
     $script:packs = @{}
+    $seenSlugs = @{}
+    $seenLabels = @{}
     Get-ChildItem $themeDir -Filter '*.json' | ForEach-Object {
         # -Raw + ConvertFrom-Json chokes on a BOM, and packs have carried one before
         # (a PowerShell write elsewhere put it there). Reading as explicit UTF-8 and
@@ -52,6 +54,17 @@ function Load-Packs {
         # same bug in install-electron.js), matching nothing and letting the BOM
         # through to ConvertFrom-Json, which throws and empties the theme list.
         $p = ([System.IO.File]::ReadAllText($_.FullName, (New-Object System.Text.UTF8Encoding($false)))) -replace '^\uFEFF', '' | ConvertFrom-Json
+        # Identity rules mirror the generators' validator (tools/theme-schema.js):
+        # a duplicate slug or label is a hard error, never a silently-overwritten
+        # row, because this GUI resolves selection BY LABEL and the CLI lists packs
+        # BY FILENAME -- both would misselect on a collision (T-187).
+        if (-not $p.slug) { throw "$($_.Name): no slug in the pack - refusing to load a nameless theme." }
+        if ($_.BaseName -ne $p.slug) { throw "$($_.Name): filename does not match pack.slug '$($p.slug)' - the CLI lists by filename while this GUI resolves by label; the two must agree." }
+        if ($seenSlugs.ContainsKey($p.slug)) { throw "$($seenSlugs[$p.slug]) and $($_.Name): duplicate slug '$($p.slug)' - refusing to silently overwrite one pack." }
+        if (-not $p.label) { throw "$($_.Name): no label." }
+        if ($seenLabels.ContainsKey($p.label)) { throw "$($seenLabels[$p.label]) and $($_.Name): duplicate label '$($p.label)' - the GUI resolves selection by label, so two packs sharing one label are indistinguishable." }
+        $seenSlugs[$p.slug] = $_.Name
+        $seenLabels[$p.label] = $_.Name
         $script:packs[$p.slug] = $p
     }
 }
@@ -67,15 +80,20 @@ $script:current = if ($script:packs.ContainsKey('goldendefault')) { 'goldendefau
 # "Custom" always starts from something that already looks right instead of black.
 $script:custom = $null
 
-$TOKENS = @(
-    'background', 'backgroundSoft',
-    'surface', 'surfaceRaised', 'surfaceAlt',
-    'borderDark', 'borderHighlight', 'bevelLight', 'borderMuted',
-    'textPrimary', 'textSecondary', 'textMuted',
-    'accentTeal', 'accentTealDeep',
-    'success', 'warning', 'danger', 'dangerText',
-    'selection', 'compareBack', 'link'
-)
+# The 21-token schema and the WCAG text-role list are read from the single
+# canonical source (tools/theme-schema.json, mirrored from theme-schema.js).
+# They used to be a second hardcoded copy that drifted from the generators'
+# REQUIRED_TOKENS and from check-css.js's gate -- the GUI warned about
+# borderHighlight while the build gate demanded link, so the editor said FAIL
+# on palettes the gate accepted. One source, no second list to drift (T-187).
+$schemaJson = Join-Path $root 'tools\theme-schema.json'
+if (Test-Path $schemaJson) {
+    $schema = ([System.IO.File]::ReadAllText($schemaJson, (New-Object System.Text.UTF8Encoding($false)))) | ConvertFrom-Json
+} else {
+    throw "Canonical theme schema not found at $schemaJson - a schema-less GUI cannot trust its token list."
+}
+$TOKENS = @($schema.tokens)
+$script:wcagRoles = @($schema.wcagRoles)
 
 function Get-ActiveTokens {
     if ($script:current -eq '<custom>') { return $script:custom }
@@ -324,9 +342,15 @@ $chkLogonTask.FlatStyle = 'Flat'
 $chkLogonTask.Add_CheckedChanged({
     $taskArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $here 'install.ps1'))
     if ($chkLogonTask.Checked) {
-        & powershell @taskArgs -RegisterLogonTask 2>&1 | ForEach-Object { Say-Log $_ }
+        $taskArgs += '-RegisterLogonTask'
     } else {
-        & powershell @taskArgs -UnregisterLogonTask 2>&1 | ForEach-Object { Say-Log $_ }
+        $taskArgs += '-UnregisterLogonTask'
+    }
+    $child = Invoke-ChildPowerShell $taskArgs
+    foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+    if ($child.ExitCode -ne 0) {
+        Say-Log "logon task: FAILED (exit $($child.ExitCode))"
+        $chkLogonTask.Checked = -not $chkLogonTask.Checked
     }
 })
 
@@ -644,7 +668,12 @@ $script:targets = @()
 function Load-Targets {
     foreach ($list in $TARGET_LISTS) { $list.Items.Clear() }
     $script:targets = @()
+    # EAP=Stop would turn the child's stderr into a terminating error here, so
+    # the target list is read with the same Continue discipline as Apply.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'install.ps1') 2>&1
+    $ErrorActionPreference = $prev
     foreach ($line in $out) {
         if ($line -match '^\s{2}(\S+)\s{2,}(.+?)\s{2,}(not installed|themed|found, not themed|fused shut)\s{2,}(.+)$') {
             $t = [pscustomobject]@{ Key = $Matches[1]; Name = $Matches[2].Trim(); State = $Matches[3]; Palette = $Matches[4].Trim() }
@@ -847,7 +876,11 @@ function Update-Info {
     if (-not $t) { return }
     $bg = $t.backgroundSoft
     $rows = @()
-    foreach ($k in @('textPrimary', 'textSecondary', 'borderHighlight')) {
+    # Same text-role list the build gate enforces (tools/theme-schema.json
+    # wcagRoles): textPrimary, textSecondary, link. borderHighlight is a
+    # decorative bevel edge, not a text role, and warning on it produced false
+    # FAILs for every light palette (T-187).
+    foreach ($k in $script:wcagRoles) {
         $c = Contrast $t.$k $bg
         $mark = if ($c -ge 4.5) { 'PASS' } else { 'FAIL' }
         $rows += ('{0,-16} {1,5}:1  {2}' -f $k, $c, $mark)
@@ -864,6 +897,30 @@ function Update-Info {
 # ---- ACTIONS ----
 function Say-Log($msg) { $log.AppendText($msg + "`r`n"); $log.SelectionStart = $log.TextLength; $log.ScrollToCaret() }
 
+# Run a child powershell and return { Output; ExitCode } WITHOUT letting EAP=Stop
+# turn the child's stderr into a terminating error mid-loop (the PS 5.1
+# NativeCommandError trap this file already documents for ffmpeg). The child's
+# own exit code is the only honest success signal.
+function Invoke-ChildPowerShell([string[]]$argsList) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $out = & powershell @argsList 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    [pscustomobject]@{ Output = @($out); ExitCode = $code }
+}
+
+# Run a node helper the same way (stderr must not throw), returning its exit code.
+function Invoke-NodeTool([string[]]$argsList) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $out = & node @argsList 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    foreach ($line in @($out)) { Say-Log ($line.ToString()) }
+    $code
+}
+
 function Save-Custom {
     $t = Get-ActiveTokens
     $pack = [ordered]@{ slug = 'custom'; label = 'Custom'; order = 99; source = 'built in the Wintage Theme Installer'; tokens = [ordered]@{} }
@@ -872,10 +929,14 @@ function Save-Custom {
     $json = ($pack | ConvertTo-Json -Depth 5)
     [System.IO.File]::WriteAllText($file, $json, (New-Object System.Text.UTF8Encoding $false))
     Say-Log "saved themes/custom.json"
-    & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
-    if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: apply-themes.js failed -- theme packs may be stale'; return }
-    & node (Join-Path $root 'tools/build-desktop.js') | Out-Null
-    if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: build-desktop.js failed -- desktop/out may be stale'; return }
+    # Fail-closed: if either generator fails, the pack OR the built output is
+    # stale, and Apply MUST NOT install it. Throwing here aborts Apply before
+    # install.ps1 ever runs, so a stale custom theme can never be installed
+    # while the log claims a successful save (T-187).
+    $code1 = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
+    if ($code1 -ne 0) { throw 'apply-themes.js failed - theme packs are stale. Nothing was installed.' }
+    $code2 = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
+    if ($code2 -ne 0) { throw 'build-desktop.js failed - desktop/out is stale. Nothing was installed.' }
     Load-Packs
 }
 
@@ -884,10 +945,13 @@ function Delete-Custom {
     if (Test-Path $file) {
         Remove-Item $file -Force
         Say-Log "deleted themes/custom.json"
-        & node (Join-Path $root 'tools/apply-themes.js') | Out-Null
-        if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: apply-themes.js failed -- theme packs may be stale'; return }
-        & node (Join-Path $root 'tools/build-desktop.js') | Out-Null
-        if ($LASTEXITCODE -ne 0) { Say-Log 'WARNING: build-desktop.js failed -- desktop/out may be stale'; return }
+        # Same fail-closed contract as Save-Custom: after deleting the pack the
+        # generated outputs MUST be regenerated before the theme list and the
+        # installers agree on what exists.
+        $code1 = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
+        if ($code1 -ne 0) { throw 'apply-themes.js failed after deleting custom.json - the theme block is stale. Run it by hand before applying.' }
+        $code2 = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
+        if ($code2 -ne 0) { throw 'build-desktop.js failed after deleting custom.json - desktop/out is stale. Run it by hand before applying.' }
         Load-Packs
         $script:current = 'goldendefault'
         $lstThemes.SelectedItem = $script:packs[$script:current].label
@@ -910,21 +974,28 @@ $btnApply.Add_Click({
             $slug = if ($script:current -eq '<custom>') { Save-Custom; 'custom' } else { $script:current }
             $checked = @(Get-CheckedTargetItems)
             if (-not $checked) { Say-Log 'nothing selected'; return }
+            $failed = @()
             foreach ($item in $checked) {
                 $key = ($item -split '\s+')[0]
                 $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Palette", $slug)
                 if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
                 if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
                 if ($key -eq 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
-                $out = & powershell $argsList 2>&1
-                $last = ($out | Where-Object { $_ -match '\S' } | Select-Object -Last 1)
-                Say-Log ("{0}: {1}" -f $key, $last)
+                $child = Invoke-ChildPowerShell $argsList
+                foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+                if ($child.ExitCode -eq 0) { Say-Log ("$key`: PASS") }
+                else { Say-Log ("$key`: FAIL (exit $($child.ExitCode))"); $failed += $key }
             }
             Load-Targets
             Update-FbButtonsVisibility
-            $status.Text = "Applied '$slug'. Restart any app that was themed."
+            if ($failed.Count) {
+                $status.Text = "Applied '$slug' with $($failed.Count) failure(s): $($failed -join ', '). See the log - nothing more was installed for those targets."
+                $status.ForeColor = [System.Drawing.Color]::Firebrick
+            } else {
+                $status.Text = "Applied '$slug'. Restart any app that was themed."
+            }
         }
-        catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message) }
+        catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message); $status.Text = 'Apply failed - see the log.' }
         finally { $btnApply.Enabled = $true }
     })
 
@@ -944,16 +1015,25 @@ $btnSelectNone.Add_Click({
     })
 
 $btnRevert.Add_Click({
+        $failed = @()
         foreach ($item in @(Get-CheckedTargetItems)) {
             $key = (($item) -split '\s+')[0]
             $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Revert")
             if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
             if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
             if ($key -eq 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
-            $out = & powershell $argsList 2>&1
-            Say-Log ("{0}: {1}" -f $key, ($out | Where-Object { $_ -match '\S' } | Select-Object -Last 1))
+            $child = Invoke-ChildPowerShell $argsList
+            foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+            if ($child.ExitCode -eq 0) { Say-Log ("$key`: PASS (reverted)") }
+            else { Say-Log ("$key`: FAIL (exit $($child.ExitCode))"); $failed += $key }
         }
         Load-Targets
+        if ($failed.Count) {
+            $status.Text = "Revert incomplete: $($failed.Count) target(s) failed ($($failed -join ', ')). See the log."
+            $status.ForeColor = [System.Drawing.Color]::Firebrick
+        } else {
+            $status.Text = 'Revert done - the marked targets are back to their pre-Wintage state.'
+        }
     })
 
 $lstThemes.Add_SelectedIndexChanged({

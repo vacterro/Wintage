@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds the desktop-application themes from the same themes/*.json packs the
-// userscript uses. One palette source, many targets вЂ” a colour that drifts between
+// userscript uses. One palette source, many targets — a colour that drifts between
 // the browser and the editor is the thing this prevents.
 //
 // Targets are declared in desktop/targets/<name>/. Each carries a template whose
@@ -18,6 +18,7 @@ const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(ROOT, 'themes');
 const DESKTOP = path.join(ROOT, 'desktop');
 const OUT = path.join(DESKTOP, 'out');
+const { loadAndValidatePacks } = require('./theme-schema.js');
 
 const VERSION = (/\/\/ @version\s+(\d+\.\d+\.\d+)/.exec(
   fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8')) || [, '0.0.0'])[1];
@@ -26,15 +27,13 @@ const checkOnly = process.argv.includes('--check');
 let stale = 0, wrote = 0;
 
 function loadPacks() {
-  return fs.readdirSync(THEME_DIR).filter(f => f.endsWith('.json'))
-    .map(f => JSON.parse(fs.readFileSync(path.join(THEME_DIR, f), 'utf8').replace(/^\uFEFF/, '')))
-    .sort((a, b) => (a.order || 99) - (b.order || 99) || a.slug.localeCompare(b.slug));
+  return loadAndValidatePacks(THEME_DIR);
 }
 
 // Substitutes ${token} anywhere in a JSON structure. An unknown token is a hard
 // error, never a silently surviving literal: `${textPrimaryy}` left in a colour
 // value is accepted by VS Code's theme loader, which then renders that element
-// with no colour at all вЂ” an invisible failure, which is exactly the class of bug
+// with no colour at all — an invisible failure, which is exactly the class of bug
 // the CSS gate exists to stop on the browser side.
 function fill(node, tokens, ctx) {
   if (typeof node === 'string') {
@@ -62,15 +61,15 @@ function emit(file, content) {
   wrote++;
 }
 
-// в”Ђв”Ђв”Ђ TARGET: vscode в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-// Covers Antigravity and VS Code both вЂ” Antigravity is a VS Code fork and reads
+// ─── TARGET: vscode ──────────────────────────────────────────────────────────
+// Covers Antigravity and VS Code both — Antigravity is a VS Code fork and reads
 // the identical extension format, so one build serves two applications.
 //
 // The template was derived from the hand-written Vintage Win 95 theme already
 // installed on this machine, by replacing each hex with the token whose value it
 // equalled: 96 of its 99 colour keys mapped exactly, and the three that did not are
 // fully transparent (#00000000, a deliberate "no shadow") and stay literal. That
-// derivation matters вЂ” it means the six generated themes are the author's own
+// derivation matters — it means the generated themes are the author's own
 // mapping of VS Code's surfaces, re-tinted, not someone's fresh guess at which
 // editor element deserves which token.
 function buildVscode(packs) {
@@ -89,10 +88,10 @@ function buildVscode(packs) {
 
   emit(path.join(outDir, 'package.json'), JSON.stringify({
     name: 'wintage-themes',
-    displayName: 'Wintage вЂ” Win95 Vintage Themes',
-    description: 'Sixteen switchable Windows 95 palettes generated from the Wintage theme packs.',
+    displayName: 'Wintage — Win95 Vintage Themes',
+    description: packs.length + ' switchable Windows 95 palettes generated from the Wintage theme packs.',
     // One version number for the whole project, taken from the userscript header
-    // rather than kept separately вЂ” two version fields drift, and the second one
+    // rather than kept separately — two version fields drift, and the second one
     // is always the one nobody remembers to bump.
     version: VERSION,
     publisher: 'vacterro',
@@ -102,10 +101,10 @@ function buildVscode(packs) {
   }, null, 2) + '\n');
 }
 
-// в”Ђв”Ђв”Ђ TARGET: electron в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ─── TARGET: electron ────────────────────────────────────────────────────────
 // Claude Code's desktop app, FreeBuff and codenomad are all Electron, which means
 // their UI is a web page and the userscript's own stylesheet already knows how to
-// impose UI.md on one. So the CSS is not rewritten here вЂ” it is EXTRACTED from
+// impose UI.md on one. So the CSS is not rewritten here — it is EXTRACTED from
 // wintage.user.js and its ${T.x} interpolations resolved against the palette.
 // Duplicating it would mean every bevel fix, scrollbar rebuild and type-ladder
 // correction had to be made twice, and the second copy would rot.
@@ -316,7 +315,7 @@ function stripNonCode(src) {
   return out;
 }
 
-// в”Ђв”Ђв”Ђ TARGET: browser в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ─── TARGET: browser ─────────────────────────────────────────────────────────
 // A Chromium theme so the browser's own chrome matches the pages the userscript is
 // repainting. Its colours are RGB triples, not hex, so the fill happens on the hex
 // and is converted after -- a `${token}` inside a JSON array would not survive
@@ -449,6 +448,6 @@ buildBetterDiscord(packs);
 buildWindows(packs);
 prune(packs);
 
-if (stale) { console.error('\n' + stale + ' output(s) out of date вЂ” run `node tools/build-desktop.js`'); process.exit(1); }
+if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }
 console.log('build-desktop: ' + (wrote ? wrote + ' file(s) written' : 'everything up to date') +
   ' (' + packs.length + ' palette(s): ' + packs.map(p => p.slug).join(', ') + ')');
