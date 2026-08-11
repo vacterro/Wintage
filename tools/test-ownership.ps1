@@ -167,6 +167,88 @@ try {
     $env:WINTAGE_APPDATA = $prevWin
 }
 
+# ---- Test 5: Obsidian 2-vault Apply + immediate Reapply schedules NO work (P1#12) ----
+$prevApp5 = $env:APPDATA
+$prevWin5 = $env:WINTAGE_APPDATA
+try {
+    $fakeApp5 = Join-Path $testRoot 'appdata5'
+    $v5a = Join-Path $testRoot 'vault5a'
+    $v5b = Join-Path $testRoot 'vault5b'
+    New-Item -ItemType Directory -Path (Join-Path $fakeApp5 'obsidian'), (Join-Path $v5a '.obsidian\themes'), (Join-Path $v5b '.obsidian\themes'), (Join-Path $fakeApp5 'Wintage') -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fakeApp5 'obsidian\obsidian.json'), (@{ vaults = @{ a = @{ path = $v5a }; b = @{ path = $v5b } } } | ConvertTo-Json -Depth 4), $utf8)
+    [System.IO.File]::WriteAllText((Join-Path $v5a '.obsidian\appearance.json'), '{"cssTheme":"Default"}', $utf8)
+    [System.IO.File]::WriteAllText((Join-Path $v5b '.obsidian\appearance.json'), '{"cssTheme":"Default"}', $utf8)
+    $env:APPDATA = $fakeApp5
+    $env:WINTAGE_APPDATA = Join-Path $fakeApp5 'Wintage'
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'obsidian', '-Palette', 'goldendefault')
+    check 'obsidian multi: Apply exits 0' ($r.Code -eq 0)
+    $m5 = Get-Content (Join-Path $fakeApp5 'Wintage\installed.json') -Raw | ConvertFrom-Json
+    check 'obsidian multi: manifest records BOTH vaults in items' (@($m5.obsidian.items).Count -eq 2)
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Reapply')
+    check 'obsidian multi: immediate Reapply exits 0' ($r.Code -eq 0)
+    check 'obsidian multi: immediate Reapply schedules NO work (up to date)' (($r.Out -join ' ') -match 'up to date')
+    $m5b = Get-Content (Join-Path $fakeApp5 'Wintage\installed.json') -Raw | ConvertFrom-Json
+    check 'obsidian multi: manifest items unchanged after no-op Reapply' (@($m5b.obsidian.items).Count -eq 2)
+} finally { $env:APPDATA = $prevApp5; $env:WINTAGE_APPDATA = $prevWin5 }
+
+# ---- Test 6: Obsidian revert walks RECORDED old vaults (P1#13) ----
+$prevApp6 = $env:APPDATA
+$prevWin6 = $env:WINTAGE_APPDATA
+try {
+    $fakeApp6 = Join-Path $testRoot 'appdata6'
+    $v6a = Join-Path $testRoot 'vault6a'
+    $v6b = Join-Path $testRoot 'vault6b'
+    New-Item -ItemType Directory -Path (Join-Path $fakeApp6 'obsidian'), (Join-Path $v6a '.obsidian\themes'), (Join-Path $v6b '.obsidian\themes'), (Join-Path $fakeApp6 'Wintage') -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fakeApp6 'obsidian\obsidian.json'), (@{ vaults = @{ a = @{ path = $v6a }; b = @{ path = $v6b } } } | ConvertTo-Json -Depth 4), $utf8)
+    [System.IO.File]::WriteAllText((Join-Path $v6a '.obsidian\appearance.json'), '{"cssTheme":"Default"}', $utf8)
+    [System.IO.File]::WriteAllText((Join-Path $v6b '.obsidian\appearance.json'), '{"cssTheme":"Default"}', $utf8)
+    $env:APPDATA = $fakeApp6
+    $env:WINTAGE_APPDATA = Join-Path $fakeApp6 'Wintage'
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'obsidian', '-Palette', 'goldendefault')
+    check 'obsidian old-vault: Apply exits 0' ($r.Code -eq 0)
+    check 'obsidian old-vault: vault B themed' (Test-Path (Join-Path $v6b '.obsidian\themes\Wintage Golden Default'))
+    # vault B is REMOVED from obsidian.json but its directory still exists.
+    [System.IO.File]::WriteAllText((Join-Path $fakeApp6 'obsidian\obsidian.json'), (@{ vaults = @{ a = @{ path = $v6a } } } | ConvertTo-Json -Depth 4), $utf8)
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'obsidian', '-Revert')
+    check 'obsidian old-vault: Revert exits 0' ($r.Code -eq 0)
+    check 'obsidian old-vault: RECORDED vault B was still reverted' (-not (Test-Path (Join-Path $v6b '.obsidian\themes\Wintage Golden Default')))
+    $m6 = Get-Content (Join-Path $fakeApp6 'Wintage\installed.json') -Raw | ConvertFrom-Json
+    check 'obsidian old-vault: manifest removed' (-not $m6.obsidian)
+} finally { $env:APPDATA = $prevApp6; $env:WINTAGE_APPDATA = $prevWin6 }
+
+# ---- Test 7: Terminal multi-settings apply rolls back on second-item failure (P1#14) ----
+$prevLocal7 = $env:LOCALAPPDATA
+$prevWin7 = $env:WINTAGE_APPDATA
+try {
+    $tl = Join-Path $testRoot 'term-local'
+    $ts1 = Join-Path $tl 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
+    $ts2Local = Join-Path $tl 'Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState'
+    New-Item -ItemType Directory -Path (Split-Path $ts1), (Join-Path $ts2Local 'settings.json') -Force | Out-Null
+    $origTerm = "{
+    `"profiles`": {
+        `"defaults`": {
+            `"font`": {
+                `"face`": `"Verdana`",
+                `"size`": 11
+            }
+        }
+    },
+    `"startOnUserLogin`": false
+}
+"
+    [System.IO.File]::WriteAllText($ts1, $origTerm, $utf8)
+    # ts2's settings.json is a DIRECTORY -> the helper fails on it.
+    $fakeWin7 = Join-Path $testRoot 'winappdata7'
+    New-Item -ItemType Directory -Path (Join-Path $fakeWin7 'Wintage') -Force | Out-Null
+    $env:LOCALAPPDATA = $tl
+    $env:WINTAGE_APPDATA = Join-Path $fakeWin7 'Wintage'
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'terminal', '-Palette', 'goldendefault')
+    check 'terminal multi-apply: second-item failure exits NONZERO' ($r.Code -ne 0)
+    $afterTerm = [System.IO.File]::ReadAllText($ts1)
+    check 'terminal multi-apply: first item reverted to owned state' ($afterTerm -match '"face": "Verdana"')
+    check 'terminal multi-apply: no manifest entry' (-not (Test-Path (Join-Path $fakeWin7 'Wintage\installed.json')))
+} finally { $env:LOCALAPPDATA = $prevLocal7; $env:WINTAGE_APPDATA = $prevWin7 }
+
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue

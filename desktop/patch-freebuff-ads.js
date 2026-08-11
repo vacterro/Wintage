@@ -285,11 +285,85 @@ function isPatched(filePath, patches) {
   return { allNew, anyOld };
 }
 
-// One transaction backup (T-189): ALL files this operation owns go into a SINGLE
-// _orig-backup-<stamp>-<pid> dir with a metadata file listing them. The metadata
-// is written LAST (complete:true only after every original is captured), so a
-// crash mid-backup leaves a dir that Revert REFUSES instead of silently restoring
-// a partial snapshot. `newestBackup` never selects an arbitrary newest dir.
+// ---------------------------------------------------------------------------
+// Persistent pristine BASELINE (T-190): the stock snapshot of EVERY Wintage-owned
+// file for the current app generation. Revert restores from this baseline, never
+// from a per-apply transaction -- so a later sound-only or subset Apply can never
+// shadow the earlier recovery source. A new generation (upstream replaced an
+// owned bundle with fresh stock) establishes a NEW baseline from the current
+// files; a same-generation repaint keeps the existing one.
+// ---------------------------------------------------------------------------
+function ownedFileList() {
+  const list = [
+    { abs: bundlePath, rel: path.relative(target, bundlePath) },
+    { abs: orchestratorPath, rel: path.relative(target, orchestratorPath) },
+  ];
+  if (chimePath) list.push({ abs: chimePath, rel: path.relative(target, chimePath) });
+  return list;
+}
+
+function baselineDir() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return path.join(target, '_orig-baseline-' + stamp + '-' + process.pid);
+}
+
+function createBaseline(files) {
+  const dir = baselineDir();
+  const meta = { kind: 'baseline', files: files.map(f => f.rel), complete: false, created: new Date().toISOString(), target };
+  for (const f of files) {
+    const dst = path.join(dir, f.rel);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(f.abs, dst);
+  }
+  fs.writeFileSync(path.join(dir, 'wintage-baseline.json'), JSON.stringify(meta, null, 2), 'utf8');
+  meta.complete = true;
+  fs.writeFileSync(path.join(dir, 'wintage-baseline.json'), JSON.stringify(meta, null, 2), 'utf8');
+  return dir;
+}
+
+function baselines() {
+  const dirs = fs.readdirSync(target).filter(d => /^_orig-baseline-/.test(d));
+  const out = [];
+  for (const d of dirs) {
+    const dir = path.join(target, d);
+    const metaPath = path.join(dir, 'wintage-baseline.json');
+    if (!fs.existsSync(metaPath)) continue;
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      if (meta.kind !== 'baseline' || meta.complete !== true || !Array.isArray(meta.files) || !meta.files.length) continue;
+      if (meta.files.some(rel => !fs.existsSync(path.join(dir, rel)))) continue;
+      out.push({ dir, meta });
+    } catch (e) { continue; }
+  }
+  return out.sort((a, b) => b.dir.localeCompare(a.dir)); // newest generation first
+}
+
+function currentBaseline() { return baselines()[0] || null; }
+
+// A fresh STOCK owned bundle (no patch markers AND no old strings) means the
+// upstream shipped a new generation -- the baseline must follow it.
+function upstreamReplacedOwnedFile() {
+  for (const f of TARGET_FILES) {
+    const { allNew, anyOld } = isPatched(f.abs, f.patches);
+    if (!allNew && !anyOld) return true;
+  }
+  return false;
+}
+
+function ensureBaseline() {
+  const cur = currentBaseline();
+  if (cur && !upstreamReplacedOwnedFile()) return cur;
+  if (cur && upstreamReplacedOwnedFile()) {
+    console.log('detected a new app generation - establishing a fresh baseline from the current stock files.');
+  }
+  const dir = createBaseline(ownedFileList());
+  console.log('baseline -> ' + path.relative(target, dir));
+  return { dir, meta: JSON.parse(fs.readFileSync(path.join(dir, 'wintage-baseline.json'), 'utf8')) };
+}
+
+// One transaction backup (T-189): ALL files THIS OPERATION writes go into a
+// SINGLE _orig-backup-<stamp>-<pid> dir used ONLY for rollback of the current
+// apply's writes. Revert sources come from the baseline, never from here.
 function transactionDir() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   return path.join(target, '_orig-backup-' + stamp + '-' + process.pid);
@@ -330,21 +404,61 @@ function completeTransactions() {
   return complete.sort((a, b) => b.dir.localeCompare(a.dir)); // newest stamp first
 }
 
+// Per-file patch state classifier.
+function patchState(filePath, patches) {
+  const { allNew, anyOld } = isPatched(filePath, patches);
+  if (allNew && !anyOld) return 'patched';
+  if (!allNew && !anyOld) return 'stock';
+  if (anyOld) return 'partial';
+  return 'stale';
+}
+
+// Machine-readable health (T-190): used by install.ps1 for the FreeBuff health
+// probe and by --verify with a desired sound. PowerShell never re-parses bundles.
+function patchHealth(desiredSound) {
+  const sound = (() => {
+    if (!chimePath) return { requested: !!desiredSound, state: 'no-chime', healthy: false };
+    if (desiredSound) {
+      if (!fs.existsSync(desiredSound)) return { requested: true, state: 'missing-source', healthy: false };
+      if (fs.readFileSync(chimePath).equals(fs.readFileSync(desiredSound))) return { requested: true, state: 'installed', healthy: true };
+      return { requested: true, state: 'wrong', healthy: false };
+    }
+    const b = currentBaseline();
+    const baselineChime = b && b.meta.files.includes(path.relative(target, chimePath))
+      ? path.join(b.dir, path.relative(target, chimePath)) : null;
+    if (baselineChime && fs.existsSync(baselineChime) && fs.readFileSync(chimePath).equals(fs.readFileSync(baselineChime))) {
+      return { requested: false, state: 'stock', healthy: true };
+    }
+    return { requested: false, state: 'custom', healthy: true };
+  })();
+  const renderer = patchState(bundlePath, RENDERER_PATCHES);
+  const orchestrator = patchState(orchestratorPath, ORCHESTRATOR_PATCHES);
+  const healthy = renderer === 'patched' && orchestrator === 'patched' && sound.healthy;
+  return { renderer, orchestrator, sound, healthy };
+}
+
 // ---------------------------------------------------------------------------
-// --revert  (restores ONLY a complete transaction; partial dirs are refused)
+// --status-json  (machine-readable patch health, optionally against a desired sound)
+// ---------------------------------------------------------------------------
+if (has('status-json')) {
+  const h = patchHealth(arg('sound', null));
+  h.resources = target;
+  console.log(JSON.stringify(h));
+  process.exit(h.healthy ? 0 : 1);
+}
+
+// ---------------------------------------------------------------------------
+// --revert  (restores ONLY the current-generation baseline; partial dirs refused)
 // ---------------------------------------------------------------------------
 if (doRevert) {
-  const txs = completeTransactions();
-  if (!txs.length) {
-    die('no COMPLETE _orig-backup-* transaction found in ' + target + ' (partial/crashed backups are deliberately not restored)');
-  }
-  const tx = txs[0];
-  for (const rel of tx.meta.files) {
-    const orig = path.join(tx.dir, rel);
+  const b = currentBaseline();
+  if (!b) die('no COMPLETE baseline found in ' + target + ' - nothing to restore. A baseline is only ever captured from stock files, so its absence means no verified pristine state exists.');
+  for (const rel of b.meta.files) {
+    const orig = path.join(b.dir, rel);
     const live = path.join(target, rel);
-    if (fs.existsSync(live)) { fs.copyFileSync(orig, live); console.log('restored ' + rel); }
+    if (fs.existsSync(orig)) { if (fs.existsSync(live)) fs.copyFileSync(orig, live); console.log('restored ' + rel); }
   }
-  console.log('reverted from complete transaction ' + path.basename(tx.dir));
+  console.log('reverted from baseline ' + path.basename(b.dir));
   process.exit(0);
 }
 
@@ -352,18 +466,13 @@ if (doRevert) {
 // --verify
 // ---------------------------------------------------------------------------
 if (doVerify) {
-  let status = 'PATCHED';
-  for (const [filePath, patches] of [[bundlePath, RENDERER_PATCHES], [orchestratorPath, ORCHESTRATOR_PATCHES]]) {
-    const { allNew, anyOld } = isPatched(filePath, patches);
-    const label = path.relative(target, filePath);
-    if (!allNew && !anyOld) { console.log(label + ': STOCK (not patched, no patch markers)'); status = 'STOCK'; }
-    else if (allNew && !anyOld) { console.log(label + ': patched OK'); }
-    else if (anyOld) { console.log(label + ': PARTIAL (some old strings still present)'); status = 'PARTIAL'; }
-    else { console.log(label + ': STALE (patch strings no longer match this build)'); status = 'STALE'; }
-  }
-  console.log('sound: ' + soundStatus());
-  console.log('status: ' + status);
-  process.exit(status === 'PATCHED' ? 0 : 1);
+  const desiredSound = arg('sound', null);
+  const h = patchHealth(desiredSound);
+  console.log('renderer bundle: ' + h.renderer);
+  console.log('orchestrator: ' + h.orchestrator);
+  console.log('sound: ' + h.sound.state + (desiredSound ? ' (desired ' + desiredSound + ')' : ''));
+  console.log('status: ' + (h.healthy ? 'PATCHED' : 'UNHEALTHY'));
+  process.exit(h.healthy ? 0 : 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -437,10 +546,22 @@ if (!toWrite.length && !(soundArg && !plan.soundAlready)) {
   process.exit(0);
 }
 
+// Establish the current-generation baseline BEFORE any mutation, so Revert can
+// restore every owned file consistently (T-190).
+const base = ensureBaseline();
+
 const owned = [];
 for (const f of toWrite) owned.push({ abs: f.abs, rel: f.rel });
 if (soundArg && chimePath && !plan.soundAlready) owned.push({ abs: chimePath, rel: path.relative(target, chimePath) });
 const tx = createTransaction(owned);
+
+// Test seam: deterministically exercise the apply-phase failure path (the caller
+// restores its own pre-state when this exits nonzero).
+if (process.env.WINTAGE_FREEBUFF_TEST_FAIL_APPLY) {
+  const e = new Error('simulated apply failure (WINTAGE_FREEBUFF_TEST_FAIL_APPLY)');
+  e.code = 'EIO';
+  throw e;
+}
 
 try {
   for (const f of toWrite) {

@@ -19,11 +19,11 @@
 // rollback source and the stale relocation is replaced, so Revert restores the NEW
 // app version, never the old moved archive.
 //
-// Every operation classifies the filesystem state first (T-189). State is decided
-// from the actual layout, never from "a backup/marker exists", because a backup
-// can be stale: UPDATED_INPLACE is precisely the state where the current app.asar
-// is fresh upstream stock while the old .bak/shim from the previous version still
-// sit there, and trusting that backup would restore v1 over v2.
+// Every operation classifies the filesystem state first (T-189) and every MUTATING
+// operation is transactional (T-190): all inputs are pre-read and all changes
+// calculated BEFORE the first mutation, the fuse flip belongs to the same
+// transaction, and any failure restores the exact pre-operation state. ANY command
+// containing --dry-run performs ZERO mutations.
 //
 // Usage:
 //   node tools/install-electron.js --resources <dir> --palette golden
@@ -66,10 +66,6 @@ function asarPackageJson(file) {
     const head = Buffer.alloc(16);
     fs.readSync(fd, head, 0, 16, 0);
     // asar layout: [u32 = 4][u32 pickleSize][u32 jsonSize][u32 jsonLen][json][files]
-    // The JSON is read using the length at offset 12, but the FILE DATA starts at
-    // 8 + pickleSize — which is not the same number, because the pickle is padded
-    // to a 4-byte boundary. Using the JSON length for both worked on one app and
-    // produced a truncated package.json on the next; the padding is the difference.
     const pickleSize = head.readUInt32LE(4);
     const jsonLen = head.readUInt32LE(12);
     const header = Buffer.alloc(jsonLen);
@@ -98,16 +94,26 @@ function resolveExe() {
   })();
 }
 
-// defuse() flips two fuse bytes inside the app EXE; those bytes are not covered by
-// the asar relocation revert, so defuse() leaves a byte-exact backup beside the EXE.
-// Restore it here so --revert undoes the whole install, not half of it.
-function restoreFuseBackup(exe) {
+// ─── Fuse handling (T-190) ──────────────────────────────────────────────────
+// The fuse flip is part of the install transaction: it happens ONLY after
+// classify + preflight + calculation, and a later failure restores the EXE.
+const { blockers, defuse } = require('./electron-fuses.js');
+
+function ensureDefused(exe) {
+  if (!exe) return;
+  const b = blockers(exe);
+  if (!b.reasons.length) return;
+  console.log('install-electron: app is fused shut, attempting to defuse ' + exe + '...');
+  const d = defuse(exe);
+  if (d.error) die('could not defuse the app: ' + d.error);
+  if (d.changed) console.log('install-electron: successfully defused the app.');
+}
+
+function restoreFuseIfDefused(exe) {
   if (!exe) return;
   const bak = exe + '.wintage-fuse.bak';
   if (!fs.existsSync(bak)) return;
-  fs.copyFileSync(bak, exe);
-  fs.unlinkSync(bak);
-  console.log('install-electron: restored original fuse bytes in ' + exe + ' from backup');
+  try { fs.copyFileSync(bak, exe); fs.unlinkSync(bak); } catch (e) { }
 }
 
 const hasRoot = () => fs.existsSync(asar);
@@ -135,8 +141,6 @@ function asarIsPatched() {
 }
 
 // ─── State classification (T-189) ───────────────────────────────────────────
-// Decided from the layout, never from backup/marker existence alone: a stale
-// backup is exactly the trap UPDATED_INPLACE exists to name.
 function classifyState() {
   const bak = asar + '.bak';
   const hasBak = fs.existsSync(bak);
@@ -163,8 +167,7 @@ function classifyState() {
 }
 
 // Current version for status/health: the newest stock archive wins (root asar),
-// else the moved archive in a themed-relocated app. Both exist => the root one is
-// the current update and the state field says so.
+// else the moved archive in a themed-relocated app.
 function currentVersion() {
   if (hasRoot()) {
     try { return asarPackageJson(asar).version || null; } catch (e) { return null; }
@@ -217,16 +220,16 @@ if (has('version')) {
 }
 
 // ─── Revert ─────────────────────────────────────────────────────────────────
-// State-aware: restores the CURRENT app version, never an old moved archive.
-// A stock asar present on top of our relocation means the app updated again —
-// our app dir is removed and the fresh stock stays live (that IS the v-now).
+// State-aware: restores the CURRENT app version, never an old moved archive or a
+// stale backup. --revert --dry-run performs ZERO mutations (T-190): the fuse
+// restore is only ever called on the real mutating path.
 if (has('revert')) {
-  restoreFuseBackup(resolveExe());
   const c = classifyState();
   if (inPlace) {
     const bak = asar + '.bak';
     if (c.state === 'themed-inplace') {
       if (dryRun) { console.log('install-electron: would restore ' + bak + ' -> ' + asar + ' and remove Wintage sidecars'); process.exit(0); }
+      restoreFuseBackupForRevert(resolveExe());
       fs.copyFileSync(bak, asar);
       fs.unlinkSync(bak);
       for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
@@ -238,9 +241,10 @@ if (has('revert')) {
     if (c.state === 'updated-inplace' || c.state === 'stock') {
       // Nothing Wintage owns is live in the current asar: the backup is stale by
       // definition, so the ONLY safe reversion is dropping the sidecars and
-      // leaving the current stock asar alone. Restoring the stale backup would
-      // time-travel the app to a version it no longer is.
+      // leaving the current stock asar alone. (Covers both the stock-no-sidecars
+      // case, which is trivially a no-op, and the stale-sidecar case.)
       if (dryRun) { console.log('install-electron: would remove stale Wintage sidecars (current asar is stock, nothing to restore)'); process.exit(0); }
+      restoreFuseBackupForRevert(resolveExe());
       for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
         try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
       }
@@ -248,15 +252,11 @@ if (has('revert')) {
       console.log('install-electron: current app.asar is stock — removed stale Wintage sidecars, nothing restored');
       process.exit(0);
     }
-    if (c.state === 'stock' && !fs.existsSync(asar + '.bak')) {
-      // trivially nothing owned
-      console.log('install-electron: nothing installed at ' + resources);
-      process.exit(0);
-    }
     die('revert refused: ' + c.detail);
   } else {
     if (c.state === 'themed-relocated') {
       if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
+      restoreFuseBackupForRevert(resolveExe());
       if (fs.existsSync(movedAsar)) {
         if (fs.existsSync(asar)) die('both ' + asar + ' and ' + movedAsar + ' exist and the archive is ours — delete ' + appDir + ' by hand');
         fs.renameSync(movedAsar, asar);
@@ -271,6 +271,7 @@ if (has('revert')) {
       // Removing it leaves the current version stock — never restore the old move.
       if (!appDirIsOurs() && c.state === 'updated-relocated') die('app/ is not ours — refusing to remove it');
       if (dryRun) { console.log('install-electron: would remove stale Wintage relocation (fresh stock ' + path.basename(asar) + ' stays live)'); process.exit(0); }
+      restoreFuseBackupForRevert(resolveExe());
       fs.rmSync(appDir, { recursive: true, force: true });
       console.log('install-electron: removed stale Wintage relocation; fresh stock ' + path.basename(asar) + ' is now live');
       process.exit(0);
@@ -279,71 +280,26 @@ if (has('revert')) {
   }
 }
 
+// The fuse backup is restored only on a REAL revert (never a dry-run).
+function restoreFuseBackupForRevert(exe) {
+  if (!exe) return;
+  const bak = exe + '.wintage-fuse.bak';
+  if (!fs.existsSync(bak)) return;
+  fs.copyFileSync(bak, exe);
+  fs.unlinkSync(bak);
+  console.log('install-electron: restored original fuse bytes in ' + exe + ' from backup');
+}
+
 const palette = arg('palette', 'golden');
 const built = path.join(ROOT, 'desktop', 'out', 'electron', palette);
 if (!fs.existsSync(built)) die('no build for palette "' + palette + '" - run `node tools/build-desktop.js`');
 
-// ─── Fuse check, BEFORE anything moves ──────────────────────────────────────
-// Two Electron fuses make the shim unrunnable, and they do not fail at install
-// time -- they fail at LAUNCH, after the archive has already moved. That is how
-// Claude's desktop app broke: installed cleanly, then would not start. Reading the
-// fuses out of the binary turns a mystery into a refusal with a reason.
-const { blockers, defuse } = require('./electron-fuses.js');
-const exe = resolveExe();
-if (exe) {
-  const b = blockers(exe);
-  if (b.reasons.length) {
-    if (dryRun) {
-      console.log('install-electron: would defuse ' + exe);
-    } else {
-      console.log('install-electron: app is fused shut, attempting to defuse ' + exe + '...');
-      const d = defuse(exe);
-      if (d.error) die('could not defuse the app: ' + d.error);
-      if (d.changed) console.log('install-electron: successfully defused the app.');
-    }
-  }
-}
-
 const c = classifyState();
 if (c.state === 'ambiguous') die('refusing to touch an ambiguous state: ' + c.detail);
 
-// ─── Apply: in-place mode ───────────────────────────────────────────────────
-function installInPlace() {
-  // An `app/` folder that is not ours is the application's own unpacked source.
-  if (fs.existsSync(appDir) && !appDirIsOurs()) {
-    die(appDir + ' already exists and was not created by Wintage. This app ships an unpacked app/ directory; ' +
-      'installing here would shadow it. Refusing.');
-  }
-  const original = asarPackageJson(asar);   // current (v-now) stock archive
-  if (dryRun) {
-    console.log('install-electron: would install palette "' + palette + '" IN-PLACE into ' + asar);
-    console.log('  app name/version preserved: ' + original.name + ' ' + original.version);
-    console.log('  injecting wintage-shim.cjs into index.pre.js');
-    process.exit(0);
-  }
-
-  // Establish a pristine backup of the CURRENT archive BEFORE patching. In
-  // UPDATED_INPLACE the existing .bak is the OLD version and must not stay the
-  // rollback authority — overwriting it with the current stock archive is what
-  // makes Revert restore v-now instead of v-old.
-  const asarBak = asar + '.bak';
-  try {
-    fs.copyFileSync(asar, asarBak);
-  } catch (e) {
-    if (e.code === 'EBUSY' || e.code === 'EPERM') {
-      die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
-    }
-    throw e;
-  }
-
-  let shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
-  shimCode = shimCode.replace("require(ASAR);", "require(path.join(ASAR, '" + original.main + "'));");
-  fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
-  fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
-  fs.writeFileSync(path.join(resources, 'wintage-palette.txt'), palette + '\n');
-
-  // Patch `main` inside the archive's package.json, byte-length-identical.
-  const fd = fs.openSync(asar, 'r+');
+// ─── In-place patch calculation (pure; no mutation) ─────────────────────────
+function calculateInPlacePatch(asarPath) {
+  const fd = fs.openSync(asarPath, 'r');
   try {
     const head = Buffer.alloc(16);
     fs.readSync(fd, head, 0, 16, 0);
@@ -352,17 +308,14 @@ function installInPlace() {
     const header = Buffer.alloc(jsonLen);
     fs.readSync(fd, header, 0, jsonLen, 16);
     const index = JSON.parse(header.toString('utf8').replace(/^\uFEFF| +$/g, ''));
-
     const entry = index.files['package.json'];
     if (!entry) throw new Error('no package.json inside the archive');
     const base = 8 + pickleSize;
     const buf = Buffer.alloc(entry.size);
     fs.readSync(fd, buf, 0, entry.size, base + Number(entry.offset));
-
     const text = buf.toString('utf8');
     const m = /"main"\s*:\s*"([^"]*)"/.exec(text);
     if (!m) throw new Error('no "main" field in the archive package.json');
-
     const want = '"main":"../wintage-shim.cjs"';
     const budget = Buffer.byteLength(m[0]);
     if (Buffer.byteLength(want) > budget) {
@@ -372,20 +325,105 @@ function installInPlace() {
     const padded = want + ' '.repeat(budget - Buffer.byteLength(want));
     const newBuf = Buffer.from(text.slice(0, m.index) + padded + text.slice(m.index + m[0].length), 'utf8');
     if (newBuf.length !== buf.length) throw new Error('package.json changed size during the patch');
-    fs.writeSync(fd, newBuf, 0, newBuf.length, base + Number(entry.offset));
-
+    let newHeader = null;
     if (entry.integrity && entry.integrity.hash) {
       const crypto = require('crypto');
       const newHash = crypto.createHash('sha256').update(newBuf).digest('hex');
       const newHeaderStr = header.toString('utf8').split(entry.integrity.hash).join(newHash);
-      const newHeader = Buffer.from(newHeaderStr, 'utf8');
+      newHeader = Buffer.from(newHeaderStr, 'utf8');
       if (newHeader.length !== header.length) throw new Error('header length changed during the hash update');
-      fs.writeSync(fd, newHeader, 0, newHeader.length, 16);
     }
-    console.log('install-electron: main "' + m[1] + '" -> "../wintage-shim.cjs" (padded to ' + budget + ' bytes)');
-  } finally {
-    fs.closeSync(fd);
+    return { newBuf, newHeader, entry, base, budget, main: m[1] };
+  } finally { fs.closeSync(fd); }
+}
+
+const SIDECAR_FILES = ['wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt'];
+
+function snapshotSidecars() {
+  const snap = {};
+  for (const f of SIDECAR_FILES) {
+    const p = path.join(resources, f);
+    snap[f] = fs.existsSync(p) ? { existed: true, buf: fs.readFileSync(p) } : { existed: false };
   }
+  return snap;
+}
+
+function restoreSidecars(snap) {
+  for (const f of SIDECAR_FILES) {
+    const p = path.join(resources, f);
+    try {
+      if (snap[f].existed) fs.writeFileSync(p, snap[f].buf);
+      else if (fs.existsSync(p)) fs.unlinkSync(p);
+    } catch (e) { }
+  }
+}
+
+// ─── Apply: in-place mode (transactional, T-190) ────────────────────────────
+function installInPlace() {
+  if (fs.existsSync(appDir) && !appDirIsOurs()) {
+    die(appDir + ' already exists and was not created by Wintage. This app ships an unpacked app/ directory; ' +
+      'installing here would shadow it. Refusing.');
+  }
+  const original = asarPackageJson(asar);   // current (v-now) stock archive
+  // CALCULATE the complete patch BEFORE any mutation.
+  const patch = calculateInPlacePatch(asar);
+  const shimCode = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8')
+    .replace("require(ASAR);", "require(path.join(ASAR, '" + original.main + "'));");
+  if (dryRun) {
+    console.log('install-electron: would install palette "' + palette + '" IN-PLACE into ' + asar);
+    console.log('  app name/version preserved: ' + original.name + ' ' + original.version);
+    console.log('  injecting wintage-shim.cjs into index.pre.js');
+    process.exit(0);
+  }
+
+  const preAsar = fs.readFileSync(asar);
+  const preSidecars = snapshotSidecars();
+  const asarBak = asar + '.bak';
+
+  // Establish a pristine backup of the CURRENT archive BEFORE patching. In
+  // UPDATED_INPLACE the existing .bak is the OLD version and must not stay the
+  // rollback authority — overwriting it with the current stock archive is what
+  // makes Revert restore v-now instead of v-old.
+  try {
+    fs.copyFileSync(asar, asarBak);
+  } catch (e) {
+    if (e.code === 'EBUSY' || e.code === 'EPERM') {
+      die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
+    }
+    throw e;
+  }
+
+  // The fuse flip belongs to this transaction (T-190).
+  ensureDefused(resolveExe());
+
+  let fd = null;
+  try {
+    fs.writeFileSync(path.join(resources, 'wintage-shim.cjs'), shimCode);
+    fs.copyFileSync(path.join(built, 'wintage.css'), path.join(resources, 'wintage.css'));
+    fs.writeFileSync(path.join(resources, 'wintage-palette.txt'), palette + '\n');
+    if (process.env.WINTAGE_TEST_FAIL_AFTER_SIDECARS) throw new Error('simulated post-sidecar failure (WINTAGE_TEST_FAIL_AFTER_SIDECARS)');
+
+    fd = fs.openSync(asar, 'r+');
+    fs.writeSync(fd, patch.newBuf, 0, patch.newBuf.length, patch.base + Number(patch.entry.offset));
+    if (process.env.WINTAGE_TEST_FAIL_AFTER_ASAR_WRITE) throw new Error('simulated post-asar-write failure (WINTAGE_TEST_FAIL_AFTER_ASAR_WRITE)');
+    if (patch.newHeader) {
+      if (process.env.WINTAGE_TEST_FAIL_BEFORE_INTEGRITY) throw new Error('simulated pre-integrity failure (WINTAGE_TEST_FAIL_BEFORE_INTEGRITY)');
+      fs.writeSync(fd, patch.newHeader, 0, patch.newHeader.length, 16);
+    }
+    if (asarIsPatched() !== true) throw new Error('verification failed: archive not patched after write');
+  } catch (e) {
+    if (fd) { try { fs.closeSync(fd); } catch (e2) { } }
+    // Restore the EXACT pre-operation state: asar byte-exact, sidecars as-were.
+    try { fs.writeFileSync(asar, preAsar); } catch (e2) { }
+    restoreSidecars(preSidecars);
+    restoreFuseIfDefused(resolveExe());
+    if (e.code === 'EBUSY' || e.code === 'EPERM') {
+      die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
+    }
+    die('in-place apply failed (' + e.message + ') - restored the exact pre-operation state.');
+  }
+  if (fd) { try { fs.closeSync(fd); } catch (e2) { } }
+  try { fs.unlinkSync(path.join(resources, 'wintage-status.txt')); } catch (e) { }
 
   console.log('install-electron: installed palette "' + palette + '" IN-PLACE into ' + asar);
   console.log('  ' + original.name + ' ' + original.version + ' - name and version preserved, so userData does not move');
@@ -393,23 +431,27 @@ function installInPlace() {
   process.exit(0);
 }
 
-// ─── Apply: relocation mode ─────────────────────────────────────────────────
-// STOCK and UPDATED_RELOCATED both end in the same shape: the CURRENT stock
-// archive moves into a fresh Wintage app/ dir and the shim takes its place.
-// UPDATED_RELOCATED additionally retires the stale relocation first, so the old
-// moved archive can never survive as a rollback source.
+// ─── Apply: relocation mode (fully transactional, T-190) ────────────────────
 function installRelocation() {
   const isUpdate = (c.state === 'updated-relocated');
-  const source = isUpdate ? asar : asar;
   let original;
-  try { original = asarPackageJson(source); }
+  try { original = asarPackageJson(asar); }
   catch (e) { die('cannot read the current app.asar (' + e.message + ') — refusing to install against an unreadable archive'); }
 
-  // An `app/` folder that is not ours is the application's own unpacked source.
   if (fs.existsSync(appDir) && !appDirIsOurs() && c.state === 'stock') {
     die(appDir + ' already exists and was not created by Wintage. This app ships an unpacked app/ directory; ' +
       'installing here would shadow it. Refusing.');
   }
+
+  // PRE-READ all inputs before any mutation.
+  const pkg = Object.assign({}, original, {
+    main: 'shim.cjs',
+    wintage: MARKER,
+    wintagePalette: palette,
+    wintageOriginalMain: original.main
+  });
+  const shimContent = fs.readFileSync(path.join(built, 'shim.cjs'), 'utf8');
+  const cssContent = fs.readFileSync(path.join(built, 'wintage.css'), 'utf8');
 
   if (dryRun) {
     console.log('install-electron: would install palette "' + palette + '" into ' + appDir + (isUpdate ? ' (replacing the stale relocation; current version ' + (original.version || '?') + ' becomes the rollback source)' : ''));
@@ -418,52 +460,72 @@ function installRelocation() {
     process.exit(0);
   }
 
-  // Retire the stale relocation first (its moved archive is obsolete — the new
-  // stock archive at root is the rollback source from here on).
-  if (isUpdate) {
-    fs.rmSync(appDir, { recursive: true, force: true });
+  // The fuse flip belongs to this transaction (T-190).
+  ensureDefused(resolveExe());
+
+  // Stage the new app dir in a temp sibling; nothing live is touched until the
+  // swap below, and the OLD relocation is preserved until commit.
+  const staging = path.join(resources, '.wintage-stage-' + process.pid);
+  const oldReloc = path.join(resources, '.wintage-old-' + process.pid);
+  fs.rmSync(staging, { recursive: true, force: true });
+  fs.rmSync(oldReloc, { recursive: true, force: true });
+  fs.mkdirSync(staging, { recursive: true });
+  try {
+    fs.writeFileSync(path.join(staging, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+    fs.writeFileSync(path.join(staging, 'shim.cjs'), shimContent);
+    fs.writeFileSync(path.join(staging, 'wintage.css'), cssContent);
+  } catch (e) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    restoreFuseIfDefused(resolveExe());
+    die('relocation staging failed (' + e.message + ') - nothing was changed.');
+  }
+  if (process.env.WINTAGE_TEST_FAIL_AFTER_STAGE) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    restoreFuseIfDefused(resolveExe());
+    die('simulated staging failure (WINTAGE_TEST_FAIL_AFTER_STAGE) - nothing was changed.');
   }
 
-  const pkg = Object.assign({}, original, {
-    main: 'shim.cjs',
-    wintage: MARKER,
-    wintagePalette: palette,
-    wintageOriginalMain: original.main
-  });
-
-  fs.mkdirSync(appDir, { recursive: true });
-  fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
-  fs.copyFileSync(path.join(built, 'shim.cjs'), path.join(appDir, 'shim.cjs'));
-  fs.copyFileSync(path.join(built, 'wintage.css'), path.join(appDir, 'wintage.css'));
-
-  // Transaction: move the archive + its unpacked sibling, rolling back on a
-  // partial failure so a crash never leaves a half-relocated app.
-  const moved = [];
+  // The swap: retire old relocation, move staging in, move archive + unpacked,
+  // verify. ANY failure rolls back every mutation in reverse.
+  const undo = [];
   try {
+    if (isUpdate && fs.existsSync(appDir)) {
+      fs.renameSync(appDir, oldReloc);
+      undo.push(() => fs.renameSync(oldReloc, appDir));
+    }
+    if (process.env.WINTAGE_TEST_FAIL_AFTER_OLD_RETIRE) throw new Error('simulated post-retire failure (WINTAGE_TEST_FAIL_AFTER_OLD_RETIRE)');
+
+    fs.renameSync(staging, appDir);
+    undo.push(() => fs.renameSync(appDir, staging));
+    if (process.env.WINTAGE_TEST_FAIL_AFTER_STAGING_MOVE) throw new Error('simulated post-staging-move failure (WINTAGE_TEST_FAIL_AFTER_STAGING_MOVE)');
+
     if (fs.existsSync(asar)) {
       fs.renameSync(asar, movedAsar);
-      moved.push([movedAsar, asar]);
+      undo.push(() => fs.renameSync(movedAsar, asar));
     }
-    // Test seam: deterministically exercise the partial-move rollback path.
-    if (process.env.WINTAGE_TEST_FAIL_UNPACKED_MOVE) {
-      const e = new Error('simulated unpacked-move failure (WINTAGE_TEST_FAIL_UNPACKED_MOVE)');
-      e.code = 'EIO';
-      throw e;
-    }
+    if (process.env.WINTAGE_TEST_FAIL_AFTER_ASAR_MOVE) throw new Error('simulated post-asar-move failure (WINTAGE_TEST_FAIL_AFTER_ASAR_MOVE)');
+
+    if (process.env.WINTAGE_TEST_FAIL_UNPACKED_MOVE) throw new Error('simulated unpacked-move failure (WINTAGE_TEST_FAIL_UNPACKED_MOVE)');
     if (fs.existsSync(unpacked)) {
       fs.renameSync(unpacked, movedUnpacked);
-      moved.push([movedUnpacked, unpacked]);
+      undo.push(() => fs.renameSync(movedUnpacked, unpacked));
     }
+
+    if (process.env.WINTAGE_TEST_FAIL_VERIFY) throw new Error('simulated verification failure (WINTAGE_TEST_FAIL_VERIFY)');
+    if (!fs.existsSync(movedAsar)) throw new Error('verification failed: moved archive missing');
+
+    // Commit: obsolete relocation state is dropped only after everything is in place.
+    if (fs.existsSync(oldReloc)) fs.rmSync(oldReloc, { recursive: true, force: true });
   } catch (e) {
-    for (const [to, from] of moved) {
-      try { if (fs.existsSync(to)) fs.renameSync(to, from); } catch (e2) { }
-    }
-    fs.rmSync(appDir, { recursive: true, force: true });
+    while (undo.length) { try { undo.pop()(); } catch (e2) { } }
+    fs.rmSync(staging, { recursive: true, force: true });
+    fs.rmSync(oldReloc, { recursive: true, force: true });
+    restoreFuseIfDefused(resolveExe());
     if (e.code === 'EBUSY' || e.code === 'EPERM') {
       die('the application is running - close it completely (check the tray) and run this again.\n' +
-        '  Nothing was changed: ' + path.basename(asar) + ' is still where it was.');
+        '  Nothing was changed.');
     }
-    die('relocation failed after a partial move (' + e.message + ') — rolled back the archive move and removed the incomplete app dir');
+    die('relocation failed (' + e.message + ') - rolled back to the exact pre-operation state.');
   }
 
   console.log('install-electron: installed palette "' + palette + '" into ' + appDir + (isUpdate ? ' (replaced stale relocation; current version preserved as rollback source)' : ''));

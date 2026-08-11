@@ -22,7 +22,7 @@ function Get-TargetCurrentPath([string]$key) {
         'discord'   { $css = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (Test-Path $css) { $css } else { $null }; break }
         'totalcmd'  { $ini = $TotalCmdIni; if (-not $ini) { $ini = Join-Path $env:APPDATA 'GHISLER\wincmd.ini' }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
         'totalcmd2' { $ini = $TotalCmd2Ini; if (-not $ini) { $ini = Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini' }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
-        'obsidian'  { $v = @(Get-ObsidianVaults); if ($v.Count) { ($v -join ';') } else { $null }; break }
+        'obsidian'  { $null; break }   # handled specially by Test-TargetNeedsReapply (recorded SET, never a joined fake path)
         'saipenview' { $css = if ($SaipenviewPath) { Join-Path $SaipenviewPath 'saipenview\ui\static\style.css' } else { $null }; if ($css -and (Test-Path $css)) { $css } else { $null }; break }
         'smartvac'  { $py = if ($SmartVacPath) { Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py' } else { $null }; if ($py -and (Test-Path $py)) { $py } else { $null }; break }
         'wildrift'  { $py = if ($WildRiftPath) { Join-Path $WildRiftPath 'theme.py' } else { $null }; if ($py -and (Test-Path $py)) { $py } else { $null }; break }
@@ -52,6 +52,68 @@ function Get-ElectronStatus([string]$key) {
     try { return ($out | ConvertFrom-Json) } catch { return $null }
 }
 
+# FreeBuff patch args are built ONCE and used identically for dry-run, apply and
+# health (T-190). A configured-but-missing sound file FAILS CLOSED - it is never
+# silently dropped into "no custom sound". Format validation is the patch
+# script's own preflight (isAudio).
+function Get-FreeBuffPatchArgs {
+    $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
+    if (-not (Test-Path $soundPref)) { return @() }
+    $wav = (Read-Utf8 $soundPref).Trim()
+    if (-not $wav) { return @() }
+    if (-not (Test-Path $wav)) { throw "FreeBuff: the configured completion sound is missing: $wav - refusing to run the ad/sound patch without it." }
+    return @('--sound', $wav)
+}
+
+# FreeBuff patch health (patch-freebuff-ads.js --status-json), optionally against
+# the configured desired sound so a missing/wrong sound is detected.
+function Get-FreeBuffHealth([switch]$DesiredSound) {
+    if (-not $node) { return $null }
+    $args = @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--status-json')
+    if ($DesiredSound) {
+        try {
+            $fb = Get-FreeBuffPatchArgs
+            if ($fb.Count) { $args += $fb }
+        } catch {
+            # A configured-but-missing sound means the desired state cannot be
+            # satisfied - report it as unhealthy rather than throwing from a probe.
+            return [pscustomobject]@{ renderer = 'unknown'; orchestrator = 'unknown'; sound = @{ requested = $true; state = 'missing-source'; healthy = $false }; healthy = $false }
+        }
+    }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $out = (& node $args 2>$null | Out-String).Trim()
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    if ($code -ne 0 -and -not $out) { return $null }
+    try { return ($out | ConvertFrom-Json) } catch { return $null }
+}
+
+# Byte-exact snapshot of an Electron target's owned files, used to restore the
+# EXACT pre-operation state if the second (FreeBuff) layer fails (T-190).
+function Save-ElectronStateSnapshot([string]$key) {
+    $e = $ELECTRON[$key]
+    $snap = Join-Path $env:TEMP ("wintage-elstate-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $snap -Force | Out-Null
+    $r = $e.Resources
+    foreach ($f in @('app', 'app.asar', 'app.asar.unpacked', 'wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt')) {
+        $src = Join-Path $r $f
+        if (Test-Path $src) { Copy-Item $src (Join-Path $snap $f) -Recurse -Force }
+    }
+    return $snap
+}
+
+function Restore-ElectronStateSnapshot([string]$key, [string]$snap) {
+    $e = $ELECTRON[$key]
+    $r = $e.Resources
+    foreach ($f in @('app', 'app.asar', 'app.asar.unpacked', 'wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt')) {
+        $src = Join-Path $snap $f
+        $dst = Join-Path $r $f
+        if (Test-Path $dst) { Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $src) { Copy-Item $src $dst -Recurse -Force }
+    }
+}
+
 # needsReapply = ANY of: payload outdated/malformed, resolved path moved, app
 # version changed, marker/theme state missing, target unresolved.
 function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
@@ -73,24 +135,57 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
         if ($data.path -and $st.resources -and ([IO.Path]::GetFullPath($data.path) -ne [IO.Path]::GetFullPath($st.resources))) {
             $reasons += "resolved path moved ($($data.path) -> $($st.resources))"
         }
+        if ($key -eq 'freebuff') {
+            # FreeBuff health = Electron health AND patch health AND desired-sound
+            # state (T-190). The patch layer is probed directly, never inferred.
+            $fh = Get-FreeBuffHealth -DesiredSound
+            if (-not $fh) { $reasons += 'freebuff patch health unavailable (node failed or the helper cannot run)' }
+            else {
+                if ($fh.renderer -and $fh.renderer -ne 'patched') { $reasons += "freebuff renderer $($fh.renderer)" }
+                if ($fh.orchestrator -and $fh.orchestrator -ne 'patched') { $reasons += "freebuff orchestrator $($fh.orchestrator)" }
+                if ($fh.sound -and $fh.sound.requested -and -not $fh.sound.healthy) { $reasons += "freebuff sound state $($fh.sound.state)" }
+            }
+        }
         return [pscustomobject]@{ Needs = ($reasons.Count -gt 0); Reasons = ($reasons -join '; '); Path = $st.resources }
     }
     $currentPath = Get-TargetCurrentPath $key
+    # Multi-item targets: compare the RECORDED owned set against current discovery
+    # (T-190). A recorded item that vanished or moved is unhealthy; a newly
+    # discovered item is NOT (it belongs to the next Apply).
+    if ($key -eq 'obsidian' -or $key -eq 'terminal') {
+        $recorded = @(Get-ManifestItems $data)
+        if (-not $recorded.Count) {
+            $reasons += "$key manifest carries no recorded item set"
+        } else {
+            $current = if ($key -eq 'obsidian') { @(Get-ObsidianVaults | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') }) }
+                      else { @(Get-WindowsTerminalSettingsPaths | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') }) }
+            foreach ($r in $recorded) {
+                $canon = [IO.Path]::GetFullPath($r).TrimEnd('\')
+                if ($canon -notin $current) { $reasons += "recorded $key item gone or moved: $canon" }
+            }
+        }
+        return [pscustomobject]@{ Needs = ($reasons.Count -gt 0); Reasons = ($reasons -join '; '); Path = ($recorded -join '; ') }
+    }
     if ($data.path) {
         if (-not $currentPath) { $reasons += 'recorded path is gone (target cannot be resolved)' }
         elseif ([IO.Path]::GetFullPath($data.path) -ne [IO.Path]::GetFullPath($currentPath)) { $reasons += "resolved path moved ($($data.path) -> $currentPath)" }
     } elseif (-not $currentPath) { $reasons += 'target cannot be resolved' }
     if ($currentPath) {
+        # The palette file for the RECORDED palette - its token values are the
+        # desired owned state (T-190). Absent palette file is itself unhealthy.
+        $palFile = Join-Path $root "themes\$($data.palette).json"
+        $palTokens = if (Test-Path $palFile) { Get-PaletteTokens $palFile } else { $null }
         switch ($key) {
             'windows'   { if (Test-Path $WINDOWS_THEME_MARKER) { $m = (Read-Utf8 $WINDOWS_THEME_MARKER).Trim(); if ($m -ne $data.palette) { $reasons += "windows marker palette mismatch ($m)" } } else { $reasons += 'windows theme marker missing' } }
-            'terminal'  { $paths = @(Get-WindowsTerminalSettingsPaths); $markers = @($paths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ }); if ($markers.Count -lt $paths.Count) { $reasons += 'terminal theme marker(s) missing' } }
-            'obs'       { $obsTheme = Join-Path $OBS_CONFIG 'themes\Wintage.ovt'; $obsMarker = Join-Path $OBS_CONFIG '.wintage-obs-palette'; if (-not (Test-Path $obsTheme) -or -not (Test-Path $obsMarker)) { $reasons += 'obs theme/marker missing' } }
-            'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } }
-            'browsers'  { $marker = Join-Path $BrowserStageRoot '.wintage-palette'; if (-not (Test-Path $marker)) { $reasons += 'browser stage marker missing' } }
+            'terminal'  { $paths = @(Get-WindowsTerminalSettingsPaths); $markers = @($paths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ }); if ($markers.Count -lt $paths.Count) { $reasons += 'terminal theme marker(s) missing' } else { foreach ($marker in $markers) { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "terminal marker palette mismatch ($mv)" } } } }
+            'obs'       { $obsTheme = Join-Path $OBS_CONFIG 'themes\Wintage.ovt'; $obsMarker = Join-Path $OBS_CONFIG '.wintage-obs-palette'; if (-not (Test-Path $obsTheme) -or -not (Test-Path $obsMarker)) { $reasons += 'obs theme/marker missing' } else { $mv = (Read-Utf8 $obsMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "obs marker palette mismatch ($mv)" } } }
+            'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" } }
+            'browsers'  { $marker = Join-Path $BrowserStageRoot '.wintage-palette'; if (-not (Test-Path $marker)) { $reasons += 'browser stage marker missing' } else { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "browser marker palette mismatch ($mv)" } } }
             'mpchc'     { $v = (Get-ItemProperty $MPC_KEY -Name OSDFont -ErrorAction SilentlyContinue).OSDFont; if ($v -ne 'Verdana') { $reasons += 'mpc OSD font not themed' } }
-            'saipenview' { if (-not (Test-Path (Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'))) { $reasons += 'saipenview backup missing (never themed)' } }
-            'smartvac'  { $py = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py'; if ($py -and (Test-Path $py) -and -not (Test-Path ($py + '.bak'))) { $reasons += 'smartvac backup missing (never themed)' } }
-            'wildrift'  { $py = Join-Path $WildRiftPath 'theme.py'; if ($py -and (Test-Path $py) -and -not (Test-Path ($py + '.bak'))) { $reasons += 'wildrift backup missing (never themed)' } }
+            'discord'   { $bdCss = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (-not (Test-Path $bdCss)) { $reasons += 'betterdiscord css missing' } elseif ($palTokens -and -not ((Read-Utf8 $bdCss) -match [regex]::Escape($palTokens.background))) { $reasons += 'betterdiscord css does not match the recorded palette' } }
+            'saipenview' { if (-not (Test-Path (Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'))) { $reasons += 'saipenview backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $cssFile) -match [regex]::Escape($palTokens.background))) { $reasons += 'saipenview css does not carry the recorded palette' } }
+            'smartvac'  { $py = if ($SmartVacPath) { Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py' } else { $null }; if (-not $py -or -not (Test-Path $py)) { $reasons += 'smartvac file missing' } elseif (-not (Test-Path ($py + '.bak'))) { $reasons += 'smartvac backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $py) -match [regex]::Escape($palTokens.background))) { $reasons += 'smartvac owned tokens do not match the recorded palette' } }
+            'wildrift'  { $py = if ($WildRiftPath) { Join-Path $WildRiftPath 'theme.py' } else { $null }; if (-not $py -or -not (Test-Path $py)) { $reasons += 'wildrift file missing' } elseif (-not (Test-Path ($py + '.bak'))) { $reasons += 'wildrift backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $py) -match [regex]::Escape($palTokens.background))) { $reasons += 'wildrift owned tokens do not match the recorded palette' } }
         }
     }
     [pscustomobject]@{ Needs = ($reasons.Count -gt 0); Reasons = ($reasons -join '; '); Path = $currentPath }
@@ -255,11 +350,34 @@ function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [
     }
     $live = Read-Utf8 $liveFile
     $bak = Read-Utf8 $bakFile
-    if (Test-SourceProvenanceChanged $live $bak $kind) {
-        Copy-Item $liveFile $bakFile -Force
-        Say "$label : the source changed since the last Wintage touch - rollback base refreshed from the current source." 'Yellow'
+    if (-not (Test-SourceProvenanceChanged $live $bak $kind)) { return }
+    # REBASE (T-190): the live file's NON-owned content becomes the new pristine
+    # base, but its OWNED token values are replaced by the OLD pristine's owned
+    # values. A themed live file (Wintage still applied while the user edited an
+    # unrelated function) must NEVER become the "pristine" backup wholesale -
+    # that would make Revert restore Wintage colours instead of the stock source.
+    $newPristine = $live
+    if ($kind -eq 'smartvac') {
+        foreach ($anchor in $script:SV_ANCHOR_NAMES) {
+            $oldM = [regex]::Match($bak, "(?m)^$anchor\s*=\s*'([^']*)'")
+            $newM = [regex]::Match($newPristine, "(?m)^$anchor\s*=\s*'([^']*)'")
+            # Only rewrite an owned region whose VALUE actually changed (Wintage
+            # themed it). A same-value anchor keeps its original bytes so an
+            # unmodified upstream file stays byte-exact.
+            if ($oldM.Success -and $newM.Success -and $newM.Groups[1].Value -ne $oldM.Groups[1].Value) {
+                $newPristine = [regex]::Replace($newPristine, "(?m)^$anchor\s*=\s*'[^']*'", "$anchor = '$($oldM.Groups[1].Value)'")
+            }
+        }
+    } else {
+        $m = [regex]::Match($bak, '(?s)TOKENS\s*=\s*\{.*?\}')
+        if ($m.Success) { $newPristine = [regex]::Replace($newPristine, '(?s)TOKENS\s*=\s*\{.*?\}', $m.Value) }
     }
+    Write-Utf8 $bakFile $newPristine
+    Say "$label : the source changed since the last Wintage touch - rollback base re-based (owned token values kept from the previous pristine)." 'Yellow'
 }
+
+# The 23 SMART VAC owned assignment names (the anchors the apply patches).
+$script:SV_ANCHOR_NAMES = @('WIN95_BG','WIN95_BG_SOFT','WIN95_SURFACE','WIN95_SURFACE_RAISED','WIN95_SURFACE_ALT','WIN95_BEVEL_HI','WIN95_BEVEL_SH','WIN95_BORDER_MUTED','WIN95_TEXT','WIN95_TEXT_DIM','WIN95_TEXT_MUTED','WIN95_GOLD','WIN95_GOLD_LIGHT','WIN95_GOLD_DIM','WIN95_GOLD_DARK','WIN95_RED','WIN95_DANGER','WIN95_GREEN','WIN95_BUTTON','WIN95_BUTTON_HOVER','WIN95_ENTRY','WIN95_SCROLL','WIN95_SCROLL_HOVER')
 
 function Invoke-WindowsTerminal {
     param([switch]$DoRevert, [string]$PaletteSlug)
@@ -269,20 +387,52 @@ function Invoke-WindowsTerminal {
 
     $helper = Join-Path $root 'tools/install-terminal.js'
     $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
+
+    if ($DoRevert) {
+        # Revert walks the RECORDED owned settings files, not today's discovery
+        # (T-190): a settings.json that vanished from discovery after Apply is
+        # still part of the ledger and must be handled (or fail closed).
+        $m = Read-Manifest
+        $recorded = if ($m.ContainsKey('terminal')) { @(Get-ManifestItems $m['terminal']) } else { @() }
+        if (-not $recorded.Count) { $recorded = @($settingsPaths) }
+        $failedItems = @()
+        foreach ($settings in $recorded) {
+            try {
+                $args = @($helper, '--settings', $settings, '--revert')
+                if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw "Windows Terminal dry-run FAILED ($LASTEXITCODE) - see the message above." }; continue }
+                if ($PSCmdlet.ShouldProcess($settings, 'Restore the pre-Wintage settings')) {
+                    & node $args
+                    if ($LASTEXITCODE -ne 0) { throw "Windows Terminal revert failed for $settings" }
+                }
+            } catch { $failedItems += $settings }
+        }
+        if ($failedItems.Count) { throw "Windows Terminal revert INCOMPLETE for: $($failedItems -join '; ') - manifest kept." }
+        Remove-ManifestEntry 'terminal'
+        return
+    }
+
+    # Multi-settings apply is transactional (T-190): EVERY file is preflighted
+    # first, then each is mutated; if item N fails, items 1..N-1 are reverted to
+    # their owned-field state so no themed file is left without a manifest.
+    $applied = @()
     foreach ($settings in $settingsPaths) {
         $args = @($helper, '--settings', $settings)
-        if ($DoRevert) { $args += '--revert' } else { $args += @('--palette', $paletteFile) }
-        $action = if ($DoRevert) { 'Restore the pre-Wintage settings' } else { "Apply $PaletteSlug + $CONSOLE_FONT to every profile" }
+        $args += @('--palette', $paletteFile)
+        $action = "Apply $PaletteSlug + $CONSOLE_FONT to every profile"
         if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw "Windows Terminal dry-run FAILED ($LASTEXITCODE) - see the message above." }; continue }
         if ($PSCmdlet.ShouldProcess($settings, $action)) {
             & node $args
-            if ($LASTEXITCODE -ne 0) { throw "Windows Terminal patch failed for $settings" }
+            if ($LASTEXITCODE -ne 0) {
+                foreach ($done in $applied) {
+                    & node $helper --settings $done --revert 2>$null | Out-Null
+                }
+                throw "Windows Terminal patch failed for $settings - previously applied settings were reverted; the manifest was NOT updated."
+            }
+            $applied += $settings
         }
     }
-    if ($settingsPaths.Count) {
-        $firstPath = $settingsPaths[0]
-        if ($DoRevert) { Remove-ManifestEntry 'terminal' }
-        else { Set-ManifestEntry 'terminal' $PaletteSlug $firstPath 'n/a' (Get-PayloadVersion) }
+    if ($applied.Count) {
+        Set-ManifestEntryMulti 'terminal' $PaletteSlug (@($applied | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
     }
 }
 
@@ -292,7 +442,7 @@ function Invoke-Conhost {
     if (-not $keys.Count) { Assert-TargetResolvable 'Console Host' $false; return }
 
     if ($DoRevert) {
-        if (-not (Test-Path $CONHOST_BACKUP)) { Say 'Console Host: no Wintage backup to restore from.' 'DarkYellow'; return }
+        Assert-RevertSource 'conhost' $CONHOST_BACKUP 'Console Host'
         if ($PSCmdlet.ShouldProcess($CONHOST_KEY, 'Restore pre-Wintage console colours and font')) {
             # Windows PowerShell 5.1 returns a top-level JSON array as one
             # Object[] pipeline item. Assign first, then enumerate it; wrapping
@@ -1016,8 +1166,16 @@ function Invoke-Obsidian {
     }
 
     if ($DoRevert) {
+        # Revert walks the RECORDED owned vault set, not today's discovery
+        # (T-190): a vault removed from obsidian.json after Apply must still be
+        # reverted, and a newly-discovered vault belongs to the next Apply, never
+        # to this rollback. Legacy manifests without `items` fall back to the
+        # single recorded `path`.
+        $m = Read-Manifest
+        $recorded = if ($m.ContainsKey('obsidian')) { @(Get-ManifestItems $m['obsidian']) } else { @() }
+        if (-not $recorded.Count) { $recorded = @($vaults) }
         $failedVaults = @()
-        foreach ($vault in $vaults) {
+        foreach ($vault in $recorded) {
             try {
                 $themesDir = Join-Path $vault '.obsidian/themes'
                 $appearance = Join-Path $vault '.obsidian/appearance.json'
@@ -1044,8 +1202,8 @@ function Invoke-Obsidian {
                 }
             } catch { $failedVaults += "$vault ($($_.Exception.Message))" }
         }
-        # Remove the manifest ONLY after every vault reverted; a partial revert
-        # keeps it as recovery evidence (T-189).
+        # Remove the manifest ONLY after every RECORDED vault reverted; a partial
+        # revert keeps it as recovery evidence (T-189/T-190).
         if ($failedVaults.Count) { throw "Obsidian revert INCOMPLETE for: $($failedVaults -join '; ') - manifest kept." }
         Remove-ManifestEntry 'obsidian'
         return
@@ -1083,12 +1241,13 @@ function Invoke-Obsidian {
             }
         } catch { $failedVaults += "$vault ($($_.Exception.Message))" }
     }
-    # The manifest is advanced ONLY after EVERY vault succeeded (T-189). A partial
-    # install keeps the manifest as recovery evidence and fails the target.
+    # The manifest is advanced ONLY after EVERY vault succeeded (T-189) and
+    # records the EXACT owned vault SET (T-190) so a later Reapply compares sets,
+    # not a `;`-joined fake path.
     if ($failedVaults.Count) {
         throw "Obsidian apply INCOMPLETE for: $($failedVaults -join '; ') - manifest NOT advanced; re-run after fixing the failing vault(s)."
     }
-    Set-ManifestEntry 'obsidian' $PaletteSlug (($vaults | Select-Object -First 1)) 'n/a' (Get-PayloadVersion)
+    Set-ManifestEntryMulti 'obsidian' $PaletteSlug (@($vaults | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
 }
 
 function Invoke-Obs {
@@ -1124,7 +1283,7 @@ function Invoke-MpcHc {
     $bak = Join-Path $bakDir 'mpc-hc-settings.reg'
 
     if ($DoRevert) {
-        if (-not (Test-Path $bak)) { Say 'MPC-HC: no backup to restore from.' 'DarkYellow'; return }
+        Assert-RevertSource 'mpchc' $bak 'MPC-HC'
         if ($PSCmdlet.ShouldProcess($MPC_REG, "Restore from $bak")) {
             # reg import merges; it restores the values that were captured and leaves
             # anything created since. That is the honest limit of a .reg backup and

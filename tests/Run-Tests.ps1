@@ -228,12 +228,33 @@ if (-not $validateSetMatch.Success) {
 Write-Host "
 --- Testing Script Syntax ---" -ForegroundColor Cyan
 $parseErrors = $null
-foreach ($script in @("$root\desktop\install.ps1", "$root\desktop\WintageInstaller.ps1", "$root\tools\install-browsers.ps1")) {
+foreach ($script in @("$root\desktop\install.ps1", "$root\desktop\WintageInstaller.ps1", "$root\tools\install-browsers.ps1", "$root\desktop\modules\common.ps1", "$root\desktop\modules\targets.ps1")) {
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$parseErrors)
     Assert-True ($parseErrors.Count -eq 0) "$($script | Split-Path -Leaf) parses with zero syntax errors"
     if ($parseErrors.Count -gt 0) {
         foreach ($e in $parseErrors) { Write-Host "       Line $($e.Extent.StartLineNumber): $($e.Message)" -ForegroundColor Red }
     }
+}
+
+Write-Host "
+--- Testing Function Definition Uniqueness ---" -ForegroundColor Cyan
+# No module may define the same function twice in one scope (T-190/P1#9):
+# "last definition wins" is how two supposedly identical copies become different
+# six months later. install.ps1 dot-sources common.ps1 THEN i18n.ps1, so a
+# duplicate across those two is a real collision in one process.
+$moduleFiles = @(
+    "$root\desktop\modules\common.ps1",
+    "$root\desktop\modules\targets.ps1",
+    "$root\desktop\i18n.ps1",
+    "$root\desktop\install.ps1",
+    "$root\desktop\WintageInstaller.ps1"
+)
+foreach ($script in $moduleFiles) {
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$null)
+    $names = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name })
+    $dups = @($names | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+    Assert-True ($dups.Count -eq 0) "$($script | Split-Path -Leaf) has no duplicate function definitions"
+    if ($dups.Count -gt 0) { Write-Host "       Duplicates: $($dups -join ', ')" -ForegroundColor Red }
 }
 
 Write-Host "

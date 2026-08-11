@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.26.6] - 2026-08-11
+
+- FreeBuff recovery is now a persistent per-generation BASELINE: every Wintage-owned file (renderer bundle, orchestrator, completion sound) is snapshotted as pristine stock, and Revert restores the current generation consistently — a later sound-only or subset Apply can never shadow the earlier recovery source, and an upstream app update starts a fresh generation baseline. The FreeBuff target is also atomic as a whole: both the Electron layer and the ad/sound patch are preflighted before any mutation, and a second-layer failure restores the exact pre-operation Electron state (a repaint rolls back to the old palette, never an uninstall). A configured-but-missing completion sound now fails closed in both `-WhatIf` and Apply, and the Reapply health probe checks the patch layer (renderer/orchestrator/sound) directly instead of assuming it.
+- Electron installs are now fully transactional: `--dry-run` performs zero mutations (the fuse restore is never touched on a dry-run), the fuse flip happens only after state classification and preflight and is rolled back on any later failure, and both the relocation and in-place apply paths stage their changes and restore the exact pre-operation state on any injected failure.
+- Revert now restores ONLY the fields Wintage owns, merged into the current config, for Obsidian and Windows Terminal too, and multi-item targets record their exact owned SET (`items`) in the manifest so health compares canonical path sets and revert walks the recorded items even when some vanish from today's discovery.
+- Source-tree rollback provenance is safer: when the upstream source changes, the rollback base is re-based from the live non-owned content plus the old pristine's owned token values — a themed file can never become the "pristine" backup.
+- Health probes now verify owned VALUES (marker == recorded palette, source-tree tokens == palette, generated CSS carries the palette), not just marker existence, so a tampered marker/token/CSS is detected and repaired by `-Reapply`.
+- Concurrency hardening: the manifest write cleans up its temp on failure, an abandoned mutex is treated as acquisition (not a timeout), and the duplicate-function static gate is enforced across all installer modules.
+- `-Target all` without Node no longer aborts globally: native/source-tree targets still run, absent generated-build targets skip, and present generated-build consumers fail with an aggregated result.
+
 ## [1.26.5] - 2026-08-11
 
 - `-Reapply` now decides by TARGET HEALTH, not just the Wintage payload version: an application update or a moved install (same payload, new app version / new path / lost theme) triggers a re-apply, and an unhealthy recorded target is reported instead of skipped. `-Reapply -WhatIf` runs each child's real preflight so a broken helper surfaces as a nonzero exit, and an explicit or manifest-recorded target that cannot be resolved is a hard failure (bulk `-Target all` keeps treating genuine absence as a skip).

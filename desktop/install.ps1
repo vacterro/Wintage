@@ -155,10 +155,11 @@ $OBS_CONFIG = Join-Path $env:APPDATA 'obs-studio'
 $OBS_THEME_ID = 'com.wintage.OBS'
 
 # Resolved BEFORE the listing, not after: the listing reads Electron fuses through
-# node, and when this lived below it, $node was still empty there -- so every app
+# node, and when this lived below it, $node was still empty there — so every app
 # silently reported "not themed" instead of "fused shut", which is the one line in
 # the table a user actually needs when an app refuses to start.
-$node = Get-Command node -ErrorAction SilentlyContinue
+# Test seam: WINTAGE_TEST_NO_NODE lets fixtures exercise the no-Node code paths.
+$node = if ($env:WINTAGE_TEST_NO_NODE) { $null } else { Get-Command node -ErrorAction SilentlyContinue }
 
 # Resolve source-tree paths from paths.json when not passed on the command line.
 # The GUI writes remembered paths there; the CLI consults the same file so a path
@@ -455,14 +456,16 @@ if (-not $Target) {
 
 # The built output is generated, not committed by hand -- refuse to install a stale
 # or missing build rather than silently shipping last week's colours. This is
-# TARGET-AWARE (T-189): only targets that CONSUME desktop/out need the build
+# TARGET-AWARE (T-189/T-190): only targets that CONSUME desktop/out need the build
 # verified, and a missing Node is then a FAIL unless -Force (the user explicitly
-# accepted unverified/stale generated output). Native/config targets that patch
-# the user's own files (mpchc, terminal, conhost, source-tree) are never blocked
-# needlessly by an absent Node.
+# accepted unverified/stale generated output). For `-Target all` the check is NOT
+# global (T-190): each build-consuming target verifies its own prerequisites at
+# dispatch, absent ones SKIP, and unrelated native/source-tree targets execute.
 $BUILD_CONSUMING = @($TARGETS.Keys) + @($ELECTRON.Keys) + @('windows', 'browsers', 'obs', 'discord', 'obsidian')
-$needsGeneratedBuild = ($Target -eq 'all') -or ($Target -in $BUILD_CONSUMING)
-if ($needsGeneratedBuild) {
+
+# For an EXPLICIT build-consuming target the global check still applies: the user
+# asked for exactly this target, so an unverifiable build aborts before dispatch.
+if ($Target -in $BUILD_CONSUMING -and $Target -ne 'all') {
     if ($node) {
         & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
@@ -473,6 +476,14 @@ if ($needsGeneratedBuild) {
     elseif (-not $Force) {
         throw (T 'NodeNotFoundBuild')
     }
+}
+
+# For `-Target all`, run the build check ONCE and cache it; the dispatch loop
+# applies it per PRESENT build-consuming target (T-190).
+$allBuildCurrent = $null   # $null = unknown (no node), $true/$false = check result
+if ($Target -eq 'all' -and $node) {
+    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
+    $allBuildCurrent = ($LASTEXITCODE -eq 0)
 }
 
 # Every target that is neither a VS Code extension nor an Electron app -- i.e. one
@@ -507,6 +518,18 @@ $dispatchFailures = @()
 
 foreach ($name in $names) {
     try {
+
+    # T-190: for `-Target all`, a PRESENT build-consuming target needs a
+    # verifiable current build; absent build-consuming targets are skipped by
+    # their own handlers. Native/source-tree targets are never blocked.
+    if ($Target -eq 'all' -and $name -in $BUILD_CONSUMING -and -not $Force) {
+        $present = Get-TargetCurrentPath $name
+        if (-not $present -and $TARGETS.ContainsKey($name)) { $present = $TARGETS[$name].Dir }
+        if ($present) {
+            if (-not $node) { throw "${name}: cannot verify the generated build without Node (use -Force to accept unverified output)." }
+            if ($allBuildCurrent -eq $false) { throw "${name}: the generated build is stale - run 'node tools/build-desktop.js' (or use -Force)." }
+        }
+    }
 
     if ($name -eq 'windows') { Invoke-WindowsTheme -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'browsers') {
@@ -587,42 +610,43 @@ foreach ($name in $names) {
             & node $nodeArgs --palette $Palette --dry-run
             if ($LASTEXITCODE -ne 0) { throw "$($e.Name): dry-run FAILED ($LASTEXITCODE) - see the message above." }
             if ($name -eq 'freebuff') {
-                # FreeBuff WhatIf validates BOTH layers (T-189): a stale ad-patch
-                # matcher or missing sound must fail the plan, not just warn.
+                # FreeBuff WhatIf validates BOTH layers (T-189/T-190) with the
+                # IDENTICAL patch args the real apply would use.
                 if (-not (Test-Path $adPatch)) { throw 'FreeBuff: patch-freebuff-ads.js is missing - the mandatory post-step cannot be validated.' }
-                & node $adPatch --dry-run
+                $fbPatchArgs = Get-FreeBuffPatchArgs
+                & node $adPatch @fbPatchArgs --dry-run
                 if ($LASTEXITCODE -ne 0) { throw "FreeBuff: ad/sound patch dry-run FAILED ($LASTEXITCODE) - see the message above." }
             }
             continue
         }
         if ($PSCmdlet.ShouldProcess($e.Resources, $action)) {
-            & node $nodeArgs --palette $Palette
-            if ($LASTEXITCODE -ne 0) { throw "$($e.Name): apply FAILED ($LASTEXITCODE) - see the message above." }
-            # FreeBuff ships its own ad network (renderer + orchestrator routes).
-            # The shim themes it; this cuts the ads out of the bundle and routes.
-            # A custom completion sound is a per-machine preference written by
-            # the GUI (WintageInstaller.ps1 -> %APPDATA%\Wintage\freebuff-sound.txt):
-            # if one is set, hand it to the same patch run so the ads and the
-            # sound are applied together.
-            #
-            # The manifest is written only AFTER both the shim AND the mandatory
-            # FreeBuff post-step succeeded. A partial apply (shim in, ads not cut)
-            # must never record the target as current -- it stays incomplete so
-            # the next -Reapply actually retries it.
+            # FreeBuff is atomic AS A WHOLE (T-190): BOTH layers are preflighted
+            # before ANY mutation, and if the second layer fails the first is
+            # restored to its exact pre-operation state (never a blind --revert,
+            # which would uninstall a valid previously-themed install).
+            $fbPatchArgs = @()
             if ($name -eq 'freebuff') {
                 if (-not (Test-Path $adPatch)) { throw 'FreeBuff: patch-freebuff-ads.js is missing - the mandatory ad/sound post-step cannot run, so the target is NOT recorded as installed.' }
-                if ($PSCmdlet.ShouldProcess($e.Resources, 'Cut FreeBuff ads')) {
-                    $patchArgs = @()
-                    $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
-                    if (Test-Path $soundPref) {
-                        $wav = (Read-Utf8 $soundPref).Trim()
-                        if ($wav -and (Test-Path $wav)) { $patchArgs = @('--sound', $wav) }
-                    }
-                    & node $adPatch @patchArgs
-                    if ($LASTEXITCODE -ne 0) {
-                        throw 'FreeBuff: shim applied but the ad/sound patch FAILED - run patch-freebuff-ads.js --scan to see what this build carries, then update the strings. The manifest was NOT updated, so -Reapply will retry.'
-                    }
+                $fbPatchArgs = Get-FreeBuffPatchArgs
+                & node $nodeArgs --palette $Palette --dry-run
+                if ($LASTEXITCODE -ne 0) { throw "FreeBuff: Electron dry-run FAILED ($LASTEXITCODE) - nothing was changed." }
+                & node $adPatch @fbPatchArgs --dry-run
+                if ($LASTEXITCODE -ne 0) { throw "FreeBuff: ad/sound patch dry-run FAILED ($LASTEXITCODE) - nothing was changed." }
+            }
+            $elSnap = if ($name -eq 'freebuff') { Save-ElectronStateSnapshot $name } else { $null }
+            & node $nodeArgs --palette $Palette
+            if ($LASTEXITCODE -ne 0) {
+                if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
+                throw "$($e.Name): apply FAILED ($LASTEXITCODE) - see the message above."
+            }
+            if ($name -eq 'freebuff') {
+                & node $adPatch @fbPatchArgs
+                if ($LASTEXITCODE -ne 0) {
+                    Restore-ElectronStateSnapshot $name $elSnap
+                    Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue
+                    throw 'FreeBuff: shim applied but the ad/sound patch FAILED - the Electron layer was restored to its exact pre-operation state; the manifest was NOT updated. Run patch-freebuff-ads.js --scan to see what this build carries.'
                 }
+                Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue
             }
             Say "  Restart $($e.Name) to see it. Undo: .\install.ps1 -Target $name -Revert" 'DarkGray'
             $appVer = 'n/a'

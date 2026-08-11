@@ -1,3 +1,3 @@
-done: T-189 second-pass audit shipped as v1.26.5 (2a8a4af) - target-health Reapply, Electron state machine, FreeBuff transaction, owned-field revert, manifest concurrency.
-remaining: nothing (board empty).
-avaiting: qqq to collect WIKI-007 if the wiki restamp is wanted; SAIT-007 reviewed.
+done: T-190 in progress - FreeBuff baseline/atomic/sound/health, Electron dry-run/defuse/relocation/inplace transactions, P1 ownership + concurrency.
+remaining: P0+P1+P2 items of T-190, then verify, review, ship.
+awaiting: nothing.

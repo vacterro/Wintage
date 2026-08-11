@@ -150,13 +150,13 @@ check 'semver missing recorded version is never up to date' (-not (Test-PayloadU
 Clean-TestState
 Reset-SmartVacDir
 Write-PathsJson @{ smartvac = $svDirB }
-$svHealthy = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
-# A themed target has its backup marker; the health probe requires it.
-Copy-Item $svHealthy ($svHealthy + '.bak') -Force
-# The health probe requires the recorded path to resolve AND the theming marker
-# (backup) to exist; a fake C:\nonexistent path is now correctly a FAIL signal.
-@{smartvac=@{palette='goldendefault';path=$svHealthy;appVersion='n/a';payloadVersion='99.99.99';applied='2026-01-01T00:00:00Z'}} | ConvertTo-Json |
-    ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
+# REAL apply first so the file actually carries the palette tokens (the deeper
+# T-190 health probe checks owned values, not just marker existence).
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1 | Out-Null
+check 'test2: real apply exits 0' ($LASTEXITCODE -eq 0)
+$mHealthy = Read-TestManifest
+$mHealthy.smartvac.payloadVersion = '99.99.99'   # force "payload current" so health alone decides
+$mHealthy | ConvertTo-Json -Depth 3 | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
 check 'up-to-date healthy target is skipped' ($out -match 'up to date')
 check 'reapply of an up-to-date healthy manifest exits 0' ($LASTEXITCODE -eq 0)
@@ -422,8 +422,9 @@ $svPristine = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
 $v1Bytes = [System.IO.File]::ReadAllBytes($svPristine)
 & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1 | Out-Null
 check 'provenance: apply v1 exits 0' ($LASTEXITCODE -eq 0)
-# Upstream ships v2: same anchors, new hexes, an unrelated new function.
-$v2 = ($svSource -replace "'#010203'", "'#0A0B0C'") + "`ndef helper_v2():`n    return 'unrelated v2 code'`n"
+# Upstream ships v2: SAME owned token values (app constants), an unrelated new
+# function added. The provenance rebase keeps the tokens and takes the new code.
+$v2 = $svSource + "`ndef helper_v2():`n    return 'unrelated v2 code'`n"
 [System.IO.File]::WriteAllText($svPristine, $v2, $utf8NoBom)
 $v2Bytes = [System.IO.File]::ReadAllBytes($svPristine)
 & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette dracula 2>&1 | Out-Null
@@ -436,29 +437,205 @@ $reverted = [System.IO.File]::ReadAllBytes($svPristine)
 check 'provenance: revert restores pristine v2, NOT v1' ((Compare-Object $v2Bytes $reverted).Count -eq 0)
 check 'provenance: revert does NOT restore the obsolete v1' ((Compare-Object $v1Bytes $reverted).Count -ne 0)
 
-# ---- Test 18: concurrent manifest writers keep BOTH entries (P1#18) ----
+# ---- Test 18: concurrent manifest writers keep BOTH entries (P1#11) ----
+# No sleep-based assertions: child processes are captured with -PassThru, run
+# behind a ready/go barrier so they contend over the same read-modify-write
+# interval, and completion is judged by bounded WaitForExit + exit codes.
 Clean-TestState
 $mPath = Join-Path $appData 'installed.json'
 $commonPath = Join-Path $root 'desktop\modules\common.ps1'
-function Start-ManifestWriter([string]$target) {
+function New-WriterScript([string]$target) {
     $childScript = Join-Path $appData ("writer-$target.ps1")
     $childContent = @"
 . "$commonPath"
 `$WintageAppData = "$appData"
 `$ManifestPath = "$mPath"
 `$script:Utf8NoBom = New-Object System.Text.UTF8Encoding(`$false)
+[System.IO.File]::WriteAllText("$appData\ready-$target", 'ready')
+while (-not (Test-Path "$appData\go")) { Start-Sleep -Milliseconds 20 }
 Set-ManifestEntry "$target" 'golden' 'C:\x' '1' '2'
 "@
     [System.IO.File]::WriteAllText($childScript, $childContent, $utf8NoBom)
-    Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $childScript) -WindowStyle Hidden
+    return $childScript
 }
-Start-ManifestWriter 'alpha'
-Start-ManifestWriter 'beta'
-# Give both writers time to run; the mutex serializes them.
-Start-Sleep -Seconds 4
+function Start-Writer([string]$target) {
+    Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (New-WriterScript $target)) -WindowStyle Hidden -PassThru
+}
+$p1 = Start-Writer 'alpha'
+$p2 = Start-Writer 'beta'
+$readyDeadline = (Get-Date).AddSeconds(15)
+while ((Get-Date) -lt $readyDeadline -and -not ((Test-Path (Join-Path $appData 'ready-alpha')) -and (Test-Path (Join-Path $appData 'ready-beta')))) { Start-Sleep -Milliseconds 20 }
+[System.IO.File]::WriteAllText((Join-Path $appData 'go'), 'go')
+$bothDone = $p1.WaitForExit(15000) -and $p2.WaitForExit(15000)
+check 'concurrent writers BOTH finish within the bounded wait' $bothDone
+check 'concurrent writer 1 exits 0' ($p1.ExitCode -eq 0)
+check 'concurrent writer 2 exits 0' ($p2.ExitCode -eq 0)
 $mConc = Read-TestManifest
 check 'concurrent writers preserve BOTH entries' ($mConc.ContainsKey('alpha') -and $mConc.ContainsKey('beta'))
-check 'concurrent writers leave no temp garbage' (-not (Get-ChildItem $appData -Filter 'installed.json.tmp-*' -ErrorAction SilentlyContinue))
+check 'concurrent writers leave no tmp garbage' (-not (Get-ChildItem $appData -Filter 'installed.json.tmp-*' -ErrorAction SilentlyContinue))
+
+# ---- Test 18b: abandoned-mutex recovery (P1#10) ----
+# A writer dies while holding the manifest mutex; the NEXT writer must receive
+# the AbandonedMutexException as ACQUISITION (not a timeout) and proceed.
+Clean-TestState
+$abandonScript = Join-Path $appData 'abandon.ps1'
+$abandonContent = @"
+. "$commonPath"
+`$WintageAppData = "$appData"
+`$ManifestPath = "$mPath"
+`$script:Utf8NoBom = New-Object System.Text.UTF8Encoding(`$false)
+`$lock = Enter-ManifestLock
+[System.IO.File]::WriteAllText("$appData\abandon-locked", 'locked')
+Start-Sleep -Seconds 10
+exit 1
+"@
+[System.IO.File]::WriteAllText($abandonScript, $abandonContent, $utf8NoBom)
+$pa = Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $abandonScript) -WindowStyle Hidden -PassThru
+$lockDeadline = (Get-Date).AddSeconds(10)
+while ((Get-Date) -lt $lockDeadline -and -not (Test-Path (Join-Path $appData 'abandon-locked'))) { Start-Sleep -Milliseconds 20 }
+$pa.Kill()
+$pa.WaitForExit(5000)
+# The abandoned mutex must be recovered by a normal writer.
+[System.IO.File]::WriteAllText((Join-Path $appData 'go'), 'go')
+$p3 = Start-Writer 'gamma'
+$p3done = $p3.WaitForExit(15000)
+check 'abandoned-mutex writer finishes' $p3done
+check 'abandoned-mutex writer exits 0' ($p3.ExitCode -eq 0)
+$mAb = Read-TestManifest
+check 'abandoned-mutex writer wrote its entry' ($mAb.ContainsKey('gamma'))
+check 'abandoned-mutex recovery leaves no tmp garbage' (-not (Get-ChildItem $appData -Filter 'installed.json.tmp-*' -ErrorAction SilentlyContinue))
+
+# ---- Test 19: provenance rebase never absorbs a THEMED live file (P1#15) ----
+Clean-TestState
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+$svLive = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1 | Out-Null
+check 'themed-edit: Apply exits 0' ($LASTEXITCODE -eq 0)
+# User edits an unrelated function while Wintage is STILL applied (themed file).
+$themed = [System.IO.File]::ReadAllText($svLive, $utf8NoBom)
+$themed = $themed + "`ndef user_helper():`n    return 'user edit while themed'`n"
+[System.IO.File]::WriteAllText($svLive, $themed, $utf8NoBom)
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette dracula 2>&1 | Out-Null
+check 'themed-edit: repaint exits 0' ($LASTEXITCODE -eq 0)
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Revert 2>&1 | Out-Null
+check 'themed-edit: revert exits 0' ($LASTEXITCODE -eq 0)
+$reverted19 = [System.IO.File]::ReadAllText($svLive, $utf8NoBom)
+check 'themed-edit: unrelated edit survives the revert' ($reverted19 -match 'user_helper')
+check 'themed-edit: original stock owned tokens return (#010203)' ($reverted19 -match "(?m)^WIN95_BG\s*=\s*'#010203'$")
+check 'themed-edit: NO Wintage palette token remains' ($reverted19 -notmatch '(?i)#1A1810|#3D372A|#D4C89A')
+
+# ---- Test 20: native source-tree target applies WITHOUT Node (P1#19) ----
+Clean-TestState
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+$env:WINTAGE_TEST_NO_NODE = '1'
+$out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1
+$env:WINTAGE_TEST_NO_NODE = ''
+check 'native target applies WITHOUT node' ($LASTEXITCODE -eq 0)
+$sv20 = [System.IO.File]::ReadAllText((Join-Path $svDirB '_SMART_VAC_CLEANER.py'), $utf8NoBom)
+$pack20 = [System.IO.File]::ReadAllText((Join-Path $root 'themes\goldendefault.json'), $utf8NoBom) | ConvertFrom-Json
+check 'native target without node is actually themed' ($sv20 -match [regex]::Escape($pack20.tokens.background))
+
+# ---- Test 21: a PRESENT generated-build consumer FAILS without Node (P1#19) ----
+Clean-TestState
+$prevLocal21 = $env:LOCALAPPDATA
+try {
+    $fakeLocal21 = Join-Path $testRoot 'localappdata-nn'
+    $agRes21 = Join-Path $fakeLocal21 'Programs\Antigravity\resources'
+    New-Item -ItemType Directory -Path $agRes21 -Force | Out-Null
+    Build-FakeAsar (Join-Path $agRes21 'app.asar') '1.0.0'
+    $env:LOCALAPPDATA = $fakeLocal21
+    $env:WINTAGE_TEST_NO_NODE = '1'
+    $prevEap21 = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target 'antigravity-app' -Palette goldendefault 2>&1
+    $code21 = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap21
+    $env:WINTAGE_TEST_NO_NODE = ''
+    check 'present generated-consumer target FAILS without node' ($code21 -ne 0)
+} finally { $env:LOCALAPPDATA = $prevLocal21 }
+
+# ---- Test 22: Write-Manifest failure cleans its tmp and keeps the old manifest (P1#20) ----
+Clean-TestState
+$mPath22 = Join-Path $appData 'installed.json'
+. $common
+$script:WintageAppData = $appData
+$script:ManifestPath = $mPath22
+$script:Utf8NoBom = $utf8NoBom
+$prevFail = $env:WINTAGE_TEST_FAIL_MANIFEST_MOVE
+$env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = '1'
+$threw22 = $false
+try { Set-ManifestEntry 'probe' 'golden' 'C:\p' '1' '2' } catch { $threw22 = $true }
+$env:WINTAGE_TEST_FAIL_MANIFEST_MOVE = $prevFail
+check 'Write-Manifest replace failure throws' $threw22
+check 'Write-Manifest failure leaves the OLD manifest intact' (-not (Test-Path $mPath22))
+check 'Write-Manifest failure leaves NO tmp garbage' (-not (Get-ChildItem $appData -Filter 'installed.json.tmp-*' -ErrorAction SilentlyContinue))
+
+# ---- Test 23: owned-token tamper is detected and repaired by Reapply (P1#16) ----
+Clean-TestState
+Reset-SmartVacDir
+Write-PathsJson @{ smartvac = $svDirB }
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target smartvac -Palette goldendefault 2>&1 | Out-Null
+check 'token-tamper: apply exits 0' ($LASTEXITCODE -eq 0)
+$py23 = Join-Path $svDirB '_SMART_VAC_CLEANER.py'
+$t23 = [System.IO.File]::ReadAllText($py23, $utf8NoBom) -replace "(?m)^WIN95_BG\s*=\s*'[^']*'", "WIN95_BG = '#BADBAD'"
+[System.IO.File]::WriteAllText($py23, $t23, $utf8NoBom)
+$out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
+check 'token-tamper: Reapply exits 0' ($LASTEXITCODE -eq 0)
+$after23 = [System.IO.File]::ReadAllText($py23, $utf8NoBom)
+$pack23 = [System.IO.File]::ReadAllText((Join-Path $root 'themes\goldendefault.json'), $utf8NoBom) | ConvertFrom-Json
+check 'token-tamper: Reapply repaired the owned token' ($after23 -match [regex]::Escape($pack23.tokens.background))
+
+# ---- Test 24: BetterDiscord css tamper is detected and repaired by Reapply (P1#16) ----
+Clean-TestState
+$prevApp24 = $env:APPDATA
+try {
+    $fakeApp24 = Join-Path $testRoot 'bdappdata'
+    New-Item -ItemType Directory -Path (Join-Path $fakeApp24 'BetterDiscord\themes'), (Join-Path $fakeApp24 'Wintage') -Force | Out-Null
+    $env:APPDATA = $fakeApp24
+    $env:WINTAGE_APPDATA = Join-Path $fakeApp24 'Wintage'
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target discord -Palette goldendefault 2>&1
+    check 'discord-tamper: apply exits 0' ($LASTEXITCODE -eq 0)
+    $bdCss24 = Join-Path $fakeApp24 'BetterDiscord\themes\wintage.theme.css'
+    $t24 = [System.IO.File]::ReadAllText($bdCss24, $utf8NoBom) -replace [regex]::Escape($pack23.tokens.background), '#000000'
+    [System.IO.File]::WriteAllText($bdCss24, $t24, $utf8NoBom)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
+    check 'discord-tamper: Reapply exits 0' ($LASTEXITCODE -eq 0)
+    $after24 = [System.IO.File]::ReadAllText($bdCss24, $utf8NoBom)
+    check 'discord-tamper: Reapply repaired the css' ($after24 -match [regex]::Escape($pack23.tokens.background))
+} finally { $env:APPDATA = $prevApp24 }
+
+# ---- Test 25: browser stage marker tamper is detected and repaired by Reapply (P1#16) ----
+Clean-TestState
+$prevLocal25 = $env:LOCALAPPDATA
+$prevApp25 = $env:APPDATA
+try {
+    $browserRoot25 = Join-Path $testRoot 'browsers'
+    $fakeBrowser25 = Join-Path $browserRoot25 'Portable Browser'
+    $fakeExe25 = Join-Path $fakeBrowser25 'chrome.exe'
+    $fakeData25 = Join-Path $fakeBrowser25 'User Data'
+    $fakeProfile25 = Join-Path $fakeData25 'Default'
+    $tmDir25 = Join-Path $fakeProfile25 'Extensions\dhdgffkkebhmkfjojejmpbldmpobfkfo\5.5.0_0'
+    $stage25 = Join-Path $browserRoot25 'stage'
+    New-Item -ItemType Directory -Path $tmDir25 -Force | Out-Null
+    [System.IO.File]::WriteAllBytes($fakeExe25, [byte[]]@())
+    [System.IO.File]::WriteAllText((Join-Path $fakeProfile25 'Preferences'), '{}', $utf8NoBom)
+    [System.IO.File]::WriteAllText((Join-Path $fakeData25 'Local State'), '{}', $utf8NoBom)
+    $catalog25 = Join-Path $browserRoot25 'catalog.json'
+    @([ordered]@{ Name = 'Fixture'; Exe = $fakeExe25; UserData = $fakeData25 }) | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText($catalog25, $_, $utf8NoBom) }
+    $fakeApp25 = Join-Path $testRoot 'winappdata25'
+    New-Item -ItemType Directory -Path (Join-Path $fakeApp25 'Wintage') -Force | Out-Null
+    $env:APPDATA = $fakeApp25
+    $env:WINTAGE_APPDATA = Join-Path $fakeApp25 'Wintage'
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target browsers -Palette goldendefault -BrowserCatalog $catalog25 -BrowserStageRoot $stage25 -NoBrowserLaunch 2>&1
+    check 'browser-tamper: apply exits 0' ($LASTEXITCODE -eq 0)
+    [System.IO.File]::WriteAllText((Join-Path $stage25 '.wintage-palette'), 'dracula', $utf8NoBom)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply -BrowserStageRoot $stage25 2>&1
+    check 'browser-tamper: Reapply exits 0' ($LASTEXITCODE -eq 0)
+    $after25 = ([System.IO.File]::ReadAllText((Join-Path $stage25 '.wintage-palette'), $utf8NoBom)).Trim()
+    check 'browser-tamper: Reapply repaired the marker' ($after25 -eq 'goldendefault')
+} finally { $env:LOCALAPPDATA = $prevLocal25; $env:APPDATA = $prevApp25 }
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

@@ -24,9 +24,11 @@ const check = (label, got, want) => {
 };
 
 // Minimal valid asar: [u32=4][u32 pickleSize][u32 jsonSize][u32 jsonLen][json][pad][file]
-function buildAsar(file, pkg) {
+function buildAsar(file, pkg, withIntegrity) {
   const data = Buffer.from(JSON.stringify(pkg, null, 2), 'utf8');
-  const json = Buffer.from(JSON.stringify({ files: { 'package.json': { size: data.length, offset: '0' } } }), 'utf8');
+  const entry = { size: data.length, offset: '0' };
+  if (withIntegrity) entry.integrity = { hash: 'a'.repeat(64) };
+  const json = Buffer.from(JSON.stringify({ files: { 'package.json': entry } }), 'utf8');
   const jsonLen = json.length;
   const pickleSize = 8 + jsonLen + (4 - ((8 + jsonLen) % 4 || 4));
   const base = 8 + pickleSize;
@@ -37,6 +39,17 @@ function buildAsar(file, pkg) {
   head.writeUInt32LE(jsonLen, 12);
   const pad = Buffer.alloc(base - 16 - jsonLen);
   fs.writeFileSync(file, Buffer.concat([head, json, pad, data]));
+}
+
+const FUSE_SENTINEL = Buffer.from('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX');
+function buildFusedExe() {
+  const head = Buffer.alloc(2);
+  head[0] = 1; head[1] = 8;
+  const fuses = Buffer.alloc(8);
+  fuses.fill(0x30);
+  fuses[6] = 0x31;   // EnableEmbeddedAsarIntegrityValidation
+  fuses[7] = 0x31;   // OnlyLoadAppFromAsar
+  return Buffer.concat([Buffer.from('MZ fake exe '), FUSE_SENTINEL, head, fuses, Buffer.from(' padding')]);
 }
 
 const PKG = (version) => ({ name: 'FakeApp', version, main: 'src/main/entry/index.js'.padEnd(40, '.') });
@@ -170,6 +183,79 @@ const mk = (name) => { const d = path.join(tmp, name, 'resources'); fs.mkdirSync
   const r = run('--resources "' + R + '" --palette goldendefault');
   check('ambiguous app/ is refused', r.code !== 0, true);
   check('ambiguous refusal leaves everything in place', fs.existsSync(path.join(R, 'app', 'foreign.txt')), true);
+}
+
+// ---- T-190: --revert --dry-run performs ZERO mutations (P0#5) ----
+{
+  const R = mk('dryrun');
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'));
+  const exe = path.join(path.dirname(R), 'FakeApp.exe');
+  fs.writeFileSync(exe, buildFusedExe());
+  const fuseBackup = exe + '.wintage-fuse.bak';
+  const fakeBak = buildFusedExe().slice(0, 12);
+  fs.writeFileSync(fuseBackup, fakeBak);
+  const exeBefore = fs.readFileSync(exe);
+  const bakBefore = fs.readFileSync(fuseBackup);
+  const asarBefore = fs.readFileSync(path.join(R, 'app.asar'));
+  const r = run('--resources "' + R + '" --revert --dry-run');
+  check('dry-run revert exits 0', r.code, 0);
+  check('dry-run revert leaves EXE byte-identical', fs.readFileSync(exe).equals(exeBefore), true);
+  check('dry-run revert leaves the fuse backup intact', fs.existsSync(fuseBackup) && fs.readFileSync(fuseBackup).equals(bakBefore), true);
+  check('dry-run revert leaves resources untouched', fs.readFileSync(path.join(R, 'app.asar')).equals(asarBefore), true);
+}
+
+// ---- T-190: ambiguous state + fused EXE => Apply refuses BEFORE defusing (P0#6) ----
+{
+  const R = mk('ambiguous-fuse');
+  fs.mkdirSync(path.join(R, 'app'), { recursive: true });
+  fs.writeFileSync(path.join(R, 'app', 'foreign.txt'), 'not ours');
+  const exe = path.join(path.dirname(R), 'FakeApp.exe');
+  fs.writeFileSync(exe, buildFusedExe());
+  const exeBefore = fs.readFileSync(exe);
+  const r = run('--resources "' + R + '" --palette goldendefault');
+  check('ambiguous + fused: Apply exits NONZERO', r.code !== 0, true);
+  check('ambiguous + fused: EXE byte-identical (defuse never ran)', fs.readFileSync(exe).equals(exeBefore), true);
+  check('ambiguous + fused: no fuse backup side effect', !fs.existsSync(exe + '.wintage-fuse.bak'), true);
+}
+
+// ---- T-190: relocation transaction rolls back on every injected failure (P0#7) ----
+const RELO_FAIL_SEAMS = ['WINTAGE_TEST_FAIL_AFTER_STAGE', 'WINTAGE_TEST_FAIL_AFTER_STAGING_MOVE', 'WINTAGE_TEST_FAIL_AFTER_ASAR_MOVE', 'WINTAGE_TEST_FAIL_UNPACKED_MOVE', 'WINTAGE_TEST_FAIL_VERIFY'];
+for (const seam of RELO_FAIL_SEAMS) {
+  const R = mk('relo-' + seam);
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'));
+  const pre = fs.readFileSync(path.join(R, 'app.asar'));
+  const r = run('--resources "' + R + '" --palette goldendefault', { [seam]: '1' });
+  check('relo ' + seam + ': exits NONZERO', r.code !== 0, true);
+  check('relo ' + seam + ': root asar byte-exact', fs.existsSync(path.join(R, 'app.asar')) && fs.readFileSync(path.join(R, 'app.asar')).equals(pre), true);
+  check('relo ' + seam + ': no app dir', !fs.existsSync(path.join(R, 'app')), true);
+  check('relo ' + seam + ': no staging/old leftovers', !fs.readdirSync(R).some(n => n.startsWith('.wintage-')), true);
+}
+{
+  // Updated-relocated + retire failure: the OLD relocation must be preserved.
+  const R = mk('relo-oldretire');
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'));
+  let r = run('--resources "' + R + '" --palette goldendefault');
+  check('relo oldretire: initial apply exits 0', r.code, 0);
+  const oldMoved = fs.readFileSync(path.join(R, 'app', 'app.asar'));
+  buildAsar(path.join(R, 'app.asar'), PKG('2.0.0'));   // app update lands
+  const newAsar = fs.readFileSync(path.join(R, 'app.asar'));
+  r = run('--resources "' + R + '" --palette goldendefault', { WINTAGE_TEST_FAIL_AFTER_OLD_RETIRE: '1' });
+  check('relo AFTER_OLD_RETIRE: exits NONZERO', r.code !== 0, true);
+  check('relo AFTER_OLD_RETIRE: new root asar intact', fs.readFileSync(path.join(R, 'app.asar')).equals(newAsar), true);
+  check('relo AFTER_OLD_RETIRE: old app dir restored with its moved archive', fs.existsSync(path.join(R, 'app', 'app.asar')) && fs.readFileSync(path.join(R, 'app', 'app.asar')).equals(oldMoved), true);
+  check('relo AFTER_OLD_RETIRE: no staging/old leftovers', !fs.readdirSync(R).some(n => n.startsWith('.wintage-')), true);
+}
+
+// ---- T-190: in-place transaction rolls back on every injected failure (P0#8) ----
+const INPLACE_FAIL_SEAMS = ['WINTAGE_TEST_FAIL_AFTER_SIDECARS', 'WINTAGE_TEST_FAIL_AFTER_ASAR_WRITE', 'WINTAGE_TEST_FAIL_BEFORE_INTEGRITY'];
+for (const seam of INPLACE_FAIL_SEAMS) {
+  const R = mk('inplace-' + seam);
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'), true);
+  const pre = fs.readFileSync(path.join(R, 'app.asar'));
+  const r = run('--resources "' + R + '" --in-place --palette goldendefault', { [seam]: '1' });
+  check('inplace ' + seam + ': exits NONZERO', r.code !== 0, true);
+  check('inplace ' + seam + ': asar byte-exact', fs.readFileSync(path.join(R, 'app.asar')).equals(pre), true);
+  check('inplace ' + seam + ': no sidecars left', !['wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt'].some(f => fs.existsSync(path.join(R, f))), true);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

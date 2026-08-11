@@ -70,10 +70,18 @@ function Write-Manifest($manifest) {
     $content = (($manifest | ConvertTo-Json -Depth 3) + "`n")
     # Atomic replace with a UNIQUE temp name per writer (T-189): a fixed
     # installed.json.tmp would let two writers collide on the temp path itself.
+    # The temp is always cleaned up, even when validation or the rename fails
+    # (T-190): a failed write leaves the OLD manifest intact and no tmp garbage.
     $tmp = $ManifestPath + '.tmp-' + [guid]::NewGuid().ToString('N')
-    Write-Utf8 $tmp $content
-    $null = Read-Utf8 $tmp | ConvertFrom-Json
-    Move-Item $tmp $ManifestPath -Force
+    try {
+        Write-Utf8 $tmp $content
+        $null = Read-Utf8 $tmp | ConvertFrom-Json
+        # Test seam: exercise the replace-failure cleanup path.
+        if ($env:WINTAGE_TEST_FAIL_MANIFEST_MOVE) { throw 'simulated manifest replace failure (WINTAGE_TEST_FAIL_MANIFEST_MOVE)' }
+        Move-Item $tmp $ManifestPath -Force
+    } finally {
+        if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+    }
 }
 
 # Serialize the FULL read-modify-write of the manifest across processes (T-189).
@@ -86,8 +94,22 @@ function Enter-ManifestLock {
     $hash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($WintageAppData))).Replace('-', '').Substring(0, 20)
     $mutex = New-Object System.Threading.Mutex($false, "Local\Wintage-Manifest-$hash")
     $got = $false
-    try { $got = $mutex.WaitOne(15000) } catch { }
-    if (-not $got) { throw 'could not acquire the manifest lock within 15s - another writer is stuck; retry.' }
+    try {
+        $null = $mutex.WaitOne(15000)
+        $got = $true
+    } catch [System.Threading.AbandonedMutexException] {
+        # AbandonedMutexException means WE now own the mutex whose previous owner
+        # died mid-write. That is acquisition, not a timeout (T-190): proceed, but
+        # Read-Manifest below still fails closed if the dead writer left corrupt
+        # JSON - the lock serializes writers, it never excuses bad state.
+        $got = $true
+    } catch {
+        $got = $false
+    }
+    if (-not $got) {
+        try { $mutex.Dispose() } catch { }
+        throw 'could not acquire the manifest lock within 15s - another writer is stuck; retry.'
+    }
     return $mutex
 }
 
@@ -123,6 +145,34 @@ function Remove-ManifestEntry($target) {
     } finally { Exit-ManifestLock $lock }
 }
 
+# Multi-item ownership (T-190): targets that install into MANY locations (e.g.
+# every Obsidian vault, every Windows Terminal settings.json) record the exact
+# owned SET as `items: [{ path }]`, keeping scalar `path` = first item for
+# backward compatibility. Revert and health walk the RECORDED set, never a
+# re-discovery, so an install whose items later disappear still has its ledger.
+function Set-ManifestEntryMulti($target, $palette, [string[]]$paths, $appVersion, $payloadVersion) {
+    $lock = Enter-ManifestLock
+    try {
+        $m = Read-Manifest
+        $m[$target] = @{
+            palette       = $palette
+            path          = if ($paths.Count) { $paths[0] } else { '' }
+            items         = @($paths | ForEach-Object { @{ path = $_ } })
+            appVersion    = $appVersion
+            payloadVersion = $payloadVersion
+            applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        }
+        Write-Manifest $m
+    } finally { Exit-ManifestLock $lock }
+}
+
+function Get-ManifestItems($entry) {
+    if (-not $entry) { return @() }
+    if ($entry.items) { return @($entry.items | ForEach-Object { $_.path }) }
+    if ($entry.path) { return @($entry.path) }
+    return @()
+}
+
 # Semver comparison for the payload/version manifest check. String comparison
 # reports 1.9.0 as newer than 1.26.3, so a repo that bumped 1.9 -> 1.26 was
 # silently "up to date" and never re-applied (T-187). A value either side cannot
@@ -132,32 +182,6 @@ function Test-PayloadUpToDate([string]$recorded, [string]$current) {
     if (-not [version]::TryParse($recorded, [ref]$rv)) { return $false }
     if (-not [version]::TryParse($current, [ref]$cv)) { return $false }
     return $rv -ge $cv
-}
-
-function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $payloadVersion) {
-    $lock = Enter-ManifestLock
-    try {
-        $m = Read-Manifest
-        $m[$target] = @{
-            palette       = $palette
-            path          = $resolvedPath
-            appVersion    = $appVersion
-            payloadVersion = $payloadVersion
-            applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-        }
-        Write-Manifest $m
-    } finally { Exit-ManifestLock $lock }
-}
-
-function Remove-ManifestEntry($target) {
-    $lock = Enter-ManifestLock
-    try {
-        $m = Read-Manifest
-        if ($m.ContainsKey($target)) {
-            $m.Remove($target)
-            Write-Manifest $m
-        }
-    } finally { Exit-ManifestLock $lock }
 }
 
 # Revert-with-recovery contract (T-189): when the manifest says a target was

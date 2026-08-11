@@ -233,6 +233,86 @@ check 'Revert restores the stock sound' (-not (Compare-Object $chimeStock2 ([Sys
 $mAfter = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
 check 'Revert removes the manifest entry' (-not $mAfter.freebuff)
 
+# ---- Test 7: repeated Apply (sound B after sound A) then Revert restores ALL stock (P0#1 baseline) ----
+Clean-Fixture
+Write-StockFixture
+$stockBundle = [System.IO.File]::ReadAllBytes($bundlePath)
+$stockOrch = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
+$stockChime = [System.IO.File]::ReadAllBytes($chimePath)
+$wavA = (New-StockWav) + [byte[]]@(0xAA)
+$wavB = (New-StockWav) + [byte[]]@(0xBB)
+$wavAPath = Join-Path $testRoot 'soundA.wav'
+$wavBPath = Join-Path $testRoot 'soundB.wav'
+[System.IO.File]::WriteAllBytes($wavAPath, $wavA)
+[System.IO.File]::WriteAllBytes($wavBPath, $wavB)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
+check 'baseline: Apply with sound A exits 0' ($r.Code -eq 0)
+check 'baseline: exactly ONE baseline created' (@(Get-ChildItem $app -Directory -Filter '_orig-baseline-*').Count -eq 1)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavBPath)
+check 'baseline: Apply with sound B exits 0' ($r.Code -eq 0)
+check 'baseline: still exactly ONE baseline (same generation)' (@(Get-ChildItem $app -Directory -Filter '_orig-baseline-*').Count -eq 1)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
+check 'baseline: Revert exits 0' ($r.Code -eq 0)
+check 'baseline: Revert restores the renderer to STOCK' (-not (Compare-Object $stockBundle ([System.IO.File]::ReadAllBytes($bundlePath))))
+check 'baseline: Revert restores the orchestrator to STOCK' (-not (Compare-Object $stockOrch ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
+check 'baseline: Revert restores the chime to STOCK (sound B did not shadow recovery)' (-not (Compare-Object $stockChime ([System.IO.File]::ReadAllBytes($chimePath))))
+
+# ---- Test 8: FreeBuff apply failure after Electron mutation restores EXACT pre-state (P0#2) ----
+Clean-Fixture
+Write-StockFixture
+[System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavAPath, $utf8)
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'goldendefault')
+check 'atomic: initial Apply exits 0' ($r.Code -eq 0)
+$preAppDir = Join-Path $app 'resources\app'
+$prePkg = [System.IO.File]::ReadAllText((Join-Path $preAppDir 'package.json'), $utf8)
+$preBundle = [System.IO.File]::ReadAllBytes($bundlePath)
+$preOrch = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
+$preChime = [System.IO.File]::ReadAllBytes($chimePath)
+# Force the ad patch to fail AFTER the Electron layer repainted to dracula and
+# the patch began writing (switch to sound B so the patch has a real write).
+$env:WINTAGE_FREEBUFF_TEST_FAIL_APPLY = '1'
+[System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavBPath, $utf8)
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'dracula')
+$env:WINTAGE_FREEBUFF_TEST_FAIL_APPLY = ''
+check 'atomic: second-layer failure exits NONZERO' ($r.Code -ne 0)
+$afterPkg = [System.IO.File]::ReadAllText((Join-Path $preAppDir 'package.json'), $utf8)
+check 'atomic: Electron layer restored to EXACT pre-state (palette A preserved, not uninstalled)' ($afterPkg -eq $prePkg)
+check 'atomic: bundle restored to pre-state' (-not (Compare-Object $preBundle ([System.IO.File]::ReadAllBytes($bundlePath))))
+check 'atomic: orchestrator restored to pre-state' (-not (Compare-Object $preOrch ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
+check 'atomic: chime restored to pre-state (sound A)' (-not (Compare-Object $preChime ([System.IO.File]::ReadAllBytes($chimePath))))
+$mAtom = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
+check 'atomic: manifest unchanged (still palette goldendefault)' ($mAtom.freebuff.palette -eq 'goldendefault')
+
+# ---- Test 9: missing configured sound fails WhatIf + Apply with zero mutation (P0#3) ----
+Clean-Fixture
+Write-StockFixture
+$missPath = Join-Path $testRoot 'does-not-exist.wav'
+[System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $missPath, $utf8)
+$bundleBefore9 = [System.IO.File]::ReadAllBytes($bundlePath)
+$orchBefore9 = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'goldendefault', '-WhatIf')
+check 'missing sound: WhatIf exits NONZERO' ($r.Code -ne 0)
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'goldendefault')
+check 'missing sound: Apply exits NONZERO' ($r.Code -ne 0)
+check 'missing sound: bundle unchanged' (-not (Compare-Object $bundleBefore9 ([System.IO.File]::ReadAllBytes($bundlePath))))
+check 'missing sound: orchestrator unchanged' (-not (Compare-Object $orchBefore9 ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
+check 'missing sound: no manifest entry' (-not (Test-Path (Join-Path $fakeAppData 'Wintage\installed.json')))
+
+# ---- Test 10: FreeBuff patch-layer tamper is detected and repaired by Reapply (P0#4) ----
+Clean-Fixture
+Write-StockFixture
+$stockBundle10 = [System.IO.File]::ReadAllBytes($bundlePath)
+[System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavAPath, $utf8)
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'goldendefault')
+check 'health: initial Apply exits 0' ($r.Code -eq 0)
+# Tamper: restore the renderer bundle to STOCK while leaving the shim untouched.
+[System.IO.File]::WriteAllBytes($bundlePath, $stockBundle10)
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Reapply')
+check 'health: Reapply after renderer tamper exits 0' ($r.Code -eq 0)
+check 'health: Reapply repaired the renderer' (([System.IO.File]::ReadAllText($bundlePath)) -match 'adSlot:\(\)=>Promise\.resolve\(null\)')
+$mHealth = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
+check 'health: manifest entry preserved after repair' ([bool]$mHealth.freebuff)
+
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 exit $fail

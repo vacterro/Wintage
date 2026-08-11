@@ -4,7 +4,13 @@
 # language machinery without importing install.ps1's whole target pipeline was
 # the T-157 defect; this file is the fix.
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script:Utf8NoBom) }
+# Read-Utf8 is also defined in modules/common.ps1, which install.ps1 dot-sources
+# BEFORE this file - a second unconditional definition would be a "last
+# definition wins" duplicate in the same scope (T-190/P1#9). Define it only when
+# nothing else has (the GUI loads only this file).
+if (-not (Get-Command Read-Utf8 -ErrorAction SilentlyContinue)) {
+    function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script:Utf8NoBom) }
+}
 
 $script:LocalesDir = Join-Path $PSScriptRoot 'locales'
 
