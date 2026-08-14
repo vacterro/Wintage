@@ -37,3 +37,4 @@
 * 2026-08-14T19:42:15Z | [Agent] Fixed BetterDiscord theme (Discord refresh vars mapped, avatars unmasked)
 * 2026-08-14T19:44:19Z | [Agent] Switched Discord theme to 'golden' (Vintage UI) and mapped missing bg-base-* variables
 * 2026-08-14T19:46:27Z | [Agent] Disabled conflicting amoled-cord theme; added brute-force backgrounds to template.css
+* 2026-08-14T19:48:23Z | [Agent] Added !important to all CSS variables to defeat native Midnight theme; built goldendefault
