@@ -473,6 +473,55 @@ const AD_BLOCK = `(() => {
   return "ad block installed";
 })()`;
 
+// ─── THEME SWITCH RE-ASSERT ─────────────────────────────────────────────────
+// FreeBuff 0.0.55 ships a real theme system (Pierre dark/light, stored under
+// localStorage "freebuff:theme", resolved against prefers-color-scheme in
+// "system" mode, applied through an inline theme stylesheet). Switching themes
+// repaints the whole window with the new theme's computed colours WITHOUT the
+// class/style churn the repainter already watches, so without this watcher a
+// switch leaves the app half-Wintage, half-Pierre until the next real DOM
+// churn. Detection is cheap: a matchMedia listener, a 2s localStorage poll, and
+// a narrow documentElement attribute observer. On a switch the palette is
+// re-asserted by appending a transient <style> node, which the repainter's own
+// observer reads as a stylesheet change and answers with a full force sweep
+// over the fresh computed styles.
+const THEME_REASSERT_FIX = `(() => {
+  if (window.__wintageThemeReassert) return "already running";
+  window.__wintageThemeReassert = true;
+
+  const poke = () => {
+    if (!document.head) return;
+    const s = document.createElement("style");
+    s.setAttribute("data-w95-reassert", "1");
+    document.head.appendChild(s);
+    // Remove next tick so a later theme switch can poke again; the repainter
+    // already saw the stylesheet-bearing childList mutation.
+    setTimeout(() => { try { s.remove(); } catch (e) { } }, 0);
+  };
+
+  try {
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", poke);
+  } catch (e) { }
+
+  let lastTheme = "";
+  try { lastTheme = localStorage.getItem("freebuff:theme") || ""; } catch (e) { }
+  setInterval(() => {
+    let t = "";
+    try { t = localStorage.getItem("freebuff:theme") || ""; } catch (e) { }
+    if (t !== lastTheme) { lastTheme = t; poke(); }
+  }, 2000);
+
+  try {
+    new MutationObserver(records => {
+      for (const r of records) {
+        if (r.type === "attributes" && /theme/i.test(r.attributeName || "")) { poke(); break; }
+      }
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  } catch (e) { }
+
+  return "theme re-assert watcher installed";
+})()`;
+
 // ─── A BAR THAT REPORTS A VALUE: TRIED, MEASURED, WITHDRAWN ──────────────────
 // The problem is real and stays on the board. A usage or quota bar carries its
 // number in the PROPORTION between fill and track, surface flattening paints both
@@ -687,6 +736,9 @@ if (css) {
         wc.executeJavaScript(AD_BLOCK, true)
           .then(r => stamp('adblock: ' + r))
           .catch(err => stamp('adblock FAILED: ' + (err && err.message)));
+        wc.executeJavaScript(THEME_REASSERT_FIX, true)
+          .then(r => stamp('themereassert: ' + r))
+          .catch(err => stamp('themereassert FAILED: ' + (err && err.message)));
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         wc.insertCSS(payload, { cssOrigin: 'author' })
           .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })

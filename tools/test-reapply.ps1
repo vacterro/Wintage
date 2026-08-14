@@ -24,7 +24,7 @@ function check($label, $cond) {
 }
 
 if ($List) {
-    Write-Host "test-reapply.ps1 (34 tests):"
+    Write-Host "test-reapply.ps1 (35 tests):"
     Write-Host "  1. semver-compare-is-semantic-not-string"
     Write-Host "  2. up-to-date-payload-is-skipped"
     Write-Host "  3. unhealthy-target-detected-under-whatif-child-preflight"
@@ -59,6 +59,7 @@ if ($List) {
     Write-Host " 32. browser-stage-ownership-unowned-never-deleted"
     Write-Host " 33. saipenview-provenance-rebase"
     Write-Host " 34. manifest-schema-validation-rejects-syntax-valid-garbage"
+    Write-Host " 35. conhost-scrollback-floor-zero-history-gets-usable-buffer"
     exit 0
 }
 
@@ -953,6 +954,37 @@ try {
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Status 2>&1
     check 'manifest-schema: unknown future target key is readable (Status exits 0)' ($LASTEXITCODE -eq 0)
 } finally { $env:WINTAGE_APPDATA = $prevW34 }
+
+# ---- Test 35: conhost scrollback floor - zero-history console profiles get a usable buffer (T-193) ----
+Clean-TestState
+$prevKey35 = $env:WINTAGE_TEST_CONHOST_KEY
+$prevBakBase35 = $env:WINTAGE_BACKUP_ROOT
+$prevWintage35 = $env:WINTAGE_APPDATA
+try {
+    $conRoot35 = 'HKCU:\Software\Wintage-Test-Conhost-' + [guid]::NewGuid().ToString('N')
+    $env:WINTAGE_TEST_CONHOST_KEY = $conRoot35
+    $fakeBak35 = Join-Path $testRoot 'backup35'
+    $env:WINTAGE_BACKUP_ROOT = $fakeBak35
+    $fakeApp35 = Join-Path $testRoot 'winappdata35'
+    $env:WINTAGE_APPDATA = $fakeApp35
+    New-Item -Path $conRoot35 -Force | Out-Null
+    # The broken shape this reproduces: buffer height == window height (25 rows,
+    # 106 cols) - i.e. ZERO scrollback, the "terminal cuts my history" bug.
+    New-ItemProperty -Path $conRoot35 -Name ScreenBufferSize -Value ((25 -shl 16) -bor 106) -PropertyType DWord -Force | Out-Null
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target conhost -Palette goldendefault 2>&1
+    check 'conhost-scrollback: apply exits 0' ($LASTEXITCODE -eq 0)
+    $buf35 = (Get-ItemProperty $conRoot35 -Name ScreenBufferSize).ScreenBufferSize
+    check 'conhost-scrollback: buffer height raised to the 9001 floor' (((($buf35 -shr 16) -band 0xFFFF) -ge 9001))
+    check 'conhost-scrollback: buffer width preserved' ((($buf35 -band 0xFFFF) -eq 106))
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target conhost -Revert 2>&1
+    check 'conhost-scrollback: revert exits 0' ($LASTEXITCODE -eq 0)
+    check 'conhost-scrollback: original zero-history buffer restored byte-exact' ((Get-ItemProperty $conRoot35 -Name ScreenBufferSize).ScreenBufferSize -eq ((25 -shl 16) -bor 106))
+} finally {
+    Remove-Item $conRoot35 -Recurse -Force -ErrorAction SilentlyContinue
+    $env:WINTAGE_TEST_CONHOST_KEY = $prevKey35
+    $env:WINTAGE_BACKUP_ROOT = $prevBakBase35
+    $env:WINTAGE_APPDATA = $prevWintage35
+}
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

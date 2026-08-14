@@ -315,6 +315,7 @@ try {
     Assert-True ($terminalApplied.profiles.defaults.font.face -eq 'Consolas') 'terminal uses a fixed-width console-safe font'
     Assert-True ($terminalApplied.profiles.defaults.font.size -eq 12) 'terminal keeps the Vintage 12px font size'
     Assert-True ($terminalApplied.profiles.defaults.antialiasingMode -eq 'aliased') 'terminal keeps aliased rendering'
+    Assert-True ($terminalApplied.profiles.defaults.historySize -eq 9000) 'terminal guarantees 9000-line scrollback (historySize floor)'
     Assert-True (Test-Path ($terminalSettings + '.wintage.bak')) 'terminal fixture creates one exact backup'
 
     # Case A: no unrelated edit -> owned-field revert restores the file byte-exact.
@@ -341,6 +342,8 @@ try {
     Assert-True ($afterOwn.profiles.defaults.font.size -eq 11) 'terminal ownership revert restores the owned font size'
     $csProp = $afterOwn.profiles.defaults.PSObject.Properties['colorScheme']
     Assert-True (-not $csProp -or $csProp.Value -ne 'Wintage') 'terminal ownership revert removes the Wintage colorScheme'
+    $hsProp = $afterOwn.profiles.defaults.PSObject.Properties['historySize']
+    Assert-True (-not $hsProp) 'terminal ownership revert restores the original historySize'
     Assert-True ($afterOwn.startOnUserLogin -eq $true) 'terminal ownership revert PRESERVES the unrelated user edit (startOnUserLogin)'
     Assert-True (@($afterOwn.profiles.list | Where-Object { $_.name -eq 'User-added profile' }).Count -eq 1) 'terminal ownership revert PRESERVES a user-added profile'
     Assert-True (@($afterOwn.actions).Count -eq 1) 'terminal ownership revert PRESERVES a user-added actions block'

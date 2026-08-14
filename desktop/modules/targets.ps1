@@ -598,6 +598,32 @@ function Invoke-Conhost {
     # The full set of Wintage-owned console values for a palette. Shared by Apply,
     # the revert rollback (rebuild the themed state after a failed manifest
     # removal) and the health probe, so the "owned state" is defined ONCE.
+    #
+    # ScreenBufferSize is also owned, but its value is COMPUTED PER KEY by
+    # Get-ConhostBufferValue (Value = $null marks it). Some Windows console
+    # profiles - cmd.exe and 64-bit PowerShell born from certain launchers - have
+    # a screen buffer height EXACTLY equal to the window height, i.e. ZERO
+    # scrollback: every command shows only the last screenful and earlier output
+    # is gone forever. Wintage owns the console look, so it also guarantees a
+    # usable history buffer: height floor 9001 (the classic conhost default),
+    # width preserved from the profile's own current value.
+    $CONSOLE_SCROLLBACK_HEIGHT = 9001
+    function Get-ConhostBufferValue([string]$psPath) {
+        $current = (Get-ItemProperty -LiteralPath $psPath -Name ScreenBufferSize -ErrorAction SilentlyContinue).ScreenBufferSize
+        if ($null -eq $current) { return (($CONSOLE_SCROLLBACK_HEIGHT -shl 16) -bor 120) }
+        $u = [uint32]$current
+        $width = $u -band 0xFFFF
+        $height = ($u -shr 16) -band 0xFFFF
+        if ($width -lt 20 -or $width -gt 999) { $width = 120 }
+        if ($height -lt $CONSOLE_SCROLLBACK_HEIGHT) { $height = $CONSOLE_SCROLLBACK_HEIGHT }
+        return (($height -shl 16) -bor $width)
+    }
+    # Write one owned value; ScreenBufferSize (Value $null) is resolved per key.
+    function Set-ConhostValue([string]$psPath, [string]$name, $entry) {
+        $value = $entry.Value
+        if ($null -eq $value -and $name -eq 'ScreenBufferSize') { $value = Get-ConhostBufferValue $psPath }
+        New-ItemProperty -LiteralPath $psPath -Name $name -Value $value -PropertyType $entry.Type -Force | Out-Null
+    }
     function Get-ConhostThemeValues([string]$paletteSlug) {
         $t = Get-PaletteTokens (Join-Path $root "themes/$paletteSlug.json")
         return [ordered]@{
@@ -609,6 +635,7 @@ function Invoke-Conhost {
             PopupColors    = @{ Value = 240; Type = 'DWord' }
             CursorColor    = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
             WindowAlpha    = @{ Value = 255; Type = 'DWord' }
+            ScreenBufferSize = @{ Value = $null; Type = 'DWord' }
             ColorTable00   = @{ Value = (Convert-HexToBgr $t.background); Type = 'DWord' }
             ColorTable01   = @{ Value = (Convert-HexToBgr $t.accentTealDeep); Type = 'DWord' }
             ColorTable02   = @{ Value = (Convert-HexToBgr $t.success); Type = 'DWord' }
@@ -660,7 +687,7 @@ function Invoke-Conhost {
                     $tv = Get-ConhostThemeValues ([string]$m['conhost'].palette)
                     foreach ($key in $keys) {
                         foreach ($name in $tv.Keys) {
-                            New-ItemProperty -LiteralPath $key.PSPath -Name $name -Value $tv[$name].Value -PropertyType $tv[$name].Type -Force | Out-Null
+                            Set-ConhostValue $key.PSPath $name $tv[$name]
                         }
                     }
                 }
@@ -711,11 +738,11 @@ function Invoke-Conhost {
         }
         foreach ($key in $keys) {
             foreach ($name in $values.Keys) {
-                New-ItemProperty -LiteralPath $key.PSPath -Name $name -Value $values[$name].Value -PropertyType $values[$name].Type -Force | Out-Null
+                Set-ConhostValue $key.PSPath $name $values[$name]
             }
         }
         Say "Console Host: applied $PaletteSlug + $CONSOLE_FONT to $($keys.Count) registry profile(s)." 'Green'
-        Say '  Restart cmd/PowerShell windows to replace the old proportional-font cells.' 'Yellow'
+        Say "  Restart cmd/PowerShell windows: new font cells + guaranteed $CONSOLE_SCROLLBACK_HEIGHT-line scrollback (zero-history consoles are fixed)." 'Yellow'
         Invoke-TargetCommit 'conhost' 'Console Host' {
             Set-ManifestEntry 'conhost' $PaletteSlug $CONHOST_KEY 'n/a' (Get-PayloadVersion)
         } {

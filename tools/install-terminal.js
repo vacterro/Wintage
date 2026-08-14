@@ -34,8 +34,13 @@ const TERMINAL_FONT = 'Consolas';
 const OWNED_FIELDS = {
   colorScheme: 'profiles.defaults.colorScheme',
   font: 'profiles.defaults.font',
-  antialiasingMode: 'profiles.defaults.antialiasingMode'
+  antialiasingMode: 'profiles.defaults.antialiasingMode',
+  historySize: 'profiles.defaults.historySize'
 };
+// historySize is a FLOOR, not an exact value (T-193): a profile with no
+// scrollback (historySize 0/absent) gets the Windows Terminal default 9000;
+// a profile already above it is left alone. Revert restores the recorded value.
+const TERMINAL_SCROLLBACK = 9000;
 const OWNED_FONT_KEYS = ['face', 'size', 'weight'];
 
 function getIn(obj, pathStr) {
@@ -148,7 +153,8 @@ function readOwnedSnapshot(backupPathOrObject) {
       __wintage_owned: true,
       colorScheme: getIn(backupPathOrObject, OWNED_FIELDS.colorScheme) || null,
       font: getIn(backupPathOrObject, OWNED_FIELDS.font) || null,
-      antialiasingMode: getIn(backupPathOrObject, OWNED_FIELDS.antialiasingMode) || null
+      antialiasingMode: getIn(backupPathOrObject, OWNED_FIELDS.antialiasingMode) || null,
+      historySize: getIn(backupPathOrObject, OWNED_FIELDS.historySize) || null
     };
   }
   if (fs.existsSync(backupPathOrObject)) {
@@ -180,6 +186,9 @@ function mergeOwnedIntoCurrent(current, snap) {
   const ownedAa = snap.antialiasingMode;
   if (ownedAa) setIn(current, OWNED_FIELDS.antialiasingMode, ownedAa);
   else delIn(current, OWNED_FIELDS.antialiasingMode);
+  const ownedHistory = snap.historySize;
+  if (ownedHistory) setIn(current, OWNED_FIELDS.historySize, ownedHistory);
+  else delIn(current, OWNED_FIELDS.historySize);
   if (Array.isArray(current.schemes)) {
     current.schemes = current.schemes.filter((s) => !s || s.name !== 'Wintage');
     if (current.schemes.length === 0) delete current.schemes;   // the apply created it
@@ -228,7 +237,8 @@ const ownedSnapshot = {
   __wintage_owned: true,
   colorScheme: getIn(settings, OWNED_FIELDS.colorScheme) || null,
   font: getIn(settings, OWNED_FIELDS.font) || null,
-  antialiasingMode: getIn(settings, OWNED_FIELDS.antialiasingMode) || null
+  antialiasingMode: getIn(settings, OWNED_FIELDS.antialiasingMode) || null,
+  historySize: getIn(settings, OWNED_FIELDS.historySize) || null
 };
 if (Array.isArray(settings.profiles)) {
   settings.profiles = { defaults: {}, list: settings.profiles };
@@ -249,6 +259,10 @@ settings.profiles.defaults.font = {
   weight: 'normal'
 };
 settings.profiles.defaults.antialiasingMode = 'aliased';
+const curHistory = settings.profiles.defaults.historySize;
+settings.profiles.defaults.historySize = (typeof curHistory === 'number' && curHistory > TERMINAL_SCROLLBACK)
+  ? curHistory
+  : TERMINAL_SCROLLBACK;
 
 const scheme = {
   name: 'Wintage',

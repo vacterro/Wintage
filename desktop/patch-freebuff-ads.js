@@ -182,30 +182,38 @@ const RENDERER_PATCHES = [
 ];
 
 // --- orchestrator (NOT minified - readable, version-stable) ---
+// FreeBuff 0.0.55 moved the ad routes' calls into comma-expressions (`let app =
+// ..., ad2 = yield* ...`) and renamed the result bindings from const to let.
+// The matchers anchor on the call expression itself, not the statement shape,
+// so a minifier that renames the variable still leaves the `app.ads.*` call
+// byte-identical.
 const ORCHESTRATOR_PATCHES = [
   P(
     '/api/ad/slot returns null (no auction call)',
-    'const ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId));',
-    /const ad2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.slotAd\([A-Za-z0-9_$]*\)\);/,
-    'const ad2 = null;'
+    'ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId))',
+    /ad2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.slotAd\([A-Za-z0-9_$]*\)\)/,
+    'ad2 = null'
   ),
   P(
     '/api/ad/impression is a no-op',
-    'const ok2 = yield* exports_Effect.promise(() => app.ads.impression(impUrl));',
-    /const ok2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.impression\([A-Za-z0-9_$]*\)\);/,
-    'const ok2 = false;'
+    'let ok2 = yield* exports_Effect.promise(() => app.ads.impression(impUrl));',
+    /let ok2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.impression\([A-Za-z0-9_$]*\)\);/,
+    'let ok2 = false;'
   ),
   P(
     '/api/ad/click is a no-op',
-    'const ok2 = yield* exports_Effect.promise(() => app.ads.click(impUrl));',
-    /const ok2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.click\([A-Za-z0-9_$]*\)\);/,
-    'const ok2 = false;'
+    'let ok2 = yield* exports_Effect.promise(() => app.ads.click(impUrl));',
+    /let ok2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.click\([A-Za-z0-9_$]*\)\);/,
+    'let ok2 = false;'
   ),
   P(
     'live-turn inline ad request disabled',
-    'if (harnessId !== "codebuff")',
-    /if \(harnessId !== "codebuff"\)/,
-    'if (true)'
+    // Anchored on `return;`, NOT on the bare condition: 0.0.55 also carries
+    // `if (harnessId !== "codebuff") throw new Conflict(...)` in the slot
+    // admission gate, which must keep working.
+    'if (harnessId !== "codebuff")\n      return;',
+    /if \(harnessId !== "codebuff"\)\s*return;/,
+    'if (true) return;'
   ),
 ];
 

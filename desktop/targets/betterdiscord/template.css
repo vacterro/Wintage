@@ -31,6 +31,7 @@
   --wintage-selection: ${selection};
   --wintage-compareBack: ${compareBack};
   --wintage-accentTeal: ${accentTeal};
+  --wintage-accentTealDeep: ${accentTealDeep};
 }
 
 /* Discord surface ladder (theme-dark). */
@@ -74,6 +75,32 @@
   --brand-experiment-500: var(--wintage-accentTeal);
   --brand-experiment-200: var(--wintage-textSecondary);
   --brand-experiment-100: var(--wintage-textSecondary);
+  --brand-100: var(--wintage-textSecondary);
+  --brand-130: var(--wintage-textSecondary);
+  --brand-160: var(--wintage-textSecondary);
+  --brand-200: var(--wintage-textSecondary);
+  --brand-230: var(--wintage-textSecondary);
+  --brand-260: var(--wintage-textSecondary);
+  --brand-300: var(--wintage-textSecondary);
+  --brand-330: var(--wintage-textSecondary);
+  --brand-345: var(--wintage-textSecondary);
+  --brand-360: var(--wintage-textSecondary);
+  --brand-400: var(--wintage-accentTeal);
+  --brand-430: var(--wintage-accentTeal);
+  --brand-460: var(--wintage-accentTeal);
+  --brand-500: var(--wintage-accentTeal);
+  --brand-530: var(--wintage-accentTealDeep);
+  --brand-560: var(--wintage-accentTealDeep);
+  --brand-600: var(--wintage-accentTealDeep);
+  --brand-700: var(--wintage-accentTealDeep);
+  --brand-800: var(--wintage-accentTealDeep);
+  --brand-900: var(--wintage-accentTealDeep);
+  --bg-brand: var(--wintage-accentTeal);
+  --button-brand-background: var(--wintage-accentTeal);
+  --button-brand-background-hover: var(--wintage-accentTealDeep);
+  --button-brand-background-active: var(--wintage-accentTealDeep);
+  --control-brand-foreground: var(--wintage-accentTeal);
+  --control-brand-foreground-new: var(--wintage-accentTeal);
 
   /* Scrollbars. */
   --scrollbar-auto-thumb: var(--wintage-borderMuted);
@@ -114,6 +141,35 @@
   --interactive-muted: var(--wintage-textMuted);
   --brand-experiment: var(--wintage-accentTeal);
   --brand-experiment-600: var(--wintage-accentTealDeep);
+  --brand-experiment-500: var(--wintage-accentTeal);
+  --brand-experiment-200: var(--wintage-textSecondary);
+  --brand-experiment-100: var(--wintage-textSecondary);
+  --brand-100: var(--wintage-textSecondary);
+  --brand-130: var(--wintage-textSecondary);
+  --brand-160: var(--wintage-textSecondary);
+  --brand-200: var(--wintage-textSecondary);
+  --brand-230: var(--wintage-textSecondary);
+  --brand-260: var(--wintage-textSecondary);
+  --brand-300: var(--wintage-textSecondary);
+  --brand-330: var(--wintage-textSecondary);
+  --brand-345: var(--wintage-textSecondary);
+  --brand-360: var(--wintage-textSecondary);
+  --brand-400: var(--wintage-accentTeal);
+  --brand-430: var(--wintage-accentTeal);
+  --brand-460: var(--wintage-accentTeal);
+  --brand-500: var(--wintage-accentTeal);
+  --brand-530: var(--wintage-accentTealDeep);
+  --brand-560: var(--wintage-accentTealDeep);
+  --brand-600: var(--wintage-accentTealDeep);
+  --brand-700: var(--wintage-accentTealDeep);
+  --brand-800: var(--wintage-accentTealDeep);
+  --brand-900: var(--wintage-accentTealDeep);
+  --bg-brand: var(--wintage-accentTeal);
+  --button-brand-background: var(--wintage-accentTeal);
+  --button-brand-background-hover: var(--wintage-accentTealDeep);
+  --button-brand-background-active: var(--wintage-accentTealDeep);
+  --control-brand-foreground: var(--wintage-accentTeal);
+  --control-brand-foreground-new: var(--wintage-accentTeal);
   --scrollbar-auto-thumb: var(--wintage-borderMuted);
   --scrollbar-auto-track: var(--wintage-background);
   --scrollbar-thin-thumb: var(--wintage-borderMuted);
@@ -137,6 +193,7 @@
   --radius-round: 0px;
 }
 .theme-dark *, .theme-light * { border-radius: 0 !important; }
+.theme-dark foreignObject, .theme-light foreignObject { mask: none !important; }
 
 /* Bevel language (UI.md law 3): raised panels get a light top/left + dark
    bottom/right edge. Discord's own flat borders are replaced where they are

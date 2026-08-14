@@ -78,20 +78,45 @@ function Build-FakeAsar([string]$path, [string]$version) {
 $FULL_ORCH = @"
 const app = {};
 const exports_Effect = { promise: (f) => f() };
-function maybeRequestAd(threadId, impUrl) {
-  const ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId));
-  const ok2 = yield* exports_Effect.promise(() => app.ads.impression(impUrl));
-  const ok2 = yield* exports_Effect.promise(() => app.ads.click(impUrl));
-  if (harnessId !== "codebuff") { return ad2; }
+const routes = [
+  { pattern: "/api/ad/slot", handler: () => exports_Effect.gen(function* () {
+      let app = yield* App, value = yield* body2(req), threadId = typeof value.threadId === "string" ? value.threadId : null, ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId));
+      return json3({ ad: ad2 });
+    })
+  },
+  { pattern: "/api/ad/impression", handler: () => exports_Effect.gen(function* () {
+      let app = yield* App, impUrl = (yield* body2(req)).impUrl;
+      let ok2 = yield* exports_Effect.promise(() => app.ads.impression(impUrl));
+      return json3({ ok: ok2 });
+    })
+  },
+  { pattern: "/api/ad/click", handler: () => exports_Effect.gen(function* () {
+      let app = yield* App, impUrl = (yield* body2(req)).impUrl;
+      let ok2 = yield* exports_Effect.promise(() => app.ads.click(impUrl));
+      return json3({ ok: ok2 });
+    })
+  }
+];
+function maybeRequestAd(threadId) {
+  if (harnessId !== "codebuff")
+    return;
+  adsRequested++, deps.ads.inlineAd(threadId).then((ad2) => emit({ type: "ad", ad: ad2 }));
 }
 "@
 
 $BROKEN_ORCH = @"
 const app = {};
 const exports_Effect = { promise: (f) => f() };
-function maybeRequestAd(threadId, impUrl) {
-  const ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId));
-  if (harnessId !== "codebuff") { return ad2; }
+const routes = [
+  { pattern: "/api/ad/slot", handler: () => exports_Effect.gen(function* () {
+      let app = yield* App, value = yield* body2(req), threadId = typeof value.threadId === "string" ? value.threadId : null, ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId));
+      return json3({ ad: ad2 });
+    })
+  }
+];
+function maybeRequestAd(threadId) {
+  if (harnessId !== "codebuff")
+    return;
 }
 "@
 
