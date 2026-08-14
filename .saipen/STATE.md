@@ -1,11 +1,11 @@
 ---
-phase: DONE
+phase: VERIFY
 task: T-193
-next_action: "saipen continue"
+next_action: "verify T-193"
 blocker: none
 agent: claude
 mode: full
-execution_intent: normal
+execution_intent: converge
 saipen_version: 7
 schema_version: 3
 style_contract: ded-4ae736e4

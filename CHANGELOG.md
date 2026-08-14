@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.26.9] - 2026-08-15
+
+- FreeBuff: Updated orchestrator matchers and inline ad blocker for version 0.0.55. Added THEME_REASSERT_FIX to the electron shim to force the repainter sweep when the theme changes (poll + matchMedia/observer logic).
+- Discord: Switched to the golden palette, overriding midnight mode, embeds, and server lists. Mapped refresh brand vars and unmasked SVGs for the Golden Default layout.
+
+
 ## [1.26.8] - 2026-08-11
 
 - The browser theme stage is now OWNED, not merely "in a safe location": a directory carrying the Wintage owner marker is the only one Apply replaces or Revert deletes. An unowned stage with user data is never touched - Apply and Revert refuse instead of recursively deleting it, and the stage is swapped atomically through a temp sibling.
