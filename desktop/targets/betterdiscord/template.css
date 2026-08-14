@@ -46,6 +46,13 @@
   --background-nested-floating: var(--wintage-surface);
   --background-mobile-primary: var(--wintage-backgroundSoft);
   --background-mobile-secondary: var(--wintage-surface);
+  --bg-base-primary: var(--wintage-backgroundSoft);
+  --bg-base-secondary: var(--wintage-surface);
+  --bg-base-tertiary: var(--wintage-surfaceRaised);
+  --bg-surface-overlay: var(--wintage-surfaceRaised);
+  --bg-surface-raised: var(--wintage-surfaceRaised);
+  --bg-surface-high: var(--wintage-surface);
+  --bg-surface-higher: var(--wintage-surfaceRaised);
   --channeltextarea-background: var(--wintage-background);
   --info-warning-foreground: var(--wintage-textPrimary);
   --info-positive-background: var(--wintage-surface);
@@ -62,6 +69,8 @@
   --text-brand: var(--wintage-link);
   --header-primary: var(--wintage-textPrimary);
   --header-secondary: var(--wintage-textSecondary);
+  --text-primary: var(--wintage-textPrimary);
+  --text-secondary: var(--wintage-textSecondary);
 
   /* Interactive controls. */
   --interactive-normal: var(--wintage-textPrimary);
@@ -126,6 +135,13 @@
   --background-tertiary: var(--wintage-surface);
   --background-accent: var(--wintage-surfaceRaised);
   --background-floating: var(--wintage-surfaceRaised);
+  --bg-base-primary: var(--wintage-backgroundSoft);
+  --bg-base-secondary: var(--wintage-surface);
+  --bg-base-tertiary: var(--wintage-surfaceRaised);
+  --bg-surface-overlay: var(--wintage-surfaceRaised);
+  --bg-surface-raised: var(--wintage-surfaceRaised);
+  --bg-surface-high: var(--wintage-surface);
+  --bg-surface-higher: var(--wintage-surfaceRaised);
   --channeltextarea-background: var(--wintage-background);
   --text-normal: var(--wintage-textPrimary);
   --text-muted: var(--wintage-textMuted);
