@@ -1,1 +1,3 @@
-done: T-192 shipped as v1.26.8 (0741bec) - browser stage ownership, vscode persistent recovery, saipenview rebase, manifest schema validation, atomic release publish, GUI custom transaction, windows/conhost/terminal/electron/totalcmd commit transactions. Suites 173/72/39/electron PASS + Run-Tests ALL PASSED.
+done: T-193 FreeBuff 0.0.55 fix, v1.26.9 shipped
+remaining: nothing
+awaiting: nothing
