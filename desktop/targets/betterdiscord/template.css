@@ -35,7 +35,7 @@
 }
 
 /* Discord surface ladder (theme-dark). */
-.theme-dark {
+[class*="theme-"] {
   --background-primary: var(--wintage-backgroundSoft);
   --background-primary-alt: var(--wintage-background);
   --background-secondary: var(--wintage-surface);
@@ -197,7 +197,7 @@
 }
 
 /* Square corners -- UI.md law 1. */
-.theme-dark, .theme-light {
+[class*="theme-"] {
   --radius-sm: 0px;
   --radius-md: 0px;
   --radius-lg: 0px;
@@ -208,42 +208,45 @@
   --radius-2xs: 0px;
   --radius-round: 0px;
 }
-.theme-dark *, .theme-light * { border-radius: 0 !important; }
-.theme-dark foreignObject, .theme-light foreignObject { mask: none !important; }
+[class*="theme-"] *, .theme-light * { border-radius: 0 !important; }
+[class*="theme-"] foreignObject, .theme-light foreignObject { mask: none !important; }
 
 /* Bevel language (UI.md law 3): raised panels get a light top/left + dark
    bottom/right edge. Discord's own flat borders are replaced where they are
    visible: buttons, inputs, search, popouts, modal headers. */
-.theme-dark button:not([class*="buttonReset"]):not([class*="closeButton"]),
-.theme-dark input, .theme-dark textarea, .theme-dark select,
-.theme-dark [class*="searchBar"], .theme-dark [class*="container-"] [class*="search" i] {
+[class*="theme-"] button:not([class*="buttonReset"]):not([class*="closeButton"]),
+[class*="theme-"] input, [class*="theme-"] textarea, [class*="theme-"] select,
+[class*="theme-"] [class*="searchBar"], [class*="theme-"] [class*="container-"] [class*="search" i] {
   border: 2px solid !important;
   border-color: var(--wintage-bevelLight) var(--wintage-borderDark) var(--wintage-borderDark) var(--wintage-bevelLight) !important;
 }
-.theme-dark button:active:not([class*="closeButton"]) {
+[class*="theme-"] button:active:not([class*="closeButton"]) {
   border-color: var(--wintage-borderDark) var(--wintage-bevelLight) var(--wintage-bevelLight) var(--wintage-borderDark) !important;
   transform: translate(1px, 1px);
 }
-.theme-dark [class*="sidebar"], .theme-dark [class*="channelSidebar"] {
+[class*="theme-"] [class*="sidebar"], [class*="theme-"] [class*="channelSidebar"] {
   background-color: var(--wintage-surface) !important;
 }
-.theme-dark [class*="panels"] { background-color: var(--wintage-surface) !important; }
-.theme-dark [class*="members"] { background-color: var(--wintage-backgroundSoft) !important; }
+[class*="theme-"] [class*="panels"] { background-color: var(--wintage-surface) !important; }
+[class*="theme-"] [class*="members"] { background-color: var(--wintage-backgroundSoft) !important; }
+[class*="theme-"] [class*="chat"], [class*="theme-"] [class*="chatContent"], [class*="theme-"] main { background-color: var(--wintage-backgroundSoft) !important; }
+[class*="theme-"] [class*="guilds"], [class*="theme-"] [class*="wrapper-"]:not([class*="avatar"]) { background-color: var(--wintage-surface) !important; }
+[class*="theme-"] [class*="bg_"], [class*="theme-"] [class*="app_"] { background-color: var(--wintage-backgroundSoft) !important; }
 
 /* Font: Verdana everywhere (UI.md law 4). */
-.theme-dark, .theme-light {
+[class*="theme-"] {
   --font-primary: Verdana, "Segoe UI", sans-serif !important;
   --font-display: Verdana, "Segoe UI", sans-serif !important;
   --font-code: "Consolas", monospace !important;
   --font-size-normal: 12px;
 }
-.theme-dark * { font-family: var(--font-primary) !important; }
+[class*="theme-"] * { font-family: var(--font-primary) !important; }
 
 /* Flat depth: no elevation shadows (UI.md law 2). */
-.theme-dark [class*="elevation"] { box-shadow: none !important; }
+[class*="theme-"] [class*="elevation"] { box-shadow: none !important; }
 
 /* Status colours stay semantic. */
-.theme-dark [class*="status-"][class*="online"] { background-color: var(--wintage-success) !important; }
-.theme-dark [class*="status-"][class*="idle"] { background-color: var(--wintage-warning) !important; }
-.theme-dark [class*="status-"][class*="dnd"], .theme-dark [class*="status-"][class*="busy"] { background-color: var(--wintage-danger) !important; }
-.theme-dark [class*="status-"][class*="offline"] { background-color: var(--wintage-textMuted) !important; }
+[class*="theme-"] [class*="status-"][class*="online"] { background-color: var(--wintage-success) !important; }
+[class*="theme-"] [class*="status-"][class*="idle"] { background-color: var(--wintage-warning) !important; }
+[class*="theme-"] [class*="status-"][class*="dnd"], [class*="theme-"] [class*="status-"][class*="busy"] { background-color: var(--wintage-danger) !important; }
+[class*="theme-"] [class*="status-"][class*="offline"] { background-color: var(--wintage-textMuted) !important; }

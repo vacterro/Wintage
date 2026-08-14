@@ -36,3 +36,4 @@
 - 12.08.26 18:27 [E-671] RUN: FreeBuff 0.0.55 ad-patch matcher fix (T-193) -> install dry-run failed: orchestrator matchers expected const ad2/ok2 standalone statements, but 0.0.55 moved the ad calls into comma-expressions and uses let; also if (harnessId !== "codebuff") now appears TWICE (2nd = slot-admission gate, must keep working) so the inline-ad matcher is anchored on eturn;. Updated ORCHESTRATOR_PATCHES (exact+regex) + test-freebuff fixtures to the 0.0.55 shape; real-build dry-run shows all 4 orchestrator + 3 renderer matchers would apply; test-freebuff 72 PASS, install.ps1 -WhatIf green
 * 2026-08-14T19:42:15Z | [Agent] Fixed BetterDiscord theme (Discord refresh vars mapped, avatars unmasked)
 * 2026-08-14T19:44:19Z | [Agent] Switched Discord theme to 'golden' (Vintage UI) and mapped missing bg-base-* variables
+* 2026-08-14T19:46:27Z | [Agent] Disabled conflicting amoled-cord theme; added brute-force backgrounds to template.css
