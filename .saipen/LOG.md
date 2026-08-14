@@ -39,3 +39,4 @@
 * 2026-08-14T19:46:27Z | [Agent] Disabled conflicting amoled-cord theme; added brute-force backgrounds to template.css
 * 2026-08-14T19:48:23Z | [Agent] Added !important to all CSS variables to defeat native Midnight theme; built goldendefault
 * 2026-08-14T19:51:52Z | [Agent] Fixed Discord class selectors (underscores to hyphens) and added embed background overrides
+* 2026-08-14T20:08:53Z | [Agent] Fixed server list background to harmonize with golden default

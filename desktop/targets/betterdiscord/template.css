@@ -230,7 +230,8 @@
 [class*="theme-"] [class*="panels"] { background-color: var(--wintage-surface) !important; }
 [class*="theme-"] [class*="members"] { background-color: var(--wintage-backgroundSoft) !important; }
 [class*="theme-"] [class*="chat"], [class*="theme-"] [class*="chatContent"], [class*="theme-"] main { background-color: var(--wintage-backgroundSoft) !important; }
-[class*="theme-"] [class*="guilds"], [class*="theme-"] [class*="wrapper-"]:not([class*="avatar"]) { background-color: var(--wintage-surface) !important; }
+[class*="theme-"] nav, [class*="theme-"] [class*="guilds"], [class*="theme-"] [aria-label*="Server"], [class*="theme-"] [class*="wrapper-"]:not([class*="avatar"]) { background-color: var(--wintage-surface) !important; }
+[class*="theme-"] nav [class*="scroller"], [class*="theme-"] [class*="guilds"] [class*="scroller"] { background-color: transparent !important; }
 body, #app-mount, [class*="theme-"] [class*="bg-"], [class*="theme-"] [class*="app-"], [class*="theme-"] [class*="appMount"] { background-color: var(--wintage-backgroundSoft) !important; background-image: none !important; }
 [class*="theme-"] [class*="embedFull"], [class*="theme-"] [class*="embedWrapper"] { background-color: var(--wintage-compareBack) !important; border-color: var(--wintage-borderDark) !important; }
 
