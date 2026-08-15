@@ -49,7 +49,13 @@ function Get-Browsers {
         @('Vivaldi', 'C:\Program Files\Vivaldi\Application\vivaldi.exe', (Join-Path $env:LOCALAPPDATA 'Vivaldi\User Data')),
         @('Chromium', (Join-Path $env:LOCALAPPDATA 'Chromium\Application\chrome.exe'), (Join-Path $env:LOCALAPPDATA 'Chromium\User Data')),
         @('Opera', (Join-Path $env:LOCALAPPDATA 'Programs\Opera\launcher.exe'), (Join-Path $env:APPDATA 'Opera Software\Opera Stable')),
-        @('Opera GX', (Join-Path $env:LOCALAPPDATA 'Programs\Opera GX\launcher.exe'), (Join-Path $env:APPDATA 'Opera Software\Opera GX Stable'))
+        @('Opera', 'C:\Program Files\Opera\launcher.exe', (Join-Path $env:APPDATA 'Opera Software\Opera Stable')),
+        @('Opera', 'C:\Program Files\Opera\opera.exe', (Join-Path $env:APPDATA 'Opera Software\Opera Stable')),
+        @('Opera GX', (Join-Path $env:LOCALAPPDATA 'Programs\Opera GX\launcher.exe'), (Join-Path $env:APPDATA 'Opera Software\Opera GX Stable')),
+        @('Opera GX', 'C:\Program Files\Opera GX\launcher.exe', (Join-Path $env:APPDATA 'Opera Software\Opera GX Stable')),
+        @('Opera GX', 'C:\Program Files\Opera GX\opera.exe', (Join-Path $env:APPDATA 'Opera Software\Opera GX Stable')),
+        @('Opera Portable (Custom)', 'V:\___VAC\__P\__SOFT\_OPERA\opera.exe', (Join-Path $env:APPDATA 'Opera Software\Opera Stable')),
+        @('Opera Portable (Custom Profile)', 'V:\___VAC\__P\__SOFT\_OPERA\opera.exe', 'V:\___VAC\__P\__SOFT\_OPERA\profile\data')
     )
     foreach ($item in $known) { Add-Browser $item[0] $item[1] $item[2] }
 

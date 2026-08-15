@@ -405,7 +405,19 @@ function Remove-DeadCodeNomadCss {
 }
 
 function Get-WindowsTerminalSettingsPaths {
-    @($TERMINAL_DIRS | Where-Object { Test-Path $_ } | ForEach-Object { Join-Path $_ 'settings.json' })
+    $paths = @($TERMINAL_DIRS | Where-Object { Test-Path $_ } | ForEach-Object { Join-Path $_ 'settings.json' })
+    if ($wt = Get-Command wt.exe -ErrorAction SilentlyContinue) {
+        $dir = Split-Path $wt.Source -Parent
+        if (Test-Path (Join-Path $dir '.portable')) {
+            $paths += Join-Path $dir 'settings.json'
+        }
+    }
+    # T-194: Also check Scoop installations
+    $scoopApp = Join-Path $env:USERPROFILE 'scoop\apps\windows-terminal\current'
+    if (Test-Path $scoopApp) {
+        $paths += Join-Path $scoopApp 'settings.json'
+    }
+    @($paths | Select-Object -Unique)
 }
 
 function Get-ConhostKeys {

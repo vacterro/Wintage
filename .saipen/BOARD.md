@@ -1,7 +1,11 @@
 # BOARD
 
 ## DOING
-- [ ] T-193 FreeBuff 0.0.55 theme re-assert and ad-patch matcher fix. owner: claude claim_time: 2026-08-14T23:04:59.265882Z
+
+## DOING
+
+- [x] T-194 Fix target installation failures: terminal (wt.exe/settings.json resolution), smartvac (WIN95_SURFACE anchor mismatch), obs (ReadAllBytes on config directory instead of user.ini), browsers (works as designed for unowned old stages). | verify: all failing targets apply correctly without errors or anchor mismatches.
+
 
 
 ## TODO

@@ -450,7 +450,7 @@ function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [
 }
 
 # The 23 SMART VAC owned assignment names (the anchors the apply patches).
-$script:SV_ANCHOR_NAMES = @('WIN95_BG','WIN95_BG_SOFT','WIN95_SURFACE','WIN95_SURFACE_RAISED','WIN95_SURFACE_ALT','WIN95_BEVEL_HI','WIN95_BEVEL_SH','WIN95_BORDER_MUTED','WIN95_TEXT','WIN95_TEXT_DIM','WIN95_TEXT_MUTED','WIN95_GOLD','WIN95_GOLD_LIGHT','WIN95_GOLD_DIM','WIN95_GOLD_DARK','WIN95_RED','WIN95_DANGER','WIN95_GREEN','WIN95_BUTTON','WIN95_BUTTON_HOVER','WIN95_ENTRY','WIN95_SCROLL','WIN95_SCROLL_HOVER')
+$script:SV_ANCHOR_NAMES = @('WIN95_BG','WIN95_BG_SOFT','WIN95_SURFACE_RAISED','WIN95_SURFACE_ALT','WIN95_BEVEL_HI','WIN95_BEVEL_SH','WIN95_TEXT','WIN95_TEXT_DIM','WIN95_TEXT_MUTED','WIN95_GOLD','WIN95_GOLD_DIM','WIN95_ACCENT','WIN95_DANGER','WIN95_SUCCESS','WIN95_BUTTON','WIN95_BUTTON_HOVER','WIN95_ENTRY')
 
 # --- T-191 P0#1: target-level commit transactions -------------------------------
 # A target's manifest commit is the LAST step of its operation. If that commit
@@ -1129,52 +1129,40 @@ function Invoke-SmartVac {
     $anchors = [ordered]@{
         'WIN95_BG'           = '(?m)^WIN95_BG\s*=\s*''[^'']+'''
         'WIN95_BG_SOFT'      = '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+'''
-        'WIN95_SURFACE'      = '(?m)^WIN95_SURFACE\s*=\s*''[^'']+'''
         'WIN95_SURFACE_RAISED' = '(?m)^WIN95_SURFACE_RAISED\s*=\s*''[^'']+'''
         'WIN95_SURFACE_ALT'  = '(?m)^WIN95_SURFACE_ALT\s*=\s*''[^'']+'''
         'WIN95_BEVEL_HI'     = '(?m)^WIN95_BEVEL_HI\s*=\s*''[^'']+'''
         'WIN95_BEVEL_SH'     = '(?m)^WIN95_BEVEL_SH\s*=\s*''[^'']+'''
-        'WIN95_BORDER_MUTED' = '(?m)^WIN95_BORDER_MUTED\s*=\s*''[^'']+'''
         'WIN95_TEXT'         = '(?m)^WIN95_TEXT\s*=\s*''[^'']+'''
         'WIN95_TEXT_DIM'     = '(?m)^WIN95_TEXT_DIM\s*=\s*''[^'']+'''
         'WIN95_TEXT_MUTED'   = '(?m)^WIN95_TEXT_MUTED\s*=\s*''[^'']+'''
         'WIN95_GOLD'         = '(?m)^WIN95_GOLD\s*=\s*''[^'']+'''
-        'WIN95_GOLD_LIGHT'   = '(?m)^WIN95_GOLD_LIGHT\s*=\s*''[^'']+'''
         'WIN95_GOLD_DIM'     = '(?m)^WIN95_GOLD_DIM\s*=\s*''[^'']+'''
-        'WIN95_GOLD_DARK'    = '(?m)^WIN95_GOLD_DARK\s*=\s*''[^'']+'''
-        'WIN95_RED'          = '(?m)^WIN95_RED\s*=\s*''[^'']+'''
+        'WIN95_ACCENT'       = '(?m)^WIN95_ACCENT\s*=\s*''[^'']+'''
         'WIN95_DANGER'       = '(?m)^WIN95_DANGER\s*=\s*''[^'']+'''
-        'WIN95_GREEN'        = '(?m)^WIN95_GREEN\s*=\s*''[^'']+'''
+        'WIN95_SUCCESS'      = '(?m)^WIN95_SUCCESS\s*=\s*''[^'']+'''
         'WIN95_BUTTON'       = '(?m)^WIN95_BUTTON\s*=\s*''[^'']+'''
         'WIN95_BUTTON_HOVER' = '(?m)^WIN95_BUTTON_HOVER\s*=\s*''[^'']+'''
         'WIN95_ENTRY'        = '(?m)^WIN95_ENTRY\s*=\s*''[^'']+'''
-        'WIN95_SCROLL'       = '(?m)^WIN95_SCROLL\s*=\s*''[^'']+'''
-        'WIN95_SCROLL_HOVER' = '(?m)^WIN95_SCROLL_HOVER\s*=\s*''[^'']+'''
     }
     $values = [ordered]@{
         'WIN95_BG'           = $t.background
         'WIN95_BG_SOFT'      = $t.backgroundSoft
-        'WIN95_SURFACE'      = $t.surface
         'WIN95_SURFACE_RAISED' = $t.surfaceRaised
         'WIN95_SURFACE_ALT'  = $t.surfaceAlt
         'WIN95_BEVEL_HI'     = $t.bevelLight
         'WIN95_BEVEL_SH'     = $t.borderDark
-        'WIN95_BORDER_MUTED' = $t.borderMuted
         'WIN95_TEXT'         = $t.textPrimary
         'WIN95_TEXT_DIM'     = $t.textSecondary
         'WIN95_TEXT_MUTED'   = $t.textMuted
         'WIN95_GOLD'         = $t.textPrimary
-        'WIN95_GOLD_LIGHT'   = $t.borderHighlight
         'WIN95_GOLD_DIM'     = $t.textSecondary
-        'WIN95_GOLD_DARK'    = $t.textMuted
-        'WIN95_RED'          = $t.danger
+        'WIN95_ACCENT'       = $t.accentTeal
         'WIN95_DANGER'       = $t.danger
-        'WIN95_GREEN'        = $t.success
+        'WIN95_SUCCESS'      = $t.success
         'WIN95_BUTTON'       = $t.surfaceRaised
         'WIN95_BUTTON_HOVER' = $t.surfaceAlt
         'WIN95_ENTRY'        = $t.background
-        'WIN95_SCROLL'       = $t.surfaceRaised
-        'WIN95_SCROLL_HOVER' = $t.surfaceAlt
     }
     $appliedHexes = @{}
     foreach ($anchor in $anchors.Keys) {
@@ -1622,17 +1610,19 @@ function Invoke-Obs {
     $action = if ($DoRevert) { 'Restore previous OBS theme and selection' } else { "Install and activate Wintage $PaletteSlug" }
     if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'OBS Studio dry-run FAILED - see the message above.' }; return }
     if ($PSCmdlet.ShouldProcess($OBS_CONFIG, $action)) {
-        $pre = Save-FilePreState $OBS_CONFIG $null
+        $obsUserIni = Join-Path $OBS_CONFIG 'global.ini'
+        if (-not (Test-Path $obsUserIni)) { $obsUserIni = Join-Path $OBS_CONFIG 'user.ini' }
+        $pre = Save-FilePreState $obsUserIni $null
         & node $args
         if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
         if ($DoRevert) {
             Invoke-TargetCommit 'obs' 'OBS Studio' {
                 Remove-ManifestEntry 'obs'
-            } { Restore-FilePreState $pre $OBS_CONFIG $null }
+            } { Restore-FilePreState $pre $obsUserIni $null }
         } else {
             Invoke-TargetCommit 'obs' 'OBS Studio' {
                 Set-ManifestEntry 'obs' $PaletteSlug $OBS_CONFIG 'n/a' (Get-PayloadVersion)
-            } { Restore-FilePreState $pre $OBS_CONFIG $null }
+            } { Restore-FilePreState $pre $obsUserIni $null }
         }
     }
 }
