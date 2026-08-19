@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.26.10] - 2026-08-19
+
+- Tampermonkey UI Bugfixes (T-195):
+  - Fixed `::selection` highlight background not applying on some sites due to specificity; upgraded to `*::selection, ::selection`.
+  - Fixed massive white un-themed blocks on SPAs (like `err.ee`, `tootukassa`) by explicitly applying the transparent background reset to `body` so it properly inherits `html`'s theme color. 
+  - Increased `MUTATION_RECORD_LIMIT` to 3500 (from 1200) to prevent the JS repainter from crashing/suspending on fast-mutating news and SPA sites.
+  - Fixed transparent floating popover menus in ChatGPT (Radix UI) and Cursor/VSCode web (Monaco editor) by adding `[data-radix-popper-content-wrapper] > *`, `[data-radix-portal] > *`, `[data-floating-ui-portal] > *`, `.quick-input-widget`, and `.context-view` to the global solid-popover selector.
+  - Fixed dotted focus-rings overlapping `code` tags and headings by removing `h1`-`h6` from the global `focus-visible` rule.
+  - Fixed inline `code` blocks overlapping adjacent text lines by setting `line-height: inherit`.
+
 ## [1.26.9] - 2026-08-15
 
 - FreeBuff: Updated orchestrator matchers and inline ad blocker for version 0.0.55. Added THEME_REASSERT_FIX to the electron shim to force the repainter sweep when the theme changes (poll + matchMedia/observer logic).

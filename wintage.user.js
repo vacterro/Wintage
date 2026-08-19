@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.26.9
+// @version      1.26.10
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -381,7 +381,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.26.9';
+  const W95_VERSION = '1.26.10';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -643,9 +643,9 @@ iframe[src*="amazon-adsystem.com" i], iframe[src*="taboola.com" i],
 iframe[src*="outbrain.com" i] {
   background-color: ${T.backgroundSoft} !important;
 }
-main, section, article, aside, footer, .container, .wrapper, .main, #main, #wrapper { background-color: transparent !important; }
+body, main, section, article, aside, footer, .container, .wrapper, .main, #main, #wrapper { background-color: transparent !important; }
 
-::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
+*::selection, ::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
 
 /* Site chrome reads as a Win95 title-bar strip: --surface, 20px per UI.md's
    window rules. Height is a MIN, not a fixed height — a real site header carries
@@ -823,7 +823,7 @@ input::placeholder, textarea::placeholder { color: ${T.textMuted} !important; }
    box-shadow, so this outline is now the only focus affordance there is — the
    old input/textarea/select/button/a list was too narrow once that ring was gone. */
 input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible,
-summary:focus-visible, [tabindex]:not([tabindex="-1"]):not(div):not(article):not(section):not(main):not(p):not(blockquote):focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
+summary:focus-visible, [tabindex]:not([tabindex="-1"]):not(div):not(article):not(section):not(main):not(p):not(blockquote):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):focus-visible, [role="button"]:focus-visible, [contenteditable]:focus-visible {
   outline: 1px dotted ${T.textPrimary} !important; outline-offset: -4px !important;
 }
 
@@ -852,7 +852,7 @@ p code, li code, blockquote code, td code, dd code, span code, code:not(pre code
   color: ${T.textPrimary} !important;
   font-family: ${FONT} !important;
   vertical-align: baseline !important;
-  line-height: normal !important;
+  line-height: inherit !important;
 }
 p, li, dd, blockquote {
   line-height: 1.4 !important;
@@ -941,7 +941,9 @@ tp-yt-app-header { border-bottom: 2px solid ${T.surfaceRaised} !important; }
    opacity/z-index/visibility; it only recolors. If the site hides it, it stays hidden. */
 dialog, [popover],
 tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-navigation-drawer,
-[role="menu"], [role="listbox"], [role="tooltip"], [role="dialog"], [role="alertdialog"] {
+[role="menu"], [role="listbox"], [role="tooltip"], [role="dialog"], [role="alertdialog"],
+[data-radix-popper-content-wrapper] > *, [data-radix-portal] > *, [data-floating-ui-portal] > *,
+.quick-input-widget, .context-view {
   /* Dialog bodies use --surfaceRaised and a RAISED bevel (UI.md windows and
      dialogs) — a floating panel is the most window-like thing on a web page, so
      it gets the full Win95 window edge instead of the old flat 1px outline. */
@@ -1127,7 +1129,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       outline: 1px dotted ${T.textPrimary} !important; outline-offset: -4px !important;
     }
     th { background-color: ${T.surface} !important; color: ${T.textPrimary} !important; ${B_OUTER} }
-    ::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
+    *::selection, ::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
 
     /* Hover recolor stays zeroed out here too — only real clickable controls respond. */
     button:hover, shreddit-button:hover, .btn:hover { background-color: ${T.surfaceAlt} !important; ${B_OUTER} }
@@ -1915,8 +1917,8 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // turn a new framework's mutation storm into a space heater. Once tripped, the
   // CSS theme remains active but all JavaScript repaint work stops for this page.
   const MUTATION_WINDOW_MS = 2000;
-  const MUTATION_RECORD_LIMIT = 1200;
-  const MUTATION_WORK_LIMIT_MS = 180;
+  const MUTATION_RECORD_LIMIT = 3500;
+  const MUTATION_WORK_LIMIT_MS = 300;
   const ADDED_NODE_BUDGET = 500;
   let mutationWindowStart = performance.now();
   let mutationRecords = 0;

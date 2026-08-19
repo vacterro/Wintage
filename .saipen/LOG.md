@@ -45,3 +45,4 @@
 - 2026-08-14 23:08:41 UTC [E-674] [parent: E-673] RUN: ship v1.26.9 -> pushed 4d09163
 - 2026-08-14 23:08:41 UTC [E-675] [parent: E-674] TRANSITION: DOING -> DONE T-193
 2026-08-15 02:22:34 | T-194 completed. SmartVac regex+anchor array synced. test-reapply regex CRLF bug fixed. OBS directory-vs-user.ini backup bug fixed. Validated unowned browser stage handling.
+- 2026-08-19 08:42:02 | T-195 completed. Tampermonkey UI bugfixes: ::selection overrides, heavy-site white blocks (err.ee body reset + mutation limit bump), Radix/Monaco popup transparent backgrounds, inline code line-height overlap.
