@@ -34,7 +34,7 @@ function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllL
 function Get-PaletteTokens([string]$jsonPath) { (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens }
 
 # Known paths.json keys: the source-tree targets whose folders the GUI can remember.
-$script:PATHS_KEYS = @('saipenview', 'smartvac', 'wildrift', 'codenomad', 'portable')
+$script:PATHS_KEYS = @('saipenview', 'smartvac', 'wildrift', 'codenomad', 'workbuddy', 'portable')
 
 function Read-PathsJson {
     if (-not (Test-Path $PathsPath)) { return @{} }
@@ -106,6 +106,45 @@ function Test-ManifestSchema($m) {
     return $errors
 }
 
+# PowerShell 6+ silently retypes any JSON string that LOOKS like a timestamp into
+# [datetime], so the `applied` field this project writes as ISO-8601 text comes back
+# as a DateTime object there and as a String on Windows PowerShell 5.1. The schema
+# then rejected the installer's own manifest on pwsh 7 and EVERY target failed with
+# "applied: not a string" before doing any work (T-199). Normalising on read keeps
+# one type contract for every host: the `-DateKind` switch that would also fix it
+# does not exist on 5.1, which is still the interpreter the GUI and the logon task
+# spawn, so it cannot be the fix.
+function ConvertTo-ManifestJsonStrings($obj) {
+    if ($null -eq $obj) { return $obj }
+    if ($obj -isnot [PSCustomObject]) { return $obj }
+    foreach ($entry in $obj.PSObject.Properties) {
+        $e = $entry.Value
+        if ($e -isnot [PSCustomObject]) { continue }
+        foreach ($field in @('palette', 'path', 'appVersion', 'payloadVersion', 'applied')) {
+            $v = $e.$field
+            if ($v -is [datetime]) {
+                $e.$field = $v.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            } elseif ($v -is [System.DateTimeOffset]) {
+                $e.$field = $v.UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            }
+        }
+        if ($null -ne $e.items -and ($e.items -is [System.Array] -or $e.items -is [System.Collections.IList])) {
+            foreach ($item in $e.items) {
+                if ($item -isnot [PSCustomObject]) { continue }
+                foreach ($field in @('path', 'applied')) {
+                    $v = $item.$field
+                    if ($v -is [datetime]) {
+                        $item.$field = $v.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+                    } elseif ($v -is [System.DateTimeOffset]) {
+                        $item.$field = $v.UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ')
+                    }
+                }
+            }
+        }
+    }
+    return $obj
+}
+
 function Read-Manifest {
     # Missing or empty manifest = "nothing installed", a normal state. A file that
     # EXISTS and does not parse is a DISTINCT corrupt state (T-187): the mutation
@@ -119,6 +158,7 @@ function Read-Manifest {
     $json = (Read-Utf8 $ManifestPath).Trim()
     if (-not $json) { return @{} }
     $obj = $json | ConvertFrom-Json
+    $obj = ConvertTo-ManifestJsonStrings $obj
     $schemaErrs = Test-ManifestSchema $obj
     if ($schemaErrs.Count) { throw "manifest schema invalid: $($schemaErrs -join '; ')" }
     $ht = @{}
@@ -388,6 +428,25 @@ function Get-CodeNomadResources {
         (Join-Path $env:ProgramFiles 'CodeNomad/resources')
     )
     if ($CodeNomadPath) { $candidates = @((Join-Path $CodeNomadPath 'resources')) + $candidates }
+    foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
+    return $null
+}
+
+function Get-WorkBuddyResources {
+    $proc = Get-Process WorkBuddy, CodeBuddy, WorkBuddyAI -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1
+    if ($proc) {
+        $r = Join-Path (Split-Path $proc.Path -Parent) 'resources'
+        if (Test-ElectronApp $r) { return $r }
+    }
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs/WorkBuddy/resources'),
+        (Join-Path $env:LOCALAPPDATA 'Programs/WorkBuddy AI/resources'),
+        (Join-Path $env:LOCALAPPDATA 'Programs/WorkBuddyAI/resources'),
+        (Join-Path $env:LOCALAPPDATA 'Programs/CodeBuddy/resources'),
+        (Join-Path $env:ProgramFiles 'WorkBuddy/resources'),
+        (Join-Path $env:ProgramFiles 'CodeBuddy/resources')
+    )
+    if ($WorkBuddyPath) { $candidates = @((Join-Path $WorkBuddyPath 'resources')) + $candidates }
     foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
     return $null
 }

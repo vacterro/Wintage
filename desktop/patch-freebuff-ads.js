@@ -190,8 +190,8 @@ const RENDERER_PATCHES = [
 const ORCHESTRATOR_PATCHES = [
   P(
     '/api/ad/slot returns null (no auction call)',
-    'ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId))',
-    /ad2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.slotAd\([A-Za-z0-9_$]*\)\)/,
+    'ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId, recent))',
+    /ad2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.slotAd\([^)]*\)\)/,
     'ad2 = null'
   ),
   P(

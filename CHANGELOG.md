@@ -1,10 +1,18 @@
 # Changelog
 
+## [1.27.0] - 2026-08-21
+
+- New target: **WorkBuddy AI** (T-196). Electron app, discovered from a running `WorkBuddyAI`/`WorkBuddy`/`CodeBuddy` process or the usual `Programs\WorkBuddy*` locations, overridable with `-WorkBuddyPath` and remembered in `paths.json`. It is grouped with the portable/source apps in the GUI target list.
+- Fixed: the GUI deleted every CLI-owned `paths.json` key (`codenomad`, `workbuddy`, `portable`) whenever the user picked a folder for one of its own targets -- the file was rebuilt from the GUI's key list instead of merged, so a remembered portable-browser root vanished on an unrelated save (T-196).
+- Fixed: FreeBuff's `/api/ad/slot` orchestrator patch stopped matching after the app moved to `app.ads.slotAd(threadId, recent)`; the matcher is argument-agnostic now (T-197).
+- Fixed: every desktop target failed with `manifest schema invalid: <target>.applied: not a string` under PowerShell 7 (T-199). PowerShell 6+ retypes timestamp-looking JSON strings into `[datetime]`, so the installer's own manifest was rejected before any work started. Manifest reads normalise those fields back to ISO-8601 UTC strings on every host; Windows PowerShell 5.1 behaviour is unchanged.
+- Fixed two release gates in `tests/Run-Tests.ps1` that were red on correct code and blocked every ship (T-198): the terminal round-trip fixture compared a CRLF here-string against the tool's LF output, and the `$TARGETS`/`$ELECTRON` extraction regex stopped at the first nested brace, so fully wired targets (`workbuddy`, `codenomad`, `antigravity-app`, `vscode`) were reported as having no implementation.
+
 ## [1.26.10] - 2026-08-19
 
 - Tampermonkey UI Bugfixes (T-195):
   - Fixed `::selection` highlight background not applying on some sites due to specificity; upgraded to `*::selection, ::selection`.
-  - Fixed massive white un-themed blocks on SPAs (like `err.ee`, `tootukassa`) by explicitly applying the transparent background reset to `body` so it properly inherits `html`'s theme color. 
+  - Fixed massive white un-themed blocks on SPAs (like `err.ee`, `tootukassa`) by explicitly applying the transparent background reset to `body` so it properly inherits `html`'s theme color.
   - Increased `MUTATION_RECORD_LIMIT` to 3500 (from 1200) to prevent the JS repainter from crashing/suspending on fast-mutating news and SPA sites.
   - Fixed transparent floating popover menus in ChatGPT (Radix UI) and Cursor/VSCode web (Monaco editor) by adding `[data-radix-popper-content-wrapper] > *`, `[data-radix-portal] > *`, `[data-floating-ui-portal] > *`, `.quick-input-widget`, and `.context-view` to the global solid-popover selector.
   - Fixed dotted focus-rings overlapping `code` tags and headings by removing `h1`-`h6` from the global `focus-visible` rule.

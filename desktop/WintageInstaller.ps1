@@ -175,7 +175,7 @@ $lstThemes.IntegralHeight = $false
 # Personal source/portable apps are a different maintenance surface from common
 # installed software. Two real lists keep that distinction visible and keyboard-
 # reachable; fake separator rows inside one checklist would be selectable noise.
-$MY_APP_KEYS = @('codenomad', 'saipenview', 'smartvac', 'wildrift')
+$MY_APP_KEYS = @('codenomad', 'workbuddy', 'saipenview', 'smartvac', 'wildrift')
 $lblMyApps = New-Object Windows.Forms.Label
 $lblMyApps.Text = (T 'MyApps'); $lblMyApps.Location = '12,248'; $lblMyApps.Size = '200,16'; $lblMyApps.Font = $FONTB
 $clbMyApps = New-Object Windows.Forms.CheckedListBox
@@ -236,7 +236,29 @@ function Save-CustomPaths {
     try {
         $dir = Split-Path $script:pathsFile -Parent
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        # paths.json has two writers. The GUI owns $PATH_TARGETS; install.ps1 owns
+        # the rest of common.ps1's canonical key set (codenomad, workbuddy,
+        # portable). Rebuilding the file from $PATH_TARGETS alone DELETED every
+        # CLI-owned key the next time anyone picked a folder here, so a remembered
+        # portable-browser root or WorkBuddy install silently disappeared on an
+        # unrelated save (T-196). Read what is on disk, keep every key this surface
+        # does not own byte-for-byte, and write only our own from live state -- a
+        # GUI key whose folder vanished is still dropped, which is the load-time
+        # contract above.
         $o = [ordered]@{}
+        if (Test-Path -LiteralPath $script:pathsFile) {
+            try {
+                $existing = ([System.IO.File]::ReadAllText($script:pathsFile, (New-Object System.Text.UTF8Encoding($false)))) -replace '^\uFEFF', '' | ConvertFrom-Json
+                foreach ($prop in $existing.PSObject.Properties) {
+                    if ($prop.Name -in $PATH_TARGETS) { continue }
+                    $o[$prop.Name] = $prop.Value
+                }
+            }
+            catch {
+                # Unreadable preferences carry nothing worth preserving; the GUI's own
+                # keys below still get written rather than losing this save too.
+            }
+        }
         foreach ($k in $PATH_TARGETS) { if ($script:customPaths.ContainsKey($k)) { $o[$k] = $script:customPaths[$k] } }
         $json = ($o | ConvertTo-Json)
         # Atomic write, same contract as the CLI manifest: a half-written

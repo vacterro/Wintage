@@ -51,3 +51,10 @@ package-lock.json
 
 # Throwaway idle-CPU harness (tools/ gets the keeper version).
 scratch-idle*
+
+# Ad-hoc probe output from live installer/GUI debugging sessions: machine-specific
+# dumps, never release content. The durable result of such a session is a ticket.
+desktop/*.log
+gui_parse_check.txt
+wb_inspect.txt
+.workbuddy-ai/

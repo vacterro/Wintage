@@ -26,13 +26,13 @@ $requiredKeys = @($schema.tokens)
 foreach ($file in Get-ChildItem "$root\themes\*.json") {
     $theme = Get-Content $file.FullName -Raw | ConvertFrom-Json
     $themeKeys = $theme.tokens.PSObject.Properties.Name | Sort-Object
-    
+
     $missing = $requiredKeys | Where-Object { $_ -notin $themeKeys }
     $extra = $themeKeys | Where-Object { $_ -notin $requiredKeys }
-    
+
     Assert-True (@($missing).Count -eq 0) "$($file.Name) has all $($requiredKeys.Count) required token keys"
     if (@($missing).Count -gt 0) { Write-Host "       Missing: $($missing -join ', ')" -ForegroundColor Red }
-    
+
     Assert-True (@($extra).Count -eq 0) "$($file.Name) has no undocumented extra keys"
     if (@($extra).Count -gt 0) { Write-Host "       Extra: $($extra -join ', ')" -ForegroundColor Red }
 
@@ -171,38 +171,41 @@ if (-not $validateSetMatch.Success) {
 } else {
     $validateTokens = $validateSetMatch.Groups[1].Value -replace "'", "" -replace " ", ""
     $validateTargets = $validateTokens -split "," | Where-Object { $_ -ne 'all' } | Sort-Object
-    
+
     # Extract $TARGETS keys (handles quoted or unquoted keys)
-    # CRLF-tolerant, and written on ONE line on purpose. The previous form
+    # CRLF-tolerant, and written as ONE escaped pattern on purpose. An earlier form
     # embedded a LITERAL newline in the pattern, so it matched only while the
     # working copy used LF -- the moment install.ps1 was checked out with CRLF the
     # ELECTRON keys stopped being found and this gate went red on code it had no
     # complaint about. Same failure the Save-CustomPaths check had: a gate that
     # goes red for reasons unrelated to what it tests gets ignored, then trusted.
-    $targetsMatches = [regex]::Matches($installCode, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{\s*
-?
-\s+(Dir|Name)")
+    $targetsMatches = [regex]::Matches($installCode, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{[ \t]*\r?\n\s+(Dir|Name)")
     $hashTargets = @()
     foreach ($m in $targetsMatches) { $hashTargets += $m.Groups[1].Value }
     # $TARGETS keys ONLY (the generic pattern above also swallows $ELECTRON keys,
     # which the ownership gate needs separated).
-    $tBlock = [regex]::Match($installCode, '(?s)\$TARGETS\s*=\s*@\{(.*?)\n\s*\}').Groups[1].Value
-    $targetsKeys = @([regex]::Matches($tBlock, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{") | ForEach-Object { $_.Groups[1].Value })
-    
+    # Both block patterns close on a brace in COLUMN 0, the only place a top-level
+    # hashtable literal can end. `(.*?)\n\s*\}` closed on the first NESTED entry's
+    # brace instead, so each block yielded only its first key or two and every
+    # later target was reported as having no implementation -- workbuddy,
+    # antigravity-app and codenomad were all "missing" while fully wired (T-198).
+    $tBlock = [regex]::Match($installCode, '(?s)\$TARGETS\s*=\s*@\{(.*?)\r?\n\}').Groups[1].Value
+    $targetsKeys = @([regex]::Matches($tBlock, "(?m)^\s{4}(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{") | ForEach-Object { $_.Groups[1].Value })
+
     # Extract $ELECTRON keys
-    $regex = '(?s)\$ELECTRON\s*=\s*@\{(.*?)\n\s*\}'
+    $regex = '(?s)\$ELECTRON\s*=\s*@\{(.*?)\r?\n\}'
     $electronMatches = [regex]::Matches($installCode, $regex)
     $electronKeys = @()
     if ($electronMatches.Count -gt 0) {
         $eBlock = $electronMatches[0].Groups[1].Value
-        $eKeysMatches = [regex]::Matches($eBlock, "(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@{")
+        $eKeysMatches = [regex]::Matches($eBlock, "(?m)^\s{4}(?:'|"")?([a-z0-9\-]+)(?:'|"")?\s*=\s*@\{")
         foreach ($m in $eKeysMatches) { $hashTargets += $m.Groups[1].Value; $electronKeys += $m.Groups[1].Value }
     }
     # Add hardcoded custom handlers
     $hardcodedMatches = [regex]::Matches($installCode, 'if \(\$name -eq ''([a-z0-9\-]+)''\)')
     $hardcoded = @()
     foreach ($m in $hardcodedMatches) { $hardcoded += $m.Groups[1].Value }
-    
+
     $implementedTargets = @($hashTargets + $hardcoded) | Sort-Object -Unique
 
     $missingImpl = $validateTargets | Where-Object { $_ -notin $implementedTargets }
@@ -294,6 +297,10 @@ try {
     # Canonical JSON in the tool's own output shape (JSON.stringify null,4) so
     # the owned-field round-trip is byte-exact when no unrelated edit happened
     # (T-189): byte-exact is valid ONLY then.
+    # The LF normalisation below is load-bearing: this file is checked out CRLF,
+    # so the here-string carries CRLF while install-terminal.js writes LF. Without
+    # it the byte-exact assertion compares line endings the tool never claimed to
+    # preserve and fails on correct code (T-198).
     $terminalOriginal = "{
     `"profiles`": {
         `"defaults`": {
@@ -306,6 +313,7 @@ try {
     `"startOnUserLogin`": false
 }
 "
+    $terminalOriginal = $terminalOriginal -replace "`r`n", "`n"
     [System.IO.File]::WriteAllText($terminalSettings, $terminalOriginal, (New-Object System.Text.UTF8Encoding($false)))
     $terminalBefore = [System.IO.File]::ReadAllBytes($terminalSettings)
 
@@ -496,6 +504,82 @@ Assert-True ($saveStart -ge 0) 'GUI still defines Save-CustomPaths'
 $saveEnd = $guiSource.IndexOf("`n}", $saveStart)
 $saveBody = if ($saveStart -ge 0 -and $saveEnd -gt $saveStart) { $guiSource.Substring($saveStart, $saveEnd - $saveStart) } else { '' }
 Assert-True ($saveBody -notmatch 'catch\s*\{\s*\}') 'GUI custom-path save no longer swallows errors'
+
+# paths.json has two writers (GUI + install.ps1) and one canonical key set. The GUI
+# rebuilding the file from its own $PATH_TARGETS deleted every CLI-owned key on an
+# unrelated folder pick, so a remembered portable-browser root or WorkBuddy install
+# vanished without anyone touching it (T-196). Behavioural, not textual: the real
+# function is lifted out of the GUI and run against a temp preferences file, because
+# a regex asserting "it looks like it merges" is what let the wipe ship.
+Assert-True ($guiSource -match "\`$MY_APP_KEYS = @\('codenomad', 'workbuddy'") 'GUI groups WorkBuddy with the portable/source apps'
+$pathsFixture = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-paths-" + [guid]::NewGuid().ToString('N'))
+try {
+    New-Item -ItemType Directory -Path $pathsFixture -Force | Out-Null
+    $pathsFixtureFile = Join-Path $pathsFixture 'paths.json'
+    $pathsFixtureSmartVac = Join-Path $pathsFixture 'smartvac-checkout'
+    New-Item -ItemType Directory -Path $pathsFixtureSmartVac -Force | Out-Null
+    $seedJson = '{"codenomad":"C:\\cn","workbuddy":"C:\\wb","portable":"C:\\pb","smartvac":"C:\\stale","wildrift":"C:\\gone"}'
+    [System.IO.File]::WriteAllText($pathsFixtureFile, $seedJson, (New-Object System.Text.UTF8Encoding($false)))
+
+    $fnEnd2 = $guiSource.IndexOf("`n}", $saveStart)
+    $fnText = if ($saveStart -ge 0 -and $fnEnd2 -gt $saveStart) { $guiSource.Substring($saveStart, $fnEnd2 - $saveStart + 2) } else { '' }
+    $harnessLines = @(
+        "`$PATH_TARGETS = @('saipenview', 'smartvac', 'wildrift')",
+        "`$script:pathsFile = '$pathsFixtureFile'",
+        "`$script:customPaths = @{ 'smartvac' = '$pathsFixtureSmartVac' }",
+        $fnText,
+        'if (-not (Save-CustomPaths)) { exit 3 }'
+    )
+    $harnessFile = Join-Path $pathsFixture 'save-paths-harness.ps1'
+    [System.IO.File]::WriteAllText($harnessFile, ($harnessLines -join "`n"), (New-Object System.Text.UTF8Encoding($false)))
+    $prevEap2 = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $harnessFile 2>&1 | Out-Null
+    $harnessCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap2
+    Assert-True ($harnessCode -eq 0) 'GUI custom-path save reports success on a writable preferences file'
+    $savedPaths = [System.IO.File]::ReadAllText($pathsFixtureFile) | ConvertFrom-Json
+    Assert-True ($savedPaths.codenomad -eq 'C:\cn') 'GUI save preserves the CLI-owned codenomad path'
+    Assert-True ($savedPaths.workbuddy -eq 'C:\wb') 'GUI save preserves the CLI-owned workbuddy path'
+    Assert-True ($savedPaths.portable -eq 'C:\pb') 'GUI save preserves the CLI-owned portable-browser root'
+    Assert-True ($savedPaths.smartvac -eq $pathsFixtureSmartVac) 'GUI save writes its own key from live state'
+    Assert-True ($savedPaths.PSObject.Properties.Name -notcontains 'wildrift') 'GUI save still drops one of its own keys whose folder is gone'
+} finally {
+    if (Test-Path $pathsFixture) { Remove-Item $pathsFixture -Recurse -Force }
+}
+
+Write-Host "
+--- Manifest Field Typing Across Hosts (T-199) ---" -ForegroundColor Cyan
+# PowerShell 6+ retypes any timestamp-looking JSON string into [datetime], so the
+# manifest's own `applied` field came back as an object there and the schema gate
+# rejected it: on pwsh 7 EVERY target failed with "applied: not a string" before
+# doing any work. Asserted at the type level rather than by host, so the gate holds
+# whichever interpreter runs this file.
+. "$root\desktop\modules\common.ps1"
+$typedManifest = [pscustomobject]@{
+    terminal = [pscustomobject]@{
+        palette        = 'goldendefault'
+        path           = 'C:\dummy\settings.json'
+        appVersion     = '1.27.0'
+        payloadVersion = '1.27.0'
+        applied        = [datetime]::SpecifyKind([datetime]'2026-08-19T12:00:00', 'Utc')
+        items          = @([pscustomobject]@{ path = 'C:\dummy\settings.json'; applied = [datetime]::SpecifyKind([datetime]'2026-08-19T12:00:00', 'Utc') })
+    }
+}
+Assert-True (@(Test-ManifestSchema $typedManifest).Count -gt 0) 'schema still rejects a date-typed applied field before normalisation'
+$normalised = ConvertTo-ManifestJsonStrings $typedManifest
+Assert-True ($normalised.terminal.applied -is [string]) 'manifest read normalises a date-typed applied field to a string'
+Assert-True ($normalised.terminal.applied -eq '2026-08-19T12:00:00Z') 'normalised applied keeps the ISO-8601 UTC shape the writer uses'
+Assert-True ($normalised.terminal.items[0].applied -is [string]) 'multi-item entries are normalised too'
+Assert-True (@(Test-ManifestSchema $normalised).Count -eq 0) 'a normalised manifest passes the schema gate'
+if (Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue) {
+    $prevEap3 = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $pwshList = (& pwsh -NoProfile -ExecutionPolicy Bypass -File "$root\desktop\install.ps1" 2>&1 | Out-String)
+    $pwshCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap3
+    Assert-True ($pwshCode -eq 0 -and $pwshList -notmatch 'manifest schema invalid') 'install.ps1 lists targets under PowerShell 7 without a schema failure'
+}
 
 Write-Host "
 --- Tool Regression Suites (T-191 P1#14 single entrypoint) ---"

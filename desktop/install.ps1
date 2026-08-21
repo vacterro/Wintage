@@ -17,12 +17,13 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
+    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
     [string]$Target,
     [string]$Palette = 'goldendefault',
     [switch]$Revert,
     [switch]$Force,
     [string]$CodeNomadPath,
+    [string]$WorkBuddyPath,
     [string]$TotalCmdIni,
     [string]$TotalCmd2Ini,
     [string]$PortableBrowserRoot,
@@ -122,6 +123,11 @@ $ELECTRON = @{
         Resources = (Get-CodeNomadResources)
         Note      = 'Electron, portable. Pass -CodeNomadPath if it lives somewhere else.'
     }
+    workbuddy       = @{
+        Name      = 'WorkBuddy AI'
+        Resources = (Get-WorkBuddyResources)
+        Note      = 'Electron, portable. Pass -WorkBuddyPath if it lives somewhere else.'
+    }
 }
 
 # ---- MPC-HC (K-Lite) ----
@@ -175,6 +181,7 @@ if (-not $SaipenviewPath -and $pathsJson.ContainsKey('saipenview')) { $Saipenvie
 if (-not $SmartVacPath -and $pathsJson.ContainsKey('smartvac')) { $SmartVacPath = $pathsJson['smartvac'] }
 if (-not $WildRiftPath -and $pathsJson.ContainsKey('wildrift')) { $WildRiftPath = $pathsJson['wildrift'] }
 if (-not $CodeNomadPath -and $pathsJson.ContainsKey('codenomad')) { $CodeNomadPath = $pathsJson['codenomad'] }
+if (-not $WorkBuddyPath -and $pathsJson.ContainsKey('workbuddy')) { $WorkBuddyPath = $pathsJson['workbuddy'] }
 if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $PortableBrowserRoot = $pathsJson['portable'] }
 
 # ---- Reapply mode: read manifest, probe TARGET health, re-apply unhealthy targets ----
@@ -616,7 +623,7 @@ foreach ($name in $names) {
         # Test seam: an env override lets fixtures point the mandatory FreeBuff
         # post-step at a fake app or at a deliberately missing path.
         $adPatch = if ($env:WINTAGE_FREEBUFF_PATCH_PATH) { $env:WINTAGE_FREEBUFF_PATCH_PATH } else { Join-Path $root 'desktop/patch-freebuff-ads.js' }
-        
+
         if ($Revert) {
             # FreeBuff owns TWO layers (the Electron shim AND the ad/sound patch on
             # the bundle), so Revert must undo both before the manifest goes away
