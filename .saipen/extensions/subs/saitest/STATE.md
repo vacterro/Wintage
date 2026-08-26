@@ -1,6 +1,6 @@
 ---
 phase: DONE
-task: ST-101/ST-102/ST-103
+task: none
 next_action: "saipen plan"
 blocker: none
 agent: saitest

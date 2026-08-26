@@ -23,4 +23,6 @@
 
 ## DONE
 
+- [x] SAIT-001 prepare saitranslate — force-fresh package bound to current source identity (HEAD fad7d717, fingerprint git-delta-v1:a6101421, role_revision sha256:f241e6b8); 29/29 locale key-parity vs en.json, 32 desktop + 32 browser README translations, 3 core doc siblings; OUTBOX status: ready | producer: saitranslate
+
 ## BLOCKED

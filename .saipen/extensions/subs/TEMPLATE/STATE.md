@@ -3,14 +3,14 @@ phase: PLAN
 task: none
 next_action: "saipen plan"
 blocker: none
-agent: TEMPLATE
+agent: <name>
 saipen_version: 7
 schema_version: 3
-style_contract: ded-0d563e56
+style_contract: ded-4ae736e4
 saipen_home: ""
 mode: read-only
 transition_from: INIT
-updated: 2026-08-07T22:29:58Z
+updated: 2026-01-01T00:00:00Z
 ---
 
 <!-- BOUNDARY: you may write ONLY inside this folder

@@ -1,9 +1,13 @@
 # SubSaipen Protocol
 
-Isolated, read-only agents that research the main project in parallel and
-hand back structured findings -- never a second write-path into the
-project. Extension, not Core (CORE.md §1.9): nothing here is read by the
-SAIPEN home on its own behalf, and it never relaxes what Core requires.
+Isolated, read-only agents that research the main project and hand back
+structured findings -- never a second write-path into the project. A
+SubSaipen is an authority/state namespace, not a mandatory process or
+chat-session boundary: subSaipens MAY run independently or in parallel, but
+the serial crew circuit (`saipen crew`) walks every role IN THE CURRENT agent
+session unless an explicit external worker runtime is already in use.
+Extension, not Core (CORE.md §1.9): nothing here is read by the SAIPEN home
+on its own behalf, and it never relaxes what Core requires.
 
 ## 0. Root path
 
@@ -111,7 +115,7 @@ File: `<name>/kitchen/OUTBOX.md`. The only channel back to the main agent.
 ```markdown
 # OUTBOX
 
-## WIKI-001: short description
+## W-001: short description
 - **status:** ready | draft | blocked | reviewed | stale
 - **summary:** one line, what was found or produced
 - **main_project_refs:** [src/foo.py, ...]
@@ -134,7 +138,7 @@ File: `<name>/kitchen/OUTBOX.md`. The only channel back to the main agent.
 | `ready` | Done, main agent may act on it |
 | `draft` | Still in progress, main agent ignores |
 | `blocked` | Waiting on something external, reason in `details` -- **and this is also how a subSaipen says "I do not have enough information", which is the one case it will otherwise get wrong** (see below) |
-| `reviewed` | Collected already (§ 4) -- retained as history. Review count and elapsed time never turn it stale or authorize deletion |
+| `reviewed` | Core DISPOSITION terminal: the linked Core review ticket was independently closed (DONE/BLOCKED) and the package was marked reviewed by `sub dispose` -- INTAKE != REVIEW, so a package that was merely collected stays `ready` (§ 4). Retained as history. Review count and elapsed time never turn it stale or authorize deletion |
 | `stale` | Evidence proves the package no longer describes the current source/charter, was explicitly invalidated, is lifecycle-inconsistent/abandoned, or belongs to a proven unrecoverable instance (§ 6). Collect skips it rather than ticketing a ghost |
 
 `critical: true` = bug, broken behavior, data loss, security issue.
@@ -166,16 +170,18 @@ project was built on it.
 | Prefix | Owner |
 |---|---|
 | `SYS-` | Cross-cutting / protocol-level tickets |
-| `WIKI-` | saiwiki |
+| `W-` | saiwiki |
 | `HUNT-` | saihunt |
+| `TEST-` | saitest |
 | `UI-` | saiui (fixer, § 9) |
 | `PY-` | saipython (fixer, § 9) |
+| `SAIT-` | saitranslate |
 | `<NAME>-` | any other subSaipen (first 4 letters, uppercase) |
 
 Each subSaipen numbers its own tickets independently; the prefix is what
 keeps them unambiguous once folded into the main board.
 
-**Folding onto the main board**: a subSaipen ID (`WIKI-001`, `HUNT-003`, ...)
+**Folding onto the main board**: a subSaipen ID (`W-001`, `HUNT-003`, ...)
 is never written directly onto the main `BOARD.md` as a ticket ID -- CORE.md
 CORE.md § 1.2 requires the `T-###` shape there, no exceptions for extension-sourced
 tickets. Collecting a finding always creates a normal new `T-###` ticket;
@@ -294,21 +300,40 @@ Whenever the main agent chooses to check (during `HUNT`, at the top of `saipen c
    entry and skip it, don't ticket a ghost. This is the same freshness
    discipline `PREPARE` already applies to one ticket, just extended to a
    backlog that may have waited days for `collect` to run.
-2. For each policy-eligible `ready` entry: `critical: true` -> ticket on the main `BOARD.md` immediately; `critical: false` -> append to `_shared/inbox.md` (shape defined below) for the next planning round. The main agent MAY skip any individual entry and leave it `ready` for a later collect -- nothing requires swallowing the whole OUTBOX in one pass.
-3. **Write order matters for crash safety**: create the main ticket and
-   append the main `LOG.md` line (below) FIRST, THEN mark the OUTBOX entry
-   `reviewed` (or clear it) LAST -- same asymmetric-safety principle as
-   CORE.md §1.5's checkpoint ordering. A crash between the two leaves a
-   worst case of one duplicate ticket on retry (annoying, safe, easy to
-   spot and merge) rather than a silently lost finding, which is the
-   failure mode the reverse order would risk.
+2. For each policy-eligible current `ready` entry: collect creates ONE
+   ordinary Core review hypothesis ticket on the main `BOARD.md` -- a normal
+   `T-###` in the normal Core flow (`SCOUT -> BUILD -> VERIFY -> REVIEW ->
+   SHIP`), NOT an accepted fact. `critical`/`severity` only inform the
+   generated ticket's `[P#]` priority; they never change the intake path.
+   `critical: false` is NOT routed to `_shared/inbox.md` -- the inbox is a
+   historical backlog surface, not the collection sink. Intake is atomic: the
+   Core ticket, the main `LOG.md` collect event and the MANIFEST
+   `last_collect` identity land in ONE journaled plan with zero semantic
+   acceptance, and a durable collect receipt binds the package identity to
+   the ticket. **INTAKE != REVIEW**: intake leaves the OUTBOX entry `ready`;
+   the `reviewed` claim is a Core DISPOSITION written by `saipen sub dispose`
+   only after the linked review ticket is terminal. Between the two the role
+   derives health `REVIEW_PENDING`, never `CURRENT`. The main agent MAY skip
+   any individual entry and leave it `ready` for a later collect -- nothing
+   requires swallowing the whole OUTBOX in one pass.
+3. **Atomicity and dedup are structured, never prose.** A package_identity
+   SHA mentioned inside an arbitrary BOARD description or LOG message is NOT
+   collection evidence; the only durable witnesses are the MANIFEST
+   `last_collect` identity and the structured collect event the collector
+   itself journaled. Autonomous collected hypotheses are inserted at the END
+   of the main `## TODO` -- board order is priority, so an autonomous P2
+   finding must never preempt already-workable Core work.
    That main-`LOG.md` line is an ordinary CORE.md §1.2 log line -- its shape
    is defined there and is not restated here (an earlier copy of the
    skeleton lived in this spot and showed every optional bracket as if it
-   were mandatory). The only sub-specific parts: set `[agent: <subSaipen
-   name>]`, and write the taxonomy text as `RUN: collect <name>-### ->
-   T-###`. Naming the subSaipen's own ID in that free text IS the
-   traceability link between the two event graphs, because CORE.md § 1.2's
+   were mandatory). The LOG writer identity is the ACTUAL Core writer
+   (the collector / `saipen-cli`) -- never the evidence producer: the
+   producer is structured provenance in the ticket and the collect receipt
+   (package_identity, producer, source identity), and writer identity must
+   not be overloaded with "where the evidence originated" (Wave 2 item 5).
+   Write the taxonomy text as `RUN: collect <name>-### -> T-###`. Naming
+   the subSaipen's own ID in that free text IS the traceability link between
+   the two event graphs, because CORE.md § 1.2's
    `[parent: E-###]` cannot reach across files into the subSaipen's
    separate `LOG.md` -- the text reference does that job instead, no RFC
    change needed.
@@ -457,11 +482,11 @@ Legal only while `.saipen/extensions/subs/` (or legacy root `extensions/subs/`) 
 | `saipen sub spawn <name>` | **First-run bootstrap, then spawn.** If this project has no `.saipen/extensions/subs/` yet: verify `<saipen_home>/extensions/subs/PROTOCOL.md` actually exists first -- `saipen_home` stale or the clone moved/deleted? `BLOCKED` with `blocker: saipen_home stale: <path>`, never copy from a path that didn't check out. Otherwise copy `PROTOCOL.md`, `README.md`, `crew.md`, `TEMPLATE/`, an empty `_shared/inbox.md`, and all built-in `sai*.md` role charters from there (the SAIPEN home's own copy of this extension -- unaffected by where a consuming project attaches it; the home path is already in `STATE.md`'s `saipen_home` field, CORE.md §1.7 -- no manual copy needed, this IS the explicit ask that makes copying it in appropriate, unlike `saipen set`'s general no-auto-populate rule in CORE.md §1.9). Then, every run: if `.saipen/extensions/subs/<name>/` already exists, refuse and report it -- point at `saipen sub clean <name>` first if replacement is actually intended, never silently overwrite an existing subSaipen's history. Otherwise copy `TEMPLATE/` to `.saipen/extensions/subs/<name>/`, set `agent: <name>` (replacing TEMPLATE's placeholder), `saipen_home: <path>` (copied from the main project's own `STATE.md`), **and `updated:` to the real current UTC timestamp** (TEMPLATE's `2026-01-01T00:00:00Z` is a placeholder like the other two, not a value to partially edit -- CORE.md §1.2 requires this field genuinely current at every checkpoint, spawn included; §8 below says this file's shape is identical to Core's own for exactly this reason) in its `STATE.md`, and record `role_revision` from the spawned instance's built-in charter metadata block (section 3.1, T-542) in the same `STATE.md`, add a line to `MANIFEST.md` (creating it first if this was also the bootstrap run). Two agents spawning concurrently is CORE.md §1.4's existing concurrency boundary (one writer at a time), not a new problem this command invents. |
 | `saipen sub pause <name>` | Set `<name>`'s own `STATE.phase: BLOCKED` with `blocker: paused by main agent` -- freezes it (no new findings, no ticket work) without destroying its board/log/outbox, unlike `clean`. Useful right before a `SHIP` to avoid a subSaipen producing findings mid-ship. |
 | `saipen sub resume <name>` | Set `<name>`'s `STATE.phase` back to whatever it was doing before `pause` (its own `LOG.md` tail says what that was). |
-| `saipen sub collect` | Run the Handoff procedure (§ 4) against every active subSaipen. |
-| `saipen sub clean <name>` | **Explicit evidence-gated removal, never an age sweep.** From project root run `python <saipen_home>/tools/sub_clean.py <name> --preserved-root .saipen/recovery/subs/<name>`; a bare name resolves to `.saipen/extensions/subs/<name>`. Refuse on any `BLOCKED:` result; the tool is read-only and never deletes. Also read `<name>/STATE.md` and `LOG.md`. Refuse and name the exact blocker while ANY `TODO`/`DOING` ticket, ready-unreviewed OUTBOX, draft/blocked/unacknowledged kitchen artifact or package, or unpreserved recovery evidence exists. Reviewed/stale history, repeated collects, and elapsed time are not deletion authority. Before removal, prove the complete instance is recoverable: every removed byte is tracked at current HEAD, or preserve it byte-for-byte under `.saipen/recovery/subs/<name>/` and record that path in Core LOG. Only then remove the MANIFEST line and instance folder. No HUNT, collect loop, timer, age threshold, or automatic maintenance path may perform this command implicitly. |
+| `saipen sub collect` | Run the Handoff procedure (§ 4) against registry roles whose executable `collect_policy` is `core-review` or `automatic`; skip `explicit` producers, whose named integration stage owns them. Every complete current READY package becomes one ordinary Core TODO review hypothesis with immutable package identity and exact provenance. One journal operation writes Core LOG/BOARD/STATE, marks that package reviewed, and records identity-bound `last_collect`; retry deduplicates. It never applies payload during intake or treats the package as accepted fact. |
+| `saipen sub clean <name>` | **Actual explicit evidence-gated removal, never an age sweep.** Refuse while any TODO/DOING work, ready/draft/blocked OUTBOX, unacknowledged kitchen artifact, unsafe path/link, or unpreserved recovery evidence exists. A successful journal operation first archives every instance byte and a hash-bound receipt under `.saipen/recovery/subs/<name>/<op-id>/`, then removes exactly its strict MANIFEST entry, files, and directories. Exact before hashes make concurrent mutation `STALE_STATE`; crash recovery resumes the same write/delete plan; retry returns already-clean. `--dry-run` reports exact writes/deletes with zero bytes changed. No HUNT, collect loop, timer, age threshold, or automatic crew path may invoke it. |
 | `saipen sub sync` | **Refresh the shared protocol files, never a subSaipen's own history.** A project's `PROTOCOL.md`/`README.md`/`crew.md`/`TEMPLATE/` and all built-in `sai*.md` role charters are copied once, at first `spawn` (§ above) -- they do NOT auto-update when `<saipen_home>`'s own copy gains new vocabulary later (a real incident: a project spawned before v7.56.0 had a frozen `PROTOCOL.md` missing this very command table, and bare-name role-adopt silently stopped being recognized). `sync` re-copies exactly those shared items plus all built-in `sai*.md` role charters from `<saipen_home>/extensions/subs/` -- same freshness check as `spawn`'s own bootstrap step (`saipen_home` stale or moved -> `BLOCKED`, never copy from a path that didn't check out. Overwriting these four is always safe: they are inherited reference material, never a subSaipen's own live data. `sync` MUST NOT touch any `.saipen/extensions/subs/<name>/` folder's `STATE.md`/`BOARD.md`/`LOG.md`/`kitchen/` -- that is exactly the live, per-agent history `spawn`'s own "refuse if already exists" rule already protects, and `sync` protects it too, by construction (it never looks inside a `<name>/` folder at all). LOG one line noting what changed (or `RUN: sub sync -> no drift` if the copies were already current). |
 | `<subname>` (bare -- any name, not just the 3 shipped examples) -- also `<subname> init`/`<subname> start`, identical meaning | **Role-adopt shortcut (crew, `crew.md`), generalized to every subSaipen, not a saiwiki/saihunt/saipython special case.** Recognized in any of three cases: (1) `subs/<subname>/` already exists -- ANY name, once spawned once, gets this same one-word shortcut forever after, no special-casing; (2) `<subname>` is a shipped example (saihunt/saipython/saiwiki); (3) `<subname>` matches the `sai`-prefix naming convention every real subSaipen in this system already uses (saiwiki, saihunt, saipython, and any future one) -- a mechanical, zero-guess signal, not free-form word matching, so an unrelated unrecognized word does NOT spin up a phantom subSaipen. A custom name that does NOT fit the `sai*` shape (e.g. README's own `myagent` example) still needs one explicit `saipen sub spawn <name>` the first time -- after that its folder exists and case (1) covers it identically. The trailing `init`/`start` is optional decoration, not a different command -- same reuse of "init" as `saipen set`/`saipen init` at the top level (CORE.md §1.7), so don't require the inferential leap twice. Not spawned yet (cases 2/3)? Spawning is the agent's own first internal step, invisible to the human, same one-word response -- not a separate command the user types first (the `saipen sub spawn <name>` row below is the same action named explicitly, for a human who wants to trigger it directly, or a name outside `sai*`). Then *become* that subSaipen: if `.saipen/extensions/subs/<subname>.md` exists locally (a built-in role charter), load it after PROTOCOL.md and before anything else -- it defines the subSaipen's identity, authority boundary, read order, and method; a subSaipen whose built-in charter is present but was not read is running as a generic worker and is not conformant. If the built-in charter exists in `<saipen_home>/extensions/subs/` but NOT locally (old project, stale sync), stop with the exact recovery instruction `run saipen sub sync` and do not proceed as a generic worker. A custom `sai*` name with no built-in charter remains a valid generic SubSaipen governed only by PROTOCOL.md and its own BOARD. Read its OWN `STATE.md`/`BOARD.md`/`LOG.md` (never the main project's `.saipen/`), and execute its `next_action` immediately -- its default is to start its own cycle. One word -> the agent is that worker and already working, in its own factory, never the main project's. Spawning a single example alone (just `saiwiki`, no crew) is a complete, valid, standalone flow -- the "three roles" in `crew.md` are one documented way to combine them, not a requirement to spawn together. For an unattended run, follow with `saipen goal "<its loop>"` so it flows between tickets to its own valve. |
-| `saipen crew` | Print the 3-window crew layout (Core writer + saihunt sensor + saipython fixer) and the single command per window, pointing at `crew.md` and the `bootstrap/saipen_crew.*` launcher. Read-only: it explains/launches, it never spawns or writes -- each window's own bare-name command does that. |
+| `saipen crew` (alias `sc`) | **The serial full-platoon convergence circuit -- never a window layout.** `saipen crew --dry-run --json` derives the whole fixed-order circuit (SC-0..SC-13, `crew.md`), shows every role's mechanical health and names the first unsatisfied stage, writing nothing. `saipen crew` persists the durable orchestration target (`execution_intent: converge` + `converge_target: crew`), runs the mechanical transitions it owns (sub sync, required instance assurance) and resumes the circuit until a fixed point -- another fresh pass has nothing real left to change -- or a genuine blocker/safety valve stops it. `cc` while the crew target is active resumes the crew, not ordinary convergence. The `bootstrap/saipen_crew.*` launcher is an OPTIONAL manual multi-window helper; it is never what `saipen crew` means. |
 
 `saipen sub spawn` requires a project that already has `.saipen/` (i.e. `saipen set` already ran) -- a subSaipen attaches to a main project's continuation state, it isn't one on its own. No `.saipen/` at all yet? Tell the user to run `saipen set` first; don't silently trigger `INIT` as a side effect of an unrelated command.
 
