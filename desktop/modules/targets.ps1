@@ -8,6 +8,16 @@
 # moved install, a replaced archive) leaves payloadVersion unchanged while the
 # theme is gone. These helpers probe the cheap signals and return one verdict.
 
+# The console scrollback floor Wintage owns (T-193). A console profile whose
+# screen-buffer height is at or below its window height has ZERO scrollback and
+# therefore no scrollbar (the "terminal cuts my history" bug). conhost rewrites
+# ScreenBufferSize back into the registry whenever the window is resized, so a
+# once-applied 9001 floor can silently collapse back to the window height after
+# the fact. Both the apply (Invoke-Conhost) and the Reapply health probe
+# (Test-TargetNeedsReapply) share this single floor value, so a drifted buffer
+# is detected and re-asserted instead of being left scrollbar-less.
+$CONSOLE_SCROLLBACK_HEIGHT = 9001
+
 # The currently-resolved install path for a target, or $null when it cannot be
 # resolved/validated. Existence of the path/marker IS the theming evidence for
 # the simple targets; the Electron targets get a full --status-json health read.
@@ -240,7 +250,13 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
     }
     if ($data.path) {
         if (-not $currentPath) { $reasons += 'recorded path is gone (target cannot be resolved)' }
-        elseif ([IO.Path]::GetFullPath($data.path) -ne [IO.Path]::GetFullPath($currentPath)) { $reasons += "resolved path moved ($($data.path) -> $currentPath)" }
+        # Registry-key targets (conhost, mpchc) record an HKCU:\... value as their
+        # "path". A GetFullPath comparison is meaningless there AND throws
+        # NotSupportedException under Windows PowerShell 5.1 (.NET Framework
+        # cannot resolve a registry-provider root), which crashed every conhost or
+        # mpchc Reapply before the marker switch even ran. Their health is decided
+        # by the marker checks below, never by a filesystem path comparison.
+        elseif ($data.path -notmatch '^(HKCU|HKLM|Registry)::?\\' -and [IO.Path]::GetFullPath($data.path) -ne [IO.Path]::GetFullPath($currentPath)) { $reasons += "resolved path moved ($($data.path) -> $currentPath)" }
     } elseif (-not $currentPath) { $reasons += 'target cannot be resolved' }
     if ($currentPath) {
         # The palette file for the RECORDED palette - its token values are the
@@ -250,7 +266,21 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
         switch ($key) {
             'windows'   { if (Test-Path $WINDOWS_THEME_MARKER) { $m = (Read-Utf8 $WINDOWS_THEME_MARKER).Trim(); if ($m -ne $data.palette) { $reasons += "windows marker palette mismatch ($m)" } } else { $reasons += 'windows theme marker missing' } }
             'obs'       { $obsTheme = Join-Path $OBS_CONFIG 'themes\Wintage.ovt'; $obsMarker = Join-Path $OBS_CONFIG '.wintage-obs-palette'; if (-not (Test-Path $obsTheme) -or -not (Test-Path $obsMarker)) { $reasons += 'obs theme/marker missing' } else { $mv = (Read-Utf8 $obsMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "obs marker palette mismatch ($mv)" } } }
-            'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" } }
+            'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" }
+                # A console profile whose screen-buffer height fell at/below its
+                # window height has ZERO scrollback and no scrollbar. conhost
+                # rewrites ScreenBufferSize into the registry on window resize,
+                # so a Wintage-applied 9001 floor can silently collapse after the
+                # fact (marker stays intact, so the palette check above misses it).
+                # Flag any owned profile that drifted below the floor so Reapply
+                # re-asserts it instead of leaving the console scrollbar-less.
+                $collapsed = @(Get-ConhostKeys | Where-Object {
+                    $sb = (Get-ItemProperty -LiteralPath $_.PSPath -Name ScreenBufferSize -ErrorAction SilentlyContinue).ScreenBufferSize
+                    if ($null -eq $sb) { return $false }
+                    (([uint32]$sb -shr 16) -band 0xFFFF) -lt $CONSOLE_SCROLLBACK_HEIGHT
+                })
+                if ($collapsed.Count) { $reasons += "conhost scrollback collapsed (buffer height < $CONSOLE_SCROLLBACK_HEIGHT, no scrollbar): $($collapsed.PSChildName -join ', ')" }
+            }
             'browsers'  { $marker = Join-Path $BrowserStageRoot '.wintage-palette'; if (-not (Test-Path $marker)) { $reasons += 'browser stage marker missing' } else { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "browser marker palette mismatch ($mv)" } } }
             'mpchc'     { $v = (Get-ItemProperty $MPC_KEY -Name OSDFont -ErrorAction SilentlyContinue).OSDFont; if ($v -ne 'Verdana') { $reasons += 'mpc OSD font not themed' } }
             'discord'   { $bdCss = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (-not (Test-Path $bdCss)) { $reasons += 'betterdiscord css missing' } elseif ($palTokens -and -not ((Read-Utf8 $bdCss) -match [regex]::Escape($palTokens.background))) { $reasons += 'betterdiscord css does not match the recorded palette' } }
@@ -607,7 +637,6 @@ function Invoke-Conhost {
     # is gone forever. Wintage owns the console look, so it also guarantees a
     # usable history buffer: height floor 9001 (the classic conhost default),
     # width preserved from the profile's own current value.
-    $CONSOLE_SCROLLBACK_HEIGHT = 9001
     function Get-ConhostBufferValue([string]$psPath) {
         $current = (Get-ItemProperty -LiteralPath $psPath -Name ScreenBufferSize -ErrorAction SilentlyContinue).ScreenBufferSize
         if ($null -eq $current) { return (($CONSOLE_SCROLLBACK_HEIGHT -shl 16) -bor 120) }

@@ -24,7 +24,7 @@ function check($label, $cond) {
 }
 
 if ($List) {
-    Write-Host "test-reapply.ps1 (35 tests):"
+    Write-Host "test-reapply.ps1 (36 tests):"
     Write-Host "  1. semver-compare-is-semantic-not-string"
     Write-Host "  2. up-to-date-payload-is-skipped"
     Write-Host "  3. unhealthy-target-detected-under-whatif-child-preflight"
@@ -60,6 +60,7 @@ if ($List) {
     Write-Host " 33. saipenview-provenance-rebase"
     Write-Host " 34. manifest-schema-validation-rejects-syntax-valid-garbage"
     Write-Host " 35. conhost-scrollback-floor-zero-history-gets-usable-buffer"
+    Write-Host " 36. conhost-reapply-health-reasserts-collapsed-scrollback"
     exit 0
 }
 
@@ -978,6 +979,41 @@ try {
     $env:WINTAGE_TEST_CONHOST_KEY = $prevKey35
     $env:WINTAGE_BACKUP_ROOT = $prevBakBase35
     $env:WINTAGE_APPDATA = $prevWintage35
+}
+
+# ---- Test 36: conhost Reapply health detects a scrollback buffer that collapsed
+# back to the window height AFTER apply (conhost rewrites ScreenBufferSize on
+# resize) and re-asserts the 9001 floor -> the scrollbar returns (T-203 follow-up) ----
+Clean-TestState
+$prevKey36 = $env:WINTAGE_TEST_CONHOST_KEY
+$prevBakBase36 = $env:WINTAGE_BACKUP_ROOT
+$prevWintage36 = $env:WINTAGE_APPDATA
+try {
+    $conRoot36 = 'HKCU:\Software\Wintage-Test-Conhost-' + [guid]::NewGuid().ToString('N')
+    $env:WINTAGE_TEST_CONHOST_KEY = $conRoot36
+    $fakeBak36 = Join-Path $testRoot 'backup36'
+    $env:WINTAGE_BACKUP_ROOT = $fakeBak36
+    $fakeApp36 = Join-Path $testRoot 'winappdata36'
+    $env:WINTAGE_APPDATA = $fakeApp36
+    New-Item -Path $conRoot36 -Force | Out-Null
+    # Apply from a collapsed (zero-scrollback) start -> buffer is raised to 9001.
+    New-ItemProperty -Path $conRoot36 -Name ScreenBufferSize -Value ((25 -shl 16) -bor 106) -PropertyType DWord -Force | Out-Null
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target conhost -Palette goldendefault 2>&1
+    check 'conhost-reapply-health: apply exits 0' ($LASTEXITCODE -eq 0)
+    check 'conhost-reapply-health: apply raised buffer to 9001' ((((Get-ItemProperty $conRoot36 -Name ScreenBufferSize).ScreenBufferSize -shr 16) -band 0xFFFF) -ge 9001)
+    # The user bug: conhost later rewrites ScreenBufferSize back to window height,
+    # collapsing scrollback. The WintagePalette marker stays intact.
+    New-ItemProperty -Path $conRoot36 -Name ScreenBufferSize -Value ((25 -shl 16) -bor 106) -PropertyType DWord -Force | Out-Null
+    check 'conhost-reapply-health: simulated drift collapsed the buffer' ((((Get-ItemProperty $conRoot36 -Name ScreenBufferSize).ScreenBufferSize -shr 16) -band 0xFFFF) -eq 25)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
+    check 'conhost-reapply-health: reapply exits 0' ($LASTEXITCODE -eq 0)
+    check 'conhost-reapply-health: reapply re-asserts the 9001 floor' ((((Get-ItemProperty $conRoot36 -Name ScreenBufferSize).ScreenBufferSize -shr 16) -band 0xFFFF) -ge 9001)
+    check 'conhost-reapply-health: reapply names the collapsed profile' ($out -match 'scrollback collapsed')
+} finally {
+    Remove-Item $conRoot36 -Recurse -Force -ErrorAction SilentlyContinue
+    $env:WINTAGE_TEST_CONHOST_KEY = $prevKey36
+    $env:WINTAGE_BACKUP_ROOT = $prevBakBase36
+    $env:WINTAGE_APPDATA = $prevWintage36
 }
 
 # ---- Summary ----
