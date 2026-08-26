@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.28.0] - 2026-08-26
+
+- New: the Windows console font is now **Terminus (TTF) for Windows** instead of Verdana (T-202). Proportional glyphs collide on a fixed cell grid; the new face is applied live to `HKCU:\Console` and six profile keys, and a gate pins that conhost and Windows Terminal agree on the same non-Verdana face.
+- New: installer language selector (T-202). English is the default (never the system culture), the pick is persisted per machine to `%APPDATA%\Wintage\language.txt`, and the GUI offers a live `Language` combo. `install.ps1 -Language` hard-fails on an unknown code. 33 locales shipped.
+- Fixed: `release.ps1` staged with `git add -A`, so any untracked file present at release time (a debug dump, a half-finished harness, a scratch file) would be published with it (T-201). A refuse guard now aborts the release and lists exactly what would have ridden along before anything is pushed; `.gitignore` covers the transient engine receipts that are safe to ignore.
+
 ## [1.27.0] - 2026-08-21
 
 - New target: **WorkBuddy AI** (T-196). Electron app, discovered from a running `WorkBuddyAI`/`WorkBuddy`/`CodeBuddy` process or the usual `Programs\WorkBuddy*` locations, overridable with `-WorkBuddyPath` and remembered in `paths.json`. It is grouped with the portable/source apps in the GUI target list.

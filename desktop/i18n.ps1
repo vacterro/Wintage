@@ -43,4 +43,36 @@ function T($key) {
     return $key
 }
 
-Load-I18n ((Get-Culture).TwoLetterISOLanguageName)
+# English is the default face of both surfaces -- never the system culture, which
+# made the GUI come up in an arbitrary language the user never asked for. A GUI
+# language pick is remembered per machine under %APPDATA%\Wintage (same discipline
+# as freebuff-sound.txt: a per-machine preference has no business in the repo) and
+# re-applied here, so the dropdown choice survives relaunches and the CLI follows
+# the same machine-wide choice.
+$script:LangPrefFile = Join-Path $env:APPDATA 'Wintage\language.txt'
+$script:SavedLocale = 'en'
+if (Test-Path $script:LangPrefFile) {
+    $saved = (Read-Utf8 $script:LangPrefFile).Trim()
+    if ($saved -and (Test-Path (Join-Path $script:LocalesDir "$saved.json"))) { $script:SavedLocale = $saved }
+}
+Load-I18n $script:SavedLocale
+
+# Available locale codes: 'en' first (the fallback face), then the rest sorted.
+function Get-I18nLocales {
+    @('en') + @((Get-ChildItem $script:LocalesDir -Filter '*.json' |
+        ForEach-Object { $_.BaseName } | Where-Object { $_ -ne 'en' } | Sort-Object))
+}
+
+# Switch the live strings AND remember the choice; a preference that forgets
+# itself makes the dropdown lie on the next launch.
+function Set-I18nLocale($locale) {
+    Load-I18n $locale
+    try {
+        $dir = Split-Path $script:LangPrefFile -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        [System.IO.File]::WriteAllText($script:LangPrefFile, $locale, $script:Utf8NoBom)
+    }
+    catch {
+        Write-Warning "could not save language preference: $($_.Exception.Message)"
+    }
+}

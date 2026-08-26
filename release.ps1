@@ -144,6 +144,19 @@ function Git-Safe {
     return $code
 }
 
+# T-201: `git add -A` publishes EVERY untracked file sitting in the tree. A debug
+# dump, a half-finished harness or a scratch file present at release time would
+# ride along in the commit -- the exact accident that shipped four audit
+# harnesses from an absent baseline once (E-692). The build/derive/import gates
+# above regenerated the owned outputs, so a clean tree is the expectation here;
+# any untracked file left is unattributed by construction. Refuse BEFORE anything
+# is published, and say exactly what would have ridden along.
+$untracked = @(& git -C $PSScriptRoot ls-files --others --exclude-standard)
+if ($untracked.Count -gt 0) {
+    Write-Host "release aborted: $($untracked.Count) untracked file(s) would ride along in 'git add -A':"
+    $untracked | ForEach-Object { Write-Host "  $_" }
+    throw "git add -A would publish untracked file(s) - commit, delete or gitignore them, then rerun"
+}
 if ((Git-Safe add -A) -ne 0) { throw "git add failed" }
 if ((Git-Safe commit -m "v${new}: $Message") -ne 0) { throw "git commit failed (nothing to commit, or a hook rejected it)" }
 # T-192 P1#25: a release is published WHOLE or NOT AT ALL. The branch and the tag

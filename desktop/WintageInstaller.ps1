@@ -686,8 +686,37 @@ $log.BorderStyle = 'FixedSingle'
 $status = New-Object Windows.Forms.Label
 $status.Location = '12,546'; $status.Size = '840,26'
 
+# ---- LANGUAGE ----
+# English by default (i18n.ps1), the machine's saved pick preselected. A switch
+# re-strings every translatable control live -- no relaunch, no second code path.
+$lblLanguage = New-Object Windows.Forms.Label
+$lblLanguage.Text = (T 'LanguageLabel'); $lblLanguage.Location = '640,10'; $lblLanguage.Size = '64,16'; $lblLanguage.Font = $FONTB
+$cmbLanguage = New-Object Windows.Forms.ComboBox
+$cmbLanguage.Location = '706,7'; $cmbLanguage.Size = '146,21'
+$cmbLanguage.DropDownStyle = 'DropDownList'
+foreach ($l in (Get-I18nLocales)) { [void]$cmbLanguage.Items.Add($l) }
+$script:currentLocale = if ($cmbLanguage.Items -contains $script:SavedLocale) { $script:SavedLocale } else { 'en' }
+$cmbLanguage.SelectedItem = $script:currentLocale
+
+function Update-GuiStrings {
+    $form.Text = (T 'WintageInstallerTitle')
+    $lblThemes.Text = (T 'Palettes'); $lblMyApps.Text = (T 'MyApps'); $lblPopularApps.Text = (T 'PopularApps')
+    $lblPreview.Text = (T 'Preview'); $lblTokens.Text = (T 'Tokens'); $lblLanguage.Text = (T 'LanguageLabel')
+    $btnSelectAll.Text = (T 'SelectAll'); $btnSelectNone.Text = (T 'SelectNone')
+    $btnApply.Text = (T 'Apply'); $btnSave.Text = (T 'Save'); $btnDelCustom.Text = (T 'DelCustom'); $btnRevert.Text = (T 'Revert')
+    $chkLogonTask.Text = (T 'LogonTask'); $btnFbSoundCopy.Text = (T 'FbSoundCopy')
+    $status.Text = (T 'StatusHint')
+    Update-FbSoundButton
+}
+
+$cmbLanguage.Add_SelectedIndexChanged({
+    $script:currentLocale = [string]$cmbLanguage.SelectedItem
+    Set-I18nLocale $script:currentLocale
+    Update-GuiStrings
+})
+
 $form.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
-        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $chkLogonTask, $btnFbSound, $btnFbSoundCopy, $log, $status))
+        $lblTokens, $swatchPanel, $lblInfo, $lblLanguage, $cmbLanguage, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $chkLogonTask, $btnFbSound, $btnFbSoundCopy, $log, $status))
 $lstThemes.TabIndex = 0; $clbMyApps.TabIndex = 1; $clbPopularApps.TabIndex = 2
 $btnSelectAll.TabIndex = 3; $btnSelectNone.TabIndex = 4; $btnApply.TabIndex = 5
 $btnSave.TabIndex = 6; $btnDelCustom.TabIndex = 7; $btnRevert.TabIndex = 8; $btnFbSound.TabIndex = 9; $btnFbSoundCopy.TabIndex = 10; $log.TabIndex = 11
@@ -1149,7 +1178,7 @@ Refresh-Swatches
 Update-Info
 Skin-Self
 $lstThemes.Add_SelectedIndexChanged({ Skin-Self })
-$status.Text = (T 'StatusHint')
+Update-GuiStrings
 
 # The folder is asked for once and remembered, so the way to CHANGE it has to be
 # discoverable somewhere. A tooltip rather than a longer label: the label is 200px

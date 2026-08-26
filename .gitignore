@@ -27,6 +27,11 @@ Cached Theme.pak
 # never release content (recovery STATE copies under .saipen/recovery/ excepted).
 .saipen/locks/
 .saipen/recovery/ops/
+.saipen/recovery/settled/
+
+# SAIPEN conformance receipts -- transient per-run engine records; the durable
+# result is the RUN: validate.py -> PASS/FAIL line in LOG, not the receipt json.
+.saipen/recovery/conformance/
 
 # throwaway probes from the Claude transparency debugging session (superseded)
 /fix.js

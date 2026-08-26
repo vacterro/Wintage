@@ -24,9 +24,10 @@ const backupPath = `${settingsPath}.wintage.bak`;
 const createdPath = `${settingsPath}.wintage-created`;
 const markerPath = `${settingsPath}.wintage-palette`;
 // Windows Terminal is cell-based: proportional Verdana overlaps neighbouring
-// cells. Consolas preserves the requested compact sans-like look without lying
-// to the renderer about glyph width.
-const TERMINAL_FONT = 'Consolas';
+// cells. Terminus (TTF) for Windows is the user's installed bitmap-style
+// monospace (the classic console look) and keeps the requested compact
+// sans-like look without lying to the renderer about glyph width.
+const TERMINAL_FONT = 'Terminus (TTF) for Windows';
 
 // The ONLY fields Wintage owns in settings.json (T-189). Revert merges these
 // back into the CURRENT file and preserves every unrelated key/profile/setting

@@ -20,6 +20,7 @@ param(
     [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
     [string]$Target,
     [string]$Palette = 'goldendefault',
+    [string]$Language,
     [switch]$Revert,
     [switch]$Force,
     [string]$CodeNomadPath,
@@ -79,6 +80,16 @@ $ManifestPath = Join-Path $WintageAppData 'installed.json'
 $PathsPath = Join-Path $WintageAppData 'paths.json'
 
 . (Join-Path $PSScriptRoot 'i18n.ps1')
+
+# Explicit -Language wins over the machine-wide saved pick; an unknown code is a
+# hard error, not a silent English fallback -- a typo'd flag that quietly does
+# nothing is worse than a failed run.
+if ($Language -and $Language -ne $script:SavedLocale) {
+    if (-not (Test-Path (Join-Path $PSScriptRoot "locales\$Language.json"))) {
+        throw "unknown -Language '$Language' - no desktop/locales/$Language.json (available: $((Get-I18nLocales) -join ', '))"
+    }
+    Load-I18n $Language
+}
 
 $TASK_NAME = 'Wintage Reapply at Logon'
 
@@ -144,9 +155,10 @@ $TERMINAL_DIRS = @(
 )
 # Terminal renderers lay text on a fixed cell grid. Verdana is proportional:
 # forcing it made conhost keep fixed cells while drawing variable-width glyphs,
-# so letters visibly collided. Consolas is bundled with Windows, monospace and
-# already approved by conhost's TrueTypeFont registry.
-$CONSOLE_FONT = 'Consolas'
+# so letters visibly collided. Terminus (TTF) for Windows is the user's installed
+# bitmap-style monospace (the classic console look), monospaced and safe for the
+# fixed cell grid; Consolas remains the bundled fallback if Terminus is absent.
+$CONSOLE_FONT = 'Terminus (TTF) for Windows'
 
 # Fixed-name recovery files (conhost-settings.json, windows-dwm-settings.json)
 # share the backup base with the timestamped apply backups; the env seam lets
