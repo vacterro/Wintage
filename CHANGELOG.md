@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.28.1] - 2026-08-26
+
+- Fixed: the console scrollbar could silently disappear from a command-line window (T-204). conhost rewrites `ScreenBufferSize` back into the registry whenever the window is resized, so a profile whose screen-buffer height collapsed to its window height had zero scrollback and no scrollbar, while the Wintage palette marker stayed intact and Reapply never noticed. Reapply now probes every console profile's buffer height against the 9001-line floor and re-asserts it when a profile has drifted below it. This also fixes a latent crash: a `Reapply` over a conhost or MPC-HC target used to throw `GetFullPath: format not supported` under Windows PowerShell 5.1, because the recorded `HKCU:\...` registry key is not a filesystem path.
+
 ## [1.28.0] - 2026-08-26
 
 - New: the Windows console font is now **Terminus (TTF) for Windows** instead of Verdana (T-202). Proportional glyphs collide on a fixed cell grid; the new face is applied live to `HKCU:\Console` and six profile keys, and a gate pins that conhost and Windows Terminal agree on the same non-Verdana face.
