@@ -132,6 +132,26 @@ function Reset-SmartVacDir([string]$dir = $svDirB) {
     [System.IO.File]::WriteAllText((Join-Path $dir '_SMART_VAC_CLEANER.py'), $svSource, $utf8NoBom)
 }
 
+# CORE-007: a mutating install-electron apply requires a RESOLVABLE executable
+# whose fuse wire is readable and schema-valid (zero-EXE is UNVERIFIABLE and
+# must fail closed), so every fixture that runs a real apply ships a stock
+# fused exe with both blocking fuses enabled. Schema v1, count 8, sentinel as
+# produced by the production reader.
+function New-FusedExe {
+    $sentinel = [System.Text.Encoding]::ASCII.GetBytes('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX')
+    $fuses = New-Object byte[] 8
+    for ($i = 0; $i -lt 8; $i++) { $fuses[$i] = 0x30 }
+    $fuses[5] = 0x31   # OnlyLoadAppFromAsar
+    $fuses[6] = 0x31   # LoadBrowserProcessSpecificV8Snapshot (non-blocking, exercises byte-level restore)
+    $bytes = New-Object System.Collections.Generic.List[byte]
+    $bytes.AddRange([System.Text.Encoding]::ASCII.GetBytes('MZ fake exe '))
+    $bytes.AddRange($sentinel)
+    $bytes.Add(1); $bytes.Add(8)
+    $bytes.AddRange($fuses)
+    $bytes.AddRange([System.Text.Encoding]::ASCII.GetBytes(' padding'))
+    $bytes.ToArray()
+}
+
 # Minimal valid asar so install-electron can read a package.json version.
 function Build-FakeAsar([string]$path, [string]$version) {
     $pkgJson = '{"name":"FakeApp","version":"' + $version + '","main":"' + ('x'.PadRight(40, 'x')) + '"}'
@@ -379,6 +399,7 @@ try {
     $agRes = Join-Path $fakeLocal 'Programs\Antigravity\resources'
     New-Item -ItemType Directory -Path $agRes -Force | Out-Null
     Build-FakeAsar (Join-Path $agRes 'app.asar') '1.0.0'
+    [System.IO.File]::WriteAllBytes((Join-Path $fakeLocal 'Programs\Antigravity\FakeApp.exe'), (New-FusedExe))
     $env:LOCALAPPDATA = $fakeLocal
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target 'antigravity-app' -Palette goldendefault 2>&1
     check 'electron apply v1 exits 0' ($LASTEXITCODE -eq 0)
@@ -758,6 +779,7 @@ try {
 # ---- Test 30: VS Code extension revert restores the apply-time backup (T-191 P0#11) ----
 Clean-TestState
 $prevHome30 = $env:HOME
+$prevProfile30 = $env:USERPROFILE
 $prevBakRoot30 = $env:WINTAGE_BACKUP_ROOT
 $prevWintage30 = $env:WINTAGE_APPDATA
 try {
@@ -769,6 +791,7 @@ try {
     $fakeApp30 = Join-Path $testRoot 'winappdata30'
     New-Item -ItemType Directory -Path $fakeApp30 -Force | Out-Null
     $env:HOME = $fakeHome30
+    $env:USERPROFILE = $fakeHome30
     $env:WINTAGE_BACKUP_ROOT = Join-Path $testRoot 'backup30'
     $env:WINTAGE_APPDATA = $fakeApp30
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target vscode -Palette goldendefault 2>&1
@@ -795,7 +818,7 @@ try {
     check 'vscode-backup: repainted artifact gone after revert' (-not (Test-Path (Join-Path $dest30 'themes\dracula.json')))
     $m30After = if (Test-Path $m30) { Get-Content $m30 -Raw | ConvertFrom-Json } else { $null }
     check 'vscode-backup: manifest entry removed' ((-not $m30After) -or -not $m30After.vscode)
-} finally { $env:HOME = $prevHome30; $env:WINTAGE_BACKUP_ROOT = $prevBakRoot30; $env:WINTAGE_APPDATA = $prevWintage30 }
+} finally { $env:HOME = $prevHome30; $env:USERPROFILE = $prevProfile30; $env:WINTAGE_BACKUP_ROOT = $prevBakRoot30; $env:WINTAGE_APPDATA = $prevWintage30 }
 
 # ---- Test 31: conhost revert keeps its backup until the manifest transition succeeds (T-192 P0#4) ----
 Clean-TestState

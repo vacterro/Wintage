@@ -15,9 +15,14 @@
 //                                            so repacking the asar instead is not a
 //                                            way around the first fuse either.
 //
-// Both are deliberate security controls. An app that sets them has decided its code
-// is not to be modified, and the correct response is to say so and stop — not to
-// find a cleverer way in.
+// Fuse policy (CORE-007): a SUPPORTED, byte-verified fuse schema (version 1 with
+// the known count) that has these two fuses enabled is repaired by backing the
+// original executable up byte-exactly (once, at the install epoch) and disabling
+// the fuse bytes, with revert restoring the backup. An app whose fuse wire cannot
+// be READ OR VERIFIED — unknown schema version, malformed count, missing sentinel,
+// or more than one candidate executable — is UNVERIFIABLE, and a mutating install
+// must fail closed rather than modify an application whose launch constraints are
+// unknown. "Unable to prove fuse safety" is never treated as "safe".
 //
 // Format: a fixed sentinel string, then one byte of wire version, one byte of fuse
 // count, then one ASCII byte per fuse: '0' disabled, '1' enabled, 'r' removed.
@@ -37,10 +42,21 @@ const NAMES = [
   'EnableEmbeddedAsarIntegrityValidation',
   'OnlyLoadAppFromAsar',
   'LoadBrowserProcessSpecificV8Snapshot',
-  'GrantFileProtocolExtraPrivileges'
+  'GrantFileProtocolExtraPrivileges',
+  'WasmTrapHandlers'
 ];
 
 const STATE = { 0x30: 'disabled', 0x31: 'enabled', 0x72: 'removed' };
+const MAX_KNOWN_COUNT = NAMES.length + 8; // tolerated slack, still validated below
+
+// Tri-state verdicts (CORE-007):
+//   VERIFIED_SAFE  - read and schema-valid: the two blocking fuses are known off.
+//   BLOCKED        - read and schema-valid: a blocking fuse is enabled.
+//   UNVERIFIABLE   - the wire cannot be read, the schema is unknown/malformed, or
+//                    the caller could not resolve exactly one executable.
+const VERIFIED_SAFE = 'VERIFIED_SAFE';
+const BLOCKED = 'BLOCKED';
+const UNVERIFIABLE = 'UNVERIFIABLE';
 
 function readFuses(exe) {
   let data;
@@ -50,23 +66,29 @@ function readFuses(exe) {
   const at = i + SENTINEL.length;
   const version = data[at];
   const count = data[at + 1];
-  if (version !== 1 || !count || count > NAMES.length + 8) {
-    // Unknown schema: report it rather than mapping bytes onto names that may have
-    // moved. A wrong ENABLED/disabled reading here would either block a themeable
-    // app or wave through one that is about to break.
-    return { version, count, unknown: true };
+  // Schema validation: version 1, count sane (at least the 6 core fuses through OnlyLoadAppFromAsar), AND every byte within the file.
+  if (version !== 1 || !count || count < 6 || count > MAX_KNOWN_COUNT || (at + 2 + count) > data.length) {
+    // Unknown or malformed schema: report it rather than mapping bytes onto names
+    // that may have moved or reading past the end. A wrong ENABLED/disabled reading
+    // here would either block a themeable app or wave through one that is about to
+    // break — both are failures of the same kind.
+    return { version, count, unknown: true, malformed: !(version === 1 && count > 0 && (at + 2 + count) <= data.length) };
   }
   const fuses = {};
-  for (let k = 0; k < count && k < NAMES.length; k++) {
-    fuses[NAMES[k]] = STATE[data[at + 2 + k]] || ('byte ' + data[at + 2 + k]);
+  for (let k = 0; k < count; k++) {
+    const raw = data[at + 2 + k];
+    fuses[NAMES[k] || ('Fuse' + k)] = STATE[raw] || ('byte 0x' + raw.toString(16));
   }
   return { version, count, fuses };
 }
 
-// The two that decide whether the shim can work at all.
-function blockers(exe) {
+// Blocking verdict with full detail. `unknown`/`error` are NEVER flattened into
+// "no reasons" (CORE-007): callers must treat them as UNVERIFIABLE.
+function fuseVerdict(exe) {
   const r = readFuses(exe);
-  if (r.error || r.unknown) return { reasons: [], detail: r };
+  if (r.error || r.unknown) {
+    return { status: UNVERIFIABLE, reasons: [], detail: r, reason: (r.error || ('unknown fuse schema: version ' + r.version + ', count ' + r.count)) };
+  }
   const reasons = [];
   if (r.fuses.OnlyLoadAppFromAsar === 'enabled') {
     reasons.push('OnlyLoadAppFromAsar is enabled - Electron will load resources/app.asar and nothing else, so the shim in resources/app can never run');
@@ -74,9 +96,19 @@ function blockers(exe) {
   if (r.fuses.EnableEmbeddedAsarIntegrityValidation === 'enabled') {
     reasons.push('EnableEmbeddedAsarIntegrityValidation is enabled - the archive is hash-checked against the binary, so repacking it is not an alternative');
   }
-  return { reasons, detail: r };
+  return { status: reasons.length ? BLOCKED : VERIFIED_SAFE, reasons, detail: r };
 }
 
+// Backward-compatible shape for existing callers: `reasons.length` still
+// means "blocked", but callers that need fail-closed behaviour must use
+// fuseVerdict/defuseState instead.
+function blockers(exe) {
+  const v = fuseVerdict(exe);
+  return { reasons: v.status === BLOCKED ? v.reasons : [], detail: v.detail || v.reason };
+}
+
+// defuse() itself validates the known schema/version/count and target offsets
+// BEFORE any write, so callers cannot bypass the guard (CORE-007).
 function defuse(exe) {
   let data;
   try { data = fs.readFileSync(exe); } catch (e) { return { error: e.message }; }
@@ -84,28 +116,36 @@ function defuse(exe) {
   const i = data.indexOf(SENTINEL);
   if (i < 0) return { error: 'no fuse wire' };
   const at = i + SENTINEL.length;
+  const version = data[at];
+  const count = data[at + 1];
+  if (version !== 1 || !count || count < 6 || count > MAX_KNOWN_COUNT || (at + 2 + count) > data.length) {
+    return { error: 'unknown/malformed fuse schema (version ' + version + ', count ' + count + ') - refusing to modify an unverifiable executable' };
+  }
   let changed = false;
   if (data[at + 6] === 0x31) { data[at + 6] = 0x30; changed = true; } // EnableEmbeddedAsarIntegrityValidation
   if (data[at + 7] === 0x31) { data[at + 7] = 0x30; changed = true; } // OnlyLoadAppFromAsar
   if (changed) {
     const backup = exe + '.wintage-fuse.bak';
-    try { fs.writeFileSync(backup, original); }
-    catch (e) { return { error: 'could not back up ' + exe + ' to ' + backup + ': ' + e.message }; }
+    // CORE-008: the backup is the INSTALL-EPOCH authority. If one already
+    // exists (a repaint re-defusing a drifted exe), it must never be replaced
+    // by the already-drifted bytes - Revert needs the original executable.
+    if (!fs.existsSync(backup)) {
+      try { fs.writeFileSync(backup, original); }
+      catch (e) { return { error: 'could not back up ' + exe + ' to ' + backup + ': ' + e.message }; }
+    }
     try { fs.writeFileSync(exe, data); }
     catch (e) { return { error: 'could not write ' + exe + ': ' + e.message + ' (is the app running?)' }; }
   }
   return { success: true, changed, backup: changed ? exe + '.wintage-fuse.bak' : null };
 }
 
-module.exports = { readFuses, blockers, defuse };
+module.exports = { readFuses, blockers, defuse, fuseVerdict, VERIFIED_SAFE, BLOCKED, UNVERIFIABLE };
 
 if (require.main === module) {
   const exe = process.argv[2];
   if (!exe) { console.error('usage: node tools/electron-fuses.js <path-to-exe>'); process.exit(1); }
-  const r = readFuses(exe);
-  if (r.error) { console.error(r.error); process.exit(1); }
-  if (r.unknown) { console.log('unknown fuse schema: version ' + r.version + ', ' + r.count + ' fuses'); process.exit(0); }
-  for (const [k, v] of Object.entries(r.fuses)) console.log((v === 'enabled' ? '  ON  ' : '  off ') + k);
-  const b = blockers(exe);
-  console.log(b.reasons.length ? '\nNOT themeable by the shim:\n  ' + b.reasons.join('\n  ') : '\nThemeable by the shim.');
-}
+  const v = fuseVerdict(exe);
+  if (v.status === UNVERIFIABLE) { console.error(v.reason); process.exit(1); }
+  for (const [k, val] of Object.entries(v.detail.fuses)) console.log((val === 'enabled' ? '  ON  ' : '  off ') + k);
+  console.log(v.status === BLOCKED ? '\nNOT themeable by the shim:\n  ' + v.reasons.join('\n  ') : '\nThemeable by the shim.');
+}

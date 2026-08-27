@@ -143,6 +143,19 @@ function replaceFile(file, content) {
   writeAtomic(file, content);
 }
 
+// Field presence is tracked SEPARATELY from value (CORE-015): an explicitly
+// configured historySize: 0 is a legitimate setting, not "absent". Truthiness
+// tests would collapse it into absence and Revert would delete it.
+function hasOwned(obj, pathStr) {
+  const parts = pathStr.split('.');
+  let o = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (o == null || typeof o !== 'object') return false;
+    o = o[parts[i]];
+  }
+  return o != null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, parts[parts.length - 1]);
+}
+
 // A legacy whole-file backup (pre-T-189) is still usable: parse it and extract
 // only the owned fields, so an old install reverts without time-travelling the
 // rest of the file.
@@ -152,10 +165,10 @@ function readOwnedSnapshot(backupPathOrObject) {
     // legacy whole-file backup
     return {
       __wintage_owned: true,
-      colorScheme: getIn(backupPathOrObject, OWNED_FIELDS.colorScheme) || null,
-      font: getIn(backupPathOrObject, OWNED_FIELDS.font) || null,
-      antialiasingMode: getIn(backupPathOrObject, OWNED_FIELDS.antialiasingMode) || null,
-      historySize: getIn(backupPathOrObject, OWNED_FIELDS.historySize) || null
+      colorScheme: hasOwned(backupPathOrObject, OWNED_FIELDS.colorScheme) ? getIn(backupPathOrObject, OWNED_FIELDS.colorScheme) : null,
+      font: hasOwned(backupPathOrObject, OWNED_FIELDS.font) ? getIn(backupPathOrObject, OWNED_FIELDS.font) : null,
+      antialiasingMode: hasOwned(backupPathOrObject, OWNED_FIELDS.antialiasingMode) ? getIn(backupPathOrObject, OWNED_FIELDS.antialiasingMode) : null,
+      historySize: hasOwned(backupPathOrObject, OWNED_FIELDS.historySize) ? getIn(backupPathOrObject, OWNED_FIELDS.historySize) : null
     };
   }
   if (fs.existsSync(backupPathOrObject)) {
@@ -164,14 +177,19 @@ function readOwnedSnapshot(backupPathOrObject) {
   return null;
 }
 
+// Presence-aware merge (CORE-015): a snapshot field whose original value was
+// explicitly 0 must be restored as 0, and an absent field stays deleted.
+function mergeOwnedField(current, pathStr, snapValue) {
+  if (snapValue !== null && snapValue !== undefined) setIn(current, pathStr, snapValue);
+  else delIn(current, pathStr);
+}
+
 // Merge the owned fields from the snapshot into the CURRENT settings, removing
 // the Wintage scheme. Everything else in the current file survives untouched.
 function mergeOwnedIntoCurrent(current, snap) {
-  const ownedColorScheme = snap.colorScheme;
-  if (ownedColorScheme) setIn(current, OWNED_FIELDS.colorScheme, ownedColorScheme);
-  else delIn(current, OWNED_FIELDS.colorScheme);
+  mergeOwnedField(current, OWNED_FIELDS.colorScheme, snap.colorScheme);
   const curFont = getIn(current, OWNED_FIELDS.font);
-  if (snap.font && typeof snap.font === 'object') {
+  if (snap.font && typeof snap.font === 'object' && !Array.isArray(snap.font)) {
     const merged = (curFont && typeof curFont === 'object' && !Array.isArray(curFont)) ? curFont : {};
     for (const k of OWNED_FONT_KEYS) {
       if (k in snap.font) merged[k] = snap.font[k];
@@ -184,12 +202,8 @@ function mergeOwnedIntoCurrent(current, snap) {
       if (Object.keys(curFont).length === 0) delIn(current, OWNED_FIELDS.font);
     }
   }
-  const ownedAa = snap.antialiasingMode;
-  if (ownedAa) setIn(current, OWNED_FIELDS.antialiasingMode, ownedAa);
-  else delIn(current, OWNED_FIELDS.antialiasingMode);
-  const ownedHistory = snap.historySize;
-  if (ownedHistory) setIn(current, OWNED_FIELDS.historySize, ownedHistory);
-  else delIn(current, OWNED_FIELDS.historySize);
+  mergeOwnedField(current, OWNED_FIELDS.antialiasingMode, snap.antialiasingMode);
+  mergeOwnedField(current, OWNED_FIELDS.historySize, snap.historySize);
   if (Array.isArray(current.schemes)) {
     current.schemes = current.schemes.filter((s) => !s || s.name !== 'Wintage');
     if (current.schemes.length === 0) delete current.schemes;   // the apply created it
@@ -202,18 +216,34 @@ if (revert) {
     console.log(`Windows Terminal: would restore the Wintage-owned fields into ${settingsPath}`);
     process.exit(0);
   }
+  // CORE-009: expected ownership must be explicit at the helper boundary. When
+  // the palette marker says Wintage owns this file, the mandatory recovery
+  // (created marker OR owned-field backup) MUST be present; a manifest-recorded
+  // item whose recovery was lost is an unverifiable state and returns NONZERO
+  // with settings, marker and manifest untouched - never a "nothing to revert".
+  if (fs.existsSync(markerPath) && !fs.existsSync(createdPath) && !fs.existsSync(backupPath)) {
+    console.error(`Windows Terminal: ${settingsPath} is Wintage-themed (palette marker present) but the recovery backup is missing - cannot restore an unverifiable state; nothing was changed.`);
+    process.exit(1);
+  }
+  // An unrecorded standalone revert stays a no-op only when NO Wintage
+  // ownership marker/state is present (CORE-009).
+  if (!fs.existsSync(createdPath) && !fs.existsSync(backupPath) && !fs.existsSync(markerPath)) {
+    console.log('Windows Terminal: no Wintage backup to restore.');
+    process.exit(0);
+  }
   if (fs.existsSync(createdPath)) {
     if (fs.existsSync(settingsPath)) fs.unlinkSync(settingsPath);
     fs.unlinkSync(createdPath);
-  } else if (fs.existsSync(backupPath)) {
+  } else {
     const snap = readOwnedSnapshot(backupPath);
+    if (!snap) {
+      console.error(`Windows Terminal: the recovery backup at ${backupPath} is corrupt - cannot restore an unverifiable state; nothing was changed.`);
+      process.exit(1);
+    }
     const current = fs.existsSync(settingsPath) ? readJsonc(settingsPath) : {};
     mergeOwnedIntoCurrent(current, snap);
     replaceFile(settingsPath, `${JSON.stringify(current, null, 4)}\n`);
     fs.unlinkSync(backupPath);
-  } else {
-    console.log('Windows Terminal: no Wintage backup to restore.');
-    process.exit(0);
   }
   if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
   console.log(`Windows Terminal: restored the Wintage-owned fields into ${settingsPath}`);
@@ -234,12 +264,13 @@ for (const key of required) {
 const settings = fs.existsSync(settingsPath) ? readJsonc(settingsPath) : {};
 // Owned-field snapshot captured from the ORIGINAL file before any mutation, so
 // Revert can restore exactly these fields into whatever the file has become.
+// Presence-aware (CORE-015): historySize: 0 is captured as 0, not null.
 const ownedSnapshot = {
   __wintage_owned: true,
-  colorScheme: getIn(settings, OWNED_FIELDS.colorScheme) || null,
-  font: getIn(settings, OWNED_FIELDS.font) || null,
-  antialiasingMode: getIn(settings, OWNED_FIELDS.antialiasingMode) || null,
-  historySize: getIn(settings, OWNED_FIELDS.historySize) || null
+  colorScheme: hasOwned(settings, OWNED_FIELDS.colorScheme) ? getIn(settings, OWNED_FIELDS.colorScheme) : null,
+  font: hasOwned(settings, OWNED_FIELDS.font) ? getIn(settings, OWNED_FIELDS.font) : null,
+  antialiasingMode: hasOwned(settings, OWNED_FIELDS.antialiasingMode) ? getIn(settings, OWNED_FIELDS.antialiasingMode) : null,
+  historySize: hasOwned(settings, OWNED_FIELDS.historySize) ? getIn(settings, OWNED_FIELDS.historySize) : null
 };
 if (Array.isArray(settings.profiles)) {
   settings.profiles = { defaults: {}, list: settings.profiles };

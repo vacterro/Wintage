@@ -94,19 +94,41 @@ function resolveExe() {
   })();
 }
 
-// ─── Fuse handling (T-190) ──────────────────────────────────────────────────
+// ─── Fuse handling (T-190 + CORE-007/CORE-008) ──────────────────────────────
 // The fuse flip is part of the install transaction: it happens ONLY after
 // classify + preflight + calculation, and a later failure restores the EXE.
-const { blockers, defuse } = require('./electron-fuses.js');
+// Fuse probing is TRI-STATE: VERIFIED_SAFE / BLOCKED / UNVERIFIABLE. An
+// unverifiable fUse wire or an ambiguous executable identity must fail closed
+// BEFORE any EXE/ASAR/filesystem change — "unable to prove fuse safety" is
+// never treated as "safe".
+const { fuseVerdict, defuse, VERIFIED_SAFE, BLOCKED, UNVERIFIABLE } = require('./electron-fuses.js');
 
 function ensureDefused(exe) {
-  if (!exe) return;
-  const b = blockers(exe);
-  if (!b.reasons.length) return;
+  if (!exe) die('cannot resolve the app executable - the fuse state cannot be verified, refusing to modify this installation (unverifiable).');
+  const v = fuseVerdict(exe);
+  if (v.status === UNVERIFIABLE) {
+    die('the app executable ' + exe + ' has an unverifiable fuse state (' + v.reason + ') - refusing to modify an installation whose launch constraints are unknown.');
+  }
+  if (v.status === VERIFIED_SAFE) return;
   console.log('install-electron: app is fused shut, attempting to defuse ' + exe + '...');
   const d = defuse(exe);
   if (d.error) die('could not defuse the app: ' + d.error);
   if (d.changed) console.log('install-electron: successfully defused the app.');
+}
+
+// Repair known fuse drift BEFORE a repaint changes anything (CORE-008): the
+// install-epoch backup is never replaced by already-drifted bytes.
+function ensureDefusedForRepaint(exe) {
+  if (!exe) die('cannot resolve the app executable - the fuse state cannot be verified, refusing to repaint this installation (unverifiable).');
+  const v = fuseVerdict(exe);
+  if (v.status === UNVERIFIABLE) {
+    die('the app executable ' + exe + ' has an unverifiable fuse state (' + v.reason + ') - refusing to repaint an installation whose launch constraints are unknown.');
+  }
+  if (v.status === VERIFIED_SAFE) return;
+  console.log('install-electron: app drifted back to a fused-shut state, re-defusing ' + exe + '...');
+  const d = defuse(exe);
+  if (d.error) die('could not re-defuse the app: ' + d.error);
+  if (d.changed) console.log('install-electron: successfully re-defused the app.');
 }
 
 function restoreFuseIfDefused(exe) {
@@ -191,16 +213,59 @@ function currentPalette() {
   } catch (e) { return null; }
 }
 
+// ─── Runtime sidecar inventory (CORE-008) ───────────────────────────────────
+// Which files the shim/runtime ACTUALLY needs for the theme to run, per mode.
+// health() must not call itself "healthy" when an owned sidecar is missing.
+function requiredSidecars() {
+  if (inPlace) {
+    return ['wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt'];
+  }
+  return ['package.json', 'shim.cjs', 'wintage.css'];
+}
+
+function missingSidecarList() {
+  const missing = [];
+  const baseDir = inPlace ? resources : appDir;
+  for (const f of requiredSidecars()) {
+    if (!fs.existsSync(path.join(baseDir, f))) missing.push(f);
+  }
+  return missing;
+}
+
+// Fuse health for --status-json (T-191 + CORE-007/CORE-008): one probe,
+// machine-readable, tri-state. `unverifiable: true` MUST be surfaced as such —
+// zero reasons is only safe when the schema itself verified.
+function fuseHealth() {
+  const exe = resolveExe();
+  if (!exe) return { exe: null, fusedShut: false, unverifiable: true, reason: 'cannot resolve exactly one candidate executable', reasons: [], pendingRestore: false };
+  const v = fuseVerdict(exe);
+  return {
+    exe,
+    fusedShut: v.status === BLOCKED,
+    unverifiable: v.status === UNVERIFIABLE,
+    reason: v.status === UNVERIFIABLE ? v.reason : undefined,
+    reasons: v.reasons || [],
+    pendingRestore: fs.existsSync(exe + '.wintage-fuse.bak'),
+    detail: (v.detail && v.detail.error) ? v.detail.error : undefined
+  };
+}
+
 function health() {
   const c = classifyState();
   const healthyStates = inPlace ? ['themed-inplace'] : ['themed-relocated'];
   const st = c.state;
+  const missing = missingSidecarList();
+  // Healthy = the state is themed AND every runtime sidecar the mode needs is
+  // present (CORE-008). A relocation can be structurally recognizable while
+  // unable to run the theme; that is not healthy.
+  const structurallyHealthy = healthyStates.indexOf(st) >= 0;
   return {
     mode: inPlace ? 'in-place' : 'relocation',
     state: st,
     version: currentVersion(),
     palette: currentPalette(),
-    healthy: healthyStates.indexOf(st) >= 0,
+    missingSidecars: missing,
+    healthy: structurallyHealthy && missing.length === 0,
     detail: c.detail
   };
 }
@@ -406,19 +471,6 @@ function restoreSidecars(snap) {
 // T-191 P0#7: fuse health for --status-json. One probe, machine-readable, so the
 // listing/Reapply layer can distinguish "themed and defused" from "themed but
 // fused shut" without re-reading the binary itself.
-function fuseHealth() {
-  const exe = resolveExe();
-  if (!exe) return { exe: null, fusedShut: false, reasons: [], pendingRestore: false };
-  const b = blockers(exe);
-  return {
-    exe,
-    fusedShut: b.reasons.length > 0,
-    reasons: b.reasons,
-    pendingRestore: fs.existsSync(exe + '.wintage-fuse.bak'),
-    detail: (b.detail && b.detail.error) ? b.detail.error : undefined
-  };
-}
-
 // T-191 P0#6: revert is a transaction. captureRevertPreState snapshots EVERYTHING
 // a revert branch may touch (the archive, the .bak, the sidecars, the exe and its
 // fuse backup); restoreRevertPreState puts it all back if the restore fails part
@@ -647,6 +699,12 @@ function installRelocation() {
 // ─── Repaint (already themed) ───────────────────────────────────────────────
 function repaintInPlace() {
   if (dryRun) { console.log('install-electron: would repaint ' + asar + ' to "' + palette + '"'); process.exit(0); }
+  // CORE-008: repaint repairs known fuse drift before repainting, while
+  // preserving the original install-epoch .wintage-fuse.bak (defuse only writes
+  // a backup when one does not exist). Unverifiable fuse state fails closed.
+  if (fs.existsSync(path.join(resources, 'wintage-palette.txt'))) {
+    ensureDefusedForRepaint(resolveExe());
+  }
   // T-191 P0#5: repaint is a transaction - snapshot the sidecars, write, verify,
   // roll back on any failure so a torn repaint can never advertise a palette the
   // files do not carry.
@@ -678,6 +736,8 @@ function repaintRelocation() {
     console.log('install-electron: would repaint ' + appDir + ' from "' + from + '" to "' + palette + '"');
     process.exit(0);
   }
+  // CORE-008: repair fuse drift before repainting; keep the epoch backup.
+  ensureDefusedForRepaint(resolveExe());
   // T-191 P0#5: transactional repaint of the owned app/ files.
   const preApp = captureAppDir();
   try {

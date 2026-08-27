@@ -173,17 +173,6 @@ function Assert-SafeStageRoot([string]$path, $profiles) {
     }
 }
 
-$before = Get-Summary
-if ($ListJson) {
-    $before | ConvertTo-Json -Depth 5 -Compress
-    exit 0
-}
-if (-not $before.ProfileCount) {
-    Write-Host 'Chromium browsers: no installed or portable profiles found.' -ForegroundColor DarkYellow
-    exit 0
-}
-Assert-SafeStageRoot $StageRoot $before.Profiles
-
 # ─── Stage ownership (T-192 P0#14) ──────────────────────────────────────────
 # A "safe filesystem location" is NOT permission to recursively delete the path.
 # Only a directory carrying the Wintage ownership marker may be replaced or
@@ -205,6 +194,16 @@ function Write-OwnerMarker([string]$path, [string]$palette) {
     [System.IO.File]::WriteAllText((Join-Path $path $OWNER_MARKER), ($o | ConvertTo-Json), (New-Object System.Text.UTF8Encoding($false)))
 }
 
+$before = Get-Summary
+if ($ListJson) {
+    $before | ConvertTo-Json -Depth 5 -Compress
+    exit 0
+}
+
+# CORE-011: Revert ownership handling comes BEFORE the zero-profile early exit -
+# browser discovery is a UI concern, never a prerequisite for filesystem
+# rollback. A valid Wintage-owned stage is removed even when every browser
+# profile has since disappeared; profile absence only suppresses the launch.
 if ($Revert) {
     if (Test-Path -LiteralPath $StageRoot) {
         if (-not (Get-StageOwner $StageRoot)) {
@@ -213,6 +212,10 @@ if ($Revert) {
         if ($PSCmdlet.ShouldProcess($StageRoot, 'Remove staged Wintage browser theme')) {
             Remove-Item -LiteralPath $StageRoot -Recurse -Force
         }
+    }
+    if (-not $before.ProfileCount) {
+        Write-Host 'Chromium browsers: staged theme removed; no browser profiles found to open.' -ForegroundColor Green
+        exit 0
     }
     if (-not $NoLaunch) {
         foreach ($profile in $before.Profiles) {
@@ -226,6 +229,12 @@ if ($Revert) {
     Write-Host "Chromium browsers: staged theme removed; remove Wintage/Tampermonkey from the opened browser pages if wanted." -ForegroundColor Green
     exit 0
 }
+
+if (-not $before.ProfileCount) {
+    Write-Host 'Chromium browsers: no installed or portable profiles found.' -ForegroundColor DarkYellow
+    exit 0
+}
+Assert-SafeStageRoot $StageRoot $before.Profiles
 
 $source = Join-Path $root "desktop\out\browser\$Palette"
 if (-not (Test-Path -LiteralPath (Join-Path $source 'manifest.json'))) {

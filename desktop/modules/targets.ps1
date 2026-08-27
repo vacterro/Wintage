@@ -30,8 +30,12 @@ function Get-TargetCurrentPath([string]$key) {
         'conhost'   { if (Test-Path $CONHOST_KEY) { $CONHOST_KEY } else { $null }; break }
         'obs'       { if (Test-Path $OBS_CONFIG) { $OBS_CONFIG } else { $null }; break }
         'discord'   { $css = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (Test-Path $css) { $css } else { $null }; break }
-        'totalcmd'  { $ini = $TotalCmdIni; if (-not $ini) { $ini = Join-Path $env:APPDATA 'GHISLER\wincmd.ini' }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
-        'totalcmd2' { $ini = $TotalCmd2Ini; if (-not $ini) { $ini = Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini' }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
+        # W2-004: Total Commander health re-resolves through the SAME resolver
+        # Apply uses (RedirectSection included), but the manifest-recorded
+        # effective INI wins when it still exists - an unattended Reapply must
+        # never classify its own recorded redirected path as "moved".
+        'totalcmd'  { $m = Read-ManifestQuiet; $ini = $null; if ($m -and $m.ContainsKey('totalcmd') -and $m['totalcmd'].path -and (Test-Path $m['totalcmd'].path)) { $ini = $m['totalcmd'].path } else { $ini = Resolve-TotalCmdIni 1 }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
+        'totalcmd2' { $m = Read-ManifestQuiet; $ini = $null; if ($m -and $m.ContainsKey('totalcmd2') -and $m['totalcmd2'].path -and (Test-Path $m['totalcmd2'].path)) { $ini = $m['totalcmd2'].path } else { $ini = Resolve-TotalCmdIni 2 }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
         'obsidian'  { $null; break }   # handled specially by Test-TargetNeedsReapply (recorded SET, never a joined fake path)
         'saipenview' { $css = if ($SaipenviewPath) { Join-Path $SaipenviewPath 'saipenview\ui\static\style.css' } else { $null }; if ($css -and (Test-Path $css)) { $css } else { $null }; break }
         'smartvac'  { $py = if ($SmartVacPath) { Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py' } else { $null }; if ($py -and (Test-Path $py)) { $py } else { $null }; break }
@@ -116,9 +120,32 @@ function Save-ElectronStateSnapshot([string]$key) {
     $snap = Join-Path $env:TEMP ("wintage-elstate-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $snap -Force | Out-Null
     $r = $e.Resources
-    foreach ($f in @('app', 'app.asar', 'app.asar.unpacked', 'wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt')) {
-        $src = Join-Path $r $f
-        if (Test-Path $src) { Copy-Item $src (Join-Path $snap $f) -Recurse -Force }
+    # PERF-005: the snapshot is MUTATION-SET AWARE. A repaint of an already-themed
+    # target changes only small sidecars (and possibly the exe/fuse backup) - it
+    # never touches the huge archive. Copying the whole app/ tree (which in
+    # relocation mode CONTAINS the moved archive) for a palette repaint pays
+    # archive-sized I/O for bytes that cannot change. The helper's own
+    # --status-json tells us which mutation class we are in: themed states =
+    # repaint = lightweight snapshot (small files only); everything else keeps
+    # the full pre-state.
+    $st = Get-ElectronStatus $key
+    $repaintOnly = $st -and $st.state -in @('themed-inplace', 'themed-relocated')
+    if ($repaintOnly) {
+        $appf = Join-Path $snap 'appfiles'
+        New-Item -ItemType Directory -Path $appf -Force | Out-Null
+        foreach ($f in @('package.json', 'shim.cjs', 'wintage.css', 'wintage-status.txt')) {
+            $src = Join-Path $r "app\$f"
+            if (Test-Path $src) { Copy-Item $src (Join-Path $appf $f) -Force }
+        }
+        foreach ($f in @('wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt')) {
+            $src = Join-Path $r $f
+            if (Test-Path $src) { Copy-Item $src (Join-Path $snap $f) -Force }
+        }
+    } else {
+        foreach ($f in @('app', 'app.asar', 'app.asar.unpacked', 'wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt')) {
+            $src = Join-Path $r $f
+            if (Test-Path $src) { Copy-Item $src (Join-Path $snap $f) -Recurse -Force }
+        }
     }
     # T-191 P0#3: the app EXE lives OUTSIDE resources/ (the app root), and the
     # fuse values live inside it. The Electron layer can flip the runAsNode fuse
@@ -137,6 +164,13 @@ function Save-ElectronStateSnapshot([string]$key) {
 function Restore-ElectronStateSnapshot([string]$key, [string]$snap) {
     $e = $ELECTRON[$key]
     $r = $e.Resources
+    # PERF-005: detect the repaint-mode snapshot (small sidecars only). Those
+    # snapshots never carry the app/ tree, so the structural restore loop below
+    # must NOT treat their absence as "delete the live dir": a repaint cannot
+    # change the archive layout, and wiping resources\app would destroy the
+    # relocated archive plus every sidecar.
+    $appf = Join-Path $snap 'appfiles'
+    $repaintOnly = Test-Path $appf
     # T-191 P0#12: copy-over FIRST, delete leftovers AFTER. A restore that removes
     # the live file and then fails to copy leaves the app broken; overwriting in
     # place never does. Directories cannot be overwritten in place (Copy-Item would
@@ -151,7 +185,20 @@ function Restore-ElectronStateSnapshot([string]$key, [string]$snap) {
             } else {
                 Copy-Item $src $dst -Force
             }
-        } elseif (Test-Path $dst) { Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue }
+        } elseif (-not $repaintOnly -and (Test-Path $dst)) {
+            # Only a full snapshot may prove that a structural artifact (the app
+            # dir or an archive) should be removed as a leftover of THIS operation.
+            Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    # PERF-005: restore the repaint-mode small files back into an EXISTING app/
+    # (the lightweight snapshot never removes the app dir - it was not touched).
+    if ($repaintOnly) {
+        $appDir = Join-Path $r 'app'
+        if (-not (Test-Path $appDir)) { New-Item -ItemType Directory -Path $appDir -Force | Out-Null }
+        foreach ($f in (Get-ChildItem $appf -File)) {
+            Copy-Item $f.FullName (Join-Path $appDir $f.Name) -Force
+        }
     }
     $exe = Get-ElectronExe $key
     if ($exe) {
@@ -169,6 +216,46 @@ function Restore-ElectronStateSnapshot([string]$key, [string]$snap) {
     }
 }
 
+# W2-005: Total Commander health compares EVERY Wintage-owned key in BOTH
+# colour sections against the values the recorded palette would write - the
+# same expectations Apply generates. Returns $null (healthy) or a reason string.
+function Test-TotalCmdThemed([string]$ini, $palTokens) {
+    if (-not $ini -or -not (Test-Path $ini)) { return 'totalcmd ini missing' }
+    if (-not $palTokens) { return 'recorded palette tokens unavailable' }
+    $t = $palTokens
+    $expected = @{
+        BackColor = Convert-HexToBgr $t.background
+        BackColor2 = Convert-HexToBgr $t.background
+        ForeColor = Convert-HexToBgr $t.textPrimary
+        MarkColor = Convert-HexToBgr $t.danger
+        CursorColor = Convert-HexToBgr $t.selection
+        CursorText = Convert-HexToBgr $t.borderHighlight
+        ActiveTitle = Convert-HexToBgr $t.surface
+        ActiveTitleText = Convert-HexToBgr $t.textPrimary
+        InactiveTitle = Convert-HexToBgr $t.backgroundSoft
+        InactiveTitleText = Convert-HexToBgr $t.textMuted
+    }
+    $recentFg = Convert-HexToBgr $t.link
+    $lines = (Read-Utf8 $ini) -split '\r?\n'
+    $bad = @()
+    foreach ($section in @('Colors', 'ColorsDark')) {
+        foreach ($key in $expected.Keys) {
+            $v = Get-IniKey $lines $section $key
+            if ($null -eq $v) { $bad += "$section.$key missing" }
+            elseif ([string]$v -ne [string]$expected[$key]) { $bad += "$section.$key=$v (want $($expected[$key]))" }
+        }
+    }
+    foreach ($line in $lines) {
+        $m = [regex]::Match($line, '^ColorFilter(\d+)Color(Dark)?=')
+        if ($m.Success) {
+            $v = $m.Value.Substring($m.Value.IndexOf('=') + 1)
+            if ([string]$v -ne [string]$recentFg) { $bad += "ColorFilter$($m.Groups[1].Value)Color$($m.Groups[2].Value)=$v (want $recentFg)" }
+        }
+    }
+    if ($bad.Count) { return 'totalcmd owned colours drifted: ' + (($bad | Select-Object -First 4) -join '; ') }
+    return $null
+}
+
 # needsReapply = ANY of: payload outdated/malformed, resolved path moved, app
 # version changed, marker/theme state missing, target unresolved.
 function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
@@ -182,10 +269,21 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
             $reasons += 'electron status unavailable (node failed or the app cannot be resolved)'
             return [pscustomobject]@{ Needs = $true; Reasons = ($reasons -join '; '); Path = $null }
         }
-        if ($st.state -in @('updated-relocated', 'updated-inplace')) { $reasons += "electron state $($st.state) (app updated, theme lost)" }
+        # CORE-008: Reapply consumes the RUNTIME health verdict, not a
+        # re-inference of state/version. `healthy` already bakes in the required
+        # sidecar set; missingSidecars names the gaps explicitly.
+        if ($st.PSObject.Properties['healthy'] -and -not $st.healthy) {
+            if ($st.missingSidecars -and @($st.missingSidecars).Count) { $reasons += "missing runtime sidecar(s): $(@($st.missingSidecars) -join ', ')" }
+            else { $reasons += ("electron health: $($st.detail)") }
+        }
+        elseif ($st.state -in @('updated-relocated', 'updated-inplace')) { $reasons += "electron state $($st.state) (app updated, theme lost)" }
         elseif ($st.state -eq 'stock') { $reasons += 'electron state stock (not themed)' }
         elseif ($st.state -eq 'ambiguous') { $reasons += "electron state ambiguous: $($st.detail)" }
         elseif ($data.appVersion -and $st.version -and $data.appVersion -ne $st.version) { $reasons += "app version $($data.appVersion) -> $($st.version)" }
+        if ($st.fuses) {
+            if ($st.fuses.unverifiable) { $reasons += ("electron fuse state unverifiable: $($st.fuses.reason)") }
+            elseif ($st.fuses.fusedShut) { $reasons += 'electron fuses are blocking the shim (fused shut)' }
+        }
         if ($data.palette -and $st.palette -and $st.palette -ne $data.palette) { $reasons += "palette $($data.palette) -> $($st.palette)" }
         if ($data.path -and $st.resources -and ([IO.Path]::GetFullPath($data.path) -ne [IO.Path]::GetFullPath($st.resources))) {
             $reasons += "resolved path moved ($($data.path) -> $($st.resources))"
@@ -228,16 +326,28 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                 if ($markers.Count -lt $paths.Count) { $reasons += 'terminal theme marker(s) missing' }
                 else { foreach ($marker in $markers) { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "terminal marker palette mismatch ($mv)" } } }
             } else {
+                # CORE-003: health tests the EXACT expected owned theme per vault,
+                # never a 'Wintage *' prefix wildcard - a user lookalike folder
+                # must not make a missing owned theme look healthy.
                 $builtRoot = Join-Path $out 'obsidian'
                 $activeName = $null
                 $activeManifest = Join-Path $builtRoot "$($data.palette)/manifest.json"
                 if (Test-Path $activeManifest) {
                     try { $activeName = (Read-Utf8 $activeManifest | ConvertFrom-Json).name } catch { }
                 }
+                $expectedNames = @()
+                if (Test-Path $builtRoot) {
+                    $expectedNames = @(Get-ChildItem $builtRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                        try { (Read-Utf8 (Join-Path $_.FullName 'manifest.json') | ConvertFrom-Json).name } catch { $null }
+                    } | Where-Object { $_ })
+                }
                 foreach ($r in $recorded) {
                     $themesDir = Join-Path $r '.obsidian/themes'
-                    $hasTheme = (Test-Path $themesDir) -and @(Get-ChildItem $themesDir -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue).Count -gt 0
-                    if (-not $hasTheme) { $reasons += "obsidian vault has no Wintage theme: $r" }
+                    foreach ($expected in $expectedNames) {
+                        if (-not (Test-Path (Join-Path $themesDir $expected))) {
+                            $reasons += "obsidian vault missing owned theme '$expected': $r"
+                        }
+                    }
                     $appearance = Join-Path $r '.obsidian/appearance.json'
                     if (Test-Path $appearance) {
                         $css = (Read-Utf8 $appearance | ConvertFrom-Json).cssTheme
@@ -264,7 +374,16 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
         $palFile = Join-Path $root "themes\$($data.palette).json"
         $palTokens = if (Test-Path $palFile) { Get-PaletteTokens $palFile } else { $null }
         switch ($key) {
-            'windows'   { if (Test-Path $WINDOWS_THEME_MARKER) { $m = (Read-Utf8 $WINDOWS_THEME_MARKER).Trim(); if ($m -ne $data.palette) { $reasons += "windows marker palette mismatch ($m)" } } else { $reasons += 'windows theme marker missing' } }
+            # W2-005: Windows health is the managed theme FILE plus the marker -
+            # the marker alone survives a deleted Wintage-<hash>.theme or a user
+            # switching CurrentTheme away, and both are real theme loss.
+            'windows'   { if (Test-Path $WINDOWS_THEME_MARKER) { $m = (Read-Utf8 $WINDOWS_THEME_MARKER).Trim(); if ($m -ne $data.palette) { $reasons += "windows marker palette mismatch ($m)" } } else { $reasons += 'windows theme marker missing' }
+                $activePathMarker = Join-Path $WINDOWS_THEMES_DIR '.wintage-active-theme-path'
+                $managed = if (Test-Path $activePathMarker) { (Read-Utf8 $activePathMarker).Trim() } else { $null }
+                if ($managed -and -not (Test-Path $managed)) { $reasons += 'managed windows theme file deleted' }
+                $currentTheme = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+                if ($managed -and $currentTheme -and ([IO.Path]::GetFullPath($currentTheme) -ne [IO.Path]::GetFullPath($managed))) { $reasons += 'current windows theme is not the Wintage-managed theme' }
+            }
             'obs'       { $obsTheme = Join-Path $OBS_CONFIG 'themes\Wintage.ovt'; $obsMarker = Join-Path $OBS_CONFIG '.wintage-obs-palette'; if (-not (Test-Path $obsTheme) -or -not (Test-Path $obsMarker)) { $reasons += 'obs theme/marker missing' } else { $mv = (Read-Utf8 $obsMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "obs marker palette mismatch ($mv)" } } }
             'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" }
                 # A console profile whose screen-buffer height fell at/below its
@@ -282,9 +401,18 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                 if ($collapsed.Count) { $reasons += "conhost scrollback collapsed (buffer height < $CONSOLE_SCROLLBACK_HEIGHT, no scrollbar): $($collapsed.PSChildName -join ', ')" }
             }
             'browsers'  { $marker = Join-Path $BrowserStageRoot '.wintage-palette'; if (-not (Test-Path $marker)) { $reasons += 'browser stage marker missing' } else { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "browser marker palette mismatch ($mv)" } } }
-            'mpchc'     { $v = (Get-ItemProperty $MPC_KEY -Name OSDFont -ErrorAction SilentlyContinue).OSDFont; if ($v -ne 'Verdana') { $reasons += 'mpc OSD font not themed' } }
+            'totalcmd'  { $tc = Test-TotalCmdThemed $currentPath $palTokens; if ($tc -is [string]) { $reasons += $tc } }
+            'totalcmd2' { $tc = Test-TotalCmdThemed $currentPath $palTokens; if ($tc -is [string]) { $reasons += $tc } }
+            # W2-005: health compares EVERY owned registry value (the exact set
+            # Invoke-MpcHc owns), not just one cheap marker.
+            'mpchc'     { $props = Get-ItemProperty $MPC_KEY -ErrorAction SilentlyContinue; if ($props) { if ($props.MPCTheme -ne 1) { $reasons += 'mpc MPCTheme not themed' }; if ($props.ModernThemeMode -ne 2) { $reasons += 'mpc ModernThemeMode not themed' }; if ($props.OSDFont -ne 'Verdana') { $reasons += 'mpc OSD font not themed' }; if ($props.OSDSize -ne 16) { $reasons += 'mpc OSD size not themed' }; if ($null -ne $props.OSDTransparency -and $props.OSDTransparency -ne 0) { $reasons += 'mpc OSD transparency not themed' }; if ($props.OSDBorder -ne 1) { $reasons += 'mpc OSD border not themed' }; if ($props.TitleBarTextStyle -ne 1) { $reasons += 'mpc title bar text style not themed' } } else { $reasons += 'mpc settings key unreadable' } }
             'discord'   { $bdCss = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (-not (Test-Path $bdCss)) { $reasons += 'betterdiscord css missing' } elseif ($palTokens -and -not ((Read-Utf8 $bdCss) -match [regex]::Escape($palTokens.background))) { $reasons += 'betterdiscord css does not match the recorded palette' } }
-            'saipenview' { if (-not (Test-Path (Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'))) { $reasons += 'saipenview backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $cssFile) -match [regex]::Escape($palTokens.background))) { $reasons += 'saipenview css does not carry the recorded palette' } }
+            # CORE-012: $currentPath IS the resolved CSS file (see
+            # Get-TargetCurrentPath); the old $cssFile variable is not defined in
+            # this scope and the Read-Utf8 of a null path THREW instead of
+            # returning an unhealthy verdict. An unreadable CSS file is an
+            # explicit health reason, never an uncaught exception.
+            'saipenview' { $svBak = if ($currentPath) { $currentPath + '.bak' } else { $null }; if (-not $svBak -or -not (Test-Path $svBak)) { $reasons += 'saipenview backup missing (never themed)' } elseif ($palTokens) { try { if (-not ((Read-Utf8 $currentPath) -match [regex]::Escape($palTokens.background))) { $reasons += 'saipenview css does not carry the recorded palette' } } catch { $reasons += 'saipenview css unreadable: ' + $_.Exception.Message } } }
             'smartvac'  { $py = if ($SmartVacPath) { Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py' } else { $null }; if (-not $py -or -not (Test-Path $py)) { $reasons += 'smartvac file missing' } elseif (-not (Test-Path ($py + '.bak'))) { $reasons += 'smartvac backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $py) -match [regex]::Escape($palTokens.background))) { $reasons += 'smartvac owned tokens do not match the recorded palette' } }
             'wildrift'  { $py = if ($WildRiftPath) { Join-Path $WildRiftPath 'theme.py' } else { $null }; if (-not $py -or -not (Test-Path $py)) { $reasons += 'wildrift file missing' } elseif (-not (Test-Path ($py + '.bak'))) { $reasons += 'wildrift backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $py) -match [regex]::Escape($palTokens.background))) { $reasons += 'wildrift owned tokens do not match the recorded palette' } }
         }
@@ -449,6 +577,8 @@ function Test-SourceProvenanceChanged([string]$liveText, [string]$backupText, [s
 function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [string]$label) {
     if (-not (Test-Path $bakFile)) {
         Copy-Item $liveFile $bakFile -Force
+        # W2-001: the backup is now the revert source - stamp it with the epoch.
+        Write-RecoveryProvenance $bakFile $kind
         return
     }
     $live = Read-Utf8 $liveFile
@@ -476,6 +606,8 @@ function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [
         if ($m.Success) { $newPristine = [regex]::Replace($newPristine, '(?s)TOKENS\s*=\s*\{.*?\}', $m.Value) }
     }
     Write-Utf8 $bakFile $newPristine
+    # W2-001: the rebased backup is still OUR recovery - re-stamp it.
+    Write-RecoveryProvenance $bakFile $kind
     Say "$label : the source changed since the last Wintage touch - rollback base re-based (owned token values kept from the previous pristine)." 'Yellow'
 }
 
@@ -600,10 +732,13 @@ function Invoke-WindowsTerminal {
         if ($PSCmdlet.ShouldProcess($settings, $action)) {
             & node $args
             if ($LASTEXITCODE -ne 0) {
-                foreach ($done in $applied) {
+                # CORE-006: roll back the previously applied items AND the failing
+                # current item - the helper writes settings before its marker, so
+                # a failure between the two leaves THIS item themed too.
+                foreach ($done in (@($applied) + @($settings))) {
                     & node $helper --settings $done --revert 2>$null | Out-Null
                 }
-                throw "Windows Terminal patch failed for $settings - previously applied settings were reverted; the manifest was NOT updated."
+                throw "Windows Terminal patch failed for $settings - all mutated settings were reverted; the manifest was NOT updated."
             }
             $applied += $settings
         }
@@ -686,7 +821,9 @@ function Invoke-Conhost {
     }
 
     if ($DoRevert) {
-        Assert-RevertSource 'conhost' $CONHOST_BACKUP 'Console Host'
+        # W2-002: a NOOP (no manifest, no recovery) returns $false - stop here
+        # instead of reading a backup that does not exist.
+        if (-not (Assert-RevertSource 'conhost' $CONHOST_BACKUP 'Console Host')) { return }
         if ($PSCmdlet.ShouldProcess($CONHOST_KEY, 'Restore pre-Wintage console colours and font')) {
             # Windows PowerShell 5.1 returns a top-level JSON array as one
             # Object[] pipeline item. Assign first, then enumerate it; wrapping
@@ -722,6 +859,7 @@ function Invoke-Conhost {
                 }
             }
             Remove-Item $CONHOST_BACKUP -Force
+            Remove-Item ($CONHOST_BACKUP + '.provenance.json') -Force -ErrorAction SilentlyContinue
         }
         return
     }
@@ -764,6 +902,9 @@ function Invoke-Conhost {
             $backupTemp = $CONHOST_BACKUP + '.tmp'
             Write-Utf8 $backupTemp ($snapshot | ConvertTo-Json -Depth 4)
             Move-Item $backupTemp $CONHOST_BACKUP -Force
+            # W2-001: the recovery file is now authoritative - stamp it with the
+            # owning install epoch so a foreign copy can never be adopted later.
+            Write-RecoveryProvenance $CONHOST_BACKUP 'conhost'
         }
         foreach ($key in $keys) {
             foreach ($name in $values.Keys) {
@@ -797,16 +938,22 @@ function Invoke-WindowsTheme {
 
     if (-not $node) { throw 'Windows theme: node is required to preserve and merge the active .theme safely.' }
     $current = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+    $originalTheme = Join-Path $WINDOWS_THEMES_DIR 'Wintage.original.theme'
+    $resolvedCurrent = if ($current -and (Test-Path $current)) { $current }
+                       elseif (Test-Path $originalTheme) { $originalTheme }
+                       elseif (Test-Path 'C:\Windows\Resources\Themes\aero.theme') { 'C:\Windows\Resources\Themes\aero.theme' }
+                       elseif (Test-Path 'C:\Windows\Resources\Themes\Light.theme') { 'C:\Windows\Resources\Themes\Light.theme' }
+                       else { $null }
     $helper = Join-Path $root 'tools/install-windows-theme.js'
     $built = Join-Path $out "windows/$PaletteSlug/Wintage.theme"
     if (-not $DoRevert -and -not (Test-Path $built)) { throw "No Windows theme build for palette '$PaletteSlug'." }
-    if (-not $DoRevert -and (-not $current -or -not (Test-Path $current))) {
+    if (-not $DoRevert -and -not $resolvedCurrent) {
         throw 'Windows theme: the active .theme file was not found - refusing to apply because the wallpaper/cursor merge would have nothing to preserve.'
     }
 
     $args = @($helper, '--themes-dir', $WINDOWS_THEMES_DIR)
     if ($DoRevert) { $args += '--revert' }
-    else { $args += @('--theme', $built, '--current-theme', $current, '--palette', $PaletteSlug) }
+    else { $args += @('--theme', $built, '--current-theme', $resolvedCurrent, '--palette', $PaletteSlug) }
     $action = if ($DoRevert) { 'Restore the exact pre-Wintage Windows theme snapshot' } else { "Merge and activate Wintage $PaletteSlug, preserving wallpaper/sounds and selecting ___CURRENT___ cursors" }
     if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'Windows theme dry-run FAILED - see the message above.' }; return }
     if (-not $PSCmdlet.ShouldProcess($WINDOWS_THEMES_DIR, $action)) { return }
@@ -911,6 +1058,10 @@ function Invoke-WindowsTheme {
             }
         }
         if (Test-Path $WINDOWS_DWM_BACKUP) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
+        # W2-003: retire the snapshot epoch ONLY after the manifest transition
+        # committed. The next Apply re-baselines from the then-current theme.
+        $finalize = & node $helper --themes-dir $WINDOWS_THEMES_DIR --finalize-revert 2>$null
+        if ($LASTEXITCODE -ne 0) { Say 'Windows: could not finalize the theme epoch - a later Apply will re-baseline anyway, but report this if it recurs.' 'Yellow' }
     }
     else {
         Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'
@@ -924,31 +1075,12 @@ function Invoke-TotalCmd {
     param([int]$Index, [switch]$DoRevert, [string]$PaletteSlug)
     $appName = if ($Index -eq 1) { 'Total Commander' } else { 'Total Commander (Local)' }
     $manifestName = if ($Index -eq 1) { 'totalcmd' } else { 'totalcmd2' }
-    $candidates = if ($Index -eq 1) {
-        @($TotalCmdIni, (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
-    } else {
-        @($TotalCmd2Ini, (Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini'))
-    }
-    $ini = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-
+    # W2-004: ONE resolver shared with health (RedirectSection followed the same
+    # way everywhere); Apply no longer reimplements a second reduced discovery.
+    $ini = Resolve-TotalCmdIni $Index
     if (-not $ini) { Assert-TargetResolvable $appName $false; return }
 
     $lines = (Read-Utf8 $ini) -split '\r?\n'
-    $inColors = $false
-    foreach ($line in $lines) {
-        if ($line -match '^\[Colors\]$') { $inColors = $true; continue }
-        if ($line -match '^\[') { $inColors = $false }
-        if ($inColors -and $line -match '^RedirectSection=(.+)$') {
-            $redirect = $matches[1].Trim('"')
-            $tcDir = Split-Path $ini -Parent
-            $redirect = $redirect -replace '%COMMANDER_PATH%', $tcDir
-            $redirect = $redirect -replace '%COMMANDER_INI%', $ini
-            if (Test-Path $redirect) {
-                $ini = $redirect
-            }
-            break
-        }
-    }
 
     # This is the only target whose config is a file the USER has been editing for
     # years, and it was the only one with no backup. Its revert deleted every
@@ -997,9 +1129,19 @@ function Invoke-TotalCmd {
                     if ($inColors -and $line.Trim() -match $keys) { continue }
                     $newLines += $line
                 }
+                # W2-008: the legacy strip is a REAL revert transaction - snapshot
+                # the pre-strip INI, strip only the legacy owned keys, then remove
+                # the manifest entry through the commit boundary. A failed manifest
+                # transition restores the complete pre-strip INI (and the manifest
+                # stays), so a retry can finish cleanly instead of repeating the
+                # strip forever with installed.json still claiming an install.
+                $preLegacy = Save-FilePreState $ini $null
                 Write-Utf8BomLines $ini $newLines
                 Say "$($appName): no backup found - stripped the colour keys from [Colors]/[ColorsDark] only." 'Yellow'
                 Say "  Colours you had set there before Wintage cannot be restored from here." 'Yellow'
+                Invoke-TargetCommit $manifestName $appName {
+                    Remove-ManifestEntry $manifestName
+                } { Restore-FilePreState $preLegacy $ini $null }
             }
         }
         return
@@ -1131,7 +1273,7 @@ function Invoke-SmartVac {
     if (-not (Test-Path $pyFile)) { Assert-TargetResolvable 'SMART VAC CLEANER' $false; return }
     
     if ($DoRevert) {
-        Assert-RevertSource 'smartvac' $bakFile 'SMART VAC CLEANER'
+        if (-not (Assert-RevertSource 'smartvac' $bakFile 'SMART VAC CLEANER')) { return }
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore SMART VAC CLEANER from backup')) {
             $pre = Save-FilePreState $pyFile $bakFile
             Copy-Item $bakFile $pyFile -Force
@@ -1239,7 +1381,7 @@ function Invoke-WildRift {
     if (-not (Test-Path $pyFile)) { Assert-TargetResolvable 'WildRiftAssistant' $false; return }
     
     if ($DoRevert) {
-        Assert-RevertSource 'wildrift' $bakFile 'WildRiftAssistant'
+        if (-not (Assert-RevertSource 'wildrift' $bakFile 'WildRiftAssistant')) { return }
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore WildRiftAssistant from backup')) {
             $pre = Save-FilePreState $pyFile $bakFile
             Copy-Item $bakFile $pyFile -Force
@@ -1297,7 +1439,7 @@ function Invoke-Saipenview {
     $bakFile = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'
     
     if ($DoRevert) {
-        Assert-RevertSource 'saipenview' $bakFile 'SAIPENVIEW'
+        if (-not (Assert-RevertSource 'saipenview' $bakFile 'SAIPENVIEW')) { return }
         if ($PSCmdlet.ShouldProcess($cssFile, 'Restore SAIPENVIEW original CSS')) {
             $pre = Save-FilePreState $cssFile $bakFile
             Copy-Item $bakFile $cssFile -Force
@@ -1344,10 +1486,12 @@ function Invoke-Saipenview {
                 $live = Read-Utf8 $cssFile
                 $newPristine = Rebase-CssTokens $live $oldPristine
                 Write-Utf8 $bakFile $newPristine
+                Write-RecoveryProvenance $bakFile 'saipenview'
                 Say "SAIPENVIEW: style.css has changed since the backup was taken - backup rebased (previous kept as style.css.bak.stale)" 'DarkYellow'
             }
         } else {
             Copy-Item $cssFile $bakFile -Force
+            Write-RecoveryProvenance $bakFile 'saipenview'
         }
 
         # Do NOT append the browser stylesheet here. That was the previous approach and
@@ -1439,23 +1583,73 @@ function Invoke-BetterDiscord {
     
     if (-not (Test-Path $bdDir)) { Assert-TargetResolvable 'BetterDiscord' $false; return }
 
+    # CORE-002: persistent first-touch recovery OUTSIDE the target directory with
+    # explicit created-vs-replaced provenance. The filename is never ownership
+    # authority; the recovery ledger is. Repaint never overwrites the pristine.
+    $recDir = Join-Path $WintageAppData 'recovery\discord'
+    $recMeta = Join-Path $recDir 'recovery.json'
+    $pristine = Join-Path $recDir 'pristine.css'
+
     if ($DoRevert) {
         if (Test-Path $bdCss) {
-            if ($PSCmdlet.ShouldProcess($bdCss, 'Remove Wintage theme')) {
+            if ($PSCmdlet.ShouldProcess($bdCss, 'Restore/remove the Wintage theme')) {
                 $pre = Save-FilePreState $bdCss $null
-                Remove-Item $bdCss -Force
-                Say "BetterDiscord: removed $bdCss" 'Green'
-                Invoke-TargetCommit 'discord' 'BetterDiscord' {
-                    Remove-ManifestEntry 'discord'
-                } { Restore-FilePreState $pre $bdCss $null }
+                if (Test-Path $recMeta) {
+                    $meta = Read-Utf8 $recMeta | ConvertFrom-Json
+                            # W2-001: a recovery ledger stamped by another install is
+                    # never adopted to rewrite the user's live css.
+                    Assert-RecoveryProvenance $recMeta 'discord' 'BetterDiscord' | Out-Null
+                    if ($meta.mode -eq 'replaced' -and (Test-Path $pristine)) {
+                        [System.IO.File]::WriteAllBytes($bdCss, [System.IO.File]::ReadAllBytes($pristine))
+                        Say 'BetterDiscord: restored the pre-existing user theme byte-for-byte' 'Green'
+                    } else {
+                        Remove-Item $bdCss -Force
+                        Say "BetterDiscord: removed $bdCss (Wintage-created, nothing pre-existed)" 'Green'
+                    }
+                    Invoke-TargetCommit 'discord' 'BetterDiscord' {
+                        Remove-ManifestEntry 'discord'
+                    } { Restore-FilePreState $pre $bdCss $null }
+                    # Recovery is consumed ONLY after the manifest transition
+                    # committed; a failed transition keeps it for a retry.
+                    Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+                    Remove-Item $pristine -Force -ErrorAction SilentlyContinue
+                } else {
+                    $m = Read-Manifest
+                    if ($m.ContainsKey('discord')) {
+                        throw "BetterDiscord: the manifest records an install but the persistent recovery is missing ($recMeta) - cannot restore an unverifiable state; the css and the manifest were both left untouched."
+                    }
+                    # A never-installed same-name user file survives explicit Revert.
+                    Say "BetterDiscord: nothing to revert (no Wintage recovery state) - $bdCss was left untouched." 'DarkYellow'
+                }
             }
-        } else { Say "BetterDiscord: nothing installed, nothing to revert." }
+        } else {
+            $m = Read-Manifest
+            if ($m.ContainsKey('discord')) {
+                # The themed file is already gone; the ledger is the only thing
+                # left to reconcile, and removing the entry cannot harm user data.
+                if ($PSCmdlet.ShouldProcess($ManifestPath, 'Remove the discord manifest entry (theme file already absent)')) {
+                    Invoke-TargetCommit 'discord' 'BetterDiscord' { Remove-ManifestEntry 'discord' } { }
+                    Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+                    Remove-Item $pristine -Force -ErrorAction SilentlyContinue
+                }
+            } else { Say "BetterDiscord: nothing installed, nothing to revert." }
+        }
         return
     }
 
     if ($PSCmdlet.ShouldProcess($bdCss, 'Install Wintage theme')) {
         $built = Join-Path $out "betterdiscord/$PaletteSlug/wintage.theme.css"
         if (-not (Test-Path $built)) { throw "Built BetterDiscord output missing for '$PaletteSlug'. Run 'node tools/build-desktop.js'." }
+        # Capture the pristine ONLY on the first-ever touch; a repaint must never
+        # overwrite it with Wintage output.
+        if (-not (Test-Path $recMeta)) {
+            New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+            $mode = if (Test-Path $bdCss) { 'replaced' } else { 'created' }
+            if ($mode -eq 'replaced') { [System.IO.File]::WriteAllBytes($pristine, [System.IO.File]::ReadAllBytes($bdCss)) }
+            Write-Utf8 $recMeta (@{ mode = $mode; target = 'discord'; created = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
+            # W2-001: the ledger is authoritative - stamp it with the owning epoch.
+            Write-RecoveryProvenance $recMeta 'discord'
+        }
         $pre = Save-FilePreState $bdCss $null
         Copy-Item $built $bdCss -Force
         Say "BetterDiscord: installed theme -> $bdCss" 'Green'
@@ -1508,6 +1702,41 @@ function Invoke-Obsidian {
         $bakPath = Get-VaultBackupPath $pre.vault
         if (-not $pre.bakExists -and (Test-Path $bakPath)) { Remove-Item $bakPath -Force }
     }
+    # CORE-003: every generated theme directory carries verifiable Wintage
+    # ownership metadata. Obsidian ignores unknown files in a theme folder, so
+    # an extra .json cannot affect the community theme.
+    function Write-VaultThemeOwner([string]$dir, [string]$displayName) {
+        # W2-001: the marker carries the owning install epoch so a theme dir
+        # copied from another machine is never treated as ours.
+        $owner = [ordered]@{ owner = 'Wintage'; schema = 1; target = 'obsidian-theme'; name = $displayName; epoch = (Get-InstallEpoch); created = (Get-Date).ToUniversalTime().ToString('o') }
+        Write-Utf8 (Join-Path $dir '.wintage-owner.json') (($owner | ConvertTo-Json) + "`n")
+    }
+    # The exact generated display names for every pack - the ONLY names Wintage
+    # may treat as owned in a vault (CORE-003): never a prefix wildcard.
+    function Get-BuiltThemeNames([string]$builtRoot) {
+        $names = @()
+        if (Test-Path $builtRoot) {
+            $names = @(Get-ChildItem $builtRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                try { (Read-Utf8 (Join-Path $_.FullName 'manifest.json') | ConvertFrom-Json).name } catch { $null }
+            } | Where-Object { $_ })
+        }
+        return $names
+    }
+    # A dir is owned when it carries a marker from THIS install epoch, OR (legacy
+    # installs that predate markers) its name is exactly one of the generated
+    # display names. A marker stamped for another install is foreign evidence:
+    # it may not authorize deletion and it is not counted as our health either.
+    function Test-VaultThemeOwned([string]$dir, [string[]]$expectedNames) {
+        $marker = Join-Path $dir '.wintage-owner.json'
+        if (Test-Path $marker) {
+            try {
+                $owned = Read-Utf8 $marker | ConvertFrom-Json
+                if ($owned.epoch -and $owned.epoch.ToString() -eq (Get-InstallEpoch)) { return $true }
+                return $false
+            } catch { return $false }
+        }
+        return ((Split-Path $dir -Leaf) -in $expectedNames)
+    }
 
     $vaults = Get-ObsidianVaults
     if (-not $vaults) { Assert-TargetResolvable 'Obsidian' $false; return }
@@ -1541,21 +1770,28 @@ function Invoke-Obsidian {
         $recorded = if ($m.ContainsKey('obsidian')) { @(Get-ManifestItems $m['obsidian']) } else { @() }
         if (-not $recorded.Count) { $recorded = @($vaults) }
         $preStates = @($recorded | ForEach-Object { Save-VaultPreState $_ })
+        $expectedNames = Get-BuiltThemeNames $builtRoot
         $failedVaults = @()
         foreach ($vault in $recorded) {
+            $preThis = Save-VaultPreState $vault
             try {
                 $themesDir = Join-Path $vault '.obsidian/themes'
                 $appearance = Join-Path $vault '.obsidian/appearance.json'
-                # Only Wintage-* theme folders are removed; a hand-made theme in the same
-                # vault (the user's own VintageWin95) is never touched.
+                # CORE-003: ONLY exact directories whose ownership is proven (the
+                # owner marker, or an exact generated display name for legacy
+                # installs) are touched. A hand-made 'Wintage MyHandMade' lookalike
+                # - or any dir that is not exactly ours - is preserved.
                 if (Test-Path $themesDir) {
-                    Get-ChildItem $themesDir -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue | ForEach-Object {
-                        if ($PSCmdlet.ShouldProcess($_.FullName, 'Remove Wintage theme')) { Remove-Item $_.FullName -Recurse -Force }
+                    foreach ($d in (Get-ChildItem $themesDir -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue)) {
+                        if (-not (Test-VaultThemeOwned $d.FullName $expectedNames)) { continue }
+                        if ($PSCmdlet.ShouldProcess($d.FullName, 'Remove Wintage theme')) { Remove-Item $d.FullName -Recurse -Force }
                     }
                     # Restore ONLY the cssTheme choice into the CURRENT appearance.json
                     # (T-189); unrelated appearance.json edits made after Apply survive.
                     $bak = Get-VaultBackupPath $vault
                     if (Test-Path $bak) {
+                        # W2-001: never consume a cssTheme snapshot from another install.
+                        Assert-RecoveryProvenance $bak 'obsidian' 'Obsidian' | Out-Null
                         $snap = Read-Utf8 $bak | ConvertFrom-Json
                         if (Test-Path $appearance) {
                             $ap = (Read-Utf8 $appearance) | ConvertFrom-Json
@@ -1567,7 +1803,14 @@ function Invoke-Obsidian {
                     }
                     Say "Obsidian: removed Wintage themes from $vault" 'Green'
                 }
-            } catch { $failedVaults += "$vault ($($_.Exception.Message))" }
+            } catch {
+                # CORE-006: a failing vault restores ITS OWN pre-state immediately
+                # (rollback is not deferred to some outer boundary that never sees
+                # this mutation - Obsidian captures prestate BEFORE entering the
+                # manifest-transaction wrapper).
+                try { Restore-VaultPreState $preThis } catch { }
+                $failedVaults += "$vault ($($_.Exception.Message))"
+            }
         }
         # Remove the manifest ONLY after every RECORDED vault reverted; a partial
         # revert keeps it as recovery evidence (T-189/T-190).
@@ -1581,6 +1824,7 @@ function Invoke-Obsidian {
     $preStates = @($vaults | ForEach-Object { Save-VaultPreState $_ })
     $failedVaults = @()
     foreach ($vault in $vaults) {
+        $preThis = Save-VaultPreState $vault
         try {
             $themesDir = Join-Path $vault '.obsidian/themes'
             $appearance = Join-Path $vault '.obsidian/appearance.json'
@@ -1589,8 +1833,14 @@ function Invoke-Obsidian {
                 foreach ($pack in (Get-ChildItem $builtRoot -Directory)) {
                     $manifest = Read-Utf8 (Join-Path $pack.FullName 'manifest.json') | ConvertFrom-Json
                     $dest = Join-Path $themesDir $manifest.name
+                    # CORE-003: an exact-name collision with a pre-existing USER
+                    # directory of the same generated name is recorded in the
+                    # per-vault prestate (Save-VaultPreState captures it byte-
+                    # exactly), so Revert can restore it. The fresh dir is then
+                    # stamped with the ownership marker after the pack lands.
                     New-Item -ItemType Directory -Force -Path $dest | Out-Null
                     Copy-Item (Join-Path $pack.FullName '*') -Destination $dest -Recurse -Force
+                    Write-VaultThemeOwner $dest $manifest.name
                 }
                 $count = (Get-ChildItem $builtRoot -Directory).Count
                 # Set the chosen palette active, snapshotting the cssTheme choice
@@ -1601,6 +1851,8 @@ function Invoke-Obsidian {
                         $ap0 = (Read-Utf8 $appearance) | ConvertFrom-Json
                         $prev = if ($ap0.PSObject.Properties['cssTheme']) { $ap0.cssTheme } else { $null }
                         Write-Utf8 $bak (@{ existed = ($null -ne $prev); value = $prev } | ConvertTo-Json -Depth 4)
+                        # W2-001: the cssTheme snapshot is now authoritative - stamp it.
+                        Write-RecoveryProvenance $bak 'obsidian'
                     }
                     $ap = (Read-Utf8 $appearance) | ConvertFrom-Json
                     $ap | Add-Member -NotePropertyName cssTheme -NotePropertyValue $activeName -Force
@@ -1609,7 +1861,12 @@ function Invoke-Obsidian {
                 Say "Obsidian: installed $count themes into $vault, active '$activeName'" 'Green'
                 Say "  Reload the vault (Ctrl+R) or Settings > Appearance to see it." 'DarkGray'
             }
-        } catch { $failedVaults += "$vault ($($_.Exception.Message))" }
+        } catch {
+            # CORE-006: this vault's partial mutation is rolled back NOW, so a
+            # failing vault 2 never leaves vault 1 themed without a manifest.
+            try { Restore-VaultPreState $preThis } catch { }
+            $failedVaults += "$vault ($($_.Exception.Message))"
+        }
     }
     # The manifest is advanced ONLY after EVERY vault succeeded (T-189) and
     # records the EXACT owned vault SET (T-190) so a later Reapply compares sets,
@@ -1635,23 +1892,76 @@ function Invoke-Obs {
     $theme = Join-Path $out "obs/$PaletteSlug/Wintage.ovt"
     if (-not $DoRevert -and -not (Test-Path $theme)) { throw "No OBS build for palette '$PaletteSlug'." }
     $args = @($helper, '--config', $OBS_CONFIG)
-    if ($DoRevert) { $args += '--revert' } else { $args += @('--theme', $theme, '--palette', $PaletteSlug) }
+    if ($DoRevert) {
+        # CORE-010/CORE-001: parent-coordinated revert. The helper restores the
+        # target but KEEPS its persistent recovery (--keep-recovery); the parent
+        # consumes it via --finalize-revert ONLY after the manifest transition
+        # commits. A failed transition can then restore every artifact exactly.
+        $args += @('--revert', '--keep-recovery')
+    } else { $args += @('--theme', $theme, '--palette', $PaletteSlug) }
     $action = if ($DoRevert) { 'Restore previous OBS theme and selection' } else { "Install and activate Wintage $PaletteSlug" }
     if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'OBS Studio dry-run FAILED - see the message above.' }; return }
+
+    # CORE-010: the complete helper-owned OBS set is ONE transaction. The parent
+    # snapshots user.ini (the ONE authoritative settings file - the helper never
+    # touches global.ini, so global.ini is never a rollback surrogate), the
+    # theme file, the palette marker AND the helper's own recovery artifacts, so
+    # a manifest-transition failure can restore every one of them exactly.
+    function Save-ObsPreState {
+        $snap = @{}
+        foreach ($rel in @('user.ini', '.wintage-obs-palette', 'themes\Wintage.ovt',
+                'user.ini.wintage.bak', 'user.ini.wintage-created',
+                'themes\Wintage.ovt.wintage.bak', 'themes\Wintage.ovt.wintage-created')) {
+            $p = Join-Path $OBS_CONFIG $rel
+            $snap[$rel] = if (Test-Path $p) { [System.IO.File]::ReadAllBytes($p) } else { $null }
+        }
+        return $snap
+    }
+    function Restore-ObsPreState($snap) {
+        foreach ($rel in $snap.Keys) {
+            $dst = Join-Path $OBS_CONFIG $rel
+            try {
+                if ($null -ne $snap[$rel]) {
+                    New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+                    [System.IO.File]::WriteAllBytes($dst, $snap[$rel])
+                } elseif (Test-Path $dst) { Remove-Item $dst -Force -ErrorAction SilentlyContinue }
+            } catch { }
+        }
+    }
+
     if ($PSCmdlet.ShouldProcess($OBS_CONFIG, $action)) {
-        $obsUserIni = Join-Path $OBS_CONFIG 'global.ini'
-        if (-not (Test-Path $obsUserIni)) { $obsUserIni = Join-Path $OBS_CONFIG 'user.ini' }
-        $pre = Save-FilePreState $obsUserIni $null
+        if ($DoRevert) {
+            # W2-001: recovery artifacts stamped by another install are never
+            # consumed to rewrite the live OBS config - fail closed BEFORE the
+            # helper mutates anything. Files without a stamp predate the contract.
+            foreach ($rel in @('user.ini.wintage.bak', 'user.ini.wintage-created',
+                    'themes\Wintage.ovt.wintage.bak', 'themes\Wintage.ovt.wintage-created')) {
+                $p = Join-Path $OBS_CONFIG $rel
+                if (Test-Path $p) { Assert-RecoveryProvenance $p 'obs' 'OBS Studio' | Out-Null }
+            }
+        }
+        $pre = Save-ObsPreState
         & node $args
         if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
         if ($DoRevert) {
             Invoke-TargetCommit 'obs' 'OBS Studio' {
                 Remove-ManifestEntry 'obs'
-            } { Restore-FilePreState $pre $obsUserIni $null }
+            } { Restore-ObsPreState $pre }
+            # The manifest transition committed: the persistent recovery the
+            # helper preserved can now be consumed.
+            & node $helper --config $OBS_CONFIG --finalize-revert
+            if ($LASTEXITCODE -ne 0) { throw 'OBS Studio: recovery finalize FAILED - the manifest is already removed; remove the .wintage recovery files by hand if they remain.' }
         } else {
             Invoke-TargetCommit 'obs' 'OBS Studio' {
                 Set-ManifestEntry 'obs' $PaletteSlug $OBS_CONFIG 'n/a' (Get-PayloadVersion)
-            } { Restore-FilePreState $pre $obsUserIni $null }
+            } { Restore-ObsPreState $pre }
+            # W2-001: the helper's recovery files are now authoritative - stamp
+            # them so a later Revert refuses to adopt a foreign copy.
+            foreach ($rel in @('user.ini.wintage.bak', 'user.ini.wintage-created',
+                    'themes\Wintage.ovt.wintage.bak', 'themes\Wintage.ovt.wintage-created')) {
+                $p = Join-Path $OBS_CONFIG $rel
+                if (Test-Path $p) { Write-RecoveryProvenance $p 'obs' }
+            }
         }
     }
 }
@@ -1678,7 +1988,7 @@ function Invoke-MpcHc {
     }
 
     if ($DoRevert) {
-        Assert-RevertSource 'mpchc' $bak 'MPC-HC'
+        if (-not (Assert-RevertSource 'mpchc' $bak 'MPC-HC')) { return }
         if ($PSCmdlet.ShouldProcess($MPC_REG, "Restore from $bak")) {
             # reg import merges; it restores the values that were captured and leaves
             # anything created since. That is the honest limit of a .reg backup and
@@ -1709,6 +2019,7 @@ function Invoke-MpcHc {
             # pass removes.
             & reg export $MPC_REG $bak /y 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "MPC-HC: reg export failed ($LASTEXITCODE) -- backup not created, so the registry was NOT changed. Fix reg export and re-run." }
+            Write-RecoveryProvenance $bak 'mpchc'
             Say "MPC-HC: settings backed up to $bak" 'DarkGray'
         }
         else { Say "MPC-HC: keeping the existing backup at $bak (it holds the pre-Wintage state)" 'DarkGray' }

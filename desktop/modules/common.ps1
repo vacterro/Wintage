@@ -200,8 +200,12 @@ function Enter-ManifestLock {
     $mutex = New-Object System.Threading.Mutex($false, "Local\Wintage-Manifest-$hash")
     $got = $false
     try {
-        $null = $mutex.WaitOne(15000)
-        $got = $true
+        # W2-001: WaitOne returns $false on timeout and does NOT throw. The
+        # discarded-result pattern below treated a real 15s timeout as
+        # acquisition and proceeded WITHOUT ownership - two manifest writers
+        # could then lose each other's entries exactly when the lock should
+        # have failed closed. Assign the actual Boolean.
+        $got = $mutex.WaitOne(15000)
     } catch [System.Threading.AbandonedMutexException] {
         # AbandonedMutexException means WE now own the mutex whose previous owner
         # died mid-write. That is acquisition, not a timeout (T-190): proceed, but
@@ -237,8 +241,9 @@ function Enter-TargetLock([string]$target) {
     $mutex = New-Object System.Threading.Mutex($false, "Local\Wintage-Target-$base-$tHash")
     $got = $false
     try {
-        $null = $mutex.WaitOne(60000)
-        $got = $true
+        # W2-001: same fail-closed contract as Enter-ManifestLock - a real
+        # WaitOne timeout returns $false and must NOT be treated as ownership.
+        $got = $mutex.WaitOne(60000)
     } catch [System.Threading.AbandonedMutexException] {
         # Ownership is acquired; the previous owner died mid-operation. Proceed,
         # but the caller's own preflight/validation still fails closed on bad state.
@@ -324,17 +329,73 @@ function Test-PayloadUpToDate([string]$recorded, [string]$current) {
     return $rv -ge $cv
 }
 
-# Revert-with-recovery contract (T-189): when the manifest says a target was
-# installed but the restore source is gone, that is a FAIL, not a happy
-# "nothing to revert" — the user is left with half a theme and no undo. Only a
-# target with NO recovery state (never installed by us) is a legitimate NOOP.
+# W2-001: recovery-file provenance. Every persistent recovery file written by
+# this installer is stamped with an INSTALL EPOCH — a machine-local, first-run
+# identity. A recovery file stamped by a different install (a foreign epoch, a
+# copied folder, a stale parallel baseline) is never adopted to rewrite the
+# user's live state: presence in a Wintage-looking path is not ownership.
+function Get-InstallEpoch {
+    $epochFile = Join-Path $WintageAppData 'install-epoch.json'
+    if (Test-Path $epochFile) {
+        try {
+            $id = (Read-Utf8 $epochFile | ConvertFrom-Json).id
+            if ($id) { return $id.ToString() }
+        } catch {}
+    }
+    $id = [guid]::NewGuid().ToString('N')
+    New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
+    Write-Utf8 $epochFile (@{ id = $id; firstSeen = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
+    return $id
+}
+
+# Stamp a recovery source with its owning install epoch. Written at the same
+# moment the recovery file itself becomes authoritative (after its temp rename).
+function Write-RecoveryProvenance([string]$sourcePath, [string]$target) {
+    Write-Utf8 ($sourcePath + '.provenance.json') (@{
+        owner = 'wintage'
+        target = $target
+        epoch = Get-InstallEpoch
+        created = (Get-Date).ToUniversalTime().ToString('o')
+    } | ConvertTo-Json)
+}
+
+# Shared foreign-provenance gate (W2-001): returns $true when the recovery
+# file passes provenance (or predates it - installs before this contract have no
+# stamp and remain accepted, or every pre-existing install would lose its undo),
+# and THROWS when the stamp names another install. The recovery file's own
+# existence is the caller's concern.
+function Assert-RecoveryProvenance([string]$sourcePath, [string]$target, [string]$label) {
+    $provPath = $sourcePath + '.provenance.json'
+    if (-not (Test-Path $provPath)) { return $true }
+    # A corrupt/unreadable provenance file also throws here, which IS the
+    # fail-closed behaviour: unverifiable ownership is never consumed.
+    $p = Read-Utf8 $provPath | ConvertFrom-Json
+    $epochOk = $null -ne $p.epoch -and $p.epoch.ToString() -eq (Get-InstallEpoch)
+    if (-not ($p.owner -eq 'wintage' -and $p.target -eq $target -and $epochOk)) {
+        throw "$label : the recovery file $sourcePath carries foreign provenance (owner=$($p.owner) target=$($p.target) epoch=$($p.epoch)) - refusing to adopt recovery from another install. The manifest entry and recovery files are kept; fix the backup or remove the entry by hand."
+    }
+    return $true
+}
+
+# Revert-with-recovery contract (T-189 + W2-001/W2-002): when the manifest says
+# a target was installed but the restore source is gone, that is a FAIL, not a
+# happy "nothing to revert" — the user is left with half a theme and no undo.
+# Only a target with NO recovery state (never installed by us) is a legitimate
+# NOOP. A recovery file that EXISTS but carries foreign provenance (a stamp from
+# a different install epoch, or a non-wintage owner) is adopted NEITHER: it is
+# kept untouched and the revert fails closed. Returns $true = proceed with
+# recovery, $false = no-op (caller must stop), throws = fail closed.
 function Assert-RevertSource([string]$key, [string]$sourcePath, [string]$label) {
-    if (Test-Path $sourcePath) { return }
+    if (Test-Path $sourcePath) {
+        Assert-RecoveryProvenance $sourcePath $key $label | Out-Null
+        return $true
+    }
     $m = Read-Manifest
     if ($m.ContainsKey($key)) {
         throw "$label : manifest says $key is installed but the restore source is missing ($sourcePath) - cannot restore. The manifest entry is kept as recovery evidence; fix the backup or remove the entry by hand."
     }
     Say "$label : nothing to revert (no Wintage recovery state)." 'DarkYellow'
+    return $false
 }
 
 function Get-PayloadVersion {
@@ -394,6 +455,76 @@ function Test-ElectronApp($resources) {
     (Test-Path (Join-Path $resources 'app.asar')) -or (Test-Path (Join-Path $resources 'app/app.asar'))
 }
 
+# Read the manifest without letting a corrupt file abort a LISTING or a path
+# probe. Callers that would write let the real Read-Manifest throw.
+function Read-ManifestQuiet { try { return Read-Manifest } catch { return @{} } }
+
+# Persist a validated explicit portable-path override into paths.json, atomically
+# (W2-004): the CLI owns these keys, so a fresh process without the flag reuses
+# what the previous successful run remembered - one source of truth.
+function Save-PathPreference([string]$key, [string]$path) {
+    if (-not $key -or -not $path) { return }
+    if ($key -notin $script:PATHS_KEYS) { return }
+    $o = [ordered]@{}
+    if (Test-Path $PathsPath) {
+        try {
+            $existing = (Read-Utf8 $PathsPath).Trim() | ConvertFrom-Json
+            foreach ($prop in $existing.PSObject.Properties) { $o[$prop.Name] = $prop.Value }
+        } catch { }
+    }
+    $o[$key] = $path
+    New-Item -ItemType Directory -Force -Path (Split-Path $PathsPath -Parent) | Out-Null
+    $tmp = $PathsPath + '.tmp-' + [guid]::NewGuid().ToString('N')
+    try {
+        Write-Utf8 $tmp (($o | ConvertTo-Json) + "`n")
+        Move-Item $tmp $PathsPath -Force
+    } finally { if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue } }
+}
+
+# CORE-004: the ONLY independently verifiable legacy Wintage identity for a
+# VS Code-family extension directory is the built extension's own package.json:
+# name wintage-themes, publisher vacterro. Nothing else - a pathname alone is
+# never ownership proof.
+function Test-LegacyWintageExtension([string]$dir) {
+    $pkg = Join-Path $dir 'package.json'
+    if (-not (Test-Path $pkg)) { return $false }
+    try {
+        $j = Read-Utf8 $pkg | ConvertFrom-Json
+        return ([string]$j.name -eq 'wintage-themes') -and ([string]$j.publisher -eq 'vacterro')
+    } catch { return $false }
+}
+
+# ─── Target path authority (W2-004) ─────────────────────────────────────────
+# ONE precedence for every target-location consumer (resource tables, listing,
+# health, dispatch), applied lazily AFTER preferences are loaded:
+#   1. explicit CLI override
+#   2. validated remembered preference (paths.json)
+#   3. validated manifest-recorded path (recovering / Reapplying)
+#   4. process / default discovery (last resort)
+# A running process must NEVER outrank an explicitly requested or remembered
+# installation, and the eager resource tables must not freeze values before
+# paths.json is read.
+function Resolve-PortableElectron([string]$key, [string]$explicitPath, [hashtable]$remembered, [string]$processName, [string[]]$defaultDirs) {
+    $manifest = Read-ManifestQuiet
+    $candidates = @()
+    if ($explicitPath) { $candidates += (Join-Path $explicitPath 'resources') }
+    if ($remembered -and $remembered.ContainsKey($key)) { $candidates += (Join-Path $remembered[$key] 'resources') }
+    if ($manifest -and $manifest.ContainsKey($key) -and $manifest[$key].path) {
+        $candidates += (Join-Path ([string]$manifest[$key].path) 'resources')
+    }
+    foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
+    # Process / default discovery last.
+    if ($processName) {
+        $proc = Get-Process $processName -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1
+        if ($proc) {
+            $r = Join-Path (Split-Path $proc.Path -Parent) 'resources'
+            if (Test-ElectronApp $r) { return $r }
+        }
+    }
+    foreach ($d in $defaultDirs) { if (Test-ElectronApp $d) { return $d } }
+    return $null
+}
+
 function Get-ClaudeResources {
     # Squirrel keeps every version side by side; only the newest is the live one.
     # A malformed app-* dir (e.g. app-beta) must be ignored, never crash the sort
@@ -418,27 +549,17 @@ function Get-ClaudeResources {
 # on a machine nobody has told this script about; the rest is where a portable
 # folder tends to be dropped, with -CodeNomadPath as the explicit override.
 function Get-CodeNomadResources {
-    $proc = Get-Process CodeNomad -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1
-    if ($proc) {
-        $r = Join-Path (Split-Path $proc.Path -Parent) 'resources'
-        if (Test-ElectronApp $r) { return $r }
-    }
-    $candidates = @(
+    # W2-004 precedence: explicit > remembered > manifest-recorded > process/default.
+    $script:pathsJson = if ($script:pathsJson) { $script:pathsJson } else { Read-PathsJson }
+    return Resolve-PortableElectron 'codenomad' $CodeNomadPath $script:pathsJson 'CodeNomad' @(
         (Join-Path $env:LOCALAPPDATA 'Programs/CodeNomad/resources'),
         (Join-Path $env:ProgramFiles 'CodeNomad/resources')
     )
-    if ($CodeNomadPath) { $candidates = @((Join-Path $CodeNomadPath 'resources')) + $candidates }
-    foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
-    return $null
 }
 
 function Get-WorkBuddyResources {
-    $proc = Get-Process WorkBuddy, CodeBuddy, WorkBuddyAI -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1
-    if ($proc) {
-        $r = Join-Path (Split-Path $proc.Path -Parent) 'resources'
-        if (Test-ElectronApp $r) { return $r }
-    }
-    $candidates = @(
+    $script:pathsJson = if ($script:pathsJson) { $script:pathsJson } else { Read-PathsJson }
+    return Resolve-PortableElectron 'workbuddy' $WorkBuddyPath $script:pathsJson @('WorkBuddy', 'CodeBuddy', 'WorkBuddyAI') @(
         (Join-Path $env:LOCALAPPDATA 'Programs/WorkBuddy/resources'),
         (Join-Path $env:LOCALAPPDATA 'Programs/WorkBuddy AI/resources'),
         (Join-Path $env:LOCALAPPDATA 'Programs/WorkBuddyAI/resources'),
@@ -446,21 +567,74 @@ function Get-WorkBuddyResources {
         (Join-Path $env:ProgramFiles 'WorkBuddy/resources'),
         (Join-Path $env:ProgramFiles 'CodeBuddy/resources')
     )
-    if ($WorkBuddyPath) { $candidates = @((Join-Path $WorkBuddyPath 'resources')) + $candidates }
-    foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
-    return $null
 }
 
-# The dead stylesheet the old CodeNomad path left behind. Removed on both install
-# and revert, because leaving it there means the next person to look sees a themed
-# -looking config directory and re-learns the same wrong thing.
+# The dead stylesheet the old CodeNomad path left behind. CORE-005: this
+# cleanup is DESTRUCTIVE, so it requires verifiable Wintage provenance - a file
+# that is byte-identical to a KNOWN historical Wintage payload (the exact
+# generated wintage.css the installer wrote into custom.css before the target
+# became an Electron shim). Unknown contents are user data and are preserved,
+# even though they occupy a path Wintage once wrote.
+$script:CODEDEAD_CONTENT_HASHES = @{
+    # historical Wintage CSS written to custom.css (v1.15.0 golden default)
+    '1ffdd98675c6664e38ffecf3fa0cb043cd232b07' = $true
+    # v1.16.0-era generated wintage.css (golden default)
+    '2d776c0f0aa809c9c85401664811dc1eda18af57' = $true
+}
+# Hash the file content WITHOUT a leading UTF-8 BOM: the historical installer
+# wrote custom.css via Set-Content -Encoding UTF8, which prepends a BOM on
+# Windows PowerShell 5.1, so byte equality with the git-object CSS would never
+# match. The BOM is an artefact of the writer, not part of the payload.
+function Get-FileSha1([string]$path) {
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+            $bytes = $bytes[3..($bytes.Length - 1)]
+        }
+        return [BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
+    }
+    catch { return $null }
+}
 function Remove-DeadCodeNomadCss {
     $dead = Join-Path $env:USERPROFILE '.config/codenomad/custom.css'
     if (-not (Test-Path $dead)) { return }
-    if ($PSCmdlet.ShouldProcess($dead, 'Remove the stylesheet CodeNomad never read')) {
-        Remove-Item $dead -Force
-        Say "CodeNomad: removed $dead - the app never read it (see the note in install.ps1)." 'DarkGray'
+    $hash = Get-FileSha1 $dead
+    if (-not $hash -or -not $script:CODEDEAD_CONTENT_HASHES.ContainsKey($hash)) {
+        Say "CodeNomad: left $dead in place - it is not a known Wintage-written stylesheet (content hash $hash does not match any historical Wintage payload); preserving it as user data." 'DarkYellow'
+        return
     }
+    if ($PSCmdlet.ShouldProcess($dead, 'Remove the stylesheet CodeNomad never read (known Wintage payload)')) {
+        Remove-Item $dead -Force
+        Say "CodeNomad: removed $dead - it matched the known historical Wintage payload the app never read (see the note in install.ps1)." 'DarkGray'
+    }
+}
+
+# W2-004: ONE Total Commander INI resolver shared by Apply, Revert and health -
+# the [Colors] RedirectSection indirection is followed identically everywhere,
+# so an unattended Reapply resolves the same EFFECTIVE file Apply recorded.
+function Resolve-TotalCmdIni([int]$Index) {
+    $candidates = if ($Index -eq 1) {
+        @($TotalCmdIni, (Join-Path $env:APPDATA 'GHISLER\wincmd.ini'))
+    } else {
+        @($TotalCmd2Ini, (Join-Path $env:LOCALAPPDATA 'GHISLER\wincmd.ini'))
+    }
+    $ini = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if (-not $ini) { return $null }
+    $lines = (Read-Utf8 $ini) -split '\r?\n'
+    $inColors = $false
+    foreach ($line in $lines) {
+        if ($line -match '^\[Colors\]$') { $inColors = $true; continue }
+        if ($line -match '^\[') { $inColors = $false }
+        if ($inColors -and $line -match '^RedirectSection=(.+)$') {
+            $redirect = $matches[1].Trim('"')
+            $tcDir = Split-Path $ini -Parent
+            $redirect = $redirect -replace '%COMMANDER_PATH%', $tcDir
+            $redirect = $redirect -replace '%COMMANDER_INI%', $ini
+            if (Test-Path $redirect) { $ini = $redirect }
+            break
+        }
+    }
+    return $ini
 }
 
 function Get-WindowsTerminalSettingsPaths {
@@ -497,10 +671,15 @@ function Backup-WindowsInactiveAccent {
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $WINDOWS_DWM_BACKUP -Parent) | Out-Null
     Write-Utf8 $WINDOWS_DWM_BACKUP ($snapshot | ConvertTo-Json)
+    # W2-001: the backup is now authoritative - stamp it with the owning epoch.
+    Write-RecoveryProvenance $WINDOWS_DWM_BACKUP 'windows'
 }
 
 function Restore-WindowsInactiveAccent([switch]$Keep) {
     if (-not (Test-Path $WINDOWS_DWM_BACKUP)) { return }
+    # W2-001: a backup stamped by another install is never used to rewrite the
+    # live accent - fail closed before any registry write.
+    Assert-RecoveryProvenance $WINDOWS_DWM_BACKUP 'windows' 'Windows system theme' | Out-Null
     $snapshot = Read-Utf8 $WINDOWS_DWM_BACKUP | ConvertFrom-Json
     if ($snapshot.Existed) {
         New-ItemProperty -Path $WINDOWS_DWM_KEY -Name $snapshot.Name -Value $snapshot.Value -PropertyType $snapshot.Kind -Force | Out-Null

@@ -128,10 +128,22 @@ function thread(i, r) { return !i||!r?null:b.jsx(s2,{ad:r,variant:"banner"}); }
 
 function New-StockWav { [byte[]]@(0x52,0x49,0x46,0x46,0x24,0,0,0,0x57,0x41,0x56,0x45,0x66,0x6D,0x74,0x20,0x10,0,0,0,1,0,1,0,0x40,0x1F,0,0,0x40,0x1F,0,0,1,0,8,0,0x64,0x61,0x74,0x61,0,0,0,0) }
 
+# CORE-007: a mutating Electron apply must be able to VERIFY fuse state, so the
+# fixture executable carries a valid, fully-disabled fuse wire (VERIFIED_SAFE).
+# An empty/garbage exe would be UNVERIFIABLE and the install would correctly
+# refuse to touch the app.
+function New-StockExe {
+    $sentinel = [Text.Encoding]::ASCII.GetBytes('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX')
+    $head = [byte[]]@(1, 8)
+    $fuses = New-Object byte[] 8
+    for ($i = 0; $i -lt 8; $i++) { $fuses[$i] = 0x30 }   # all disabled
+    [Text.Encoding]::ASCII.GetBytes('MZ fake exe ') + $sentinel + $head + $fuses + [Text.Encoding]::ASCII.GetBytes(' padding')
+}
+
 function Write-StockFixture {
     # Full stock fixture: every required matcher present (happy path).
     New-Item -ItemType Directory -Path $orchestratorDir, $assetsDir -Force | Out-Null
-    [System.IO.File]::WriteAllText((Join-Path $app 'Freebuff.exe'), '', $utf8)
+    [System.IO.File]::WriteAllBytes((Join-Path $app 'Freebuff.exe'), (New-StockExe))
     Build-FakeAsar (Join-Path $app 'resources\app.asar') '1.0.0'
     [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', $FULL_ORCH, $utf8)
     [System.IO.File]::WriteAllText((Join-Path $orchestratorDir 'ui\index.html'), '<script src="assets/index-abc.js"></script>', $utf8)
@@ -144,7 +156,7 @@ function Write-BrokenFixture {
     # Renderer has ALL matchers, orchestrator is MISSING two -> preflight must fail
     # with ZERO mutation and NO backup transaction.
     New-Item -ItemType Directory -Path $orchestratorDir, $assetsDir -Force | Out-Null
-    [System.IO.File]::WriteAllText((Join-Path $app 'Freebuff.exe'), '', $utf8)
+    [System.IO.File]::WriteAllBytes((Join-Path $app 'Freebuff.exe'), (New-StockExe))
     Build-FakeAsar (Join-Path $app 'resources\app.asar') '1.0.0'
     [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', $BROKEN_ORCH, $utf8)
     [System.IO.File]::WriteAllText((Join-Path $orchestratorDir 'ui\index.html'), '<script src="assets/index-abc.js"></script>', $utf8)

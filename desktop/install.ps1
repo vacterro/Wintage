@@ -13,7 +13,8 @@
 #   .\install.ps1 -Target all -WhatIf   # say what would change, touch nothing
 #   .\install.ps1 -Target antigravity -Revert
 #
-# Anything overwritten is copied to desktop/backup/<timestamp>/ first.
+# Anything overwritten is copied to the recovery tree in your profile
+# (%APPDATA%\Wintage\recovery\<timestamp>/) first.
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -46,10 +47,6 @@ $here = $PSScriptRoot
 $root = Split-Path $here -Parent
 $out = Join-Path $here 'out'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-# Test seam: WINTAGE_BACKUP_ROOT lets fixtures isolate the apply-time backup
-# location; the real root stays desktop/backup/<stamp>.
-$backupBase = if ($env:WINTAGE_BACKUP_ROOT) { $env:WINTAGE_BACKUP_ROOT } else { Join-Path $here 'backup' }
-$backupRoot = Join-Path $backupBase $stamp
 
 # Shared helpers + per-target implementations, split out at T-169. Dot-sourced so they
 # resolve install.ps1 scoped variables and the i18n T() loader at call time. Load
@@ -79,6 +76,20 @@ $WintageAppData = if ($env:WINTAGE_APPDATA) { $env:WINTAGE_APPDATA } else { Join
 $ManifestPath = Join-Path $WintageAppData 'installed.json'
 $PathsPath = Join-Path $WintageAppData 'paths.json'
 
+# Recovery root (W2-001): fixed-name recovery files (conhost-settings.json,
+# windows-dwm-settings.json) and the timestamped apply-time backups live under
+# the same user-profile recovery tree as the manifest, so an installer copy can
+# never strand ownership evidence outside the profile (and %APPDATA% owns the
+# install epoch that stamps those files). The env seam lets fixtures isolate it.
+$backupBase = if ($env:WINTAGE_BACKUP_ROOT) { $env:WINTAGE_BACKUP_ROOT } else { Join-Path $WintageAppData 'recovery' }
+$backupRoot = Join-Path $backupBase $stamp
+
+# W2-004: preferences are loaded BEFORE the target tables freeze their values.
+# The $ELECTRON table below resolves CodeNomad/WorkBuddy at definition time, so
+# remembered paths must be in scope first or the eager resolution ignores them.
+$pathsJson = Read-PathsJson
+$script:pathsJson = $pathsJson
+
 . (Join-Path $PSScriptRoot 'i18n.ps1')
 
 # Explicit -Language wins over the machine-wide saved pick; an unknown code is a
@@ -95,18 +106,19 @@ $TASK_NAME = 'Wintage Reapply at Logon'
 
 # Where each target keeps its extensions. Both are VS Code-family and read the
 # identical format, which is why one built extension serves them both.
+$userHome = if ($env:HOME) { $env:HOME } else { $HOME }
 $TARGETS = @{
     antigravity = @{
         Name  = 'Antigravity IDE'
         Kind  = 'vscode-extension'
-        Dir   = Join-Path $HOME '.antigravity/extensions'
+        Dir   = Join-Path $userHome '.antigravity/extensions'
         Built = Join-Path $out 'vscode/wintage-themes'
         Note  = 'Six colour themes. Lives in your profile, so an IDE update cannot remove it.'
     }
     vscode      = @{
         Name  = 'Visual Studio Code'
         Kind  = 'vscode-extension'
-        Dir   = Join-Path $HOME '.vscode/extensions'
+        Dir   = Join-Path $userHome '.vscode/extensions'
         Built = Join-Path $out 'vscode/wintage-themes'
         Note  = 'Same extension as Antigravity -- VS Code family, identical format.'
     }
@@ -186,9 +198,9 @@ $OBS_THEME_ID = 'com.wintage.OBS'
 $node = if ($env:WINTAGE_TEST_NO_NODE) { $null } else { Get-Command node -ErrorAction SilentlyContinue }
 
 # Resolve source-tree paths from paths.json when not passed on the command line.
-# The GUI writes remembered paths there; the CLI consults the same file so a path
-# entered once is available to every install.ps1 invocation without repeating it.
-$pathsJson = Read-PathsJson
+# The GUI and (since W2-004) the CLI both write remembered paths there; the CLI
+# consults the same file so a path entered once is available to every install.ps1
+# invocation without repeating it.
 if (-not $SaipenviewPath -and $pathsJson.ContainsKey('saipenview')) { $SaipenviewPath = $pathsJson['saipenview'] }
 if (-not $SmartVacPath -and $pathsJson.ContainsKey('smartvac')) { $SmartVacPath = $pathsJson['smartvac'] }
 if (-not $WildRiftPath -and $pathsJson.ContainsKey('wildrift')) { $WildRiftPath = $pathsJson['wildrift'] }
@@ -222,6 +234,7 @@ if ($Reapply) {
     $failedTargets = @()
     $passArgs = @{}
     if ($CodeNomadPath) { $passArgs['-CodeNomadPath'] = $CodeNomadPath }
+    if ($WorkBuddyPath) { $passArgs['-WorkBuddyPath'] = $WorkBuddyPath }
     if ($TotalCmdIni)  { $passArgs['-TotalCmdIni'] = $TotalCmdIni }
     if ($TotalCmd2Ini) { $passArgs['-TotalCmd2Ini'] = $TotalCmd2Ini }
     if ($SaipenviewPath) { $passArgs['-SaipenviewPath'] = $SaipenviewPath }
@@ -352,8 +365,16 @@ if (-not $Target) {
                 Where-Object { $_.Name -notmatch '^(Uninstall|elevate|Squirrel|Update)' } |
                 Sort-Object Length -Descending | Select-Object -First 1
             if ($exe -and $node) {
-                $fuse = & node (Join-Path $root 'tools/electron-fuses.js') $exe.FullName 2>$null
-                if ($fuse -match 'NOT themeable') { $blocked = 'fused shut' }
+                try {
+                    $prevEap = $ErrorActionPreference
+                    $ErrorActionPreference = 'Continue'
+                    $fuse = & node (Join-Path $root 'tools/electron-fuses.js') $exe.FullName 2>$null
+                    $ErrorActionPreference = $prevEap
+                    if ($LASTEXITCODE -ne 0) { $blocked = 'listing failed' }
+                    elseif ($fuse -match 'NOT themeable') { $blocked = 'fused shut' }
+                } catch {
+                    $blocked = 'listing failed'
+                }
             }
         }
         # An IN-PLACE target writes no package.json of its own, so asking for one
@@ -600,6 +621,8 @@ foreach ($name in $names) {
             Invoke-TargetCommit 'browsers' 'Chromium browsers' {
                 Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion)
             } { Restore-DirPreState $BrowserStageRoot $preStage }
+            # W2-004: remember a validated portable browser root for later runs.
+            if ($PortableBrowserRoot) { Save-PathPreference 'portable' $PortableBrowserRoot }
         }
         if ($preStage) { Remove-Item $preStage -Recurse -Force -ErrorAction SilentlyContinue }
         continue
@@ -727,6 +750,10 @@ foreach ($name in $names) {
                 if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
             }
             if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
+            # W2-004: a validated explicit portable override is remembered here so
+            # a later run without the flag resolves the same installation.
+            if ($name -eq 'codenomad' -and $CodeNomadPath) { Save-PathPreference 'codenomad' $CodeNomadPath }
+            if ($name -eq 'workbuddy' -and $WorkBuddyPath) { Save-PathPreference 'workbuddy' $WorkBuddyPath }
             Say "  Recorded in $ManifestPath" 'DarkGray'
         }
         continue
@@ -755,6 +782,14 @@ foreach ($name in $names) {
         if (Test-Path $dest) {
             if ($PSCmdlet.ShouldProcess($dest, 'Restore the previous Wintage install')) {
                 $preDest = Save-DirPreState $dest
+                # CORE-004: without persistent recovery, the destination pathname
+                # alone is NEVER ownership proof. Three states are distinguished:
+                # recovery present  -> normal recovery-based revert;
+                # no recovery + no manifest -> only an independently verifiable
+                #   legacy Wintage extension may be removed; anything else is
+                #   user data and is left untouched;
+                # manifest present but recovery missing -> FAIL CLOSED, directory
+                #   and ledger both preserved as recovery evidence.
                 if (Test-Path $recoveryMeta) {
                     $meta = Read-Utf8 $recoveryMeta | ConvertFrom-Json
                     if ($meta.mode -eq 'replaced' -and (Test-Path $pristineDir)) {
@@ -770,12 +805,21 @@ foreach ($name in $names) {
                         Remove-ManifestEntry $name
                     } { Restore-DirPreState $dest $preDest }
                 } else {
-                    # Never applied through a version with persistent recovery.
-                    Remove-Item $dest -Recurse -Force
-                    Say "$($t.Name): removed $dest (no recovery snapshot existed to restore)" 'Green'
-                    Invoke-TargetCommit $name $t.Name {
-                        Remove-ManifestEntry $name
-                    } { Restore-DirPreState $dest $preDest }
+                    $m = Read-Manifest
+                    if ($m.ContainsKey($name)) {
+                        throw "$($t.Name): the manifest records an install but the persistent recovery is missing ($recoveryMeta) - refusing a destructive fallback; the directory and the manifest entry are both preserved for recovery evidence. Remove the entry by hand only after confirming the directory contents."
+                    }
+                    if (Test-LegacyWintageExtension $dest) {
+                        # A genuinely identifiable legacy Wintage directory: the
+                        # built extension's own package.json proves it.
+                        Remove-Item $dest -Recurse -Force
+                        Say "$($t.Name): removed the verified legacy Wintage extension directory $dest" 'Green'
+                        Invoke-TargetCommit $name $t.Name {
+                            Remove-ManifestEntry $name
+                        } { Restore-DirPreState $dest $preDest }
+                    } else {
+                        Say "$($t.Name): nothing to revert - $dest is not a verified Wintage extension and no recovery state exists; it was left untouched." 'DarkYellow'
+                    }
                 }
             }
         }

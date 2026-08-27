@@ -70,7 +70,15 @@ function status(resources, inPlace) {
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wintage-elstate-'));
-const mk = (name) => { const d = path.join(tmp, name, 'resources'); fs.mkdirSync(d, { recursive: true }); return d; };
+const mk = (name) => {
+  const d = path.join(tmp, name, 'resources');
+  fs.mkdirSync(d, { recursive: true });
+  // CORE-007: a mutating apply requires a resolvable executable to verify fuse
+  // state (zero-EXE is unverifiable and must fail closed), so every fixture
+  // ships a fused exe that apply will defuse.
+  fs.writeFileSync(path.join(tmp, name, 'FakeApp.exe'), buildFusedExe());
+  return d;
+};
 
 // ---- Relocation mode ----
 {

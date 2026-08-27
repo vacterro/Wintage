@@ -163,8 +163,8 @@ function P(name, exact, regex, to) { return { name, exact, regex, to }; }
 const RENDERER_PATCHES = [
   P(
     'ad API client -> no-op',
-    'adSlot:e=>Ie("/api/ad/slot",{threadId:e}),adImpression:e=>Ie("/api/ad/impression",{impUrl:e}),adClick:e=>Ie("/api/ad/click",{impUrl:e})',
-    /adSlot:\s*[A-Za-z0-9_$]+\s*=>\s*[A-Za-z0-9_$]+\("[^"]*\/api\/ad\/slot"[^)]*\),\s*adImpression:\s*[A-Za-z0-9_$]+\s*=>\s*[A-Za-z0-9_$]+\("[^"]*\/api\/ad\/impression"[^)]*\),\s*adClick:\s*[A-Za-z0-9_$]+\s*=>\s*[A-Za-z0-9_$]+\("[^"]*\/api\/ad\/click"[^)]*\)/,
+    'adSlot:t=>$e("/api/ad/slot",{threadId:t}),adImpression:(t,e,n,i)=>$e("/api/ad/impression",{impUrl:t,provider:e,surface:n,placementId:i}),adClick:t=>$e("/api/ad/click",{impUrl:t})',
+    /adSlot:\s*(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>\s*[A-Za-z0-9_$]+\("[^"]*\/api\/ad\/slot"[^)]*\),\s*adImpression:\s*(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>\s*[A-Za-z0-9_$]+\("[^"]*\/api\/ad\/impression"[^)]*\),\s*adClick:\s*(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>\s*[A-Za-z0-9_$]+\("[^"]*\/api\/ad\/click"[^)]*\)/,
     'adSlot:()=>Promise.resolve(null),adImpression:()=>Promise.resolve(null),adClick:()=>Promise.resolve(null)'
   ),
   P(
@@ -184,20 +184,18 @@ const RENDERER_PATCHES = [
 // --- orchestrator (NOT minified - readable, version-stable) ---
 // FreeBuff 0.0.55 moved the ad routes' calls into comma-expressions (`let app =
 // ..., ad2 = yield* ...`) and renamed the result bindings from const to let.
-// The matchers anchor on the call expression itself, not the statement shape,
-// so a minifier that renames the variable still leaves the `app.ads.*` call
-// byte-identical.
+// FreeBuff 0.0.75 inlined the return (`return json3(yield* ...)`).
 const ORCHESTRATOR_PATCHES = [
   P(
     '/api/ad/slot returns null (no auction call)',
-    'ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId, recent))',
-    /ad2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.slotAd\([^)]*\)\)/,
-    'ad2 = null'
+    'return json3(yield* exports_Effect.promise(() => app.ads.slotAd(threadId, recent)));',
+    /(?:return json3\(yield\* exports_Effect\.promise\(\(\) => app\.ads\.slotAd\([^)]*\)\)\)|ad2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.slotAd\([^)]*\)\));?/,
+    'return json3(null);'
   ),
   P(
     '/api/ad/impression is a no-op',
     'let ok2 = yield* exports_Effect.promise(() => app.ads.impression(impUrl));',
-    /let ok2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.impression\([A-Za-z0-9_$]*\)\);/,
+    /let ok2 = yield\* exports_Effect\.promise\(\(\) => app\.ads\.impression\([\s\S]*?\)\);/,
     'let ok2 = false;'
   ),
   P(

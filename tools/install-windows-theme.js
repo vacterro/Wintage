@@ -38,6 +38,15 @@ const existingBackup = path.join(themesDir, 'Wintage.theme.wintage.bak');
 const createdMarker = path.join(themesDir, 'Wintage.theme.wintage-created');
 const paletteMarker = path.join(themesDir, '.wintage-windows-palette');
 const activePathMarker = path.join(themesDir, '.wintage-active-theme-path');
+// W2-003: a completed Revert RETIRES the snapshot epoch. The retired marker is
+// the difference between "snapshot exists because an install is live" and
+// "snapshot exists, but the epoch it belongs to ended and the snapshot may be
+// stale (the user has changed themes since Revert)". The next fresh Apply must
+// re-baseline from the THEN-CURRENT active theme even though the old snapshot
+// file still physically exists - and it must never be deleted while Windows may
+// still hold it as CurrentTheme. Reuse-on-repaint inside ONE epoch is untouched:
+// repaint keeps the epoch baseline; a completed Revert ends it.
+const epochRetired = path.join(themesDir, '.wintage-epoch-retired');
 
 function read(file) { return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''); }
 function remove(file) { if (fs.existsSync(file)) fs.unlinkSync(file); }
@@ -88,8 +97,14 @@ function mergeTheme(baseText, overlayText) {
 }
 
 if (finalizeRevert) {
+  // W2-003: retire the epoch instead of deleting the snapshot - Windows may
+  // still hold Wintage.original.theme as CurrentTheme (activation was just
+  // confirmed), and deleting it would leave a stale pointer. The next Apply
+  // re-baselines over it and removes the marker.
   if (!dryRun) {
-    for (const file of [original, originalPath, existingBackup, createdMarker, paletteMarker, activePathMarker]) remove(file);
+    remove(paletteMarker);
+    remove(activePathMarker);
+    writeAtomic(epochRetired, 'retired\n');
   }
   console.log(JSON.stringify({ finalized: true }));
   process.exit(0);
@@ -112,7 +127,10 @@ if (revert) {
 if (!fs.existsSync(overlayFile)) fail('generated theme not found: ' + overlayFile);
 if (!fs.existsSync(currentTheme) && !fs.existsSync(original)) fail('active theme not found: ' + currentTheme);
 
-const firstApply = !fs.existsSync(original);
+// W2-003: firstApply also fires after a RETIRED epoch even though the old
+// snapshot file still exists - the snapshot's epoch ended at Revert, so the
+// then-current theme becomes the new baseline.
+const firstApply = !fs.existsSync(original) || fs.existsSync(epochRetired);
 const base = firstApply ? read(currentTheme) : read(original);
 const merged = mergeTheme(base, read(overlayFile));
 const hash = crypto.createHash('sha256').update(merged).digest('hex').slice(0, 10);
@@ -127,6 +145,8 @@ if (!dryRun) {
     writeAtomic(originalPath, path.resolve(currentTheme) + '\n');
     if (fs.existsSync(legacyInstalled)) writeAtomic(existingBackup, fs.readFileSync(legacyInstalled));
     else writeAtomic(createdMarker, 'created by Wintage\n');
+    // The retired epoch is over: this snapshot is the fresh baseline again.
+    remove(epochRetired);
   }
   writeAtomic(installed, merged);
   writeAtomic(paletteMarker, palette + '\n');
