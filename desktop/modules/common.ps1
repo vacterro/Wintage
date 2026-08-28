@@ -334,17 +334,47 @@ function Test-PayloadUpToDate([string]$recorded, [string]$current) {
 # identity. A recovery file stamped by a different install (a foreign epoch, a
 # copied folder, a stale parallel baseline) is never adopted to rewrite the
 # user's live state: presence in a Wintage-looking path is not ownership.
+#
+# CORE-008: the epoch is the foundation. Silently inventing a new GUID when the
+# existing file is corrupt (parse failure, missing/empty id, wrong shape)
+# rotates the install identity and disconnects every provenance-stamped
+# recovery file from the install that wrote it. Assert-RecoveryProvenance
+# would then reject its own files as foreign, locking the user out of every
+# recovery. The contract is therefore fail-closed on corruption: the corrupt
+# bytes are preserved exactly, no rotation, and the caller sees an error. A
+# genuinely absent file is still created exactly once and remains stable.
 function Get-InstallEpoch {
     $epochFile = Join-Path $WintageAppData 'install-epoch.json'
+    New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
     if (Test-Path $epochFile) {
+        $raw = Read-Utf8 $epochFile
         try {
-            $id = (Read-Utf8 $epochFile | ConvertFrom-Json).id
-            if ($id) { return $id.ToString() }
-        } catch {}
+            $parsed = $raw | ConvertFrom-Json
+        } catch {
+            throw "install epoch at $epochFile is corrupt (cannot parse JSON) -- refusing to rotate the install identity because every recovery file on this machine is stamped with it. Preserve the original bytes or delete the file by hand after a backup."
+        }
+        # Tolerant of an id that arrives as any single scalar (string/number/guid);
+        # strict on shape -- a non-object root, a missing id, or an empty id is
+        # corruption, not "no identity".
+        if ($null -eq $parsed -or $parsed -is [System.Array] -or $parsed -is [string] -or $parsed -is [int] -or $parsed -is [bool]) {
+            throw "install epoch at $epochFile is not a JSON object -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
+        }
+        if ($parsed -isnot [System.Collections.IDictionary] -and $parsed -isnot [PSCustomObject]) {
+            throw "install epoch at $epochFile has an unrecognised shape -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
+        }
+        $id = $parsed.id
+        if ($null -eq $id -or ($id -isnot [string]) -or -not $id.Trim()) {
+            throw "install epoch at $epochFile has no usable id field -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
+        }
+        return $id.ToString()
     }
     $id = [guid]::NewGuid().ToString('N')
-    New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
-    Write-Utf8 $epochFile (@{ id = $id; firstSeen = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
+    # Write atomically: same-directory temp + rename, so a crash between the
+    # Write-Utf8 and the rename can never leave a half-written epoch on disk
+    # that the next call would read as corrupt.
+    $tmp = "$epochFile.tmp-$([guid]::NewGuid().ToString('N'))"
+    Write-Utf8 $tmp (@{ id = $id; firstSeen = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
+    Move-Item -LiteralPath $tmp -Destination $epochFile -Force
     return $id
 }
 
