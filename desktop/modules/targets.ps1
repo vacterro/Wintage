@@ -653,25 +653,47 @@ function Invoke-TargetCommit([string]$target, [string]$label, [scriptblock]$comm
 
 # Whole-directory snapshots for targets whose mutation is directory-shaped (the
 # browser stage root, the VS Code extension dirs). Byte-exact, recursive.
+#
+# CORE-005: the snapshot must represent BOTH pre-states -- "directory existed
+# at capture time" and "directory was absent" -- because first-install targets
+# routinely create the directory as part of their mutation. A nullable-path
+# snapshot collapses those two states into one, and a first-install failure
+# leaves a newly-created directory behind while the manifest stays at its
+# previous (absent) state. The structured snapshot here is the contract every
+# caller relies on.
 function Save-DirPreState([string]$dir) {
-    if (-not $dir -or -not (Test-Path $dir)) { return $null }
+    if (-not $dir) { return @{ Existed = $false; SnapshotPath = $null } }
+    if (-not (Test-Path $dir)) { return @{ Existed = $false; SnapshotPath = $null } }
     $snap = Join-Path $env:TEMP ("wintage-dirstate-" + [guid]::NewGuid().ToString('N'))
     Copy-Item $dir $snap -Recurse -Force
-    return $snap
+    return @{ Existed = $true; SnapshotPath = $snap }
 }
-function Restore-DirPreState([string]$dir, [string]$snap) {
-    if (-not $snap -or -not (Test-Path $snap)) { return }
+function Restore-DirPreState([string]$dir, $snap) {
+    if (-not $snap) { return }
+    $existed = [bool]$snap.Existed
+    $path = $snap.SnapshotPath
+    if (-not $existed) {
+        # The directory was absent pre-Apply; the restore must recreate that
+        # exact pre-state, even if a mutation created the directory in the
+        # meantime (first-install failure path).
+        if ($dir -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
+        return
+    }
+    if (-not $path -or -not (Test-Path $path)) { return }
     # T-191 P0#12: materialise the restore in a temp sibling FIRST, then swap it
     # in. A failed copy never touches the live dir; the temp is dropped on error.
     $tmp = Join-Path (Split-Path $dir) ('.wintage-restore-' + [guid]::NewGuid().ToString('N'))
     try {
-        Copy-Item $snap $tmp -Recurse -Force
+        Copy-Item $path $tmp -Recurse -Force
         if ($dir -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
         New-Item -ItemType Directory -Force -Path (Split-Path $dir) | Out-Null
         Rename-Item $tmp ([IO.Path]::GetFileName($dir))
     } catch {
         if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
         throw
+    } finally {
+        # The captured snapshot is no longer needed once Restore finishes.
+        if ($path -and (Test-Path $path)) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
 
