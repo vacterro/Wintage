@@ -41,6 +41,14 @@ if ($List) {
     Write-Host "  4. install.ps1 missing FreeBuff helper hard-fails (no manifest)"
     Write-Host "  5. install.ps1 FreeBuff -WhatIf validates the ad helper"
     Write-Host "  6. top-level FreeBuff Revert restores shim + patches + sound + manifest"
+    Write-Host "  7. repeated Apply sound B after sound A restores all stock from baseline"
+    Write-Host "  8. failed composite Apply restores exact pre-state"
+    Write-Host "  9. missing configured sound fails closed"
+    Write-Host " 10. FreeBuff patch tamper repaired by Reapply"
+    Write-Host " 11. Electron snapshot carries EXE and fuse backup"
+    Write-Host " 12. new app generation refuses stale baseline"
+    Write-Host " 13. baseline pruning stays bounded"
+    Write-Host " 14. missing live renderer/orchestrator restored from baseline"
     exit 0
 }
 
@@ -413,6 +421,35 @@ check 'prune: at most 3 baselines kept' ($bCount -le 3)
 check 'prune: at least 1 baseline kept' ($bCount -ge 1)
 $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
 check 'prune: Revert still works after pruning' ($r.Code -eq 0)
+
+# ---- Test 14: W2-010 missing-live recovery from complete baseline ----
+# A missing owned file is damage within the current generation, not proof that
+# the baseline belongs to an older app. The helper must consult the complete
+# baseline and recreate each missing file byte-exact.
+Clean-Fixture
+Write-StockFixture
+$stockBundle14 = [System.IO.File]::ReadAllBytes($bundlePath)
+$stockOrch14 = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+check 'missing-live: initial Apply exits 0' ($r.Code -eq 0)
+$missingOrch = Join-Path $orchestratorDir 'orchestrator.js'
+Remove-Item $missingOrch -Force -ErrorAction SilentlyContinue
+
+# The path is now absent while its complete baseline remains available.
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
+check 'missing-live: missing orchestrator Revert exits 0' ($r.Code -eq 0)
+check 'missing-live: Revert does not refuse missing orchestrator' (($r.Out -join ' ') -notmatch 'REVERT REFUSED')
+check 'missing-live: missing orchestrator recreated byte-exact from baseline' ((Test-Path $missingOrch) -and (-not (Compare-Object $stockOrch14 ([System.IO.File]::ReadAllBytes($missingOrch)))))
+
+Clean-Fixture
+Write-StockFixture
+$stockBundle14b = [System.IO.File]::ReadAllBytes($bundlePath)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+check 'missing-live: second Apply exits 0' ($r.Code -eq 0)
+Remove-Item $bundlePath -Force
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
+check 'missing-live: missing renderer Revert exits 0' ($r.Code -eq 0)
+check 'missing-live: missing renderer recreated byte-exact from baseline' ((Test-Path $bundlePath) -and (-not (Compare-Object $stockBundle14b ([System.IO.File]::ReadAllBytes($bundlePath)))))
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

@@ -1295,11 +1295,16 @@ function Invoke-SmartVac {
     param([switch]$DoRevert, [string]$PaletteSlug)
     Assert-SafeProjectPath $SmartVacPath 'SMART VAC CLEANER'
     if (-not (Test-Path $SmartVacPath)) { Assert-TargetResolvable 'SMART VAC CLEANER' $false; return }
-    
+
     $pyFile = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py'
     $bakFile = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py.bak'
-    if (-not (Test-Path $pyFile)) { Assert-TargetResolvable 'SMART VAC CLEANER' $false; return }
-    
+    # W2-010: a missing live file is a recovery barrier ONLY for Apply (the
+    # source we read does not exist). Revert's recovery source is the backup,
+    # and a missing live is exactly the case Revert must repair -- so the
+    # gate is split: Apply refuses, Revert proceeds to Assert-RevertSource
+    # which validates the backup and its provenance.
+    if (-not $DoRevert -and -not (Test-Path $pyFile)) { Assert-TargetResolvable 'SMART VAC CLEANER' $false; return }
+
     if ($DoRevert) {
         if (-not (Assert-RevertSource 'smartvac' $bakFile 'SMART VAC CLEANER')) { return }
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore SMART VAC CLEANER from backup')) {
@@ -1409,11 +1414,14 @@ function Invoke-WildRift {
     param([switch]$DoRevert, [string]$PaletteSlug)
     Assert-SafeProjectPath $WildRiftPath 'WildRiftAssistant'
     if (-not (Test-Path $WildRiftPath)) { Assert-TargetResolvable 'WildRiftAssistant' $false; return }
-    
+
     $pyFile = Join-Path $WildRiftPath 'theme.py'
     $bakFile = Join-Path $WildRiftPath 'theme.py.bak'
-    if (-not (Test-Path $pyFile)) { Assert-TargetResolvable 'WildRiftAssistant' $false; return }
-    
+    # W2-010: see Invoke-SmartVac -- the live-file gate is split: Apply
+    # refuses, Revert proceeds to Assert-RevertSource which validates the
+    # backup and its provenance.
+    if (-not $DoRevert -and -not (Test-Path $pyFile)) { Assert-TargetResolvable 'WildRiftAssistant' $false; return }
+
     if ($DoRevert) {
         if (-not (Assert-RevertSource 'wildrift' $bakFile 'WildRiftAssistant')) { return }
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore WildRiftAssistant from backup')) {

@@ -104,7 +104,7 @@ if (fs.existsSync(indexHtmlPath)) {
   const m = /assets\/(index-[A-Za-z0-9_-]+\.js)/.exec(html);
   if (m) bundlePath = path.join(orchestratorDir, 'ui', 'assets', m[1]);
 }
-if (!bundlePath || !fs.existsSync(bundlePath)) {
+if (!bundlePath || (!fs.existsSync(bundlePath) && !doRevert)) {
   die('could not locate the renderer bundle (index-*.js) under ' + orchestratorDir);
 }
 
@@ -508,7 +508,14 @@ if (doRevert) {
     const t = TARGET_FILES.find(f => f.rel === rel);
     if (!t) continue; // generation-neutral files (e.g. the chime) are skipped
     const live = path.join(target, rel);
-    if (!fs.existsSync(live)) { mismatch = rel; break; }
+    // W2-010: a missing live file is NOT a generation mismatch -- it is
+    // damage within the current generation (antivirus, interrupted update,
+    // partial filesystem loss). The baseline restore is exactly the
+    // repair it needs, so we skip the existence check and let the restore
+    // loop recreate the file. The generation check below still protects
+    // against a newer-generation file: if `live` exists AND carries a
+    // different generation's bytes, the original-vs-live comparison refuses.
+    if (!fs.existsSync(live)) continue;
     const liveBuf = fs.readFileSync(live);
     const { allNew, anyOld } = isPatched(live, t.patches);
     if (allNew || anyOld) continue; // still carries this generation's Wintage state
@@ -525,7 +532,12 @@ if (doRevert) {
   for (const rel of b.meta.files) {
     const orig = path.join(b.dir, rel);
     const live = path.join(target, rel);
-    if (fs.existsSync(orig)) { if (fs.existsSync(live)) fs.copyFileSync(orig, live); console.log('restored ' + rel); }
+    // W2-010: copy the baseline file over the live file UNCONDITIONALLY when
+    // the baseline exists. If the live file was missing (damage, antivirus,
+    // partial filesystem loss) the copy recreates it byte-exact from the
+    // baseline; the live file's prior absence is exactly what the Revert
+    // is supposed to repair.
+    if (fs.existsSync(orig)) { fs.copyFileSync(orig, live); console.log('restored ' + rel); }
   }
   console.log('reverted from baseline ' + path.basename(b.dir));
   process.exit(0);
