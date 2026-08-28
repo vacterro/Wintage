@@ -321,7 +321,13 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
             # A marker that was deleted or rewritten to another palette is just as
             # unhealthy as a vanished vault, and must trigger Reapply.
             if ($key -eq 'terminal') {
-                $paths = @(Get-WindowsTerminalSettingsPaths)
+                # CORE-011: probe the EFFECTIVE marker/palette state only for the
+                # RECORDED item set. The set comparison above already proved every
+                # recorded item still exists. A newly discovered unowned settings
+                # file (no marker, never Apply'd) must NOT make an existing
+                # healthy install look unhealthy -- it belongs to the next user
+                # Apply, not to an automatic Reapply adoption.
+                $paths = @($recorded)
                 $markers = @($paths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ })
                 if ($markers.Count -lt $paths.Count) { $reasons += 'terminal theme marker(s) missing' }
                 else { foreach ($marker in $markers) { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "terminal marker palette mismatch ($mv)" } } }
