@@ -1,7 +1,7 @@
 ---
-phase: PLAN
+phase: SHIP
 task: T-222
-next_action: "RUN: plan T-222 audit re-derivation against current clean main@553f4b8 (41 tickets, SRC-001 captured)"
+next_action: "RUN: report audit run 1 (3 tickets done: T-205/T-206/T-207), await user direction on pace"
 blocker: none
 agent: opencode
 saipen_version: 7
@@ -9,24 +9,24 @@ schema_version: 3
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN
 mode: full
 execution_intent: goal
-goal_waves: 0
-goal_tickets: 0
+goal_waves: 1
+goal_tickets: 3
 converge_target: null
-last_event: 702
+last_event: 710
 style_contract: ded-4ae736e4
-updated: 2026-08-28T10:00:00Z
-transition_from: SHIP
+updated: 2026-08-28T11:30:00Z
+transition_from: BUILD
 ---
 
 # Active Work
 
-T-222: AUDIT_ALL_3 re-derivation against current clean main@553f4b8.
-Source: .saipen/intake/active/SRC-001.md (SHA256 5F862E63...) [E-702]
+T-222 audit implementation resumed. 3 tickets DONE, committed on wip/audit-acb-mat-mta5kmaj:
+- T-205 / CORE-008 install-epoch fail-closed (edf6666)
+- T-206 / W2-009 backup-before-manifest ordering (a357694)
+- T-207 / CORE-009 portable Electron manifest path semantics (4ddc49c)
 
-User decision: re-derive against current clean main. Audit baseline (main@553f4b8) == current HEAD. Audit doc line numbers calibrated to dirty archived tree (126 porcelain entries, archive SHA256 bd038a71...) absent here. WIP branch `wip/audit-acb-mat-mta5kmaj` (T-222, d0614bc) IS the user's in-progress of this same audit, 1498+/603- over 14 files, single "WIP preservation" commit, untested.
+All suites green: test-epoch 21, test-recovery-consumption 15, test-resolve-portable 11, test-ownership 39, test-freebuff 72, test-reapply 183+1 (pre-existing unrelated FAIL).
 
-Already-shipped overlaps with T-187..T-204:
-- CORE-001/002/004/005/006/007/008/010/011 substantially closed by T-189/T-190/T-191/T-192.
-- T-200 BLOCKED intake superseded by this `gg`.
+Remaining: CORE-005/010/011/012, W2-002/010/014/015, PERF-001..014 + WIP gaps (CORE-001/002/003/004/007, W2-001/002/005/011/013/015, PERF-005/008). 19 net-new actionable left. Safety valve: 3 waves / 20 tickets (currently 1 wave / 3 tickets).
 
-Next: PLAN tickets T-205.. on BOARD; SCOUT topmost workable.
+Awaiting user direction on pace (continue full audit, prioritize CORE, or batch the remaining).
