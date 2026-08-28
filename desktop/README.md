@@ -57,7 +57,7 @@ in use.
 |---|---|---|
 | `windows` | user `.theme`: dark system/app mode, accent and classic colour roles | yes — installed in your local Windows Themes folder |
 | `browsers` | detects installed + portable Chromium profiles, stages the selected chrome theme and opens browser-owned Tampermonkey/theme confirmation pages | yes after one **Load unpacked** per profile |
-| `terminal` | Windows Terminal scheme + all-profile defaults, Consolas 12 aliased | yes — settings are in your profile |
+| `terminal` | Windows Terminal scheme + all-profile defaults, Terminus (TTF) for Windows | yes — settings are in your profile |
 | `conhost` | `HKCU\Console` defaults + every existing cmd/PowerShell profile | yes — exact touched-value snapshot |
 | `obs` | OBS 30.2+ `.ovt` variant + active `user.ini` theme ID | yes — it lives in your profile |
 | `antigravity`, `vscode` | colour-theme extension in `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — it lives in your profile |
@@ -159,8 +159,10 @@ Apply the `freebuff` target afterwards (tick FreeBuff + APPLY, or run
 
 `terminal` writes a `Wintage` colour scheme into every detected stable, Preview,
 or unpackaged Windows Terminal settings file and selects it through
-`profiles.defaults`, together with console-safe Consolas 12 and aliased text. The original file
-is kept byte-for-byte beside it and `-Revert` restores it.
+`profiles.defaults`, together with console-safe Terminus (TTF) for Windows and
+aliased text. Only the fields Wintage owns are written — comments, formatting and
+any unrelated settings in the file survive, so `-Revert` merges the original
+values back into the current document instead of restoring a whole-file copy.
 
 `conhost` covers classic `cmd.exe`, Windows PowerShell, Git CMD/Bash console
 profiles, and other existing `HKCU\Console` children. It writes the palette's full
@@ -220,8 +222,14 @@ backs up both the previous selection and any same-named theme byte-for-byte.
 `resources/app.asar` is moved to `resources/app/app.asar` (its `app.asar.unpacked`
 sibling moves with it — that pairing is by filename, and separating it breaks every
 native module), and a small `shim.cjs` takes the vacated `resources/app` slot. The
-shim injects the stylesheet and then loads the original archive. **No application
-byte is rewritten**, only relocated; `-Revert` moves it straight back.
+shim injects the stylesheet and then loads the original archive. The application
+byte is relocated, not rewritten; on top of that, the installer reads the
+fuses first and refuses (with a reason) when they block the install. For
+fuses in a supported BLOCKED state, the installer keeps a byte-exact
+`<exe>.wintage-fuse.bak` of the pre-Wintage executable, then `defuse()` rewrites
+only the known fuse byte positions and verifies the result before
+returning — `-Revert` restores the exact pre-Wintage executable, never an
+intermediate generation. UNVERIFIABLE fuse states fail closed.
 
 The stylesheet is not written for these apps — it is extracted from
 `wintage.user.js`, so every bevel, scrollbar and type-ladder fix made for the
