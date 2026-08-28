@@ -535,12 +535,20 @@ function Test-LegacyWintageExtension([string]$dir) {
 # installation, and the eager resource tables must not freeze values before
 # paths.json is read.
 function Resolve-PortableElectron([string]$key, [string]$explicitPath, [hashtable]$remembered, [string]$processName, [string[]]$defaultDirs) {
+    # CORE-009: candidate semantic types are NOT uniform.
+    #   - explicit / remembered / process / default = APP ROOT (need 'resources' appended)
+    #   - manifest-recorded = ALREADY the resources directory (the installer
+    #     writes Set-ManifestEntry ... $e.Resources, so the manifest value
+    #     is the resources path itself; appending another 'resources' would
+    #     test `<resources>\resources` and never resolve the install the
+    #     manifest claims to be recording).
     $manifest = Read-ManifestQuiet
     $candidates = @()
     if ($explicitPath) { $candidates += (Join-Path $explicitPath 'resources') }
     if ($remembered -and $remembered.ContainsKey($key)) { $candidates += (Join-Path $remembered[$key] 'resources') }
     if ($manifest -and $manifest.ContainsKey($key) -and $manifest[$key].path) {
-        $candidates += (Join-Path ([string]$manifest[$key].path) 'resources')
+        # Manifest path is already the resources directory -- use it directly.
+        $candidates += [string]$manifest[$key].path
     }
     foreach ($c in $candidates) { if (Test-ElectronApp $c) { return $c } }
     # Process / default discovery last.
