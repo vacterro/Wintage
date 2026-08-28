@@ -560,7 +560,7 @@ check 'themed-edit: repaint exits 0' ($LASTEXITCODE -eq 0)
 check 'themed-edit: revert exits 0' ($LASTEXITCODE -eq 0)
 $reverted19 = [System.IO.File]::ReadAllText($svLive, $utf8NoBom)
 check 'themed-edit: unrelated edit survives the revert' ($reverted19 -match 'user_helper')
-check 'themed-edit: original stock owned tokens return (#010203)' ($reverted19 -match "(?m)^WIN95_BG\s*=\s*'#010203'$")
+check 'themed-edit: original stock owned tokens return (#010203)' ($reverted19 -match "(?m)^WIN95_BG\s*=\s*'#010203'\r?$")
 check 'themed-edit: NO Wintage palette token remains' ($reverted19 -notmatch '(?i)#1A1810|#3D372A|#D4C89A')
 
 # ---- Test 20: native source-tree target applies WITHOUT Node (P1#19) ----
