@@ -2091,6 +2091,10 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // off instead of ticking forever in the background like a stubborn appliance.
   const FORCE_BUDGET = 2500;
   let forceCursor = 0;
+  // CORE-010: the cursor position where the current force LAP began. Persists
+  // across continuation slices so the "cursor wrapped the whole root set" test
+  // is meaningful: -1 means no lap is in flight.
+  let forceLapOrigin = -1;
 
   let forcePassesOwed = 0;
   let sweepTimer = null;
@@ -2157,9 +2161,20 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // lane, NEVER immediately. runSweeper itself calls this (via stripHoverSheets
   // spotting a changed sheet), so an immediate schedule here is a direct
   // sweep-calls-sweep loop.
+  //
+  // CORE-010: the old cap of two owed passes per request is gone. A request
+  // now owes a whole lap: one owed pass to start, plus one owed pass on every
+  // continuation slice in runSweeper until the cursor has wrapped the full
+  // root set. The "forcePassesOwed" counter is the continuation debt, not a
+  // per-request ceiling -- the value never gets capped at 2 and is cleared
+  // by runSweeper when the cursor passes the lap origin.
   function requestForceSweep() {
     if (repainterSuspended) return;
-    if (forcePassesOwed < 2) forcePassesOwed++;
+    if (forcePassesOwed < 1) forcePassesOwed = 1;
+    // CORE-010: opening a force lap at the current cursor anchors the
+    // whole-lap debt; runSweeper uses forceLapOrigin to decide when the
+    // cursor has wrapped past the lap origin and the debt can clear.
+    if (forceLapOrigin < 0) forceLapOrigin = forceCursor;
     scheduleSweep(1500);
   }
 
@@ -2183,10 +2198,20 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     // end is what collapses thousands of style invalidations into a single
     // recalc. Never flush inside the loop (see the flushWrites comment).
     const w = [];
+    // CORE-010: a force request owes a WHOLE LAP, not one 2500-window. The
+    // rotating cursor below covers one bounded slice per pass; when the root
+    // set is bigger than the budget and the cursor has not yet wrapped the
+    // full lap, the scheduler re-arms the force debt and schedules another
+    // floor-limited slice. Only after the cursor passes a full rotation past
+    // forceLapOrigin does the debt clear and the scheduler become fully idle
+    // -- a quiet page above 5000 elements can no longer stop with a remainder
+    // never re-verified.
+    let lapTotal = 0;
     searchRoots.forEach(root => {
       try {
         const all = root.querySelectorAll(force ? '*' : '*:not([data-w95-done])');
         if (force && all.length > FORCE_BUDGET) {
+          lapTotal = Math.max(lapTotal, all.length);
           const start = forceCursor % all.length;
           for (let n = 0; n < FORCE_BUDGET; n++) { process(all[(start + n) % all.length], true, w); }
           forceCursor += FORCE_BUDGET;
@@ -2197,6 +2222,23 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     });
     flushWrites(w);
     addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
+    // Continuation: keep the force debt alive until the cursor has wrapped
+    // past the lap origin (cursor - origin >= lapTotal), then close the
+    // lap and clear the debt. The debt is what requestForceSweep() set at
+    // the start of this lap, not a fresh request -- a hidden / suspended
+    // tab stops the continuation safely (scheduleSweep guards both).
+    if (force && forceLapOrigin >= 0 && lapTotal > FORCE_BUDGET
+        && (forceCursor - forceLapOrigin) < lapTotal
+        && !repainterSuspended && !document.hidden) {
+      forcePassesOwed = Math.max(forcePassesOwed, 1);
+      scheduleSweep(MIN_SWEEP_GAP);
+    } else if (force && forceLapOrigin >= 0
+        && (lapTotal <= FORCE_BUDGET || (forceCursor - forceLapOrigin) >= lapTotal)) {
+      // Lap complete: close it. Any further owed passes that arrived during
+      // the lap still get served on the next idle schedule, but the lap
+      // origin is cleared so the next request opens a fresh one.
+      forceLapOrigin = -1;
+    }
   }
 
   // Elements processed before the site's CSS finished loading bake in unstyled
