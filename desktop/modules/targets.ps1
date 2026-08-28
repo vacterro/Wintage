@@ -1277,10 +1277,16 @@ function Invoke-SmartVac {
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore SMART VAC CLEANER from backup')) {
             $pre = Save-FilePreState $pyFile $bakFile
             Copy-Item $bakFile $pyFile -Force
-            Remove-Item $bakFile -Force
             Say "SMART VAC CLEANER: restored from backup" 'Green'
+            # W2-009: defer backup consumption until the manifest removal has
+            # committed. A process death between Copy-Item and the manifest
+            # transition now leaves bak intact and the manifest at its previous
+            # state -- the Revert is retryable, not stranded. Delete the
+            # backup inside the commit scriptblock so Restore-FilePreState on
+            # a commit failure rebuilds the bak from the in-memory prestate.
             Invoke-TargetCommit 'smartvac' 'SMART VAC CLEANER' {
                 Remove-ManifestEntry 'smartvac'
+                Remove-Item $bakFile -Force
             } { Restore-FilePreState $pre $pyFile $bakFile }
         }
         return
@@ -1385,10 +1391,12 @@ function Invoke-WildRift {
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore WildRiftAssistant from backup')) {
             $pre = Save-FilePreState $pyFile $bakFile
             Copy-Item $bakFile $pyFile -Force
-            Remove-Item $bakFile -Force
             Say "WildRiftAssistant: restored from backup" 'Green'
+            # W2-009: defer backup consumption until the manifest removal has
+            # committed -- a process death at this seam is now retryable.
             Invoke-TargetCommit 'wildrift' 'WildRiftAssistant' {
                 Remove-ManifestEntry 'wildrift'
+                Remove-Item $bakFile -Force
             } { Restore-FilePreState $pre $pyFile $bakFile }
         }
         return
@@ -1443,10 +1451,12 @@ function Invoke-Saipenview {
         if ($PSCmdlet.ShouldProcess($cssFile, 'Restore SAIPENVIEW original CSS')) {
             $pre = Save-FilePreState $cssFile $bakFile
             Copy-Item $bakFile $cssFile -Force
-            Remove-Item $bakFile -Force
             Say "SAIPENVIEW: restored from backup" 'Green'
+            # W2-009: defer backup consumption until the manifest removal has
+            # committed -- a process death at this seam is now retryable.
             Invoke-TargetCommit 'saipenview' 'SAIPENVIEW' {
                 Remove-ManifestEntry 'saipenview'
+                Remove-Item $bakFile -Force
             } { Restore-FilePreState $pre $cssFile $bakFile }
         }
         return
