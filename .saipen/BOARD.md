@@ -1,7 +1,10 @@
 # BOARD
 
 ## DOING
-- [ ] T-222 Audit handoff implementation (AUDIT_ALL_3, 41 tickets: 7 DONE in this goal run, 14+ net-new remain). CORE wave complete (T-205..T-211). Source SRC-001 captured. | in progress (W2/PERF waves remain)
+- [ ] T-222 Audit handoff implementation (AUDIT_ALL_3, 41 tickets: 8 DONE in this goal run, 13+ net-new remain). CORE wave complete (T-205..T-211); W2-010 done. Source SRC-001 captured. | in progress (W2/PERF waves remain)
+
+## DONE
+- [x] T-212 W2-010 missing-live recovery: FreeBuff Revert previously refused when baseline-owned renderer/orchestrator files were absent; SmartVac/WildRift Revert bailed before consulting valid .bak recovery. Fix: FreeBuff skips missing live files during generation reconciliation and recreates them from complete baseline; SmartVac/WildRift Apply-only live-file gates let Revert restore missing files from backup. | verify: test-freebuff 79 PASS, test-reapply 184 PASS, test-ownership 39 PASS, Run-Tests ALL PASSED, build-desktop --check PASS, node --check desktop/patch-freebuff-ads.js + wintage.user.js PASS [E-719..E-721]
 
 ## DONE
 - [x] T-211 CORE-012 README docs contract: README advertised Consolas 12 (live is Terminus TTF), "kept byte-for-byte" Terminal Revert (live is owned-field merge), "No application byte is rewritten" Electron (live supports fuse defuse with byte-exact <exe>.wintage-fuse.bak, fail-closed UNVERIFIABLE). Fix: README updated to live contracts. | verify: test-readme-contract 11 PASS (live-vs-readme Terminus + merge + defuse, anti-patterns gone) [E-716]

@@ -221,7 +221,7 @@ if (revert) {
   if (exists(userIniCreated)) {
     // We created user.ini from nothing - drop it back to nothing.
     if (exists(userIni)) remove(userIni);
-    remove(userIniCreated);
+    if (!keepRecovery) remove(userIniCreated);
   } else {
     const snap = readThemeSnapshot();
     if (exists(userIni)) {
@@ -234,7 +234,7 @@ if (revert) {
   }
   if (exists(ovtCreated)) {
     remove(themeFile);
-    remove(ovtCreated);
+    if (!keepRecovery) remove(ovtCreated);
   } else {
     const snap = ReadRecoveryJson(ovtBackup);
     if (snap && snap.existed && snap.value !== undefined && snap.value !== null) {
@@ -243,7 +243,7 @@ if (revert) {
     } else if (exists(themeFile)) {
       remove(themeFile);
     }
-    remove(ovtBackup);
+    if (!keepRecovery) remove(ovtBackup);
   }
   if (exists(markerFile)) remove(markerFile);
   consumeRecovery();

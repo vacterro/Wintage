@@ -66,6 +66,22 @@ check 'OBS revert PRESERVES the unrelated Video section' ($after -match '(?m)^Re
 check 'OBS revert removes the Wintage theme file' (-not (Test-Path (Join-Path $obsConfig 'themes\Wintage.ovt')))
 check 'OBS revert removes the marker' (-not (Test-Path (Join-Path $obsConfig '.wintage-obs-palette')))
 
+# ---- Test 1b: OBS parent-coordinated recovery remains until finalize ----
+$obsKeep = Join-Path $testRoot 'obs-keep'
+New-Item -ItemType Directory -Path $obsKeep -Force | Out-Null
+$obsKeepTheme = Join-Path $root 'desktop\out\obs\goldendefault\Wintage.ovt'
+$r = Run-TestChild node @((Join-Path $root 'tools\install-obs.js'), '--config', $obsKeep, '--theme', $obsKeepTheme, '--palette', 'goldendefault')
+check 'OBS keep-recovery apply exits 0' ($r.Code -eq 0)
+$r = Run-TestChild node @((Join-Path $root 'tools\install-obs.js'), '--config', $obsKeep, '--revert', '--keep-recovery')
+check 'OBS keep-recovery revert exits 0' ($r.Code -eq 0)
+check 'OBS keep-recovery keeps created user.ini marker' (Test-Path (Join-Path $obsKeep 'user.ini.wintage-created'))
+check 'OBS keep-recovery keeps created theme marker' (Test-Path (Join-Path $obsKeep 'themes\Wintage.ovt.wintage-created'))
+check 'OBS keep-recovery removes live user.ini' (-not (Test-Path (Join-Path $obsKeep 'user.ini')))
+check 'OBS keep-recovery removes live theme' (-not (Test-Path (Join-Path $obsKeep 'themes\Wintage.ovt')))
+$r = Run-TestChild node @((Join-Path $root 'tools\install-obs.js'), '--config', $obsKeep, '--finalize-revert')
+check 'OBS finalize-revert exits 0' ($r.Code -eq 0)
+check 'OBS finalize-revert consumes created recovery markers' (-not (Test-Path (Join-Path $obsKeep 'user.ini.wintage-created')) -and -not (Test-Path (Join-Path $obsKeep 'themes\Wintage.ovt.wintage-created')))
+
 # ---- Test 2: TotalCmd ownership revert ----
 $tcRoot = Join-Path $testRoot 'totalcmd'
 New-Item -ItemType Directory -Path $tcRoot -Force | Out-Null

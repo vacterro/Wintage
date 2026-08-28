@@ -248,7 +248,7 @@ function Test-TotalCmdThemed([string]$ini, $palTokens) {
     foreach ($line in $lines) {
         $m = [regex]::Match($line, '^ColorFilter(\d+)Color(Dark)?=')
         if ($m.Success) {
-            $v = $m.Value.Substring($m.Value.IndexOf('=') + 1)
+            $v = $line.Substring($m.Index + $m.Length)
             if ([string]$v -ne [string]$recentFg) { $bad += "ColorFilter$($m.Groups[1].Value)Color$($m.Groups[2].Value)=$v (want $recentFg)" }
         }
     }
@@ -411,7 +411,7 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
             'totalcmd2' { $tc = Test-TotalCmdThemed $currentPath $palTokens; if ($tc -is [string]) { $reasons += $tc } }
             # W2-005: health compares EVERY owned registry value (the exact set
             # Invoke-MpcHc owns), not just one cheap marker.
-            'mpchc'     { $props = Get-ItemProperty $MPC_KEY -ErrorAction SilentlyContinue; if ($props) { if ($props.MPCTheme -ne 1) { $reasons += 'mpc MPCTheme not themed' }; if ($props.ModernThemeMode -ne 2) { $reasons += 'mpc ModernThemeMode not themed' }; if ($props.OSDFont -ne 'Verdana') { $reasons += 'mpc OSD font not themed' }; if ($props.OSDSize -ne 16) { $reasons += 'mpc OSD size not themed' }; if ($null -ne $props.OSDTransparency -and $props.OSDTransparency -ne 0) { $reasons += 'mpc OSD transparency not themed' }; if ($props.OSDBorder -ne 1) { $reasons += 'mpc OSD border not themed' }; if ($props.TitleBarTextStyle -ne 1) { $reasons += 'mpc title bar text style not themed' } } else { $reasons += 'mpc settings key unreadable' } }
+            'mpchc'     { $props = Get-ItemProperty $MPC_KEY -ErrorAction SilentlyContinue; if ($props) { if ($props.MPCTheme -ne 1) { $reasons += 'mpc MPCTheme not themed' }; if ($props.ModernThemeMode -ne 2) { $reasons += 'mpc ModernThemeMode not themed' }; if ($props.OSDFont -ne 'Verdana') { $reasons += 'mpc OSD font not themed' }; if ($props.OSDSize -ne 16) { $reasons += 'mpc OSD size not themed' }; if ($props.OSDTransparency -ne 0) { $reasons += 'mpc OSD transparency not themed' }; if ($props.OSDBorder -ne 1) { $reasons += 'mpc OSD border not themed' }; if ($props.TitleBarTextStyle -ne 1) { $reasons += 'mpc title bar text style not themed' } } else { $reasons += 'mpc settings key unreadable' } }
             'discord'   { $bdCss = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (-not (Test-Path $bdCss)) { $reasons += 'betterdiscord css missing' } elseif ($palTokens -and -not ((Read-Utf8 $bdCss) -match [regex]::Escape($palTokens.background))) { $reasons += 'betterdiscord css does not match the recorded palette' } }
             # CORE-012: $currentPath IS the resolved CSS file (see
             # Get-TargetCurrentPath); the old $cssFile variable is not defined in
@@ -1645,7 +1645,8 @@ function Invoke-BetterDiscord {
                             # W2-001: a recovery ledger stamped by another install is
                     # never adopted to rewrite the user's live css.
                     Assert-RecoveryProvenance $recMeta 'discord' 'BetterDiscord' | Out-Null
-                    if ($meta.mode -eq 'replaced' -and (Test-Path $pristine)) {
+                    if ($meta.mode -eq 'replaced') {
+                        if (-not (Test-Path $pristine)) { throw "BetterDiscord: pristine recovery is missing ($pristine) - refusing to delete the live CSS." }
                         [System.IO.File]::WriteAllBytes($bdCss, [System.IO.File]::ReadAllBytes($pristine))
                         Say 'BetterDiscord: restored the pre-existing user theme byte-for-byte' 'Green'
                     } else {

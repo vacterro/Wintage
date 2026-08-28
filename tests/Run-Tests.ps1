@@ -610,6 +610,10 @@ foreach ($s in $toolSuites) {
 # Do the JS gates exist? Every gate release.ps1 runs must be reachable as a file,
 # so a renamed/removed gate fails this check instead of being silently skipped.
 $releaseCode = [System.IO.File]::ReadAllText("$root\release.ps1")
+Assert-True ($releaseCode -notmatch 'git\s+-C\s+[$]PSScriptRoot\s+checkout\s+--\s+\.') 'release rollback does not discard worktree from mutable HEAD'
+Assert-True ($releaseCode -match 'stash create') 'release snapshots the pre-release tracked state'
+Assert-True ($releaseCode -match 'restore "--source=[$]snapshotWorktree" --worktree') 'release rollback restores worktree from immutable snapshot'
+Assert-True ($releaseCode -match 'restore "--source=[$]snapshotIndex" --staged') 'release rollback restores index from immutable snapshot'
 $gateRefs = [regex]::Matches($releaseCode, "Join-Path [$]PSScriptRoot '([^']+\.js)'") |
     ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 foreach ($g in $gateRefs) {

@@ -634,6 +634,8 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $fakeApp24 'BetterDiscord\themes'), (Join-Path $fakeApp24 'Wintage') -Force | Out-Null
     $env:APPDATA = $fakeApp24
     $env:WINTAGE_APPDATA = Join-Path $fakeApp24 'Wintage'
+    $bdOriginal24 = '/* user theme */'
+    [System.IO.File]::WriteAllText((Join-Path $fakeApp24 'BetterDiscord\themes\wintage.theme.css'), $bdOriginal24, $utf8NoBom)
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target discord -Palette goldendefault 2>&1
     check 'discord-tamper: apply exits 0' ($LASTEXITCODE -eq 0)
     $bdCss24 = Join-Path $fakeApp24 'BetterDiscord\themes\wintage.theme.css'
@@ -643,6 +645,12 @@ try {
     check 'discord-tamper: Reapply exits 0' ($LASTEXITCODE -eq 0)
     $after24 = [System.IO.File]::ReadAllText($bdCss24, $utf8NoBom)
     check 'discord-tamper: Reapply repaired the css' ($after24 -match [regex]::Escape($pack23.tokens.background))
+    Remove-Item (Join-Path $fakeApp24 'Wintage\recovery\discord\pristine.css') -Force
+    $beforeMissingPristine24 = [System.IO.File]::ReadAllBytes($bdCss24)
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target discord -Revert 2>&1
+    check 'discord-revert: missing pristine exits NONZERO' ($LASTEXITCODE -ne 0)
+    $afterMissingPristine24 = [System.IO.File]::ReadAllBytes($bdCss24)
+    check 'discord-revert: missing pristine preserves live css' (-not (Compare-Object $beforeMissingPristine24 $afterMissingPristine24))
 } finally { $env:APPDATA = $prevApp24; $env:WINTAGE_APPDATA = $prevWintageApp24 }
 
 # ---- Test 25: browser stage marker tamper is detected and repaired by Reapply (P1#16) ----

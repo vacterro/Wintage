@@ -73,10 +73,14 @@ $branchRef = 'refs/heads/main'
 
 # ─── PREPARED-VERSION TRACKING (W2-009) ───────────────────────────────────
 # A failed release is restartable: $prepared stays $false until the release
-# COMMIT exists. Any failure before that restores every tracked file to HEAD, so
-# a rerun recomputes the SAME version instead of skipping one or failing against
-# a changelog entry the user never intended to create.
+# COMMIT exists. Any failure before that restores the exact pre-release worktree
+# and index, so a rerun recomputes the SAME version without losing user edits.
 $prepared = $false
+$snapshotCommit = ((& git -C $PSScriptRoot stash create 'wintage release pre-state' 2>$null) -join '').Trim()
+if ($LASTEXITCODE -ne 0) { throw 'could not snapshot the pre-release tracked worktree and index' }
+$snapshotIndex = if ($snapshotCommit) { "$snapshotCommit^2" } else { $headCommit }
+$snapshotWorktree = if ($snapshotCommit) { $snapshotCommit } else { $headCommit }
+if ($snapshotWorktree -notmatch '^[0-9a-f]{40}$') { throw 'could not snapshot the pre-release tracked worktree and index' }
 try {
     # The changelog entry for the TARGET version must exist BEFORE the bump (a
     # rerun after a failed release retries the same version, so the entry is
@@ -213,7 +217,10 @@ try {
         # W2-009: restore every tracked file the preparation mutated so a rerun
         # retries the SAME version (untracked files were refused at preflight, so
         # restoring tracked files returns the tree to its exact pre-release state).
-        & git -C $PSScriptRoot checkout -- . 2>$null | Out-Null
+        if ((Git-Safe restore "--source=$snapshotWorktree" --worktree -- .) -ne 0 -or
+            (Git-Safe restore "--source=$snapshotIndex" --staged -- .) -ne 0) {
+            throw 'release rollback failed: pre-release tracked worktree and index could not be restored'
+        }
         Write-Host "release aborted before the release commit: the versioned files were restored to their pre-release state - fix the cause and rerun (it will bump the SAME version)." -ForegroundColor Yellow
     }
     throw

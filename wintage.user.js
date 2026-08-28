@@ -2090,11 +2090,8 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // rotations. The scheduler is now adaptive: when nothing changes, it backs
   // off instead of ticking forever in the background like a stubborn appliance.
   const FORCE_BUDGET = 2500;
-  let forceCursor = 0;
-  // CORE-010: the cursor position where the current force LAP began. Persists
-  // across continuation slices so the "cursor wrapped the whole root set" test
-  // is meaningful: -1 means no lap is in flight.
-  let forceLapOrigin = -1;
+  const forceRootCursors = new Map();
+  let forceLapActive = false;
 
   let forcePassesOwed = 0;
   let sweepTimer = null;
@@ -2162,31 +2159,17 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // spotting a changed sheet), so an immediate schedule here is a direct
   // sweep-calls-sweep loop.
   //
-  // CORE-010: the old cap of two owed passes per request is gone. A request
-  // now owes a whole lap: one owed pass to start, plus one owed pass on every
-  // continuation slice in runSweeper until the cursor has wrapped the full
-  // root set. The "forcePassesOwed" counter is the continuation debt, not a
-  // per-request ceiling -- the value never gets capped at 2 and is cleared
-  // by runSweeper when the cursor passes the lap origin.
   function requestForceSweep() {
     if (repainterSuspended) return;
     if (forcePassesOwed < 1) forcePassesOwed = 1;
-    // CORE-010: opening a force lap at the current cursor anchors the
-    // whole-lap debt; runSweeper uses forceLapOrigin to decide when the
-    // cursor has wrapped past the lap origin and the debt can clear.
-    if (forceLapOrigin < 0) forceLapOrigin = forceCursor;
+    forceLapActive = true;
     scheduleSweep(1500);
   }
 
   function runSweeper(force) {
     if (repainterSuspended) return;
     const sweepStarted = performance.now();
-    // Prune shadow roots whose hosts left the DOM (SPA navigations) — keeping
-    // them leaks memory and bloats every sweep on long sessions.
-    piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) piercedRoots.delete(root); } catch (e) { } });
-    // Hover-rule scanning is the expensive part. Only do it when we have a
-    // concrete stylesheet signal, or when the caller explicitly asked for a
-    // full re-verify.
+    piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) { piercedRoots.delete(root); forceRootCursors.delete(root); } } catch (e) { } });
     const scanStyles = force || stylesDirty;
     if (scanStyles) {
       stylesDirty = false;
@@ -2194,50 +2177,43 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
     }
     const searchRoots = [document, ...piercedRoots];
-    // ONE write queue for the whole sweep across every root: the flush at the
-    // end is what collapses thousands of style invalidations into a single
-    // recalc. Never flush inside the loop (see the flushWrites comment).
     const w = [];
-    // CORE-010: a force request owes a WHOLE LAP, not one 2500-window. The
-    // rotating cursor below covers one bounded slice per pass; when the root
-    // set is bigger than the budget and the cursor has not yet wrapped the
-    // full lap, the scheduler re-arms the force debt and schedules another
-    // floor-limited slice. Only after the cursor passes a full rotation past
-    // forceLapOrigin does the debt clear and the scheduler become fully idle
-    // -- a quiet page above 5000 elements can no longer stop with a remainder
-    // never re-verified.
-    let lapTotal = 0;
+    let remaining = force ? FORCE_BUDGET : Infinity;
+    let incomplete = false;
     searchRoots.forEach(root => {
+      if (remaining <= 0) { incomplete = true; return; }
       try {
         const all = root.querySelectorAll(force ? '*' : '*:not([data-w95-done])');
-        if (force && all.length > FORCE_BUDGET) {
-          lapTotal = Math.max(lapTotal, all.length);
-          const start = forceCursor % all.length;
-          for (let n = 0; n < FORCE_BUDGET; n++) { process(all[(start + n) % all.length], true, w); }
-          forceCursor += FORCE_BUDGET;
+        if (force) {
+          let state = forceRootCursors.get(root);
+          if (!state) {
+            state = { cursor: 0, elements: Array.from(all) };
+            forceRootCursors.set(root, state);
+          }
+          const count = Math.min(remaining, Math.max(0, state.elements.length - state.cursor));
+          for (let i = 0; i < count; i++) process(state.elements[state.cursor + i], true, w);
+          state.cursor += count;
+          remaining -= count;
+          if (state.cursor < state.elements.length) incomplete = true;
         } else {
-          for (let i = 0; i < all.length; i++) { process(all[i], force, w); }
+          for (let i = 0; i < all.length; i++) process(all[i], force, w);
         }
-      } catch (e) { }
+      } catch (e) { if (force) incomplete = true; }
     });
     flushWrites(w);
     addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
-    // Continuation: keep the force debt alive until the cursor has wrapped
-    // past the lap origin (cursor - origin >= lapTotal), then close the
-    // lap and clear the debt. The debt is what requestForceSweep() set at
-    // the start of this lap, not a fresh request -- a hidden / suspended
-    // tab stops the continuation safely (scheduleSweep guards both).
-    if (force && forceLapOrigin >= 0 && lapTotal > FORCE_BUDGET
-        && (forceCursor - forceLapOrigin) < lapTotal
-        && !repainterSuspended && !document.hidden) {
-      forcePassesOwed = Math.max(forcePassesOwed, 1);
-      scheduleSweep(MIN_SWEEP_GAP);
-    } else if (force && forceLapOrigin >= 0
-        && (lapTotal <= FORCE_BUDGET || (forceCursor - forceLapOrigin) >= lapTotal)) {
-      // Lap complete: close it. Any further owed passes that arrived during
-      // the lap still get served on the next idle schedule, but the lap
-      // origin is cleared so the next request opens a fresh one.
-      forceLapOrigin = -1;
+    if (force && forceLapActive) {
+      if ([document, ...piercedRoots].some(root => {
+        const state = forceRootCursors.get(root);
+        return !state || state.cursor < state.total;
+      })) incomplete = true;
+      if (incomplete && !repainterSuspended && !document.hidden) {
+        forcePassesOwed = Math.max(forcePassesOwed, 1);
+        scheduleSweep(MIN_SWEEP_GAP);
+      } else {
+        forceRootCursors.clear();
+        forceLapActive = false;
+      }
     }
   }
 

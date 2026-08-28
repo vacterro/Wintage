@@ -534,7 +534,7 @@ function Test-LegacyWintageExtension([string]$dir) {
 # A running process must NEVER outrank an explicitly requested or remembered
 # installation, and the eager resource tables must not freeze values before
 # paths.json is read.
-function Resolve-PortableElectron([string]$key, [string]$explicitPath, [hashtable]$remembered, [string]$processName, [string[]]$defaultDirs) {
+function Resolve-PortableElectron([string]$key, [string]$explicitPath, [hashtable]$remembered, [string[]]$processName, [string[]]$defaultDirs) {
     # CORE-009: candidate semantic types are NOT uniform.
     #   - explicit / remembered / process / default = APP ROOT (need 'resources' appended)
     #   - manifest-recorded = ALREADY the resources directory (the installer

@@ -70,10 +70,10 @@ $tmpNode = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-sweep-test-" + 
 # Build a Node script that:
 #   1. Stubs the global environment (document, performance, setTimeout, process).
 #   2. Inlines the production scheduler body.
-#   3. Creates a 6000-element fixture.
+#   3. Creates document + two large shadow-root fixtures.
 #   4. Calls requestForceSweep() ONCE.
 #   5. Drains the floor-limited timer queue, accelerating time.
-#   6. Reports final cursor + processed element count + debt.
+#   6. Reports per-root coverage and debt.
 $nodeScript = @"
 let processCalls = 0;
 const processed = new Set();
@@ -83,19 +83,23 @@ let piercedRoots = new Set();
 const timers = [];
 globalThis.setTimeout = (fn, d) => { timers.push({ fn, d, id: timers.length }); return timers.length - 1; };
 globalThis.clearTimeout = (id) => { if (timers[id]) timers[id].cancelled = true; };
+function makeRoot(elements) {
+  return { querySelectorAll: (sel) => sel === '*' ? elements : elements.filter(e => e.dataset.w95Done !== '1'), styleSheets: [], adoptedStyleSheets: [], host: { isConnected: true } };
+}
+let allElements = [];
+let rootA = [];
+let rootB = [];
 const document = {
   hidden: false,
   documentElement: { setAttribute: () => {} },
-  querySelectorAll: (sel) => {
-    if (sel === '*') return allElements;
-    return allElements.filter(e => e.dataset.w95Done !== '1');
-  },
+  querySelectorAll: (sel) => sel === '*' ? allElements : allElements.filter(e => e.dataset.w95Done !== '1'),
+  styleSheets: [],
+  adoptedStyleSheets: [],
   forEach: () => {},
   addEventListener: () => {},
   readyState: 'complete'
 };
 globalThis.document = document;
-let allElements = [];
 function process(el, force) {
   processCalls++;
   el.dataset.w95Done = '1';
@@ -117,21 +121,25 @@ const IS_TOP = true;
 __BODY__
 // === end scheduler ===
 
-// Drive a 6000-element fixture.
-allElements = Array.from({ length: 6000 }, (_, i) => {
-  const el = { _i: i, dataset: {}, isConnected: true, host: null, nodeType: 1, tagName: 'DIV', rel: '' };
-  return el;
-});
+// Drive document + two large shadow-root fixtures.
+function makeElements(count, start) {
+  return Array.from({ length: count }, (_, i) => ({ _i: start + i, dataset: {}, isConnected: true, host: null, nodeType: 1, tagName: 'DIV', rel: '' }));
+}
+allElements = makeElements(6000, 0);
+rootA = makeElements(6000, 6000);
+rootB = makeElements(6000, 12000);
+const shadowA = makeRoot(rootA);
+const shadowB = makeRoot(rootB);
+piercedRoots = new Set([shadowA, shadowB]);
 processed.clear();
 processCalls = 0;
-forceCursor = 0;
 forcePassesOwed = 0;
 repainterSuspended = false;
 document.hidden = false;
 
 // ONE whole-lap request.
 requestForceSweep();
-const fullLapSize = allElements.length;
+const fullLapSize = allElements.length + rootA.length + rootB.length;
 
 // Drain timers: each timer fires immediately, accelerated gap -> 0.
 let safety = 200;
@@ -149,8 +157,10 @@ while (timers.some(t => !t.cancelled && !t.fired) && safety-- > 0) {
 const out = {
   totalElements: fullLapSize,
   processed: processed.size,
+  documentProcessed: allElements.filter(e => processed.has(e._i)).length,
+  shadowAProcessed: rootA.filter(e => processed.has(e._i)).length,
+  shadowBProcessed: rootB.filter(e => processed.has(e._i)).length,
   processCalls,
-  finalCursor: forceCursor,
   finalDebt: forcePassesOwed,
   sliceCount: timers.length
 };
@@ -174,10 +184,12 @@ try {
 Write-Host "node driver output:"
 Write-Host $result
 
-check 'behavioural: 6000 elements were all processed across the cycle' ($json.processed -eq 6000)
-check 'behavioural: final cursor covered more than one window (multi-slice)' ($json.finalCursor -ge 5000)
+check 'behavioural: document elements were all processed across the cycle' ($json.documentProcessed -eq 6000)
+check 'behavioural: first large shadow root elements were all processed' ($json.shadowAProcessed -eq 6000)
+check 'behavioural: second large shadow root elements were all processed' ($json.shadowBProcessed -eq 6000)
+check 'behavioural: every intended element was processed' ($json.processed -eq 18000)
 check 'behavioural: no remaining force debt at the end of the cycle' ($json.finalDebt -eq 0)
-check 'behavioural: at least two floor-limited slices were scheduled' ($json.sliceCount -ge 2)
+check 'behavioural: at least two floor-limited slices were scheduled' ($json.sliceCount -ge 8)
 
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 exit $fail

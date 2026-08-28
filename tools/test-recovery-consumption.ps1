@@ -53,6 +53,11 @@ if ($List) {
 
 # ------------------------------------------------------------------ fixtures
 $src = Get-Content $targets -Raw
+$commonSrc = Get-Content $common -Raw
+check 'BetterDiscord: replaced recovery without pristine fails closed' ($src -match 'if \(\$meta\.mode -eq ''replaced''\) \{\s*if \(-not \(Test-Path \$pristine\)\) \{ throw .*refusing to delete the live CSS')
+check 'TotalCmd: health captures value after matched key prefix' ($src -match '\$v = \$line\.Substring\(\$m\.Index \+ \$m\.Length\)')
+check 'MPC-HC: missing OSDTransparency is unhealthy' ($src -match '\$props\.OSDTransparency -ne 0')
+check 'Portable Electron: process names accept arrays' ($commonSrc -match 'Resolve-PortableElectron\(\[string\]\$key, \[string\]\$explicitPath, \[hashtable\]\$remembered, \[string\[\]\]\$processName')
 
 # ---- Test 1..3: structural guard. Read the SOURCE file directly and
 # assert that each function's Revert branch does NOT carry a bare
