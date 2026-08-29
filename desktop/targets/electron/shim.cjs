@@ -20,6 +20,13 @@ const fs = require('fs');
 const CSS_FILE = path.join(__dirname, 'wintage.css');
 const ASAR = path.join(__dirname, 'app.asar');
 
+let TARGET_IDENTITY = '';
+try {
+  const { app } = require('electron');
+  TARGET_IDENTITY = String(app.getName() || '').trim().toLowerCase();
+} catch (e) { }
+const IS_FREEBUFF = TARGET_IDENTITY === 'freebuff';
+
 let css = '';
 try { css = fs.readFileSync(CSS_FILE, 'utf8'); } catch (e) {
   console.error('[wintage] stylesheet missing, loading the app unthemed:', e.message);
@@ -96,20 +103,19 @@ const SCROLL_FIX = `(() => {
   if (window.__wintageScrollFix) return "already running";
   window.__wintageScrollFix = true;
 
-  // Two bevels (2px each) plus sub-pixel rounding is 5px of overflow this theme
-  // creates by itself. 8 leaves headroom without reaching anything a person would
-  // recognise as a scrollable list.
   const NOISE = 8;
+  const BUDGET = 200;
   const MARK = "__wintageNoScrollbar";
 
   const fixOne = el => {
     const cs = getComputedStyle(el);
-    if (cs.overflowY === "scroll") el.style.setProperty("overflow-y", "auto", "important");
-    if (cs.overflowX === "scroll") el.style.setProperty("overflow-x", "auto", "important");
+    let changed = false;
+    if (cs.overflowY === "scroll") { el.style.setProperty("overflow-y", "auto", "important"); changed = true; }
+    if (cs.overflowX === "scroll") { el.style.setProperty("overflow-x", "auto", "important"); changed = true; }
 
     const scrollableY = cs.overflowY === "auto" || cs.overflowY === "scroll" || cs.overflowY === "overlay";
     const scrollableX = cs.overflowX === "auto" || cs.overflowX === "scroll" || cs.overflowX === "overlay";
-    if (!scrollableY && !scrollableX) return;
+    if (!scrollableY && !scrollableX) return changed;
 
     const rangeY = el.scrollHeight - el.clientHeight;
     const rangeX = el.scrollWidth - el.clientWidth;
@@ -118,46 +124,98 @@ const SCROLL_FIX = `(() => {
     if (noise && !el[MARK]) {
       el[MARK] = true;
       el.style.setProperty("scrollbar-width", "none", "important");
+      changed = true;
     } else if (!noise && el[MARK]) {
       el[MARK] = false;
       el.style.removeProperty("scrollbar-width");
+      changed = true;
+    }
+    return changed;
+  };
+
+  const dirty = new Set();
+  const trees = [];
+  const treeRoots = new Set();
+  const activeTrees = [];
+  let frameQueued = false;
+  let settleTimer = null;
+  let settlePasses = 0;
+  let settleNeeded = false;
+
+  const hasWork = () => dirty.size || trees.length || activeTrees.length;
+  const queueFrame = () => {
+    if (frameQueued) return;
+    frameQueued = true;
+    requestAnimationFrame(flush);
+  };
+  const queueDirty = el => {
+    if (!el || el.nodeType !== 1) return;
+    dirty.add(el);
+    queueFrame();
+  };
+  const queueTree = root => {
+    if (!root || root.nodeType !== 1 || treeRoots.has(root)) return;
+    treeRoots.add(root);
+    trees.push(root);
+    queueFrame();
+  };
+  const nextTreeNode = () => {
+    for (;;) {
+      let state = activeTrees[activeTrees.length - 1];
+      if (!state) {
+        const root = trees.shift();
+        if (!root) return null;
+        treeRoots.delete(root);
+        state = { stack: [root] };
+        activeTrees.push(state);
+      }
+      const node = state.stack.pop();
+      if (!node) { activeTrees.pop(); continue; }
+      const children = node.children;
+      if (children) for (let i = children.length - 1; i >= 0; i--) state.stack.push(children[i]);
+      return node;
     }
   };
-
-  const fixTree = root => {
-    const els = root.querySelectorAll ? root.querySelectorAll("*") : [];
-    for (const el of els) fixOne(el);
+  const scheduleSettle = () => {
+    if (settleTimer || settlePasses >= 2 || !settleNeeded || hasWork()) return;
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      if (hasWork() || !settleNeeded || settlePasses >= 2) return;
+      settleNeeded = false;
+      settlePasses++;
+      queueTree(document.documentElement);
+    }, 600);
   };
-
-  fixTree(document);
-  let passes = 0;
-  const settle = () => { if (++passes < 3) { fixTree(document); setTimeout(settle, 600); } };
-  setTimeout(settle, 600);
-
-  let queued = false;
-  const mutations = [];
-  new MutationObserver(records => {
-    mutations.push(...records);
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      const recs = mutations.splice(0, mutations.length);
-      for (const r of recs) {
-        if (r.type === "childList") {
-          // The TARGET matters as much as the added nodes here. It is the element
-          // whose children changed -- i.e. the scroll container itself -- and it is
-          // the only way a panel that was clipped while empty gets its scrollbar
-          // back once something is put in it.
-          if (r.target.nodeType === 1) fixOne(r.target);
-          for (const node of r.addedNodes) {
-            if (node.nodeType === 1) { fixOne(node); fixTree(node); }
-          }
-        } else if (r.type === "attributes") {
-          if (r.target.nodeType === 1) fixOne(r.target);
-        }
+  function flush() {
+    frameQueued = false;
+    let budget = BUDGET;
+    while (budget-- > 0) {
+      let el;
+      if (dirty.size) {
+        el = dirty.values().next().value;
+        dirty.delete(el);
+      } else {
+        el = nextTreeNode();
+        if (!el) break;
       }
-    });
+      if (fixOne(el)) settleNeeded = true;
+    }
+    if (hasWork()) queueFrame();
+    else scheduleSettle();
+  }
+
+  queueTree(document.documentElement);
+  new MutationObserver(records => {
+    settleNeeded = true;
+    for (const r of records) {
+      if (r.type === "childList") {
+        queueDirty(r.target);
+        for (const node of r.addedNodes) queueTree(node);
+      } else if (r.type === "attributes") {
+        queueDirty(r.target);
+      }
+    }
+    queueFrame();
   }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
 
   return "scroll fix installed";
@@ -455,19 +513,31 @@ const AD_BLOCK = `(() => {
     return rxs.apply(this, arguments);
   };
 
-  const hideAds = () => {
-    for (const el of document.querySelectorAll('[class*="sponsored-ad"]')) {
+  const hideAds = root => {
+    if (root.nodeType === 1 && root.matches('[class*="sponsored-ad"]')) {
+      root.__wintageAdHidden = true;
+      root.style.setProperty("display", "none", "important");
+    }
+    for (const el of root.querySelectorAll('[class*="sponsored-ad"]')) {
       if (el.__wintageAdHidden) continue;
       el.__wintageAdHidden = true;
       el.style.setProperty("display", "none", "important");
     }
   };
-  hideAds();
+  hideAds(document);
   let queued = false;
-  new MutationObserver(() => {
-    if (queued) return;
+  const added = new Set();
+  new MutationObserver(records => {
+    for (const r of records) {
+      for (const node of r.addedNodes) if (node.nodeType === 1) added.add(node);
+    }
+    if (queued || !added.size) return;
     queued = true;
-    requestAnimationFrame(() => { queued = false; hideAds(); });
+    requestAnimationFrame(() => {
+      queued = false;
+      for (const root of added) hideAds(root);
+      added.clear();
+    });
   }).observe(document.documentElement, { childList: true, subtree: true });
 
   return "ad block installed";
@@ -709,9 +779,13 @@ if (css) {
     app.on('web-contents-created', (_e, wc) => {
       // dom-ready, did-finish-load and did-frame-finish-load all fire for the same
       // document, so an unguarded handler inserted the same 39 KB stylesheet three
-      // times into every renderer. The status file is what made that visible. Keyed
-      // on the URL, so a real navigation still re-injects (insertCSS does not
-      // survive one) while the three events for one document inject once.
+      // times into every renderer. The status file is what made that visible.
+      // PERF-004: the dedupe token is a DOCUMENT epoch, not the URL string. A
+      // same-URL reload (Ctrl+R, app-triggered) is a NEW document whose insertCSS
+      // must run again, but `url === injectedFor` would have skipped it forever.
+      // A non-in-place main-frame navigation bumps the epoch; the three events of
+      // one document share the same epoch and inject once.
+      let injectedEpoch = 0;
       let injectedFor = null;
       const inject = () => {
         let url = '';
@@ -719,8 +793,8 @@ if (css) {
         // Devtools is Chromium's own UI, not the application's. Theming it makes
         // the one tool you would use to debug the theme unreadable.
         if (!url || url.startsWith('devtools://')) return;
-        if (url === injectedFor) return;
-        injectedFor = url;
+        if (injectedFor === injectedEpoch) return;
+        injectedFor = injectedEpoch;
         wc.executeJavaScript(SCROLL_FIX, true)
           .then(r => stamp('scrollfix: ' + r))
           .catch(err => stamp('scrollfix FAILED: ' + (err && err.message)));
@@ -733,12 +807,14 @@ if (css) {
         wc.executeJavaScript(SCROLL_INTENT_FIX, true)
           .then(r => stamp('scrollintent: ' + r))
           .catch(err => stamp('scrollintent FAILED: ' + (err && err.message)));
-        wc.executeJavaScript(AD_BLOCK, true)
-          .then(r => stamp('adblock: ' + r))
-          .catch(err => stamp('adblock FAILED: ' + (err && err.message)));
-        wc.executeJavaScript(THEME_REASSERT_FIX, true)
-          .then(r => stamp('themereassert: ' + r))
-          .catch(err => stamp('themereassert FAILED: ' + (err && err.message)));
+        if (IS_FREEBUFF) {
+          wc.executeJavaScript(AD_BLOCK, true)
+            .then(r => stamp('adblock: ' + r))
+            .catch(err => stamp('adblock FAILED: ' + (err && err.message)));
+          wc.executeJavaScript(THEME_REASSERT_FIX, true)
+            .then(r => stamp('themereassert: ' + r))
+            .catch(err => stamp('themereassert FAILED: ' + (err && err.message)));
+        }
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         wc.insertCSS(payload, { cssOrigin: 'author' })
           .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })
@@ -751,6 +827,11 @@ if (css) {
       wc.on('did-finish-load', inject);
       // Child frames (iframes) of this contents.
       wc.on('did-frame-finish-load', inject);
+      // PERF-004: every non-in-place main-frame navigation is a new document
+      // even if the URL string is identical. Bump the epoch on the same
+      // navigation hook the renderer treats as a new top document.
+      wc.on('did-navigate', () => { injectedEpoch++; });
+      wc.on('did-navigate-in-page', (_e, _url, isMainFrame) => { if (isMainFrame) injectedEpoch++; });
     });
 
     // ─── THE NATIVE CAPTION STRIP ───────────────────────────────────────────

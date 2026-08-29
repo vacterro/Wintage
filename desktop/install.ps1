@@ -569,6 +569,38 @@ $script:StrictTarget = $Target -and $Target -ne 'all'
 
 $dispatchFailures = @()
 
+function Save-FreeBuffPatchState([string]$resources) {
+    $orchestrator = Join-Path $resources 'orchestrator\orchestrator.js'
+    $index = Join-Path $resources 'orchestrator\ui\index.html'
+    $bundle = $null
+    if (Test-Path $index) {
+        $match = [regex]::Match((Read-Utf8 $index), 'assets/(index-[A-Za-z0-9_-]+\.js)')
+        if ($match.Success) { $bundle = Join-Path $resources ('orchestrator\ui\assets\' + $match.Groups[1].Value) }
+    }
+    $assets = Join-Path $resources 'orchestrator\ui\assets'
+    $chime = if (Test-Path $assets) { Get-ChildItem $assets -Filter 'chime-*.mp3' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1 } else { $null }
+    $paths = @($orchestrator, $bundle, $(if ($chime) { $chime.FullName })) | Where-Object { $_ }
+    @($paths | ForEach-Object {
+        [pscustomobject]@{
+            Path = $_
+            Exists = (Test-Path $_)
+            Bytes = if (Test-Path $_) { [System.IO.File]::ReadAllBytes($_) } else { $null }
+        }
+    })
+}
+
+function Restore-FreeBuffPatchState($state) {
+    foreach ($item in @($state)) {
+        if ($item.Exists) {
+            $parent = Split-Path $item.Path -Parent
+            if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+            [System.IO.File]::WriteAllBytes($item.Path, $item.Bytes)
+        } elseif (Test-Path $item.Path) {
+            Remove-Item $item.Path -Force
+        }
+    }
+}
+
 foreach ($name in $names) {
     $targetLock = $null
     try {
@@ -668,6 +700,7 @@ foreach ($name in $names) {
                 # manifest transition can restore it instead of leaving the app
                 # unthemed while the manifest still claims an install.
                 $elSnap = Save-ElectronStateSnapshot $name
+                $fbPatchSnap = if ($name -eq 'freebuff') { Save-FreeBuffPatchState $e.Resources } else { $null }
                 $revertFailures = @()
                 if ($name -eq 'freebuff') {
                     if (Test-Path $adPatch) {
@@ -677,15 +710,20 @@ foreach ($name in $names) {
                         $revertFailures += 'missing patch-freebuff-ads helper'
                     }
                 }
-                & node $nodeArgs --revert
-                if ($LASTEXITCODE -ne 0) { $revertFailures += 'install-electron --revert' }
+                if (-not $revertFailures.Count) {
+                    & node $nodeArgs --revert
+                    if ($LASTEXITCODE -ne 0) { $revertFailures += 'install-electron --revert' }
+                }
                 if ($revertFailures.Count) {
+                    if ($name -eq 'freebuff' -and $fbPatchSnap) { Restore-FreeBuffPatchState $fbPatchSnap }
+                    if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
                     if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
                     throw "$($e.Name): revert INCOMPLETE ($($revertFailures -join ', ')) - the manifest and recovery evidence are kept."
                 }
                 Invoke-TargetCommit $name $e.Name {
                     Remove-ManifestEntry $name
                 } {
+                    if ($name -eq 'freebuff' -and $fbPatchSnap) { Restore-FreeBuffPatchState $fbPatchSnap }
                     if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
                 }
                 if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }

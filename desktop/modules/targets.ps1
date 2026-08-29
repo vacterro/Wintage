@@ -330,7 +330,44 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                 $paths = @($recorded)
                 $markers = @($paths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ })
                 if ($markers.Count -lt $paths.Count) { $reasons += 'terminal theme marker(s) missing' }
-                else { foreach ($marker in $markers) { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "terminal marker palette mismatch ($mv)" } } }
+                else {
+                    foreach ($marker in $markers) { $mv = (Read-Utf8 $marker).Trim(); if ($mv -ne $data.palette) { $reasons += "terminal marker palette mismatch ($mv)" } }
+                    # CORE-004 (SRC-002): marker alone is not enough - the
+                    # effective owned fields (colorScheme, font, AA,
+                    # historySize, Wintage scheme) may have been deleted or
+                    # drifted by the user. Validate the actual settings.json
+                    # owned fields against the Wintage floor/expected values.
+                    foreach ($settingsPath in $paths) {
+                        if (-not (Test-Path $settingsPath)) {
+                            $reasons += "terminal settings.json missing: $settingsPath"
+                            continue
+                        }
+                        try {
+                            $term = Read-Utf8 $settingsPath | ConvertFrom-Json
+                            $def = $term.profiles.defaults
+                            $cs = if ($def.colorScheme) { $def.colorScheme.ToString() } else { $null }
+                            $aa = if ($def.antialiasingMode) { $def.antialiasingMode.ToString() } else { $null }
+                            $hs = if ($null -ne $def.historySize) { [int]$def.historySize } else { $null }
+                            $fntFace = if ($def.font -and $def.font.face) { $def.font.face.ToString() } else { $null }
+                            # colorScheme must be 'Wintage'
+                            if ($cs -ne 'Wintage') { $reasons += "terminal colorScheme is '$cs' not 'Wintage': $settingsPath" }
+                            # antialiasingMode must be 'aliased'
+                            if ($aa -ne 'aliased') { $reasons += "terminal antialiasingMode is '$aa' not 'aliased': $settingsPath" }
+                            # historySize must be >= TERMINAL_SCROLLBACK floor
+                            if ($null -eq $hs -or $hs -lt $CONSOLE_SCROLLBACK_HEIGHT) { $reasons += "terminal historySize ($hs) below $CONSOLE_SCROLLBACK_HEIGHT floor: $settingsPath" }
+                            # font face must be set to a non-default value
+                            if ([string]::IsNullOrEmpty($fntFace)) { $reasons += "terminal font face missing: $settingsPath" }
+                            # Wintage color scheme must exist in schemes[]
+                            $hasWintageScheme = $false
+                            if ($term.schemes) {
+                                foreach ($s in $term.schemes) {
+                                    if ($s.name -and $s.name.ToString() -eq 'Wintage') { $hasWintageScheme = $true; break }
+                                }
+                            }
+                            if (-not $hasWintageScheme) { $reasons += "terminal Wintage color scheme missing from schemes[]: $settingsPath" }
+                        } catch { $reasons += "terminal settings.json unparseable: $settingsPath ($($_.Exception.Message))" }
+                    }
+                }
             } else {
                 # CORE-003: health tests the EXACT expected owned theme per vault,
                 # never a 'Wintage *' prefix wildcard - a user lookalike folder
@@ -986,26 +1023,57 @@ function Invoke-WindowsTheme {
     if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'Windows theme dry-run FAILED - see the message above.' }; return }
     if (-not $PSCmdlet.ShouldProcess($WINDOWS_THEMES_DIR, $action)) { return }
 
-    $helperOutput = @(& node $args)
-    if ($LASTEXITCODE -ne 0) { throw 'Windows theme preparation failed.' }
-    $payload = $helperOutput[-1] | ConvertFrom-Json
-
-    # T-192 P1#27: capture the exact owned pre-state BEFORE any mutation, so an
-    # activation failure can restore it instead of leaving a half-applied theme.
     $preAccentItem = Get-Item $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
     $preAccentExists = $preAccentItem -and ($preAccentItem.GetValueNames() -contains 'AccentColorInactive')
     $preAccent = if ($preAccentExists) { $preAccentItem.GetValue('AccentColorInactive', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { $null }
-    $preWintageThemes = @(Get-ChildItem $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue | ForEach-Object { [IO.Path]::GetFullPath($_.FullName) })
-    function Restore-WindowsApplyPreState {
+    $preCurrentTheme = $current
+    $preThemePaths = @(
+        @(Get-ChildItem $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+        (Join-Path $WINDOWS_THEMES_DIR 'Wintage.original.theme')
+        (Join-Path $WINDOWS_THEMES_DIR '.wintage-original-theme-path')
+        (Join-Path $WINDOWS_THEMES_DIR 'Wintage.theme.wintage.bak')
+        (Join-Path $WINDOWS_THEMES_DIR 'Wintage.theme.wintage-created')
+        (Join-Path $WINDOWS_THEMES_DIR '.wintage-windows-palette')
+        (Join-Path $WINDOWS_THEMES_DIR '.wintage-active-theme-path')
+        (Join-Path $WINDOWS_THEMES_DIR '.wintage-epoch-retired')
+    ) | Sort-Object -Unique
+    $preThemeState = @($preThemePaths | ForEach-Object {
+        [pscustomobject]@{
+            Path = $_
+            Exists = (Test-Path $_)
+            Bytes = if (Test-Path $_) { [IO.File]::ReadAllBytes($_) } else { $null }
+        }
+    })
+    function Restore-WindowsPreState {
         if ($preAccentExists) {
             New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $preAccent -PropertyType DWord -Force | Out-Null
         } else {
             Remove-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -ErrorAction SilentlyContinue
         }
         foreach ($t in @(Get-ChildItem $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue)) {
-            if ([IO.Path]::GetFullPath($t.FullName) -notin $preWintageThemes) { Remove-Item -LiteralPath $t.FullName -Force -ErrorAction SilentlyContinue }
+            if (-not ($preThemeState.Path -contains $t.FullName)) { Remove-Item -LiteralPath $t.FullName -Force -ErrorAction SilentlyContinue }
+        }
+        foreach ($item in $preThemeState) {
+            if ($item.Exists) {
+                New-Item -ItemType Directory -Force -Path (Split-Path $item.Path -Parent) | Out-Null
+                [IO.File]::WriteAllBytes($item.Path, $item.Bytes)
+            } elseif (Test-Path $item.Path) {
+                Remove-Item $item.Path -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if ($preCurrentTheme -and (Test-Path $preCurrentTheme)) {
+            $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+            if (-not $now -or [IO.Path]::GetFullPath($now) -ne [IO.Path]::GetFullPath($preCurrentTheme)) {
+                $restoreShell = New-Object -ComObject Shell.Application
+                try { $restoreShell.ShellExecute([string]$preCurrentTheme, '', '', 'open', 0) }
+                finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($restoreShell) }
+            }
         }
     }
+
+    $helperOutput = @(& node $args)
+    if ($LASTEXITCODE -ne 0) { throw 'Windows theme preparation failed.' }
+    $payload = $helperOutput[-1] | ConvertFrom-Json
 
     $expectedAccent = $null
     if ($DoRevert) { Restore-WindowsInactiveAccent -Keep }
@@ -1057,7 +1125,7 @@ function Invoke-WindowsTheme {
         # P1#27: activation was not confirmed - restore the exact owned pre-state
         # (DWM accent + any Wintage*.theme this run created) and keep the DWM
         # backup as the recovery authority. Never throw after partial mutation.
-        if (-not $DoRevert) { Restore-WindowsApplyPreState }
+        Restore-WindowsPreState
         throw 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts - the owned pre-state was restored, so the manifest was NOT updated. Re-run to retry.'
     }
     foreach ($oldTheme in @($payload.cleanup)) {
@@ -1078,24 +1146,19 @@ function Invoke-WindowsTheme {
         Invoke-TargetCommit 'windows' 'Windows system theme' {
             Remove-ManifestEntry 'windows'
         } {
-            $m = Read-Manifest
-            if ($m.ContainsKey('windows') -and $m['windows'].palette) {
-                $t = Get-PaletteTokens (Join-Path $root "themes/$($m['windows'].palette).json")
-                $inactiveAccent = ([uint32](Convert-HexToBgr $t.surfaceRaised)) -bor [uint32]4278190080
-                New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $inactiveAccent -PropertyType DWord -Force | Out-Null
-            }
+            Restore-WindowsPreState
         }
-        if (Test-Path $WINDOWS_DWM_BACKUP) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
         # W2-003: retire the snapshot epoch ONLY after the manifest transition
         # committed. The next Apply re-baselines from the then-current theme.
         $finalize = & node $helper --themes-dir $WINDOWS_THEMES_DIR --finalize-revert 2>$null
-        if ($LASTEXITCODE -ne 0) { Say 'Windows: could not finalize the theme epoch - a later Apply will re-baseline anyway, but report this if it recurs.' 'Yellow' }
+        if ($LASTEXITCODE -ne 0) { throw 'Windows: could not finalize the theme epoch after manifest removal; recovery state was kept for retry.' }
+        if (Test-Path $WINDOWS_DWM_BACKUP) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
     }
     else {
         Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'
         Invoke-TargetCommit 'windows' 'Windows system theme' {
             Set-ManifestEntry 'windows' $PaletteSlug $WINDOWS_THEMES_DIR 'n/a' (Get-PayloadVersion)
-        } { Restore-WindowsApplyPreState }
+        } { Restore-WindowsPreState }
     }
 }
 
@@ -1176,6 +1239,7 @@ function Invoke-TotalCmd {
     }
 
     if ($PSCmdlet.ShouldProcess($ini, 'Apply Wintage theme')) {
+        $preIni = Save-FilePreState $ini $iniBak
         # Snapshot ONLY the Wintage-owned keys once (T-189): a second snapshot
         # would capture the already-themed values and destroy the one copy of the
         # originals. Same discipline as the MPC-HC .reg backup.
@@ -1284,7 +1348,6 @@ function Invoke-TotalCmd {
         $recentNote = if ($recentFilterIds.Count) { "; recent-file indicator themed ($($recentFilterIds.Count) filter(s))" } else { '; no existing recent-file filter found' }
         Say "$($appName): applied $PaletteSlug$recentNote" 'Green'
         # T-192 P2/B: a manifest-commit failure restores the exact pre-mutation ini.
-        $preIni = Save-FilePreState $ini $iniBak
         Invoke-TargetCommit $manifestName $appName {
             Set-ManifestEntry $manifestName $PaletteSlug $ini 'n/a' (Get-PayloadVersion)
         } { Restore-FilePreState $preIni $ini $iniBak }
@@ -1728,7 +1791,19 @@ function Invoke-Obsidian {
         }
         $apBytes = if (Test-Path $appearance) { [System.IO.File]::ReadAllBytes($appearance) } else { $null }
         $bakPath = (Get-VaultBackupPath $vault)
-        return [pscustomobject]@{ vault = $vault; dirs = $dirs; appearance = $apBytes; bakExists = (Test-Path $bakPath) }
+        # CORE-002 (SRC-002): the per-vault cssTheme recovery file is a Revert
+        # input, not an Apply output. Snapshot its bytes byte-exactly alongside
+        # dirs+appearance so a manifest-commit failure mid-Revert can put it
+        # back even after a successful Revert read+merged+deleted it; otherwise
+        # a later clean Revert has no cssTheme to merge back.
+        $bakBytes = if (Test-Path $bakPath) { [System.IO.File]::ReadAllBytes($bakPath) } else { $null }
+        return [pscustomobject]@{
+            vault = $vault
+            dirs = $dirs
+            appearance = $apBytes
+            bakExists = ($null -ne $bakBytes)
+            bakBytes = $bakBytes
+        }
     }
     function Restore-VaultPreState($pre) {
         $themesDir = Join-Path $pre.vault '.obsidian/themes'
@@ -1747,7 +1822,16 @@ function Invoke-Obsidian {
         if ($null -ne $pre.appearance) { [System.IO.File]::WriteAllBytes($appearance, $pre.appearance) }
         elseif (Test-Path $appearance) { Remove-Item $appearance -Force }
         $bakPath = Get-VaultBackupPath $pre.vault
-        if (-not $pre.bakExists -and (Test-Path $bakPath)) { Remove-Item $bakPath -Force }
+        # CORE-002: byte-exact restore matches the snapshot's prior existence -
+        # if the cssTheme recovery file existed before, rewrite its exact bytes;
+        # only remove it when it did not pre-exist (this is the original
+        # Save-FilePreState contract applied to the recovery file).
+        if ($pre.bakExists) {
+            $parent = Split-Path $bakPath -Parent
+            if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+            [System.IO.File]::WriteAllBytes($bakPath, $pre.bakBytes)
+        }
+        elseif (Test-Path $bakPath) { Remove-Item $bakPath -Force }
     }
     # CORE-003: every generated theme directory carries verifiable Wintage
     # ownership metadata. Obsidian ignores unknown files in a theme folder, so

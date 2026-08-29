@@ -1,7 +1,10 @@
 # BOARD
 
 ## DOING
-- [ ] T-222 Audit handoff implementation (AUDIT_ALL_3, 41 tickets: 8 DONE in this goal run, 13+ net-new remain). CORE wave complete (T-205..T-211); W2-010 done. Source SRC-001 captured. | in progress (W2/PERF waves remain)
+- [ ] T-223 Audit handoff implementation (SRC-002, 18 tickets: 4 CORE + 7 W2 + 7 PERF). All 18 repaired (10 net-new + 8 verified pre-fixed by prior SHIPs). Gates green (Run-Tests ALL PASSED, 9 JS gates PASS). | uncommitted working tree; ship v1.29.0-audit.1 pending user direction
+
+## DONE
+- [x] T-223 (goal) SRC-002 18-ticket AUDIT_ALL_3 repair complete: net-new CORE-002 (Obsidian cssTheme prestate byte-complete), CORE-004 (Terminal Reapply owned-state: colorScheme/font/AA/historySize/scheme), W2-004 (TotalCmd prestate pre-mutation), W2-006 (FreeBuff two-layer Revert atomic), PERF-001 (SCROLL_FIX bounded/coalesced/FreeBuff-gated), PERF-002 (runSweeper global TreeWalker budget), PERF-003 (added-node budget during collection), PERF-004 (same-URL doc-epoch reinjection), PERF-005 (drainable light/force scheduler), PERF-006 (FreeBuff-only AD_BLOCK/THEME_REASSERT), PERF-007 (suspend clears piercedRoots). 8 verified pre-fixed: CORE-001/003, W2-001/002/003/005/007, PERF-002-continuation. | verify: Run-Tests ALL PASSED (PS5.1: reapply 184, freebuff 79, ownership 39), all 9 Node gates PASS, cr-at-eol clean [E-726..E-727]
 
 ## DONE
 - [x] T-212 W2-010 missing-live recovery: FreeBuff Revert previously refused when baseline-owned renderer/orchestrator files were absent; SmartVac/WildRift Revert bailed before consulting valid .bak recovery. Fix: FreeBuff skips missing live files during generation reconciliation and recreates them from complete baseline; SmartVac/WildRift Apply-only live-file gates let Revert restore missing files from backup. | verify: test-freebuff 79 PASS, test-reapply 184 PASS, test-ownership 39 PASS, Run-Tests ALL PASSED, build-desktop --check PASS, node --check desktop/patch-freebuff-ads.js + wintage.user.js PASS [E-719..E-721]

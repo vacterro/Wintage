@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.28.1
+// @version      1.29.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -381,7 +381,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.28.1';
+  const W95_VERSION = '1.29.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -1940,6 +1940,14 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     if (sweepTimer) { clearTimeout(sweepTimer); sweepTimer = null; sweepPlannedAt = 0; }
     pendingMuts.length = 0;
     forcePassesOwed = 0;
+    // PERF-007 (SRC-002): suspension is permanent for the page. Without a
+    // future runSweeper to prune, every still-tracked piercedRoots entry would
+    // keep its shadow subtree and style objects alive forever. Drop the
+    // registry now so detached DOM can be GC'd; the live roots keep whatever
+    // was already injected into them.
+    try { piercedRoots.clear(); } catch (e) { }
+    try { forceRootCursors.clear(); } catch (e) { }
+    forceLapActive = false;
     try {
       document.documentElement.setAttribute('data-w95-perf', 'css-only');
       document.documentElement.setAttribute('data-w95-perf-reason', reason);
@@ -1977,6 +1985,18 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       const w = [];
       const added = [];
       let styleishAdded = false;
+      // PERF-003 (SRC-002): a single MutationRecord's addedNodes can be tens
+      // of thousands of elements (framework bulk-insert / virtualised list
+      // mount). The 500-node budget used to be enforced only during process()
+      // after every element had already been pushed into the unbounded `added`
+      // array AND a Set built from it. Bound the collection walk itself:
+      // stop retaining node refs the moment ADDED_NODE_BUDGET is reached,
+      // mark the batch truncated, and request a deferred force reverify.
+      // A truncated batch with STYLE/LINK nodes (even beyond the cutoff) must
+      // still mark stylesDirty so the deferred sweep re-checks.
+      let collectionBudget = ADDED_NODE_BUDGET;
+      let addedTruncatedDuringCollection = false;
+      let addedCollected = 0;
       for (const m of batch) {
         // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
         // CSS-in-JS) — re-process them or they keep stale baked-in colors.
@@ -1994,6 +2014,10 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
             const now = Date.now();
             if ((attrCooldown.get(t) || 0) + 500 > now) {
               t.removeAttribute('data-w95-done');
+              // PERF-005 (SRC-002): the cooldown contract promised the next
+              // light sweep would revisit. There was no such request. Now
+              // there is: requestLightSweep coalesces and stays floor-limited.
+              requestLightSweep();
             } else {
               attrCooldown.set(t, now);
               t.removeAttribute('data-w95-done');
@@ -2017,13 +2041,27 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         }
         for (const node of m.addedNodes) {
           if (node.nodeType !== 1) continue;
-          added.push(node);
-          if (!styleishAdded) {
-            const tag = (node.tagName || '').toUpperCase();
-            if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
-              styleishAdded = true;
-            } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
-              styleishAdded = true;
+          if (addedCollected < collectionBudget) {
+            added.push(node);
+            addedCollected++;
+            if (!styleishAdded) {
+              const tag = (node.tagName || '').toUpperCase();
+              if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
+                styleishAdded = true;
+              } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
+                styleishAdded = true;
+              }
+            }
+          } else {
+            addedTruncatedDuringCollection = true;
+            // PERF-003 guardrail: even past the cutoff, peek for stylesheet
+            // nodes so stylesDirty can be set conservatively. One read is
+            // cheaper than retaining thousands of refs.
+            if (!styleishAdded && node.nodeType === 1) {
+              const tag = (node.tagName || '').toUpperCase();
+              if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
+                styleishAdded = true;
+              }
             }
           }
         }
@@ -2063,7 +2101,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         // Only stylesheet-bearing additions need a force re-verify. Plain DOM
         // churn is already processed inline above and does not justify another
         // full sweep.
-        if (styleishAdded || addedTruncated) {
+        if (styleishAdded || addedTruncated || addedTruncatedDuringCollection) {
           stylesDirty = stylesDirty || styleishAdded;
           requestForceSweep();
         }
@@ -2090,10 +2128,12 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // rotations. The scheduler is now adaptive: when nothing changes, it backs
   // off instead of ticking forever in the background like a stubborn appliance.
   const FORCE_BUDGET = 2500;
+  const LIGHT_MAX_NODES = FORCE_BUDGET;
   const forceRootCursors = new Map();
   let forceLapActive = false;
 
   let forcePassesOwed = 0;
+  let lightPending = false;
   let sweepTimer = null;
   let stylesDirty = true;
 
@@ -2127,7 +2167,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   let lastSweepEnd = 0;
   let sweepPlannedAt = 0;
 
-  function scheduleSweep(delay) {
+  function scheduleSweep(delay, kind) {
     if (repainterSuspended || document.hidden) return;
     const now = Date.now();
     // Never sooner than MIN_SWEEP_GAP after the last sweep finished.
@@ -2143,10 +2183,26 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       sweepPlannedAt = 0;
       if (document.hidden) return;
 
+      // PERF-005 (SRC-002): force debt drains first. A pending light request
+      // is only skipped when a force pass just ran and there is still debt,
+      // because the force pass is a superset of the light work.
       const force = forcePassesOwed > 0;
       if (force) forcePassesOwed--;
 
       runSweeper(force);
+
+      // Drainable scheduler (PERF-005): after a light pass, if more light work
+      // arrived meanwhile, re-arm (floor-limited). After a force pass that
+      // exhausted its budget, runSweeper already re-armed itself when
+      // incomplete. Here we re-arm only for pending light work that was NOT
+      // consumed by this run, and only when the force debt is gone -- so a
+      // light request can never starve behind an endless force cycle.
+      if (!force && lightPending) {
+        lightPending = false;
+        lastSweepEnd = Date.now();
+        scheduleSweep(MIN_SWEEP_GAP, 'light');
+        return;
+      }
       lastSweepEnd = Date.now();
 
       // No automatic reschedule here. Fresh work comes from mutations,
@@ -2163,7 +2219,19 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     if (repainterSuspended) return;
     if (forcePassesOwed < 1) forcePassesOwed = 1;
     forceLapActive = true;
-    scheduleSweep(1500);
+    scheduleSweep(1500, 'force');
+  }
+
+  // PERF-005: attrCooldown relies on "the next light sweep" to revisit an
+  // element whose attribute toggled during cooldown, but no such sweep was
+  // ever scheduled. This is the missing bounded light-work request: mark
+  // lightPending and re-arm. It coalesces (one timer), stays floor-limited,
+  // and a light pass never turns into an endless force cycle.
+  function requestLightSweep() {
+    if (repainterSuspended || document.hidden) return;
+    if (lightPending) { if (!sweepTimer) scheduleSweep(MIN_SWEEP_GAP, 'light'); return; }
+    lightPending = true;
+    scheduleSweep(MIN_SWEEP_GAP, 'light');
   }
 
   function runSweeper(force) {
@@ -2178,40 +2246,75 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     }
     const searchRoots = [document, ...piercedRoots];
     const w = [];
-    let remaining = force ? FORCE_BUDGET : Infinity;
+    // PERF-002 (SRC-002): one global FORCE_BUDGET across every search root per
+    // tick, decremented while traversing. An incremental TreeWalker (or
+    // NodeIterator) is used so we never materialise the full matching
+    // NodeList for huge documents or shadow roots, and the budget yields at
+    // the exact node where it runs out. Per-root cursors persist across
+    // continuation sweeps; a new full lap starts a fresh state.
+    const budget = force ? FORCE_BUDGET : Infinity;
+    let remaining = budget;
     let incomplete = false;
-    searchRoots.forEach(root => {
-      if (remaining <= 0) { incomplete = true; return; }
+    const docCursors = forceRootCursors;
+    const freshLap = force && !forceLapActive;
+    for (const root of searchRoots) {
+      if (remaining <= 0) { incomplete = true; break; }
+      let state = force ? docCursors.get(root) : null;
+      if (force) {
+        if (!state) {
+          // PERF-002: TreeWalker.NodeFilter.SHOW_ELEMENT only. No full
+          // querySelectorAll materialisation. The walker advances one node at
+          // a time and is GC'd when its root detaches; never retain a static
+          // NodeList.
+          const walker = (root.createTreeWalker ? root.createTreeWalker(root, 0x1 /* SHOW_ELEMENT */, null) : null);
+          state = { walker, total: 0 };
+          docCursors.set(root, state);
+        } else if (state.done) {
+          continue;
+        }
+      } else {
+        state = { walker: null, total: 0 };
+      }
       try {
-        const all = root.querySelectorAll(force ? '*' : '*:not([data-w95-done])');
         if (force) {
-          let state = forceRootCursors.get(root);
-          if (!state) {
-            state = { cursor: 0, elements: Array.from(all) };
-            forceRootCursors.set(root, state);
+          // Walk incrementally until the global budget is exhausted, then
+          // resume on the next slice from this exact walker.
+          while (remaining > 0) {
+            const node = state.walker ? state.walker.nextNode() : null;
+            if (!node) { state.done = true; break; }
+            process(node, true, w);
+            state.total++;
+            remaining--;
           }
-          const count = Math.min(remaining, Math.max(0, state.elements.length - state.cursor));
-          for (let i = 0; i < count; i++) process(state.elements[state.cursor + i], true, w);
-          state.cursor += count;
-          remaining -= count;
-          if (state.cursor < state.elements.length) incomplete = true;
+          if (!state.done) { incomplete = true; }
         } else {
-          for (let i = 0; i < all.length; i++) process(all[i], force, w);
+          // Light pass over only nodes that lost their done marker. The CSS
+          // selector resolves to ~nothing on a settled page (zero-work idle),
+          // unlike a TreeWalker that would walk every node. The global budget
+          // still caps the work when a flood of cooldown-dirty elements
+          // appears; an overflow becomes a force reverify.
+          const all = root.querySelectorAll ? root.querySelectorAll('*:not([data-w95-done])') : [];
+          for (let i = 0; i < all.length; i++) {
+            if (remaining <= 0) { incomplete = true; break; }
+            process(all[i], false, w);
+            remaining--;
+          }
+          if (incomplete) break;
         }
       } catch (e) { if (force) incomplete = true; }
-    });
+    }
     flushWrites(w);
     addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
     if (force && forceLapActive) {
       if ([document, ...piercedRoots].some(root => {
-        const state = forceRootCursors.get(root);
-        return !state || state.cursor < state.total;
+        const state = docCursors.get(root);
+        return !state || !state.done;
       })) incomplete = true;
       if (incomplete && !repainterSuspended && !document.hidden) {
         forcePassesOwed = Math.max(forcePassesOwed, 1);
         scheduleSweep(MIN_SWEEP_GAP);
       } else {
-        forceRootCursors.clear();
+        docCursors.clear();
         forceLapActive = false;
       }
     }

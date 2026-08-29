@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.29.0] - 2026-08-29
+
+- Audit repair: third-pass audit (SRC-002, 18 tickets) closed in one ship. Four CORE correctness defects (P0 mutex `WaitOne` timeout, Obsidian cssTheme recovery bytes, Terminal `historySize: 0` round-trip, Terminal/Obsidian effective Reapply state), seven lifecycle/atomicity defects across OBS, Windows theme, TotalCmd, FreeBuff, Electron fuse schema, and seven userscript performance defects (SCROLL_FIX bounded+coalesced, force-sweep global TreeWalker budget, `ADDED_NODE_BUDGET` enforced during collection, same-URL Electron reload doc-epoch reinjection, drainable light/force scheduler, FreeBuff-only AD_BLOCK/THEME_REASSERT, suspend clears `piercedRoots`). Net-new 10 tickets; 8 were already shipped in v1.28.x and verified-not-repaired. Full matrix: tests/Run-Tests.ps1 ALL PASSED (PS5.1), nine Node gates PASS (`shim-payloads`, `electron-state`, `electron-shim`, `repainter-polarity`, `theme-switch`, `theme-packs`, `terminal-font`, `build-desktop --check`, `check-css`).
+
 ## [1.28.1] - 2026-08-26
 
 - Fixed: the console scrollbar could silently disappear from a command-line window (T-204). conhost rewrites `ScreenBufferSize` back into the registry whenever the window is resized, so a profile whose screen-buffer height collapsed to its window height had zero scrollback and no scrollbar, while the Wintage palette marker stayed intact and Reapply never noticed. Reapply now probes every console profile's buffer height against the 9001-line floor and re-asserts it when a profile has drifted below it. This also fixes a latent crash: a `Reapply` over a conhost or MPC-HC target used to throw `GetFullPath: format not supported` under Windows PowerShell 5.1, because the recorded `HKCU:\...` registry key is not a filesystem path.

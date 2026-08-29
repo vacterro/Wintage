@@ -97,14 +97,14 @@ function mergeTheme(baseText, overlayText) {
 }
 
 if (finalizeRevert) {
-  // W2-003: retire the epoch instead of deleting the snapshot - Windows may
-  // still hold Wintage.original.theme as CurrentTheme (activation was just
-  // confirmed), and deleting it would leave a stale pointer. The next Apply
-  // re-baselines over it and removes the marker.
   if (!dryRun) {
+    remove(original);
+    remove(originalPath);
+    remove(existingBackup);
+    remove(createdMarker);
     remove(paletteMarker);
     remove(activePathMarker);
-    writeAtomic(epochRetired, 'retired\n');
+    remove(epochRetired);
   }
   console.log(JSON.stringify({ finalized: true }));
   process.exit(0);
@@ -114,13 +114,9 @@ if (revert) {
   if (!fs.existsSync(original)) fail('no Wintage snapshot to restore');
   const activeManaged = fs.existsSync(activePathMarker) ? read(activePathMarker).trim() : null;
   const cleanup = activeManaged ? [activeManaged] : [];
-  if (!dryRun) {
-    remove(paletteMarker);
-    remove(activePathMarker);
-    if (fs.existsSync(existingBackup)) writeAtomic(legacyInstalled, fs.readFileSync(existingBackup));
-    else if (fs.existsSync(createdMarker)) cleanup.push(legacyInstalled);
-  }
-  console.log(JSON.stringify({ activate: original, revert: true, cleanup }));
+  if (!dryRun && fs.existsSync(existingBackup)) writeAtomic(legacyInstalled, fs.readFileSync(existingBackup));
+  else if (fs.existsSync(createdMarker)) cleanup.push(legacyInstalled);
+  console.log(JSON.stringify({ activate: original, revert: true, cleanup: [...new Set(cleanup)] }));
   process.exit(0);
 }
 

@@ -1,27 +1,25 @@
 ---
 phase: DONE
-task: T-222
-next_action: "RUN: resume audit W2/PERF (13+ net-new remain) or ccc ship v1.29.0-audit.1"
+task: T-223
+next_action: "REVIEW + ship v1.29.0-audit.1 (18-ticket SRC-002 repair verified by fresh run, working tree uncommitted)"
 blocker: none
 agent: opencode
 saipen_version: 7
 schema_version: 3
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN
 mode: full
-execution_intent: converge
-converge_target: ship
+execution_intent: goal
+converge_target: null
 goal_waves: 1
-goal_tickets: 8
-last_event: 724
+goal_tickets: 18
+last_event: 727
 style_contract: ded-4ae736e4
-updated: 2026-08-28T13:40:00Z
-transition_from: REVIEW
+updated: 2026-08-29T15:00:00Z
+transition_from: SCOUT
 ---
 
 # Active Work
 
-ss (stop) after review round. Branch wip/audit-acb-mat-mta5kmaj, 8 audit tickets DONE (T-205..T-212), 7 review-blocking regressions fixed in 5051df7.
+T-223 complete: all 18 SRC-002 tickets repaired (10 net-new + 8 verified pre-fixed), gates green (Run-Tests ALL PASSED under PS5.1, 9 JS gates PASS, cr-at-eol clean). Working tree uncommitted (5 files). Source SRC-002 supersedes T-222's SRC-001.
 
-All gates green: Run-Tests ALL PASSED, test-reapply 186, test-freebuff 79, test-ownership 47, test-force-sweep-continuation 9, build check + syntax clean.
-
-Remaining: W2-002/014/015 + PERF-001..014 + WIP gaps. Audit done_when not yet met (all 41 tickets required). Ship v1.29.0-audit.1 NOT cut yet -- awaiting user direction.
+Remaining: REVIEW of the full diff + ship v1.29.0-audit.1 — awaiting user direction (ship or review first).
