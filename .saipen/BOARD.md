@@ -1,9 +1,7 @@
 # BOARD
 
-## DOING
-- [ ] T-223 Audit handoff implementation (SRC-002, 18 tickets: 4 CORE + 7 W2 + 7 PERF). All 18 repaired (10 net-new + 8 verified pre-fixed by prior SHIPs). Gates green (Run-Tests ALL PASSED, 9 JS gates PASS). | uncommitted working tree; ship v1.29.0-audit.1 pending user direction
-
 ## DONE
+- [x] T-223 (goal) SRC-002 18-ticket AUDIT_ALL_3 repair shipped v1.29.0 (9ff576c): net-new CORE-002 (Obsidian cssTheme prestate byte-complete), CORE-004 (Terminal Reapply owned-state), W2-004 (TotalCmd prestate pre-mutation), W2-006 (FreeBuff two-layer Revert atomic), PERF-001 (SCROLL_FIX bounded/coalesced/FreeBuff-gated), PERF-002 (runSweeper global TreeWalker budget), PERF-003 (added-node budget during collection), PERF-004 (same-URL doc-epoch reinjection), PERF-005 (drainable light/force scheduler), PERF-006 (FreeBuff-only AD_BLOCK/THEME_REASSERT), PERF-007 (suspend clears piercedRoots). 8 verified pre-fixed: CORE-001/003, W2-001/002/003/005/007, PERF-002-continuation. REVIEW re-ran all verify gates green (Run-Tests ALL PASSED, 9 JS gates PASS). | verify: v1.29.0 pushed 9ff576c, remote main+tag verified, all gates PASS [E-726..E-728]
 - [x] T-223 (goal) SRC-002 18-ticket AUDIT_ALL_3 repair complete: net-new CORE-002 (Obsidian cssTheme prestate byte-complete), CORE-004 (Terminal Reapply owned-state: colorScheme/font/AA/historySize/scheme), W2-004 (TotalCmd prestate pre-mutation), W2-006 (FreeBuff two-layer Revert atomic), PERF-001 (SCROLL_FIX bounded/coalesced/FreeBuff-gated), PERF-002 (runSweeper global TreeWalker budget), PERF-003 (added-node budget during collection), PERF-004 (same-URL doc-epoch reinjection), PERF-005 (drainable light/force scheduler), PERF-006 (FreeBuff-only AD_BLOCK/THEME_REASSERT), PERF-007 (suspend clears piercedRoots). 8 verified pre-fixed: CORE-001/003, W2-001/002/003/005/007, PERF-002-continuation. | verify: Run-Tests ALL PASSED (PS5.1: reapply 184, freebuff 79, ownership 39), all 9 Node gates PASS, cr-at-eol clean [E-726..E-727]
 
 ## DONE

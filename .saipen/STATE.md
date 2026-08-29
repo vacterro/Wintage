@@ -1,7 +1,7 @@
 ---
 phase: DONE
-task: T-223
-next_action: "REVIEW + ship v1.29.0-audit.1 (18-ticket SRC-002 repair verified by fresh run, working tree uncommitted)"
+task: none
+next_action: "RUN: hunt clean @9ff576c (v1.29.0 shipped) then validate closure, or ccc/qqq to continue"
 blocker: none
 agent: opencode
 saipen_version: 7
@@ -12,14 +12,14 @@ execution_intent: goal
 converge_target: null
 goal_waves: 1
 goal_tickets: 18
-last_event: 727
+last_event: 728
 style_contract: ded-4ae736e4
-updated: 2026-08-29T15:00:00Z
-transition_from: SCOUT
+updated: 2026-08-29T15:30:00Z
+transition_from: SHIP
 ---
 
 # Active Work
 
-T-223 complete: all 18 SRC-002 tickets repaired (10 net-new + 8 verified pre-fixed), gates green (Run-Tests ALL PASSED under PS5.1, 9 JS gates PASS, cr-at-eol clean). Working tree uncommitted (5 files). Source SRC-002 supersedes T-222's SRC-001.
+v1.29.0 shipped (9ff576c): T-223 SRC-002 18-ticket AUDIT_ALL_3 repair pushed to main + tag v1.29.0 (atomic), remote verified. All 18 tickets closed (10 net-new + 8 pre-fixed verified). Run-Tests ALL PASSED, 9 JS gates PASS.
 
-Remaining: REVIEW of the full diff + ship v1.29.0-audit.1 — awaiting user direction (ship or review first).
+Remaining: HUNT clean sweep then validate closure — awaiting user direction (bare cc continues).
