@@ -39,7 +39,7 @@ const check = (label, got, want) => {
   if (!ok) bad++;
 };
 
-function run({ gm, stored, isTop }) {
+function run({ gm, stored, isTop, isX, isReddit }) {
   const painted = {}, attrs = {}, menu = [];
   let reloads = 0, wrote = null;
   const el = {
@@ -50,6 +50,8 @@ function run({ gm, stored, isTop }) {
     document: { documentElement: el },
     location: { reload: () => { reloads++; } },
     IS_TOP: isTop,
+    IS_X: !!isX,
+    IS_REDDIT: !!isReddit,
     console
   };
   if (gm) {
@@ -119,7 +121,7 @@ check('clicking another theme reloads', r.reloads, 1);
   const ctx = {
     document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
     location: { reload: () => { reloads++; } },
-    IS_TOP: true, console,
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, console,
     GM_getValue: (k, d) => d,
     GM_setValue: () => { throw new Error('storage quota'); },
     GM_registerMenuCommand: (l, f) => menu.push([l, f])
@@ -136,6 +138,86 @@ for (const need of ['// @grant        GM_getValue', '// @grant        GM_setValu
   check('header carries ' + need.trim(), src.includes(need), true);
 }
 check('no leftover @grant none', /@grant\s+none/.test(src), false);
+
+// 8. host-specific data attributes — X, Reddit, ordinary hosts
+r = run({ gm: true, stored: DEFAULT_THEME, isTop: true, isX: true });
+check('X host -> data-w95-x', r.attrs['data-w95-x'], '1');
+check('X host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false);
+r = run({ gm: true, stored: DEFAULT_THEME, isTop: true, isReddit: true });
+check('Reddit host -> data-w95-reddit', r.attrs['data-w95-reddit'], '1');
+check('Reddit host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
+r = run({ gm: true, stored: DEFAULT_THEME, isTop: true });
+check('ordinary host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
+check('ordinary host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false);
+
+// 9. CORE-014: a refused reload must not leave a silent split brain.
+//    The write lands before the navigation, so a blocked reload leaves storage on
+//    the NEW palette while the page keeps painting the OLD one. That state has to
+//    be stated, not swallowed: warn once, and never claim the switch failed
+//    (storage really did change).
+{
+  const menu = [];
+  let reloads = 0;
+  const warns = [];
+  let wrote = null;
+  const ctx = {
+    document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
+    location: { reload: () => { reloads++; throw new Error('navigation refused'); } },
+    IS_TOP: true, IS_X: false, IS_REDDIT: false,
+    console: { warn: (m) => warns.push(String(m)), log: console.log, error: console.error },
+    GM_getValue: (k, d) => d,
+    GM_setValue: (k, v) => { wrote = [k, v]; },
+    GM_registerMenuCommand: (l, f) => menu.push([l, f])
+  };
+  vm.createContext(ctx);
+  vm.runInContext('(function(){\n' + slice + '\n}).call(this)', ctx);
+  menu.find(m => m[0] === '○ Test Palette')[1]();
+  check('refused reload: the palette was still persisted', wrote, ['w95-theme', 'testpal']);
+  check('refused reload: reload was attempted', reloads, 1);
+  check('refused reload: warns exactly once', warns.length, 1);
+  check('refused reload: warning names the palette', /testpal/.test(warns[0] || ''), true);
+  check('refused reload: warning names the manual fix', /[Rr]eload/.test(warns[0] || ''), true);
+  check('refused reload: does not throw out of the callback', true, true);
+}
+
+// 10. CORE-014: storage naming a palette the document is NOT painting (a switch
+//     made in another tab, or the refused reload above) surfaces a pending row.
+{
+  r = run({ gm: true, stored: 'testpal', isTop: true });
+  check('painting the stored palette -> no pending row', r.menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
+}
+{
+  // The document paints DEFAULT_THEME (its own THEME_ID), while storage says
+  // testpal: only reachable when a previous switch persisted without reloading.
+  // Simulated by handing GM_getValue the stored slug but forcing the resolved
+  // theme to differ is not possible from outside, so the honest check is the
+  // inverse of the case above plus the row's own wiring: a pending row, when it
+  // exists, must reload and nothing else.
+  const menu = [];
+  let reloads = 0;
+  const ctx = {
+    document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
+    location: { reload: () => { reloads++; } },
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, console,
+    // First read resolves THEME_ID; the menu block reads the same binding, so a
+    // slug that exists resolves normally. To reach the pending branch the stored
+    // slug must be valid AND different from the painted one, which the source
+    // only produces after a failed reload; the source shape is asserted instead.
+    GM_getValue: (k, d) => d,
+    GM_setValue: () => { },
+    GM_registerMenuCommand: (l, f) => menu.push([l, f])
+  };
+  vm.createContext(ctx);
+  vm.runInContext('(function(){\n' + slice + '\n}).call(this)', ctx);
+  check('healthy switch -> no pending row', menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
+}
+// The pending row is source-gated on STORED_THEME_ID !== THEME_ID; pin that the
+// guard and the recovery action both exist, so a refactor cannot quietly drop the
+// only surface that reports the split-brain state.
+check('source declares STORED_THEME_ID', /const STORED_THEME_ID = requested;/.test(src), true);
+check('pending row is gated on a real divergence',
+  /STORED_THEME_ID && STORED_THEME_ID !== THEME_ID && THEMES\[STORED_THEME_ID\]/.test(src), true);
+check('pending row offers a reload', /Apply pending theme: '/.test(src), true);
 
 console.log(bad ? '\n' + bad + ' failure(s)' : '\ntheme-switch test PASS');
 process.exit(bad ? 1 : 0);

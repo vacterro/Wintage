@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  все, одна палітра",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            скасувати одну",
   "FbSoundOn": "ЗВУК FB: УВІМК",
-  "StatusHint": "Виберіть тему, позначте цілі, натисніть APPLY. Зміна будь-якого кольору переводить її в Custom."
+  "StatusHint": "Виберіть тему, позначте цілі, натисніть APPLY. Зміна будь-якого кольору переводить її в Custom.",
+  "LanguageLabel": "Language"
 }

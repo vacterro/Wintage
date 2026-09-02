@@ -34,6 +34,7 @@ if ($List) {
     Write-Host "test-ownership.ps1:"
     Write-Host "  1. OBS unrelated post-Apply edit survives Revert"
     Write-Host "  2. TotalCmd unrelated post-Apply edit survives Revert"
+    Write-Host "  2b. qBittorrent owned INI keys + theme dir apply/reapply/revert"
     Write-Host "  3. Obsidian unrelated post-Apply edit survives Revert"
     Write-Host "  4. Obsidian second-vault failure does not advance/remove manifest"
     exit 0
@@ -121,6 +122,64 @@ check 'TotalCmd revert removes the owned BackColor (absent originally)' ($after 
 check 'TotalCmd revert restores the recent-filter colour' ($after -match '(?m)^ColorFilter1Color=8414720\r?$')
 check 'TotalCmd revert PRESERVES the unrelated ShowToolbar edit' ($after -match '(?m)^ShowToolbar=1\r?$')
 check 'TotalCmd revert PRESERVES the unrelated CustomColor edit' ($after -match '(?m)^CustomColor=123456\r?$')
+
+# ---- Test 2b: qBittorrent ownership revert ----
+# Apply must own exactly two INI keys and one theme dir; a user edit made
+# afterwards (an unrelated Preferences key) must survive Revert, and the two
+# owned keys must go back to their exact pre-Wintage values.
+$prevApp2b = $env:APPDATA
+$prevWin2b = $env:WINTAGE_APPDATA
+$prevRun2b = $env:WINTAGE_TEST_ALLOW_RUNNING_QBT
+try {
+    $fakeApp2b = Join-Path $testRoot 'appdata-qbt'
+    $qbtDir = Join-Path $fakeApp2b 'qBittorrent'
+    New-Item -ItemType Directory -Path $qbtDir, (Join-Path $fakeApp2b 'Wintage') -Force | Out-Null
+    $qbtIni = Join-Path $qbtDir 'qBittorrent.ini'
+    $qbtOrig = "[Preferences]`r`nGeneral\Locale=en`r`nGeneral\UseCustomUITheme=false`r`nGeneral\CustomUIThemePath=D:/old/theme.qbtheme`r`n[BitTorrent]`r`nSession\Port=1234`r`n"
+    [System.IO.File]::WriteAllText($qbtIni, $qbtOrig, $utf8)
+    $env:APPDATA = $fakeApp2b
+    $env:WINTAGE_APPDATA = Join-Path $fakeApp2b 'Wintage'
+    # The fixture INI is not the one a locally running qBittorrent owns.
+    $env:WINTAGE_TEST_ALLOW_RUNNING_QBT = '1'
+
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'qbittorrent', '-Palette', 'goldendefault')
+    check 'qBittorrent apply exits 0' ($r.Code -eq 0)
+    check 'qBittorrent apply writes config.json' (Test-Path (Join-Path $qbtDir 'themes\wintage\config.json'))
+    check 'qBittorrent apply writes stylesheet.qss' (Test-Path (Join-Path $qbtDir 'themes\wintage\stylesheet.qss'))
+    $qbtAfterApply = [System.IO.File]::ReadAllText($qbtIni)
+    check 'qBittorrent apply enables the custom theme' ($qbtAfterApply -match '(?m)^General\\UseCustomUITheme=true\r?$')
+    check 'qBittorrent apply points the path at the Wintage config.json' ($qbtAfterApply -match '(?m)^General\\CustomUIThemePath=.*themes/wintage/config\.json\r?$')
+    check 'qBittorrent apply writes the palette marker' ((Get-Content (Join-Path $qbtDir '.wintage-qbt-palette') -Raw).Trim() -eq 'goldendefault')
+    $m2b = Get-Content (Join-Path $fakeApp2b 'Wintage\installed.json') -Raw | ConvertFrom-Json
+    check 'qBittorrent apply advances the manifest' ([bool]$m2b.qbittorrent)
+
+    # An immediate Reapply must see a healthy target and schedule no work.
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Reapply')
+    check 'qBittorrent immediate Reapply exits 0' ($r.Code -eq 0)
+    check 'qBittorrent immediate Reapply schedules NO work' (($r.Out -join ' ') -match 'up to date')
+
+    # A user un-ticking "Use custom UI theme" is real theme loss: Reapply must see it.
+    $tampered = ([System.IO.File]::ReadAllText($qbtIni)) -replace '(?m)^General\\UseCustomUITheme=true', 'General\UseCustomUITheme=false'
+    [System.IO.File]::WriteAllText($qbtIni, $tampered, $utf8)
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Reapply', '-WhatIf')
+    check 'qBittorrent disabled theme is detected as needing reapply' (($r.Out -join ' ') -match 'UseCustomUITheme')
+
+    # Unrelated user edit after Apply, then Revert.
+    $withEdit = ([System.IO.File]::ReadAllText($qbtIni)) -replace '(?m)^General\\Locale=en', "General\Locale=ru`r`nGeneral\CloseToTray=true"
+    [System.IO.File]::WriteAllText($qbtIni, $withEdit, $utf8)
+    $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'qbittorrent', '-Revert')
+    check 'qBittorrent revert exits 0' ($r.Code -eq 0)
+    $qbtAfter = [System.IO.File]::ReadAllText($qbtIni)
+    check 'qBittorrent revert restores UseCustomUITheme=false' ($qbtAfter -match '(?m)^General\\UseCustomUITheme=false\r?$')
+    check 'qBittorrent revert restores the original theme path' ($qbtAfter -match '(?m)^General\\CustomUIThemePath=D:/old/theme\.qbtheme\r?$')
+    check 'qBittorrent revert PRESERVES the unrelated Locale edit' ($qbtAfter -match '(?m)^General\\Locale=ru\r?$')
+    check 'qBittorrent revert PRESERVES the unrelated CloseToTray edit' ($qbtAfter -match '(?m)^General\\CloseToTray=true\r?$')
+    check 'qBittorrent revert PRESERVES the unrelated section' ($qbtAfter -match '(?m)^Session\\Port=1234\r?$')
+    check 'qBittorrent revert removes the theme directory' (-not (Test-Path (Join-Path $qbtDir 'themes\wintage')))
+    check 'qBittorrent revert removes the marker' (-not (Test-Path (Join-Path $qbtDir '.wintage-qbt-palette')))
+    $m2bAfter = Get-Content (Join-Path $fakeApp2b 'Wintage\installed.json') -Raw | ConvertFrom-Json
+    check 'qBittorrent revert removes the manifest entry' (-not $m2bAfter.qbittorrent)
+} finally { $env:APPDATA = $prevApp2b; $env:WINTAGE_APPDATA = $prevWin2b; $env:WINTAGE_TEST_ALLOW_RUNNING_QBT = $prevRun2b }
 
 # ---- Tests 3+4: Obsidian ----
 $fakeAppData = Join-Path $testRoot 'appdata'

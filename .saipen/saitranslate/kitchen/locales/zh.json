@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  所有，一个调色板",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            还原一个",
   "FbSoundOn": "FB 声音：开",
-  "StatusHint": "选择主题，勾选目标，按下 APPLY。编辑任何颜色都会将其分支为 Custom。"
+  "StatusHint": "选择主题，勾选目标，按下 APPLY。编辑任何颜色都会将其分支为 Custom。",
+  "LanguageLabel": "Language"
 }

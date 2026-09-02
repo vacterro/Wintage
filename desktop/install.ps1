@@ -18,7 +18,7 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'saipenview', 'smartvac', 'wildrift', 'all')]
+    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'saipenview', 'smartvac', 'wildrift', 'all')]
     [string]$Target,
     [string]$Palette = 'goldendefault',
     [string]$Language,
@@ -189,6 +189,15 @@ $MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
 
 $OBS_CONFIG = Join-Path $env:APPDATA 'obs-studio'
 $OBS_THEME_ID = 'com.wintage.OBS'
+
+# qBittorrent keeps its settings in a QSettings INI and its themes under the same
+# config root, so the theme survives an application update untouched. The theme is
+# a DIRECTORY (config.json + stylesheet.qss): pointing CustomUIThemePath at the
+# config.json is what makes qBittorrent read the pair as an unpacked theme.
+$QBT_CONFIG = Join-Path $env:APPDATA 'qBittorrent'
+$QBT_INI = Join-Path $QBT_CONFIG 'qBittorrent.ini'
+$QBT_THEME_DIR = Join-Path $QBT_CONFIG 'themes\wintage'
+$QBT_MARKER = Join-Path $QBT_CONFIG '.wintage-qbt-palette'
 
 # Resolved BEFORE the listing, not after: the listing reads Electron fuses through
 # node, and when this lived below it, $node was still empty there — so every app
@@ -429,6 +438,21 @@ if (-not $Target) {
     $obsPal = if (Test-Path $obsMarker) { (Read-Utf8 $obsMarker).Trim() } else { '-' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obs', 'OBS Studio', $obs, $obsPal)
 
+    # "themed" here means what the app itself needs to load the theme: the two
+    # files present AND both INI keys pointing at them. A marker alone would call
+    # it themed after the user unticked "Use custom UI theme".
+    $qbtCfg = Join-Path $QBT_THEME_DIR 'config.json'
+    $qbtPal = if (Test-Path $QBT_MARKER) { (Read-Utf8 $QBT_MARKER).Trim() } else { '-' }
+    $qbt = if (-not (Test-Path $QBT_INI)) { 'not installed' }
+           else {
+               $qbtLines = (Read-Utf8 $QBT_INI) -split '\r?\n'
+               $qbtOn = "$(Get-IniKey $qbtLines 'Preferences' 'General\UseCustomUITheme')".Trim() -eq 'true'
+               $qbtSel = Test-QbtThemePath (Get-IniKey $qbtLines 'Preferences' 'General\CustomUIThemePath') $qbtCfg
+               if ((Test-Path $qbtCfg) -and (Test-Path (Join-Path $QBT_THEME_DIR 'stylesheet.qss')) -and $qbtOn -and $qbtSel) { 'themed' }
+               else { 'found, not themed' }
+           }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'qbittorrent', 'qBittorrent', $qbt, $qbtPal)
+
     $browserTool = Join-Path $root 'tools/install-browsers.ps1'
     $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-ListJson', '-StageRoot', $BrowserStageRoot)
     if ($PortableBrowserRoot) { $browserArgs += @('-PortableRoot', $PortableBrowserRoot) }
@@ -514,7 +538,7 @@ if (-not $Target) {
 # accepted unverified/stale generated output). For `-Target all` the check is NOT
 # global (T-190): each build-consuming target verifies its own prerequisites at
 # dispatch, absent ones SKIP, and unrelated native/source-tree targets execute.
-$BUILD_CONSUMING = @($TARGETS.Keys) + @($ELECTRON.Keys) + @('windows', 'browsers', 'obs', 'discord', 'obsidian')
+$BUILD_CONSUMING = @($TARGETS.Keys) + @($ELECTRON.Keys) + @('windows', 'browsers', 'obs', 'discord', 'obsidian', 'qbittorrent')
 
 # For an EXPLICIT build-consuming target the global check still applies: the user
 # asked for exactly this target, so an unverifiable build aborts before dispatch.
@@ -544,7 +568,7 @@ if ($Target -eq 'all' -and $node) {
 # this list silently dropped five targets: codenomad, discord, totalcmd, totalcmd2
 # and obsidian were all reachable individually but were skipped by `-Target all`,
 # so "everything" quietly meant nine of fourteen.
-$SIMPLE = @('windows', 'browsers', 'mpchc', 'terminal', 'conhost', 'obs', 'saipenview', 'smartvac', 'wildrift', 'discord', 'totalcmd', 'totalcmd2', 'obsidian')
+$SIMPLE = @('windows', 'browsers', 'mpchc', 'terminal', 'conhost', 'obs', 'saipenview', 'smartvac', 'wildrift', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent')
 
 # And this is the guard that stops it happening a third time: the parameter's own
 # ValidateSet is the definition of what a user may ask for, so anything in it that
@@ -663,6 +687,7 @@ foreach ($name in $names) {
     if ($name -eq 'terminal') { Invoke-WindowsTerminal -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'conhost') { Invoke-Conhost -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'obs') { Invoke-Obs -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'qbittorrent') { Invoke-Qbittorrent -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'saipenview') { Invoke-Saipenview -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'smartvac') { Invoke-SmartVac -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'wildrift') { Invoke-WildRift -DoRevert:$Revert -PaletteSlug $Palette; continue }
@@ -765,8 +790,24 @@ foreach ($name in $names) {
             $elSnap = Save-ElectronStateSnapshot $name
             & node $nodeArgs --palette $Palette
             if ($LASTEXITCODE -ne 0) {
-                if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
-                throw "$($e.Name): apply FAILED ($LASTEXITCODE) - see the message above."
+                # W2-003: the parent owns an independent snapshot precisely so
+                # a child failure (or the child's own failed rollback, CORE-001)
+                # does not destroy the user's original installation. Restore
+                # from $elSnap FIRST, only delete it once the restore succeeded
+                # (or failed with a recoverable error).
+                if ($elSnap) {
+                    $parentRestoreErr = $null
+                    try {
+                        Restore-ElectronStateSnapshot $name $elSnap
+                    } catch {
+                        $parentRestoreErr = $_.Exception.Message
+                    }
+                    if ($parentRestoreErr) {
+                        throw "$($e.Name): apply FAILED ($LASTEXITCODE) AND parent restore INCOMPLETE ($parentRestoreErr). Pre-apply snapshot preserved at $elSnap for manual recovery."
+                    }
+                    Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                throw "$($e.Name): apply FAILED ($LASTEXITCODE) - parent restored the exact pre-Apply state from its independent snapshot. See the message above."
             }
             if ($name -eq 'freebuff') {
                 & node $adPatch @fbPatchArgs

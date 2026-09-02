@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  mọi thứ, một palette",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            hoàn tác một app",
   "FbSoundOn": "ÂM THANH FB: BẬT",
-  "StatusHint": "Chọn theme, tick các mục, bấm APPLY. Sửa bất kỳ màu nào sẽ fork nó thành Custom."
+  "StatusHint": "Chọn theme, tick các mục, bấm APPLY. Sửa bất kỳ màu nào sẽ fork nó thành Custom.",
+  "LanguageLabel": "Language"
 }

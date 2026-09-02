@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  सब कुछ, एक पैलेट",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            एक पूर्ववत करें",
   "FbSoundOn": "FB SOUND: चालू",
-  "StatusHint": "थीम चुनें, टारगेट टिक करें, APPLY दबाएँ। किसी भी रंग को संपादित करना उसे Custom में फोर्क करता है।"
+  "StatusHint": "थीम चुनें, टारगेट टिक करें, APPLY दबाएँ। किसी भी रंग को संपादित करना उसे Custom में फोर्क करता है।",
+  "LanguageLabel": "Language"
 }

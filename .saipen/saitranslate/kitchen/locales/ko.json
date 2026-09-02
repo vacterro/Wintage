@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  전부, 팔레트 하나",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            하나 되돌리기",
   "FbSoundOn": "FB 사운드: 켜짐",
-  "StatusHint": "테마를 고르고, 대상을 체크하고, APPLY를 누르세요. 색상을 편집하면 Custom으로 분기됩니다."
+  "StatusHint": "테마를 고르고, 대상을 체크하고, APPLY를 누르세요. 색상을 편집하면 Custom으로 분기됩니다.",
+  "LanguageLabel": "Language"
 }

@@ -80,7 +80,7 @@
 }
 
 QWidget {
-    font-family: Verdana;
+    font-family: Verdana_m1, Verdana;
     font-size: 12px;
 }
 

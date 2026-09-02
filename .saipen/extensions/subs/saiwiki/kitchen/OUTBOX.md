@@ -1,8 +1,90 @@
 # OUTBOX
 
-## WIKI-007: Wintage wiki fresh QQ at 8867967, v1.26.4 restamp (converge closure)
+## WIKI-008: Wintage wiki FORCE-FRESH rebind at a9399dc9, v1.29.0 restamp (T-187..T-223 ship)
 
 - **status:** ready
+- **summary:** FORCE-FRESH rebind bound to current HEAD a9399dc9 (v1.29.0 T-187..T-223
+  ship). The 8-page maintained wiki was version-restamped 1.26.4 -> 1.29.0
+  (Home.md current-version line + _Footer.md) AND the Terminals section of
+  Desktop.md was corrected to the post-T-202 reality (Terminus (TTF) for Windows
+  replaces Consolas 12; conhost still 9001-line floor, terminal font is the new
+  face from v1.28.0). WIKI-007 went stale on two independent grounds: HEAD
+  moved 8867967 -> a9399dc9 and the wiki Terminals section still described the
+  pre-T-202 Consolas font that v1.28.0/T-202 replaced. The payload is NOT yet
+  live in the repo mirror — collect via qqq applies it. Freshness identity:
+  source_head a9399dc9, fingerprint 3dc46023 (clean delta, .saipen excluded),
+  role_revision 54a42475 (unchanged charter).
+- **critical:** false
+- **severity:** P3
+- **producer:** saiwiki
+- **source_head:** a9399dc9d053b0cd333e0c343fbe6eed26d40185 (project HEAD)
+- **source_tree_fingerprint:** git-delta-v1:3dc46023688daf25f64f1105823dc4f33ba0da21e693b73e8ff88a1da1357209
+- **role_revision:** sha256:54a42475a124ab0f27e83d600a284a9cc54d9668029c4828cfc48512b031df13
+- **coverage:** every maintained wiki page (Home, Installation, Palettes, Desktop,
+  Known-Behaviors, Development, _Sidebar, _Footer). Source invariants cross-checked:
+  wintage.user.js @version 1.29.0 + W95_VERSION 1.29.0, CHANGELOG.md [1.29.0]
+  - 2026-08-29, README.md (sixteen palettes, Golden Default, twenty-one tokens),
+  desktop/README.md (Terminus (TTF) for Windows, 9001-line conhost floor, sixteen
+  palettes), 16-palette THEMES registry in wintage.user.js
+  (golden/claudecode/antigravity/klite/freebuff/codenomad/fpdefault/goldenvintage/
+  goldendefault/vintagedark/vintageclassic/oled/dracula/nord/solarized/custom),
+  release.ps1 gate list (incl. check-wiki-mirror).
+- **payload:** the 8 kitchen/wiki/*.md pages (Home.md + _Footer.md restamped to
+  1.29.0 / 2026-08-29; Desktop.md Terminals table + body corrected to
+  Terminus (TTF) for Windows; all other pages re-verified faithful). The repo
+  wiki/ mirror still carries 1.26.4 stamps + the stale Consolas Terminals row —
+  collect applies both fixes.
+- **verified:**
+  - Freshness identity recomputed manually per PROTOCOL.md §6
+    (tools/freshness.py produced no output in this environment) at a9399dc9:
+    source_head a9399dc9d053b0cd333e0c343fbe6eed26d40185, fingerprint
+    3dc46023688daf25f64f1105823dc4f33ba0da21e693b73e8ff88a1da1357209
+    (218 files, .saipen excluded, blob-hashed sorted by path), role_revision
+    54a42475 matches the charter's declared YAML value.
+  - Version stamps: Home.md + _Footer.md now carry 1.29.0 (2026-08-29), zero
+    1.26.4 / 1.28.x remains in any page; matches wintage.user.js @version
+    1.29.0 (line 4) and W95_VERSION '1.29.0' (line 437) and CHANGELOG
+    [1.29.0] - 2026-08-29 (line 3).
+  - Desktop.md terminal row now reads "Terminus (TTF) for Windows" — matches
+    desktop/README.md:60 verbatim. Terminals body section now describes
+    Terminus (TTF) for Windows + Consolas fallback, matches desktop/README.md:160-171.
+  - 16-palette THEMES registry confirmed in wintage.user.js (golden/claudecode/
+    antigravity/klite/freebuff/codenomad/fpdefault/goldenvintage/goldendefault/
+    vintagedark/vintageclassic/oled/dracula/nord/solarized/custom) — matches
+    README.md "Sixteen palettes" + Palettes.md.
+  - Palettes.md token-table hexes byte-match themes/goldendefault.json (10/10:
+    #1A1810/#232018/#332E22/#3D372A/#453D30/#F0D060/#100E08/#D4C89A/#6E674E/#F0D060).
+  - Installation.md install.ps1 command block still `.\desktop\install.ps1`,
+    matches desktop/README.md:42-46 verbatim.
+  - check-wiki-mirror listed in Development.md Gates section (line 45) and
+    wired at release.ps1:167 — invariant preserved.
+  - Development.md release section matches the post-T-184 README contract: zero
+    "Edit wintage.user.js" hits across all pages; CHANGELOG head-entry
+    prerequisite named (release.ps1:90); @version + W95_VERSION bump together.
+- **instructions:** (1) This is a closure-bar package (CONVERGE.md stage L): it
+  exists so `--gate converge` sees QQ fresh+ready at the final HEAD. (2) Collect
+  via `qqq` applies the 8 pages to the repo wiki/ mirror with .md-adapted links
+  (kitchen pages link as [Home](Home); the mirror carries [Home](Home.md) per
+  T-105 precedent — adapt at injection, never edit kitchen), re-syncs the mirror
+  (check-wiki-mirror goes green again) and pushes Wintage.wiki master. (3) If
+  any future source change lands before collect, re-run `qq` first.
+- **details:**
+  Fresh QQ, not reuse: WIKI-007 was bound to 8867967 (v1.26.4). The T-187..T-223
+  audit repair ship moved HEAD to a9399dc9, bumped the version to v1.29.0
+  (through v1.27.0, v1.28.0, v1.28.1), AND changed the terminal font from
+  Consolas to Terminus (TTF) for Windows (T-202, v1.28.0). The kitchen wiki
+  Home/_Footer still carried 1.26.4 stamps and the Desktop.md Terminals section
+  still described the pre-T-202 Consolas font. The closure bar (CONVERGE.md
+  stage M: "bound to the current source identity") demanded a fresh ready
+  package with real content changes — both the version restamp AND the
+  Terminals correction. All other pages re-verified byte-identical to WIKI-007.
+  All work under .saipen/extensions/subs/saiwiki/kitchen/; the main repo tree
+  and wiki remote were not touched by this preparation.
+
+## WIKI-007: Wintage wiki fresh QQ at 8867967, v1.26.4 restamp (converge closure)
+
+- **status:** stale
+- **superseded_by:** WIKI-008 (source_head 8867967 -> a9399dc9 at the T-187..T-223 v1.29.0 ship; version stamps lifted 1.26.4 -> 1.29.0; Desktop.md Terminals section corrected to post-T-202 Terminus font)
 - **summary:** Converge stage-L fresh QQ bound to the current HEAD (8867967,
   v1.26.4 T-187 ship). The 8-page maintained wiki was version-restamped
   1.26.3 -> 1.26.4 (Home.md current-version line + _Footer.md) and re-verified

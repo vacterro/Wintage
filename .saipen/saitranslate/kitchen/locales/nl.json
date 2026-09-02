@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  alles, één palet",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            één ongedaan maken",
   "FbSoundOn": "FB-GELUID: AAN",
-  "StatusHint": "Kies een thema, vink de doelwitten aan, druk op APPLY. Het bewerken van een kleur zet het om naar Custom."
+  "StatusHint": "Kies een thema, vink de doelwitten aan, druk op APPLY. Het bewerken van een kleur zet het om naar Custom.",
+  "LanguageLabel": "Language"
 }

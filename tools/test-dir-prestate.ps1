@@ -38,7 +38,7 @@ function check($label, $cond) {
 }
 
 if ($List) {
-    Write-Host "test-dir-prestate.ps1 (10 tests):"
+    Write-Host "test-dir-prestate.ps1 (15 tests):"
     Write-Host "  1. Save returns structured snapshot with Existed=true and SnapshotPath for an existing dir"
     Write-Host "  2. Save returns structured snapshot with Existed=false for an absent dir"
     Write-Host "  3. Restore for Existed=true reconstructs the byte-exact pre-state recursively"
@@ -49,6 +49,11 @@ if ($List) {
     Write-Host "  8. Existing-dir scenario: Apply mutates contents, manifest commit fails, restore returns to original"
     Write-Host "  9. Snapshot directory is cleaned up after Restore"
     Write-Host " 10. No nullable-path contract remains: every Save call returns a hashtable"
+    Write-Host " 11. W2-001: Restore refuses a raw string snapshot (malformed contract)"
+    Write-Host " 12. W2-001: Restore refuses a hashtable without Existed/SnapshotPath fields"
+    Write-Host " 13. W2-002: failed swap preserves BOTH original and restored copy as recovery locations"
+    Write-Host " 14. W2-002: successful swap retires the original cleanly (no .wintage-retired leftovers)"
+    Write-Host " 15. W2-002: snapshot directory is consumed once the swap is known good"
     exit 0
 }
 
@@ -174,6 +179,82 @@ New-Item -ItemType Directory -Path $present10 -Force | Out-Null
 $snap10b = Save-DirPreState $present10
 check 'contract: Save on present returns a hashtable' ($snap10b -is [hashtable])
 if ($snap10b.SnapshotPath -and (Test-Path $snap10b.SnapshotPath)) { Remove-Item $snap10b.SnapshotPath -Recurse -Force -ErrorAction SilentlyContinue }
+
+# ---- Test 11 (W2-001): Restore refuses a raw string snapshot ----
+# Pre-fix the ElectronStateSnapshot path here passed a raw path string. Restore
+# coerced it to @{Existed=$false}, the helper entered the absent-prestate
+# branch, and the relocated resources\app directory was DELETED on a failed
+# rollback instead of being restored byte-exactly. The fix rejects any
+# non-structured input before touching the live directory.
+$strDir = Join-Path $testRoot 'str-restore'
+New-Item -ItemType Directory -Path $strDir -Force | Out-Null
+'live' | Set-Content (Join-Path $strDir 'live.txt')
+$caught = $null
+try { Restore-DirPreState $strDir $strDir } catch { $caught = $_.Exception.Message }
+check 'W2-001: raw string snapshot throws' ($null -ne $caught)
+check 'W2-001: live dir untouched after malformed restore' (Test-Path $strDir)
+check 'W2-001: live content untouched after malformed restore' (Test-Path (Join-Path $strDir 'live.txt'))
+
+# ---- Test 12 (W2-001): Restore refuses a hashtable missing required fields ----
+$badSnapDir = Join-Path $testRoot 'bad-hash-restore'
+New-Item -ItemType Directory -Path $badSnapDir -Force | Out-Null
+'live' | Set-Content (Join-Path $badSnapDir 'live.txt')
+$caught2 = $null
+try { Restore-DirPreState $badSnapDir @{ Foo = 'bar' } } catch { $caught2 = $_.Exception.Message }
+check 'W2-001: hashtable without Existed/SnapshotPath throws' ($null -ne $caught2)
+check 'W2-001: live dir untouched when snapshot lacks required fields' (Test-Path $badSnapDir)
+
+# ---- Test 13 (W2-002): restore failure must never destroy the live directory ----
+# Pre-fix the helper deleted the live dir BEFORE materialising the restored
+# copy, so a failure anywhere between "delete live" and "rename tmp into
+# place" destroyed the user's only copy. The two-phase swap retires the live
+# dir to a recovery sibling instead of deleting it. We inject a failure at the
+# retire step by holding an exclusive lock on a file inside the live dir: the
+# retire rename cannot proceed, the helper must throw, and the original
+# directory must survive byte-identical.
+$swapDir = Join-Path $testRoot 'swap-fail'
+New-Item -ItemType Directory -Path $swapDir -Force | Out-Null
+'orig' | Set-Content (Join-Path $swapDir 'orig.txt')
+$snapSwap = Save-DirPreState $swapDir
+'CHANGED' | Set-Content (Join-Path $swapDir 'orig.txt')
+$stream = $null
+try {
+    $stream = [System.IO.File]::Open((Join-Path $swapDir 'orig.txt'), 'Open', 'Read', 'None')
+    $swapErr = $null
+    try { Restore-DirPreState $swapDir $snapSwap } catch { $swapErr = $_.Exception.Message }
+    check 'W2-002: retire failure throws' ($null -ne $swapErr)
+    if ($swapErr) {
+        check 'W2-002: retire failure message reports INCOMPLETE' ($swapErr -match 'INCOMPLETE')
+    }
+} finally {
+    if ($stream) { $stream.Dispose() }
+}
+# The live directory must still hold the ORIGINAL content untouched.
+check 'W2-002: live dir survives a failed restore' (Test-Path $swapDir)
+check 'W2-002: live content survives a failed restore' (Test-Path (Join-Path $swapDir 'orig.txt'))
+$content13 = (Get-Content (Join-Path $swapDir 'orig.txt') -Raw) -replace "`r?`n", ''
+check 'W2-002: live content byte-identical after failed restore' ($content13 -eq 'CHANGED')
+# Clean up retired siblings so they do not pollute other fixtures.
+Get-ChildItem $testRoot -Force -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like '.wintage-*' } |
+    ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+
+# ---- Test 14 (W2-002): successful swap retires the original cleanly ----
+$swapOk = Join-Path $testRoot 'swap-ok'
+New-Item -ItemType Directory -Path $swapOk -Force | Out-Null
+'orig' | Set-Content (Join-Path $swapOk 'orig.txt')
+$snapOk = Save-DirPreState $swapOk
+'CHANGED' | Set-Content (Join-Path $swapOk 'orig.txt')
+Restore-DirPreState $swapOk $snapOk
+check 'W2-002: successful swap leaves original content restored' (((Get-Content (Join-Path $swapOk 'orig.txt') -Raw) -replace "`r?`n", '') -eq 'orig')
+check 'W2-002: no .wintage-retired leftovers after successful swap' (-not (Get-ChildItem $testRoot -Force -Directory | Where-Object { $_.Name -like '.wintage-retired-*' }))
+
+# ---- Test 15 (W2-002): snapshot directory is consumed once the swap is known good ----
+$snapConsume = Join-Path $testRoot 'consume'
+New-Item -ItemType Directory -Path $snapConsume -Force | Out-Null
+$preConsume = Save-DirPreState $snapConsume
+Restore-DirPreState $snapConsume $preConsume
+check 'W2-002: snapshot directory removed after successful restore' (-not (Test-Path $preConsume.SnapshotPath))
 
 Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 

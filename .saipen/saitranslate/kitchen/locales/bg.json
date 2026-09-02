@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  всичко, една палитра",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            върни едно",
   "FbSoundOn": "FB SOUND: ВКЛ",
-  "StatusHint": "Изберете тема, отбележете целите, натиснете APPLY. Редактирането на всеки цвят го превръща в Custom."
+  "StatusHint": "Изберете тема, отбележете целите, натиснете APPLY. Редактирането на всеки цвят го превръща в Custom.",
+  "LanguageLabel": "Language"
 }

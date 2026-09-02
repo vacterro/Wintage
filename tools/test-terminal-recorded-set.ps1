@@ -83,7 +83,65 @@ $mismatch = @()
 foreach ($marker in $markers) { $mv = (Get-Content $marker -Raw).Trim(); if ($mv -ne $palette) { $mismatch += $marker } }
 check 'behavioural: recorded-set markers all match the recorded palette' ($mismatch.Count -eq 0)
 
-Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+# ---- Test 3 (W2-007): install-terminal.js --revert --keep-recovery preserves the
+# recovery artifacts so a failed sibling revert leaves the already-reverted
+# items rollback-able. A standalone --finalize-recovery call must refuse to
+# consume artifacts while a palette marker is still present (the manifest
+# still claims ownership) and must consume them once the marker is gone.
+$itRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-terminal-it-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $itRoot -Force | Out-Null
+$itSettings = Join-Path $itRoot 'settings.json'
+$itSettingsBak = "$itSettings.wintage.bak"
+$itSettingsMarker = "$itSettings.wintage-palette"
+$itSettingsCreated = "$itSettings.wintage-created"
+
+# Build a minimal settings file with one of the OWNED_FIELDS so the helper
+# captures a real owned-field backup at Apply time.
+$seed = '{"profiles":{"defaults":{"colorScheme":"Stock"}},"schemes":[]}'
+[IO.File]::WriteAllText($itSettings, $seed)
+
+# Apply a real palette to seed the backup.
+& node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings --palette (Join-Path $root 'themes/goldendefault.json') | Out-Null
+check 'W2-007: Apply wrote the palette marker' (Test-Path $itSettingsMarker)
+check 'W2-007: Apply captured the owned-field backup' (Test-Path $itSettingsBak)
+
+# Revert with --keep-recovery: marker, backup, settings merged back to pre-state.
+& node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings --revert --keep-recovery | Out-Null
+check 'W2-007: --keep-recovery leaves the palette marker in place' (Test-Path $itSettingsMarker)
+check 'W2-007: --keep-recovery leaves the owned-field backup in place' (Test-Path $itSettingsBak)
+$kept = (Get-Content $itSettings -Raw) | ConvertFrom-Json
+check 'W2-007: --keep-recovery restored the owned field value' ($kept.profiles.defaults.colorScheme -eq 'Stock')
+
+# --finalize-recovery must REFUSE while the marker is still present.
+# T-231: the refusal is a NATIVE stderr line, and under $ErrorActionPreference =
+# 'Stop' PowerShell 5.1 promotes any native stderr into a terminating
+# NativeCommandError -- so the suite died on the exact refusal it was written to
+# assert, and the four checks after this point never ran. Every other suite in
+# this repo already reads children with Continue and judges them by
+# $LASTEXITCODE alone (test-ownership.ps1's Run-TestChild); this does the same.
+$finRefused = $false
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$out = & node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings --finalize-recovery 2>&1
+$finCode = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+if ($finCode -ne 0) { $finRefused = $true }
+check 'W2-007: --finalize-recovery refuses while the marker is present' $finRefused
+check 'W2-007: the refusal names the marker as the reason' ([bool](@($out) -match 'palette marker is still present'))
+check 'W2-007: refusal leaves the marker untouched' (Test-Path $itSettingsMarker)
+check 'W2-007: refusal leaves the owned-field backup untouched' (Test-Path $itSettingsBak)
+
+# Simulate the manifest commit: remove the marker, then --finalize-recovery consumes the artifacts.
+Remove-Item $itSettingsMarker -Force
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$out2 = & node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings --finalize-recovery 2>&1
+$finCode2 = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+check 'W2-007: --finalize-recovery exits 0' ($finCode2 -eq 0)
+check 'W2-007: --finalize-recovery consumes the owned-field backup' (-not (Test-Path $itSettingsBak))
+
+Remove-Item $itRoot -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 exit $fail

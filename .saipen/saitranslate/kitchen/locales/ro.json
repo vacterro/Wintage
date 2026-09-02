@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  totul, o paletă",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            anulează una",
   "FbSoundOn": "FB SOUND: PORNIT",
-  "StatusHint": "Alege o temă, bifează țintele, apasă APPLY. Editarea oricărei culori o transformă în Custom."
+  "StatusHint": "Alege o temă, bifează țintele, apasă APPLY. Editarea oricărei culori o transformă în Custom.",
+  "LanguageLabel": "Language"
 }

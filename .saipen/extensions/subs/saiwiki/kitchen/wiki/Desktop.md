@@ -34,13 +34,15 @@ across both lists without changing their grouping.
 |---|---|---|
 | `windows` | user `.theme`: dark system/app mode, accent and classic colour roles | yes |
 | `browsers` | detects Chromium profiles, stages the chrome theme, opens browser-owned confirmation pages | yes after one **Load unpacked** per profile |
-| `terminal` | Windows Terminal scheme + all-profile defaults, Consolas 12 aliased, 9000-line scrollback floor | yes |
+| `terminal` | Windows Terminal scheme + all-profile defaults, Terminus (TTF) for Windows | yes |
 | `conhost` | `HKCU\Console` defaults + every existing cmd/PowerShell profile (colours, font, 9001-line scrollback floor) | yes |
 | `obs` | OBS 30.2+ `.ovt` variant + active `user.ini` theme ID | yes |
+| `qbittorrent` | unpacked Qt UI theme (`config.json` + `stylesheet.qss`) + the two `qBittorrent.ini` theme keys | yes |
 | `antigravity`, `vscode` | colour-theme extension in the extensions folder | **yes** |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim (relocation) | no — re-run the installer |
 | `claude` | Electron shim, patched in place | no — an update makes a new folder |
 | `mpchc` | registry, dark theme + OSD typography only | no — MPC-HC rewrites settings on exit |
+| `qbittorrent`/`obs`/`mpchc` fonts | the themes NAME `Verdana_m1` (the no-antialias face); the installer never installs or removes fonts | n/a — install the face once by hand |
 | `obsidian` | community theme per vault, all palettes installed at once | **yes** |
 | `saipenview` | rewrites its own `:root` token values in `style.css` | no — a source file; re-run after a pull |
 | `discord` | CSS dropped into BetterDiscord's own theme folder | yes |
@@ -73,15 +75,15 @@ contents, `WebContentsView`s, `BrowserView`s, `<webview>` guests and popups alik
 ## Terminals
 
 `terminal` writes a `Wintage` colour scheme into every detected Windows Terminal
-settings file and selects it through `profiles.defaults`, with console-safe
-Consolas 12 and a 9000-line `historySize` floor (a profile set to `0` has no
-scrollback at all — output is cut to the last screenful). `conhost` covers classic
-`cmd.exe`, Windows PowerShell, Git CMD/Bash
-profiles and other `HKCU\Console` children, writing the palette's full 16-colour
-table, the Consolas font, and a 9001-line screen-buffer floor (some launchers
-create cmd/PowerShell profiles whose buffer height equals the window height —
-zero scrollback) while restoring only the values it touched. Proportional Verdana
-collides inside the fixed-width cell grid, so both hosts use Consolas.
+settings file and selects it through `profiles.defaults`, together with
+console-safe Terminus (TTF) for Windows. `conhost` covers classic `cmd.exe`,
+Windows PowerShell, Git CMD/Bash profiles and other `HKCU\Console` children,
+writing the palette's full 16-colour table, the Terminus (TTF) for Windows font,
+and a 9001-line screen-buffer floor (some launchers create cmd/PowerShell
+profiles whose buffer height equals the window height — zero scrollback) while
+restoring only the values it touched. It applies Consolas there too, because
+proportional Verdana collides inside the fixed-width cell grid used by both
+terminal hosts.
 
 ## Rebuilding
 

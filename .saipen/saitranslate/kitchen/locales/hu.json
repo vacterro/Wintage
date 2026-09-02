@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  minden, egy paletta",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            egy visszavonása",
   "FbSoundOn": "FB HANG: BE",
-  "StatusHint": "Válassz témát, pipáld be a célpontokat, nyomd meg az APPLY-t. Bármely szín szerkesztése Custom-ba forkolja."
+  "StatusHint": "Válassz témát, pipáld be a célpontokat, nyomd meg az APPLY-t. Bármely szín szerkesztése Custom-ba forkolja.",
+  "LanguageLabel": "Language"
 }

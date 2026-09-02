@@ -1,0 +1,419 @@
+/*
+  Wintage qBittorrent Qt stylesheet -- ${label}
+  Derived from UI.md: Win95 2D depth (2px bevel), Verdana, zero radius / gradient / shadow /
+  animation / transparency. Palette colours are carried by the config.json beside this file
+  (Palette.* roles plus qBittorrent's own context colours); this sheet owns geometry and the
+  few surfaces config.json cannot reach.
+
+  Verdana_m1 first, stock Verdana as the fallback: Qt has no property to switch
+  antialiasing off, so UI.md law 1 is satisfied by the FACE - Verdana_m1 carries
+  pre-rendered 1bpp bitmap strikes at 3-30 ppem, which the renderer uses instead of
+  smoothing the outline. The installer puts that font on the machine per-user.
+*/
+QWidget {
+    font-family: Verdana_m1, Verdana, "MS Sans Serif", sans-serif;
+    font-size: 12px;
+    color: ${textPrimary};
+    background-color: ${background};
+}
+
+QMainWindow {
+    background-color: ${background};
+}
+
+QMainWindow > QWidget {
+    background-color: ${background};
+}
+
+QMainWindow .QMenuBar {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+}
+
+QMenuBar::item:selected,
+QMenuBar::item:pressed {
+    background-color: ${surface};
+    border: 2px solid;
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+}
+
+QMenuBar::item:focus {
+    border: 2px solid ${link};
+}
+
+QMenu {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    border-radius: 0px;
+}
+
+QMenu::item:selected,
+QMenu::item:pressed {
+    background-color: ${surface};
+    border: 1px solid ${link};
+}
+
+QMenu::item:disabled {
+    color: ${textMuted};
+}
+
+QMenu::separator {
+    height: 1px;
+    border: 1px solid ${borderMuted};
+    background: ${borderMuted};
+}
+
+QToolBar {
+    background-color: ${surfaceRaised};
+    spacing: 2px;
+    padding: 0px;
+    border: 2px solid;
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    border-radius: 0px;
+}
+
+QToolButton {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    padding: 1px;
+}
+
+QToolButton:checked,
+QToolButton:pressed {
+    background-color: ${surface};
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+}
+
+QToolButton:disabled {
+    color: ${textMuted};
+}
+
+QPushButton {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    padding: 2px 6px;
+    min-height: 20px;
+}
+
+QPushButton:hover {
+    background-color: ${surfaceAlt};
+}
+
+QPushButton:pressed,
+QPushButton:checked {
+    background-color: ${surface};
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+}
+
+QPushButton:disabled {
+    color: ${textMuted};
+}
+
+QComboBox {
+    background-color: ${surface};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    border-radius: 0px;
+    padding: 1px 3px;
+}
+
+QComboBox:editable {
+    background-color: ${compareBack};
+}
+
+QComboBox::drop-down {
+    background-color: ${surface};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    border-width: 0px 0px 0px 2px;
+}
+
+QComboBox::item {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+}
+
+QComboBox::item:selected {
+    background-color: ${selection};
+    color: ${textPrimary};
+}
+
+QComboBox QAbstractItemView {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    outline: none;
+}
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit {
+    background-color: ${compareBack};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    border-radius: 0px;
+    padding: 1px 3px;
+}
+
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus {
+    border-color: ${link};
+}
+
+QSpinBox,
+QDoubleSpinBox {
+    background-color: ${surface};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    border-radius: 0px;
+}
+
+QSpinBox::up-button,
+QDoubleSpinBox::up-button {
+    background-color: ${surfaceRaised};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    border-width: 0px 0px 2px 0px;
+}
+
+QSpinBox::down-button,
+QDoubleSpinBox::down-button {
+    background-color: ${surfaceRaised};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    border-width: 2px 0px 0px 0px;
+}
+
+QCheckBox {
+    color: ${textPrimary};
+}
+
+QCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    background-color: ${surface};
+    border-radius: 0px;
+}
+
+QCheckBox::indicator:checked {
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    background-color: ${surfaceAlt};
+}
+
+QRadioButton {
+    color: ${textPrimary};
+}
+
+QRadioButton::indicator {
+    width: 13px;
+    height: 13px;
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    background-color: ${surface};
+    border-radius: 0px;
+}
+
+QRadioButton::indicator:checked {
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+    background-color: ${surfaceAlt};
+}
+
+QSlider::groove:horizontal {
+    height: 8px;
+    background: ${backgroundSoft};
+    border: 1px solid ${borderMuted};
+    border-radius: 0px;
+}
+
+QSlider::handle:horizontal {
+    background: ${bevelLight};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    width: 13px;
+    margin: -3px 0px;
+}
+
+QProgressBar {
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    background-color: ${compareBack};
+    text-align: center;
+    color: ${textPrimary};
+}
+
+QProgressBar::chunk {
+    background-color: ${link};
+}
+
+QHeaderView::section {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    padding: 2px;
+}
+
+QTreeView,
+QListView,
+QTableView,
+QTreeWidget,
+QListWidget,
+QTableWidget {
+    background-color: ${compareBack};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+}
+
+QTreeView::item:selected,
+QListView::item:selected,
+QTableView::item:selected,
+QTreeWidget::item:selected,
+QListWidget::item:selected,
+QTableWidget::item:selected {
+    background-color: ${selection};
+    color: ${textPrimary};
+}
+
+QTreeView::item:focus,
+QListView::item:focus,
+QTableView::item:focus,
+QTreeWidget::item:focus,
+QListWidget::item:focus,
+QTableWidget::item:focus {
+    border: 2px solid ${link};
+}
+
+QTreeView::item:alternate,
+QTableView::item:alternate {
+    background-color: ${backgroundSoft};
+}
+
+QGroupBox {
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    margin-top: 8px;
+    padding-top: 4px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    color: ${textPrimary};
+    padding: 0px 2px;
+}
+
+QTabWidget::pane {
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    background-color: ${compareBack};
+}
+
+QTabBar::tab {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    padding: 2px 6px;
+    margin-left: 2px;
+}
+
+QTabBar::tab:selected,
+QTabBar::tab:hover {
+    background-color: ${surfaceAlt};
+}
+
+QTabBar::tab:selected {
+    border-bottom-color: ${surface};
+}
+
+QSplitter {
+    border: 1px solid ${borderMuted};
+}
+
+QSplitter::handle {
+    background-color: ${surface};
+    border: 1px solid ${borderDark};
+}
+
+QDockWidget {
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    background-color: ${surfaceRaised};
+    titlebar-normal-font: bold;
+    color: ${textPrimary};
+}
+
+QDockWidget::title {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    padding: 2px;
+}
+
+QDialog {
+    background-color: ${background};
+}
+
+QDialogButtonBox {
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+}
+
+QToolBox {
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    background-color: ${surfaceRaised};
+}
+
+QToolBox::tab {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+}
+
+QToolBox::tab:selected {
+    background-color: ${compareBack};
+    border-color: ${borderDark} ${bevelLight} ${bevelLight} ${borderDark};
+}
+
+QToolTip {
+    background-color: ${surfaceRaised};
+    color: ${textPrimary};
+    border: 2px solid;
+    border-color: ${bevelLight} ${borderDark} ${borderDark} ${bevelLight};
+    border-radius: 0px;
+    padding: 1px 2px;
+}

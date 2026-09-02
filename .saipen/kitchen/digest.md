@@ -1,3 +1,3 @@
-done: v1.29.0 shipped (9ff576c) — T-223 SRC-002 18-ticket AUDIT_ALL_3 repair
-remaining: nothing — HUNT clean then validate closure next
-awaiting: nothing
+done: T-225 CORE-013 route-guard idempotency latch, T-226 CORE-014 refused-reload split brain (warn + pending-theme menu row), T-227 CORE-015 suppressed-throw counters + window.__wintageDiag(), T-228 qBittorrent target + name-not-install font policy -- all built, verified with red instrument controls, reviewed; 10 JS gates + 4 --check contracts + Run-Tests + 6 PS sub-suites green.
+remaining: ship as v1.30.0 (stage tools/test-diag-counters.js, tools/test-spa-exclude.js and desktop/targets/qbittorrent/ -- the first two are now release gates), or continue the goal run into the LIVE audit tickets CORE-003/007, W2-003, PERF-006.
+awaiting: user ship decision -- nothing is committed, tagged or pushed.

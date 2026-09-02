@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  alt, én palett",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            angre én",
   "FbSoundOn": "FB LYD: PÅ",
-  "StatusHint": "Velg et tema, merk målene, trykk APPLY. Redigering av en hvilken som helst farge gjør den til Custom."
+  "StatusHint": "Velg et tema, merk målene, trykk APPLY. Redigering av en hvilken som helst farge gjør den til Custom.",
+  "LanguageLabel": "Language"
 }

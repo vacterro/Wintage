@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.29.0
+// @version      1.30.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -38,7 +38,74 @@
     // Heavy Web Apps (lag too much or UI gets destroyed)
     /translate\.google/i, /maps\.google/i, /figma\.com/i, /canva\.com/i, /webflow\.com/i, /photopea\.com/i
   ];
-  if (EXCLUDE.some(r => r.test(location.href))) return;
+
+  // CORE-003: the exclusion predicate is centralized so the SAME check that
+  // runs at startup can be re-evaluated on every same-document route change.
+  function isExcludedUrl(url) {
+    return EXCLUDE.some(r => r.test(url || location.href));
+  }
+
+  // CORE-003: SPA safety guard. Once this script is active on an allowed route,
+  // a same-document navigation into an excluded URL (/oauth, /captcha,
+  // /paypal, /stripe, /bank, ...) must NOT leave the theme mutating auth or
+  // payment UI. The inline repainter cannot be cheaply unwound, so the
+  // smallest fail-safe is a forced normal reload: the userscript restarts,
+  // observes the excluded URL at startup, and returns before any mutation.
+  // The guard is installed BEFORE any DOM/CSS/observer mutation so an excluded
+  // transition is caught as early as possible. It is only installed after the
+  // startup check passes, so a reload on an excluded URL restarts cleanly and
+  // never enters an infinite reload loop.
+  function setupRouteGuard() {
+    // CORE-013: install EXACTLY ONCE per document. This script can legitimately
+    // run twice in the same document -- an in-place Tampermonkey update, a
+    // manual re-inject from the dashboard, a manager that re-evaluates on a
+    // same-document navigation -- and a second pass wraps `history.pushState`
+    // around the FIRST wrapper. Three things then go wrong at once: `guard()`
+    // fires twice per transition, the two `popstate`/`hashchange` listeners
+    // stack one extra copy per pass, and layer one holds a permanent reference
+    // to layer two so neither can ever be unwound. None of it is visible: the
+    // guard still works, it just costs double and grows every re-inject.
+    //
+    // The latch lives on `window`, not in a module variable, because a second
+    // run gets a fresh module scope and the same window. A window that refuses
+    // the write (locked-down host object) falls through deliberately: one wrap
+    // too many is strictly better than no safety guard at all.
+    try {
+      if (window.__wintageRouteGuard) return;
+      window.__wintageRouteGuard = true;
+    } catch (e) { }
+    const guard = function () {
+      if (isExcludedUrl(location.href)) {
+        try {
+          if (!window.__wintageExcludedReload) {
+            window.__wintageExcludedReload = true;
+            location.reload();
+          }
+        } catch (e) { }
+      }
+    };
+    try {
+      const origPush = history.pushState;
+      history.pushState = function () {
+        const ret = origPush.apply(this, arguments);
+        guard();
+        return ret;
+      };
+    } catch (e) { }
+    try {
+      const origReplace = history.replaceState;
+      history.replaceState = function () {
+        const ret = origReplace.apply(this, arguments);
+        guard();
+        return ret;
+      };
+    } catch (e) { }
+    try { window.addEventListener('popstate', guard); } catch (e) { }
+    try { window.addEventListener('hashchange', guard); } catch (e) { }
+  }
+
+  if (isExcludedUrl(location.href)) return;
+  setupRouteGuard();
 
   // ─── FRAME ROLE ──────────────────────────────────────────────────────────────
   // @match *://*/* + @run-at document-start means this script runs in EVERY
@@ -64,6 +131,8 @@
   // This is the hard guarantee that an idle long chat cannot keep reheating the
   // CPU merely because the site twitches a class or inline style in the background.
   const HOST = (location.hostname || '').toLowerCase();
+  const IS_X = /(^|\.)(x\.com|twitter\.com)$/.test(HOST);
+  const IS_REDDIT = /(^|\.)(reddit\.com|redd\.it)$/.test(HOST);
   const HIGH_CHURN_HOST = /(^|\.)(chatgpt\.com|chat\.openai\.com|claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
   const CSS_ONLY_MODE = HIGH_CHURN_HOST;
 
@@ -315,6 +384,12 @@
   const THEME_ID = THEMES[requested] ? requested
     : (THEMES[DEFAULT_THEME] ? DEFAULT_THEME : Object.keys(THEMES)[0]);
   const T = THEMES[THEME_ID].tokens;
+  // CORE-014: what STORAGE says, before the fallback above collapses it onto a
+  // real pack. The menu compares the two: when storage names a valid palette this
+  // document is not painting, the switch was persisted and the reload did not
+  // land, so the pending choice has to stay visible instead of looking like a
+  // switcher that silently did nothing.
+  const STORED_THEME_ID = requested;
 
   function lum({ r, g, b }) {
     const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
@@ -349,6 +424,8 @@
   document.documentElement.style.setProperty('color', T.textPrimary, 'important');
   document.documentElement.setAttribute('data-w95-dark', DARK ? '1' : '0');
   document.documentElement.setAttribute('data-w95-theme', THEME_ID);
+  if (IS_X) document.documentElement.setAttribute('data-w95-x', '1');
+  if (IS_REDDIT) document.documentElement.setAttribute('data-w95-reddit', '1');
 
   // ─── THEME MENU ──────────────────────────────────────────────────────────────
   // Top frame only. The script runs in every frame (see FRAME ROLE above), so
@@ -360,13 +437,47 @@
   // inline !important values keyed to the old tokens, and there is no cheap,
   // correct way to unwind them. Reload is the honest answer, and it is what the
   // user expects from a theme switch anyway.
+  //
+  // CORE-014: a reload that does not happen must not leave a silent split brain.
+  // The write lands first (it has to -- the new palette is read at the next
+  // document-start), so if the navigation is then refused -- a `beforeunload`
+  // confirm the user cancels, a host that blocks programmatic navigation -- the
+  // page keeps painting the OLD palette while storage already says the NEW one.
+  // The theme did switch; only this tab did not, and nothing on screen says so.
+  // That reads as "the switcher is broken", and the next reload silently
+  // "fixes" it, which is worse than a visible failure.
+  //
+  // A DOM banner is not available here: this runs at document-start where
+  // document.body does not exist yet, and the menu callback fires much later
+  // against a page the repainter owns. The one channel that is always present
+  // and cannot be styled away by the host page is the menu itself, so the
+  // pending palette is re-advertised there on the next registration pass, and
+  // the failure is stated once in the console with the exact recovery step.
   if (IS_TOP && typeof GM_registerMenuCommand === 'function') {
     for (const id of Object.keys(THEMES)) {
       const active = id === THEME_ID;
       GM_registerMenuCommand((active ? '● ' : '○ ') + THEMES[id].label, function () {
         if (active) return;
         try { GM_setValue(THEME_KEY, id); } catch (e) { return; }
-        location.reload();
+        try {
+          location.reload();
+        } catch (e) {
+          // Navigation refused. Storage is already the new palette, so say so
+          // rather than letting the tab look unchanged for no stated reason.
+          try {
+            console.warn('[Wintage] theme set to "' + id + '" but this tab could not reload (' +
+              (e && e.message ? e.message : 'navigation refused') +
+              '). Reload the page manually to apply it.');
+          } catch (e2) { }
+        }
+      });
+    }
+    // Only shown when storage names a palette this document is NOT painting --
+    // i.e. exactly the failed-reload state above, or a switch made in another
+    // tab. On a healthy switch the reload lands and this row never exists.
+    if (STORED_THEME_ID && STORED_THEME_ID !== THEME_ID && THEMES[STORED_THEME_ID]) {
+      GM_registerMenuCommand('⟳ Apply pending theme: ' + THEMES[STORED_THEME_ID].label, function () {
+        try { location.reload(); } catch (e) { }
       });
     }
     GM_registerMenuCommand('🤍 Support developer', function () {
@@ -381,10 +492,53 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.29.0';
+  const W95_VERSION = '1.30.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
+
+  // ─── DIAGNOSTIC COUNTERS (CORE-015) ─────────────────────────────────────────
+  // Several passes below run inside try/catch by necessity: a cross-origin sheet
+  // throws on cssRules, an unresolved @import throws, an engine can hand back a
+  // half-built rule, and a shadow root can be detached between discovery and
+  // injection. Swallowing those is correct -- one hostile sheet must not stop the
+  // pass. Swallowing them SILENTLY is not: the visible symptom of a suppressed
+  // throw in the hover surgery is "the site's hover highlight is still there",
+  // which looks exactly like a missing feature and leaves nothing to diagnose.
+  //
+  // So the swallow is counted rather than hidden. Cost on the happy path is one
+  // integer bump that never happens; there is deliberately NO per-throw logging,
+  // because a churning CSS-in-JS page would flood the console with thousands of
+  // identical lines. One snapshot is readable on demand, from the page console:
+  //     window.__wintageDiag()
+  //
+  // Declared up here with the other cross-cutting constants, not next to the
+  // hover surgery: pierceShadow (far above it) reports through the same counters,
+  // and a `const` used before its declaration line is a TDZ ReferenceError, not
+  // a hoisted undefined.
+  const DIAG = { hoverWalkThrows: 0, hoverAppendThrows: 0, sheetGenThrows: 0, shadowPierceThrows: 0, firstError: null };
+  function noteSuppressed(kind, e) {
+    DIAG[kind]++;
+    // Only the FIRST error is kept: it carries the untangled stack, and a hostile
+    // page can throw thousands. The counters carry the volume.
+    if (!DIAG.firstError) DIAG.firstError = { kind: kind, message: (e && e.message) ? e.message : String(e) };
+  }
+  try {
+    window.__wintageDiag = function () {
+      return {
+        version: W95_VERSION,
+        theme: THEME_ID,
+        cssOnlyMode: CSS_ONLY_MODE,
+        suppressed: {
+          hoverWalkThrows: DIAG.hoverWalkThrows,
+          hoverAppendThrows: DIAG.hoverAppendThrows,
+          sheetGenThrows: DIAG.sheetGenThrows,
+          shadowPierceThrows: DIAG.shadowPierceThrows
+        },
+        firstError: DIAG.firstError
+      };
+    };
+  } catch (e) { }
 
   // ─── STRUCTURAL BEVEL CONSTANTS — 2px, BORDERS ONLY, NO SHADOW ─────────────
   // UI.md law 3: "Depth is 2px bevel only." UI.md law 2: "zero shadow."
@@ -919,11 +1073,47 @@ hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important;
    noise, not clarity. Colour (--borderHighlight vs --textPrimary body text)
    carries the "this is a link" signal on its own, so no control depends on hover
    alone — the hover underline is confirmation, not the only affordance. */
-:root body a:hover { color: ${T.link} !important; text-decoration: underline !important; background-color: transparent !important; }
+ :root body a:hover { color: ${T.link} !important; text-decoration: underline !important; background-color: transparent !important; }
 
-yt-interaction, paper-ripple, .mdc-ripple-surface, .mdc-ripple-upgraded::before, .mdc-ripple-upgraded::after, [class*="ripple" i] {
-  display: none !important; opacity: 0 !important; visibility: hidden !important; content: none !important;
-}
+
+ html[data-w95-x="1"], html[data-w95-x="1"] body { background-color: ${T.background} !important; color: ${T.textPrimary} !important; }
+ html[data-w95-x="1"] body > div, html[data-w95-x="1"] main, html[data-w95-x="1"] header[role="banner"],
+ html[data-w95-x="1"] [data-testid="primaryColumn"], html[data-w95-x="1"] [data-testid="sidebarColumn"],
+ html[data-w95-x="1"] [data-testid="DMDrawer"], html[data-w95-x="1"] [data-testid="tweetDetail"],
+ html[data-w95-x="1"] [data-testid="sheetDialog"], html[data-w95-x="1"] [role="dialog"],
+ html[data-w95-x="1"] [role="menu"], html[data-w95-x="1"] [role="listbox"] {
+   background-color: ${T.backgroundSoft} !important; background-image: none !important; color: ${T.textPrimary} !important;
+ }
+ html[data-w95-x="1"] [data-testid="primaryColumn"], html[data-w95-x="1"] [data-testid="sidebarColumn"],
+ html[data-w95-x="1"] [data-testid="tweetDetail"], html[data-w95-x="1"] [data-testid="sheetDialog"],
+ html[data-w95-x="1"] [role="dialog"], html[data-w95-x="1"] [role="menu"], html[data-w95-x="1"] [role="listbox"] {
+   background-color: ${T.surface} !important; ${B_OUTER}
+ }
+ html[data-w95-x="1"] [data-testid="tweet"], html[data-w95-x="1"] [data-testid="cellInnerDiv"] > div {
+   background-color: ${T.surface} !important; color: ${T.textPrimary} !important; border-color: ${T.borderMuted} !important;
+ }
+ html[data-w95-x="1"] [data-testid="tweetText"], html[data-w95-x="1"] [data-testid="User-Name"],
+ html[data-w95-x="1"] [data-testid="UserDescription"] { color: ${T.textPrimary} !important; }
+ html[data-w95-x="1"] [data-testid="SearchBox_Search_Input"], html[data-w95-x="1"] [contenteditable="true"] {
+   background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK}
+  }
+
+  html[data-w95-reddit="1"] {
+    --color-neutral-content: ${T.textPrimary} !important;
+    --color-neutral-content-weak: ${T.textSecondary} !important;
+    --color-neutral-background: ${T.backgroundSoft} !important;
+    --color-neutral-background-weak: ${T.surface} !important;
+    --shreddit-content-background: ${T.backgroundSoft} !important;
+    --shreddit-post-background: ${T.surface} !important;
+  }
+  html[data-w95-reddit="1"] shreddit-post, html[data-w95-reddit="1"] shreddit-comment-tree,
+  html[data-w95-reddit="1"] shreddit-feed, html[data-w95-reddit="1"] faceplate-tracker {
+    color: ${T.textPrimary} !important;
+  }
+
+  yt-interaction, paper-ripple, .mdc-ripple-surface, .mdc-ripple-upgraded::before, .mdc-ripple-upgraded::after {
+   display: none !important; opacity: 0 !important; visibility: hidden !important; content: none !important;
+ }
 
 ytd-app, ytd-page-manager, #content.ytd-app, #page-manager.ytd-app { background-color: ${T.backgroundSoft} !important; }
 /* The masthead separator was a box-shadow, which the global zero-shadow rule now
@@ -1068,7 +1258,13 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       font-family: ${FONT} !important; -webkit-font-smoothing: none !important; -moz-osx-font-smoothing: unset !important; font-smooth: never !important; text-rendering: optimizeSpeed !important;
     }
     input, textarea, select, option, button, code, pre, kbd, samp, tt, [class*="code" i], [class*="mono" i] { font-family: ${FONT} !important; }
-    :host { --radius: 0px; --shreddit-border-radius: 0px; --md-sys-shape-corner-full: 0px; background-color: transparent !important; background-image: none !important; color: ${T.textPrimary} !important; }
+     :host {
+       --radius: 0px; --shreddit-border-radius: 0px; --md-sys-shape-corner-full: 0px;
+       --color-neutral-content: ${T.textPrimary}; --color-neutral-content-weak: ${T.textSecondary};
+       --color-neutral-background: ${T.backgroundSoft}; --color-neutral-background-weak: ${T.surface};
+       --shreddit-content-background: ${T.backgroundSoft}; --shreddit-post-background: ${T.surface};
+       background-color: transparent !important; background-image: none !important; color: ${T.textPrimary} !important;
+     }
     /* Ad-iframe load-flash fix, scoped to known ad hosts only — see GLOBAL_CSS note (unconditional would break transparent widget overlays) */
     iframe[src*="doubleclick.net" i], iframe[src*="googlesyndication.com" i],
     iframe[src*="google.com/ads" i], iframe[id*="google_ads_iframe" i],
@@ -1379,7 +1575,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         });
         stylesDirty = true;
       }
-    } catch (e) { }
+    } catch (e) { noteSuppressed('shadowPierceThrows', e); }
   }
 
 
@@ -1390,7 +1586,58 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // Cross-origin sheets that throw on cssRules access are covered by the CSS
   // freeze rule in GLOBAL_CSS/SHADOW_CSS instead.
   const HOVER_PAINT = /^(background|box-shadow|filter|backdrop-filter|color|border|outline|text-decoration|text-shadow|--)/;
-  const sheetSeen = new WeakMap(); // sheet -> cssRules.length at last pass
+  const sheetSeen = new WeakMap(); // sheet -> { gen, count } at last pass
+  // PERF-010: same-count stylesheet replacement (CSSStyleSheet.replace /
+  // replaceSync, or STYLE text replacement) is a normal mutation shape and
+  // must invalidate the per-sheet hover-surgery cache. cssRules.length is
+  // not a generation identifier: it can stay constant while every rule is
+  // rewritten. We instrument the CSSStyleSheet prototype once at startup to
+  // bump a per-sheet generation token whenever ANY rule-mutating API runs.
+  // stripHoverSheets then re-walks the sheet whenever either length or
+  // generation changes, instead of silently skipping same-count changes.
+  if (typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype && !CSSStyleSheet.prototype.__wintageInstrumented) {
+    CSSStyleSheet.prototype.__wintageInstrumented = true;
+    const bump = function (sheet) {
+      try { sheet.__wintageGen = (sheet.__wintageGen || 0) + 1; } catch (e) { }
+    };
+    const proto = CSSStyleSheet.prototype;
+    if (typeof proto.replace === 'function' && !proto.__wintagePatchedReplace) {
+      const origReplace = proto.replace;
+      proto.replace = function () { const r = origReplace.apply(this, arguments); bump(this); return r; };
+      proto.__wintagePatchedReplace = true;
+    }
+    if (typeof proto.replaceSync === 'function' && !proto.__wintagePatchedReplaceSync) {
+      const origReplaceSync = proto.replaceSync;
+      proto.replaceSync = function () { const r = origReplaceSync.apply(this, arguments); bump(this); return r; };
+      proto.__wintagePatchedReplaceSync = true;
+    }
+    if (typeof proto.insertRule === 'function' && !proto.__wintagePatchedInsert) {
+      const origInsert = proto.insertRule;
+      proto.insertRule = function () { const r = origInsert.apply(this, arguments); bump(this); return r; };
+      proto.__wintagePatchedInsert = true;
+    }
+    if (typeof proto.deleteRule === 'function' && !proto.__wintagePatchedDelete) {
+      const origDelete = proto.deleteRule;
+      proto.deleteRule = function () { const r = origDelete.apply(this, arguments); bump(this); return r; };
+      proto.__wintagePatchedDelete = true;
+    }
+  }
+  // STYLE text replacements mutate the ownerNode's sheet under the hood; the
+  // sibling instrumentations above already cover that case because the
+  // browser dispatches a corresponding API call. We additionally bump the
+  // sheet's generation when a <style> element's text is set, because some
+  // engines bypass the prototype patch in that path.
+  function bumpStyleElementSheets(root) {
+    if (!root || !root.querySelectorAll) return;
+    const els = root.querySelectorAll('style');
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      if (el.__wintageLastText !== el.textContent) {
+        el.__wintageLastText = el.textContent;
+        try { if (el.sheet) el.sheet.__wintageGen = (el.sheet.__wintageGen || 0) + 1; } catch (e) { noteSuppressed('sheetGenThrows', e); }
+      }
+    }
+  }
 
   function stripHoverRule(rule) {
     const st = rule.style;
@@ -1411,7 +1658,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       try {
         if (r.selectorText && r.selectorText.indexOf(':hover') !== -1) stripHoverRule(r);
         if (r.cssRules && r.cssRules.length) walkRules(r); // @media/@supports/@layer/nesting
-      } catch (e) { }
+      } catch (e) { noteSuppressed('hoverWalkThrows', e); }
     }
   }
 
@@ -1421,6 +1668,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // what lets the expensive pass go quiet.
   function stripHoverSheets(root) {
     let changed = false;
+    bumpStyleElementSheets(root);
     const lists = [root.styleSheets, root.adoptedStyleSheets];
     for (let l = 0; l < lists.length; l++) {
       const list = lists[l];
@@ -1431,23 +1679,28 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         if (node && node.getAttribute && node.getAttribute('data-w95')) continue; // our own hover bevels stay
         let count;
         try { count = sheet.cssRules ? sheet.cssRules.length : 0; } catch (e) { continue; }
+        const gen = sheet.__wintageGen || 0;
         const seen = sheetSeen.get(sheet);
-        if (seen === count) continue; // unchanged since last pass
-        sheetSeen.set(sheet, count);
+        // PERF-010: a same-length sheet that was rewritten still invalidates
+        // the cache (the old length-only check silently skipped it). The
+        // generation token is bumped by the prototype-instrumented mutators
+        // and by bumpStyleElementSheets; any of them invalidates this pass.
+        if (seen && seen.gen === gen && seen.count === count) continue;
+        sheetSeen.set(sheet, { gen, count });
         changed = true;
-        if (seen === undefined || count < seen) {
-          walkRules(sheet); // first sight or rules removed: full walk
+        if (!seen || seen.count > count || seen.gen !== gen) {
+          walkRules(sheet); // first sight, rules removed, or same-count rewrite: full walk
         } else {
           // CSS-in-JS engines insertRule constantly; re-walking the whole sheet
           // every tick was a jank source. Walk the appended rules only.
           try {
             const rules = sheet.cssRules;
-            for (let r = seen; r < count; r++) {
+            for (let r = seen.count; r < count; r++) {
               const rule = rules[r];
               if (rule.selectorText && rule.selectorText.indexOf(':hover') !== -1) stripHoverRule(rule);
               if (rule.cssRules && rule.cssRules.length) walkRules(rule);
             }
-          } catch (e) { }
+          } catch (e) { noteSuppressed('hoverAppendThrows', e); }
         }
       }
     }

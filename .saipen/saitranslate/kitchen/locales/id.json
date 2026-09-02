@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  semuanya, satu palet",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            batalkan satu",
   "FbSoundOn": "SUARA FB: AKTIF",
-  "StatusHint": "Pilih tema, centang target, tekan APPLY. Mengedit warna apa pun memfokusnya ke Custom."
+  "StatusHint": "Pilih tema, centang target, tekan APPLY. Mengedit warna apa pun memfokusnya ke Custom.",
+  "LanguageLabel": "Language"
 }

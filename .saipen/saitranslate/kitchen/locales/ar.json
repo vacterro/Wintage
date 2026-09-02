@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  كل شيء، لوحة واحدة",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            تراجع عن واحد",
   "FbSoundOn": "صوت FB: مفعّل",
-  "StatusHint": "اختر سمة، علّم الأهداف، اضغط APPLY. تحرير أي لون يفرّعه إلى Custom."
+  "StatusHint": "اختر سمة، علّم الأهداف، اضغط APPLY. تحرير أي لون يفرّعه إلى Custom.",
+  "LanguageLabel": "Language"
 }

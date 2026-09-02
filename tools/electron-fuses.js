@@ -32,6 +32,15 @@
 const fs = require('fs');
 
 const SENTINEL = Buffer.from('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX');
+// PERF-008: bounded chunk scanner. The previous implementation loaded the entire
+// executable into a Buffer just to locate a 32-byte sentinel. A 200 MiB Electron
+// binary therefore cost 200 MiB of peak memory on every install-listing probe
+// (which is the read path the GUI hits once per target per refresh). Scanning in
+// fixed-size chunks keeps the high-water mark near CHUNK_SIZE, and the trailing
+// overlap across chunk boundaries guarantees a sentinel split between two reads
+// is still found.
+const CHUNK_SIZE = 1 << 20;   // 1 MiB
+const OVERLAP = SENTINEL.length - 1;
 
 // Order is the wire order for fuse schema version 1.
 const NAMES = [
@@ -58,28 +67,64 @@ const VERIFIED_SAFE = 'VERIFIED_SAFE';
 const BLOCKED = 'BLOCKED';
 const UNVERIFIABLE = 'UNVERIFIABLE';
 
+// PERF-008: scan an open fd for the fuse sentinel, returning the read so far
+// (capped at SENTINEL.length + 2 + MAX_KNOWN_COUNT bytes) once it is found.
+// The returned buffer is a slice of the cumulative read window so callers can
+// validate the wire bytes without ever materialising the rest of the executable.
+function findFuseWireChunked(fd, fileSize) {
+  const readCap = SENTINEL.length + 2 + MAX_KNOWN_COUNT;
+  let carry = Buffer.alloc(0);
+  let offset = 0;
+  const buf = Buffer.alloc(CHUNK_SIZE);
+  while (offset < fileSize) {
+    const bytesRead = fs.readSync(fd, buf, 0, Math.min(CHUNK_SIZE, fileSize - offset), offset);
+    if (bytesRead <= 0) break;
+    // Combine the trailing overlap from the previous chunk with the new bytes.
+    const window = carry.length === 0 ? buf.subarray(0, bytesRead) : Buffer.concat([carry, buf.subarray(0, bytesRead)], carry.length + bytesRead);
+    const hit = window.indexOf(SENTINEL);
+    if (hit >= 0) {
+      // Found the sentinel. The full read window already covers the wire; cap
+      // it at readCap so we never return more than the maximum bytes any
+      // valid schema can occupy.
+      return window.subarray(hit, Math.min(window.length, hit + readCap));
+    }
+    // Keep only the last OVERLAP bytes for cross-chunk sentinel matching.
+    if (bytesRead >= OVERLAP) {
+      carry = buf.subarray(bytesRead - OVERLAP, bytesRead);
+    } else {
+      carry = Buffer.concat([carry, buf.subarray(0, bytesRead)], carry.length + bytesRead).subarray(Math.max(0, carry.length + bytesRead - OVERLAP));
+    }
+    offset += bytesRead;
+  }
+  return null;
+}
+
 function readFuses(exe) {
-  let data;
-  try { data = fs.readFileSync(exe); } catch (e) { return { error: 'cannot read ' + exe + ': ' + e.message }; }
-  const i = data.indexOf(SENTINEL);
-  if (i < 0) return { error: 'no fuse wire in ' + exe };
-  const at = i + SENTINEL.length;
-  const version = data[at];
-  const count = data[at + 1];
-  // Schema validation: version 1, count sane (at least the 6 core fuses through OnlyLoadAppFromAsar), AND every byte within the file.
-  if (version !== 1 || !count || count < 6 || count > MAX_KNOWN_COUNT || (at + 2 + count) > data.length) {
-    // Unknown or malformed schema: report it rather than mapping bytes onto names
-    // that may have moved or reading past the end. A wrong ENABLED/disabled reading
-    // here would either block a themeable app or wave through one that is about to
-    // break — both are failures of the same kind.
-    return { version, count, unknown: true, malformed: !(version === 1 && count > 0 && (at + 2 + count) <= data.length) };
-  }
-  const fuses = {};
-  for (let k = 0; k < count; k++) {
-    const raw = data[at + 2 + k];
-    fuses[NAMES[k] || ('Fuse' + k)] = STATE[raw] || ('byte 0x' + raw.toString(16));
-  }
-  return { version, count, fuses };
+  let fd;
+  try { fd = fs.openSync(exe, 'r'); }
+  catch (e) { return { error: 'cannot read ' + exe + ': ' + e.message }; }
+  try {
+    const stat = fs.fstatSync(fd);
+    const wire = findFuseWireChunked(fd, stat.size);
+    if (!wire) return { error: 'no fuse wire in ' + exe };
+    const at = SENTINEL.length;
+    const version = wire[at];
+    const count = wire[at + 1];
+    // Schema validation: version 1, count sane (at least the 6 core fuses through OnlyLoadAppFromAsar), AND every byte within the file.
+    if (version !== 1 || !count || count < 6 || count > MAX_KNOWN_COUNT || (at + 2 + count) > wire.length) {
+      // Unknown or malformed schema: report it rather than mapping bytes onto names
+      // that may have moved or reading past the end. A wrong ENABLED/disabled reading
+      // here would either block a themeable app or wave through one that is about to
+      // break — both are failures of the same kind.
+      return { version, count, unknown: true, malformed: !(version === 1 && count > 0 && (at + 2 + count) <= wire.length) };
+    }
+    const fuses = {};
+    for (let k = 0; k < count; k++) {
+      const raw = wire[at + 2 + k];
+      fuses[NAMES[k] || ('Fuse' + k)] = STATE[raw] || ('byte 0x' + raw.toString(16));
+    }
+    return { version, count, fuses };
+  } finally { try { fs.closeSync(fd); } catch (e) { } }
 }
 
 // Blocking verdict with full detail. `unknown`/`error` are NEVER flattened into
@@ -109,34 +154,68 @@ function blockers(exe) {
 
 // defuse() itself validates the known schema/version/count and target offsets
 // BEFORE any write, so callers cannot bypass the guard (CORE-007).
+// PERF-008: scan the executable in fixed-size chunks to locate the wire, then
+// patch only the two known fuse bytes through a file handle. The full
+// executable is NEVER materialised in memory; the original-bytes backup is
+// created by streaming the file to disk, not by retaining a second Buffer.
 function defuse(exe) {
-  let data;
-  try { data = fs.readFileSync(exe); } catch (e) { return { error: e.message }; }
-  const original = Buffer.from(data);
-  const i = data.indexOf(SENTINEL);
-  if (i < 0) return { error: 'no fuse wire' };
-  const at = i + SENTINEL.length;
-  const version = data[at];
-  const count = data[at + 1];
-  if (version !== 1 || !count || count < 6 || count > MAX_KNOWN_COUNT || (at + 2 + count) > data.length) {
+  let fd;
+  try { fd = fs.openSync(exe, 'r'); }
+  catch (e) { return { error: e.message }; }
+  let wire, wireOffset;
+  try {
+    const stat = fs.fstatSync(fd);
+    wireOffset = -1;
+    let carry = Buffer.alloc(0);
+    let offset = 0;
+    const buf = Buffer.alloc(CHUNK_SIZE);
+    while (offset < stat.size) {
+      const bytesRead = fs.readSync(fd, buf, 0, Math.min(CHUNK_SIZE, stat.size - offset), offset);
+      if (bytesRead <= 0) break;
+      const window = carry.length === 0 ? buf.subarray(0, bytesRead) : Buffer.concat([carry, buf.subarray(0, bytesRead)], carry.length + bytesRead);
+      const hit = window.indexOf(SENTINEL);
+      if (hit >= 0) { wireOffset = offset - carry.length + hit; wire = window.subarray(hit); break; }
+      if (bytesRead >= OVERLAP) carry = buf.subarray(bytesRead - OVERLAP, bytesRead);
+      else carry = Buffer.concat([carry, buf.subarray(0, bytesRead)], carry.length + bytesRead).subarray(Math.max(0, carry.length + bytesRead - OVERLAP));
+      offset += bytesRead;
+    }
+  } finally { try { fs.closeSync(fd); } catch (e) { } }
+  if (!wire) return { error: 'no fuse wire' };
+  const at = SENTINEL.length;
+  const version = wire[at];
+  const count = wire[at + 1];
+  if (version !== 1 || !count || count < 6 || count > MAX_KNOWN_COUNT || (at + 2 + count) > wire.length) {
     return { error: 'unknown/malformed fuse schema (version ' + version + ', count ' + count + ') - refusing to modify an unverifiable executable' };
   }
   let changed = false;
-  if (data[at + 6] === 0x31) { data[at + 6] = 0x30; changed = true; } // EnableEmbeddedAsarIntegrityValidation
-  if (data[at + 7] === 0x31) { data[at + 7] = 0x30; changed = true; } // OnlyLoadAppFromAsar
-  if (changed) {
-    const backup = exe + '.wintage-fuse.bak';
-    // CORE-008: the backup is the INSTALL-EPOCH authority. If one already
-    // exists (a repaint re-defusing a drifted exe), it must never be replaced
-    // by the already-drifted bytes - Revert needs the original executable.
-    if (!fs.existsSync(backup)) {
-      try { fs.writeFileSync(backup, original); }
-      catch (e) { return { error: 'could not back up ' + exe + ' to ' + backup + ': ' + e.message }; }
-    }
-    try { fs.writeFileSync(exe, data); }
-    catch (e) { return { error: 'could not write ' + exe + ': ' + e.message + ' (is the app running?)' }; }
+  if (wire[at + 6] === 0x31) { wire[at + 6] = 0x30; changed = true; } // EnableEmbeddedAsarIntegrityValidation
+  if (wire[at + 7] === 0x31) { wire[at + 7] = 0x30; changed = true; } // OnlyLoadAppFromAsar
+  if (!changed) return { success: true, changed: false, backup: null };
+  const backup = exe + '.wintage-fuse.bak';
+  // CORE-008: the backup is the INSTALL-EPOCH authority. If one already
+  // exists (a repaint re-defusing a drifted exe), it must never be replaced
+  // by the already-drifted bytes - Revert needs the original executable.
+  // PERF-008: stream-copy the file rather than loading it into a Buffer, so
+  // peak memory stays bounded regardless of exe size.
+  if (!fs.existsSync(backup)) {
+    try {
+      fs.copyFileSync(exe, backup);
+    } catch (e) { return { error: 'could not back up ' + exe + ' to ' + backup + ': ' + e.message }; }
   }
-  return { success: true, changed, backup: changed ? exe + '.wintage-fuse.bak' : null };
+  // Patch the two fuse bytes in place through a writable fd. CORE-007/W2
+  // guard rollback: the original bytes are now safely on disk as the backup.
+  let wfd;
+  try { wfd = fs.openSync(exe, 'r+'); }
+  catch (e) { return { error: 'could not open ' + exe + ' for writing: ' + e.message + ' (is the app running?)' }; }
+  try {
+    // Only the two changed fuse bytes are written, at their validated offsets
+    // (fuse indices 6 and 7 after the sentinel + version + count).
+    fs.writeSync(wfd, wire, SENTINEL.length + 6, 1, wireOffset + SENTINEL.length + 6);
+    fs.writeSync(wfd, wire, SENTINEL.length + 7, 1, wireOffset + SENTINEL.length + 7);
+  } catch (e) {
+    return { error: 'could not write fuse bytes into ' + exe + ': ' + e.message + ' (is the app running?)' };
+  } finally { try { fs.closeSync(wfd); } catch (e) { } }
+  return { success: true, changed: true, backup };
 }
 
 module.exports = { readFuses, blockers, defuse, fuseVerdict, VERIFIED_SAFE, BLOCKED, UNVERIFIABLE };

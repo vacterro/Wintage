@@ -30,18 +30,44 @@ function Git-Safe {
     return $code
 }
 
+# T-232: the same two belts, for the calls whose VALUE is needed.
+#
+# Git-Safe above was written for exactly this hazard and every fire-and-forget
+# call uses it -- but the calls that read a value back (`stash create`, `rev-parse`,
+# `ls-remote`, `tag -l`) were written as bare `& git ... 2>$null` instead, so they
+# got NEITHER belt. `2>$null` does not save them: under
+# $ErrorActionPreference='Stop' PowerShell 5.1 still promotes a native stderr
+# line into a terminating NativeCommandError, and `git stash create` on this repo
+# emits one warning per CRLF-converted file. The release therefore died at the
+# snapshot step -- before the try block, so before any mutation -- with a "warning:
+# LF will be replaced by CRLF" as the fatal error. Same defect class as the gates
+# nobody ran: the fix already existed in this file and the risky call sites
+# bypassed it.
+#
+# Returns stdout as a string array and leaves the exit code in $script:GitReadCode
+# so a caller can still distinguish "empty because absent" from "empty because it
+# failed" (`ls-remote --exit-code` depends on that).
+function Git-Read {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $output = & git -c core.autocrlf=false -C $PSScriptRoot @args 2>$null
+    $script:GitReadCode = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    return @($output)
+}
+
 # ─── PREFLIGHT: every feasible NON-MUTATING gate runs before any file changes ──
 # W2-007: the release publishes refs/heads/main + the version tag as ONE atomic
 # unit, so the branch being committed on MUST be main and HEAD MUST equal the
 # local main ref that will be pushed. A release run from a feature branch used to
 # push the tag (feature commit) while remote main stayed behind - atomicity only
 # proves both refs moved together, never that they name the same commit.
-$currentBranch = ((& git -C $PSScriptRoot rev-parse --abbrev-ref HEAD 2>$null) -join '').Trim()
+$currentBranch = ((Git-Read rev-parse --abbrev-ref HEAD) -join '').Trim()
 if ($currentBranch -ne 'main') {
     throw "release must run on 'main' (current branch: '$currentBranch') - the release publishes refs/heads/main and the version tag as one unit; committing on any other branch would split them. NOTHING was changed."
 }
-$headCommit = ((& git -C $PSScriptRoot rev-parse HEAD 2>$null) -join '').Trim()
-$mainCommit = ((& git -C $PSScriptRoot rev-parse 'refs/heads/main' 2>$null) -join '').Trim()
+$headCommit = ((Git-Read rev-parse HEAD) -join '').Trim()
+$mainCommit = ((Git-Read rev-parse 'refs/heads/main') -join '').Trim()
 if (-not $headCommit -or $mainCommit -ne $headCommit) {
     throw "HEAD ($headCommit) does not equal refs/heads/main ($mainCommit) - the release would publish a different commit than it pushes. NOTHING was changed."
 }
@@ -49,7 +75,7 @@ if (-not $headCommit -or $mainCommit -ne $headCommit) {
 # T-201: `git add -A` publishes EVERY untracked file sitting in the tree. Refuse
 # BEFORE anything is mutated (W2-009) so a refused release leaves the tree
 # byte-identical and the next run retries at the same version.
-$untracked = @(& git -C $PSScriptRoot ls-files --others --exclude-standard)
+$untracked = @(Git-Read ls-files --others --exclude-standard)
 if ($untracked.Count -gt 0) {
     Write-Host "release aborted: $($untracked.Count) untracked file(s) would ride along in 'git add -A':"
     $untracked | ForEach-Object { Write-Host "  $_" }
@@ -76,7 +102,7 @@ $branchRef = 'refs/heads/main'
 # COMMIT exists. Any failure before that restores the exact pre-release worktree
 # and index, so a rerun recomputes the SAME version without losing user edits.
 $prepared = $false
-$snapshotCommit = ((& git -C $PSScriptRoot stash create 'wintage release pre-state' 2>$null) -join '').Trim()
+$snapshotCommit = ((Git-Read stash create 'wintage release pre-state') -join '').Trim()
 if ($LASTEXITCODE -ne 0) { throw 'could not snapshot the pre-release tracked worktree and index' }
 $snapshotIndex = if ($snapshotCommit) { "$snapshotCommit^2" } else { $headCommit }
 $snapshotWorktree = if ($snapshotCommit) { $snapshotCommit } else { $headCommit }
@@ -92,7 +118,7 @@ try {
     }
     # Tag availability is checked BEFORE any mutation too: a tag collision must
     # abort with the tree untouched, not after the version was bumped and committed.
-    $tagExists = ((& git -C $PSScriptRoot tag -l "v$new") -join '').Trim()
+    $tagExists = ((Git-Read tag -l "v$new") -join '').Trim()
     if ($tagExists) { throw "local tag v$new already exists - release aborted BEFORE publishing anything. NOTHING was changed." }
     if ((Git-Safe ls-remote --exit-code origin $tagRef) -eq 0) { throw "remote already has $tagRef - release aborted BEFORE publishing anything. NOTHING was changed." }
 
@@ -120,10 +146,44 @@ try {
 
     # The theme switch is resolved at document-start from GM storage, with fallbacks
     # that only matter when something is wrong (no GM API, a slug whose pack was
-    # removed, a failed write). None of those paths is exercised by opening a page in
-    # a healthy browser, so they get a real test instead of an assumption.
+    # removed, a failed write, a refused reload). None of those paths is exercised by
+    # opening a page in a healthy browser, so they get a real test instead of an
+    # assumption.
     node (Join-Path $PSScriptRoot 'tools/test-theme-switch.js')
     if ($LASTEXITCODE -ne 0) { throw "Theme switch test failed - release aborted" }
+
+    # CORE-003: a same-document SPA navigation into an excluded URL (oauth, captcha,
+    # paypal, stripe, bank) must re-evaluate the safety guard, and CORE-013: that
+    # guard must install exactly once per document. A second install used to wrap the
+    # first wrapper, invisibly, on every re-inject.
+    node (Join-Path $PSScriptRoot 'tools/test-spa-exclude.js')
+    if ($LASTEXITCODE -ne 0) { throw "SPA exclude safety test failed - release aborted" }
+
+    # CORE-015: the hover surgery and the shadow pierce swallow throws by design (a
+    # cross-origin sheet, an unresolved @import, a detached root). The swallow must
+    # stay COUNTED: a silent one looks exactly like "hover highlighting is broken"
+    # and leaves nothing to diagnose from.
+    node (Join-Path $PSScriptRoot 'tools/test-diag-counters.js')
+    if ($LASTEXITCODE -ne 0) { throw "Diagnostic counters test failed - release aborted" }
+
+    # PERF-008/009/010: the fuse scanner must stay chunked (it ran on every GUI
+    # listing refresh against a hundreds-of-MiB exe), the GUI must dispose its
+    # per-draw GDI handles deterministically, and stripHoverSheets must invalidate
+    # its per-sheet cache on a SAME-COUNT stylesheet rewrite. All three are
+    # invisible when broken: the theme still looks right and the machine just costs
+    # more. T-229 also repaired this gate's own ColorDialog assertion, which had
+    # been stuck red on correct code.
+    node (Join-Path $PSScriptRoot 'tools/test-perf-bounded.js')
+    if ($LASTEXITCODE -ne 0) { throw "Performance bounding test failed - release aborted" }
+
+    # T-230: on Windows a file written milliseconds earlier is routinely still held
+    # by the AV scanner or the search indexer. install-electron used to report every
+    # such sharing violation as "the application is running - close it completely",
+    # which made this very gate red on correct code about one run in twenty and told
+    # real users to close an app that was not open. The retry must stay bounded, must
+    # still fail for a genuinely locked archive, and must never retry ENOENT.
+    node (Join-Path $PSScriptRoot 'tools/test-fs-retry.js')
+    if ($LASTEXITCODE -ne 0) { throw "Filesystem retry test failed - release aborted" }
 
     # Every luminance threshold in the repainter was written against one dark palette.
     # This pins that the polarity layer is a no-op on golden and actually inverts on a
@@ -198,8 +258,8 @@ try {
     # W2-007: prove the annotated tag dereferences to the EXACT branch commit being
     # published - a tag on a different commit is a branch/tag split even when the
     # push is atomic.
-    $tagOid = ((& git -C $PSScriptRoot rev-parse "${tagRef}^{commit}" 2>$null) -join '').Trim()
-    $mainOid = ((& git -C $PSScriptRoot rev-parse 'refs/heads/main^{commit}' 2>$null) -join '').Trim()
+    $tagOid = ((Git-Read rev-parse "${tagRef}^{commit}") -join '').Trim()
+    $mainOid = ((Git-Read rev-parse 'refs/heads/main^{commit}') -join '').Trim()
     if (-not $tagOid -or $tagOid -ne $mainOid) {
         throw "tag v$new dereferences to $tagOid but the published branch is $mainOid - branch/tag split detected; nothing was pushed."
     }
@@ -207,7 +267,7 @@ try {
         throw "atomic push FAILED - the remote received NEITHER the branch NOR the tag (git push --atomic). The local commit and annotated tag are ready; fix the remote and re-run: git push --atomic origin refs/heads/main refs/tags/v$new"
     }
     # Post-push invariant: origin/main must now BE the release commit.
-    $remoteMain = ((& git -C $PSScriptRoot ls-remote origin $branchRef 2>$null) -join '').Trim() -split '\s+' | Select-Object -First 1
+    $remoteMain = ((Git-Read ls-remote origin $branchRef) -join '').Trim() -split '\s+' | Select-Object -First 1
     if ($remoteMain -ne $mainOid) {
         throw "post-push verification failed: origin/main is $remoteMain, expected $mainOid - the remote may need manual repair."
     }
@@ -224,4 +284,4 @@ try {
         Write-Host "release aborted before the release commit: the versioned files were restored to their pre-release state - fix the cause and rerun (it will bump the SAME version)." -ForegroundColor Yellow
     }
     throw
-}
+}

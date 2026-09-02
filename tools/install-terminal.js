@@ -14,9 +14,18 @@ const settingsPath = arg('--settings');
 const palettePath = arg('--palette');
 const revert = process.argv.includes('--revert');
 const dryRun = process.argv.includes('--dry-run');
+// W2-007: multi-item Revert must keep the recovery artifacts intact until the
+// caller has confirmed EVERY recorded item reverted cleanly and the manifest
+// has been removed. Without --keep-recovery the helper unlinks the .wintage.bak
+// and the created/owned-field markers immediately, so an item-N failure
+// commits items 1..N-1 irreversibly while the manifest still claims the entire
+// set. --keep-recovery suppresses the cleanup; a follow-up --finalize-recovery
+// (or a normal revert on a fully-cleaned manifest) consumes the artifacts.
+const keepRecovery = process.argv.includes('--keep-recovery');
+const finalizeRecovery = process.argv.includes('--finalize-recovery');
 
-if (!settingsPath || (!revert && !palettePath)) {
-  console.error('Usage: install-terminal.js --settings PATH (--palette PACK | --revert) [--dry-run]');
+if (!settingsPath || (!revert && !finalizeRecovery && !palettePath)) {
+  console.error('Usage: install-terminal.js --settings PATH (--palette PACK | --revert [--keep-recovery] | --finalize-recovery) [--dry-run]');
   process.exit(2);
 }
 
@@ -211,6 +220,23 @@ function mergeOwnedIntoCurrent(current, snap) {
   return current;
 }
 
+if (finalizeRecovery) {
+  // W2-007: --finalize-recovery can run standalone (no --revert) to consume
+  // the recovery artifacts after the caller has confirmed the manifest
+  // transition committed. It only runs when the manifest is no longer
+  // claiming ownership (marker absent), so the caller cannot accidentally
+  // delete the still-needed recovery.
+  if (fs.existsSync(markerPath)) {
+    console.error(`Windows Terminal: --finalize-recovery refused for ${settingsPath} - the palette marker is still present, the manifest still claims this item. Revert it first or pass --keep-recovery.`);
+    process.exit(1);
+  }
+  const consumed = [];
+  if (fs.existsSync(backupPath)) { fs.unlinkSync(backupPath); consumed.push(backupPath); }
+  if (fs.existsSync(createdPath)) { fs.unlinkSync(createdPath); consumed.push(createdPath); }
+  console.log(`Windows Terminal: finalised recovery for ${settingsPath} (${consumed.length} artifact(s) consumed).`);
+  process.exit(0);
+}
+
 if (revert) {
   if (dryRun) {
     console.log(`Windows Terminal: would restore the Wintage-owned fields into ${settingsPath}`);
@@ -233,7 +259,9 @@ if (revert) {
   }
   if (fs.existsSync(createdPath)) {
     if (fs.existsSync(settingsPath)) fs.unlinkSync(settingsPath);
-    fs.unlinkSync(createdPath);
+    // W2-007: with --keep-recovery the created marker survives so a failed
+    // sibling revert can roll THIS item back to its pre-Revert themed state.
+    if (!keepRecovery) fs.unlinkSync(createdPath);
   } else {
     const snap = readOwnedSnapshot(backupPath);
     if (!snap) {
@@ -243,10 +271,15 @@ if (revert) {
     const current = fs.existsSync(settingsPath) ? readJsonc(settingsPath) : {};
     mergeOwnedIntoCurrent(current, snap);
     replaceFile(settingsPath, `${JSON.stringify(current, null, 4)}\n`);
-    fs.unlinkSync(backupPath);
+    // W2-007: --keep-recovery leaves the owned-field backup on disk so a
+    // failed sibling revert can re-apply the original owned-field values.
+    if (!keepRecovery) fs.unlinkSync(backupPath);
   }
-  if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
-  console.log(`Windows Terminal: restored the Wintage-owned fields into ${settingsPath}`);
+  // W2-007: --keep-recovery leaves the marker in place too. The manifest
+  // keeps claiming ownership until the caller confirms the whole multi-item
+  // Revert succeeded and explicitly removes the manifest entry.
+  if (fs.existsSync(markerPath) && !keepRecovery) fs.unlinkSync(markerPath);
+  console.log(`Windows Terminal: restored the Wintage-owned fields into ${settingsPath}${keepRecovery ? ' (recovery preserved)' : ''}`);
   process.exit(0);
 }
 

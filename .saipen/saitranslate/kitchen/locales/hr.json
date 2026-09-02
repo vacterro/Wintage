@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  sve, jedna paleta",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            poništi jedan",
   "FbSoundOn": "FB ZVUK: UKLJUČEN",
-  "StatusHint": "Odaberite temu, označite ciljeve i pritisnite APPLY. Uređivanje bilo koje boje prebacuje temu u Custom."
+  "StatusHint": "Odaberite temu, označite ciljeve i pritisnite APPLY. Uređivanje bilo koje boje prebacuje temu u Custom.",
+  "LanguageLabel": "Language"
 }

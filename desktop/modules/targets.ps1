@@ -18,6 +18,83 @@
 # is detected and re-asserted instead of being left scrollbar-less.
 $CONSOLE_SCROLLBACK_HEIGHT = 9001
 
+# ─── The non-antialiased face (UI.md law 1) ──────────────────────────────────
+# Law 1 asks for Verdana with NO antialiasing. Neither a Qt stylesheet nor a GDI
+# settings value can switch smoothing off, so the only lever left is the FACE:
+# Verdana_m1 is a copy of Verdana whose EBDT/EBLC tables carry pre-rendered 1bpp
+# bitmap strikes at 3-30 ppem, and a renderer uses those in preference to
+# smoothing the outline. The repo ships that .ttf for the browser theme.
+#
+# WINTAGE NAMES THAT FACE AND NEVER MANAGES IT. This is a deliberate limit, and
+# it is the whole design note:
+#
+# A font FAMILY is resolved by (family, style). Register Regular+Bold+Italic and
+# every consumer resolves correctly; deregister ONE member and every consumer
+# asking for that family re-points at a surviving member. On a machine that
+# routes `MS Shell Dlg 2` (the Windows dialog-font alias) at this family through
+# HKLM\FontSubstitutes - a legitimate user configuration - removing Regular
+# turns the ENTIRE desktop italic, including window titles the DWM has already
+# cached. That is a machine-wide, hard-to-notice, hard-to-undo consequence of a
+# theme installer's Revert, and it happened twice while this target was being
+# built. No refcount fixes it: the blast radius is wrong, not the bookkeeping.
+#
+# So: the installer PROBES for the face and names whichever face it can actually
+# guarantee. Installing the font stays a deliberate user action (double-click the
+# .ttf -> Install), exactly like it already is for the browser theme.
+$WINTAGE_FONT_SRC = Join-Path $root 'Verdana_m1.ttf'
+$WINTAGE_FONT_FACE = 'Verdana_m1'
+$WINTAGE_FONT_FALLBACK = 'Verdana'
+
+# Does a NEW process on this machine resolve the face? GDI+ family enumeration is
+# the same question the themed applications will ask, and it sees HKLM fonts,
+# HKCU fonts and the per-user Fonts folder alike - which a single registry probe
+# does not. The registry fallback exists only for hosts without System.Drawing.
+function Test-WintageFontInstalled {
+    if ($null -ne $script:WintageFontPresent) { return $script:WintageFontPresent }
+    $found = $null
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $found = [bool](@([System.Drawing.FontFamily]::Families | Where-Object { $_.Name -eq $WINTAGE_FONT_FACE }).Count)
+    } catch {
+        foreach ($hive in @('HKCU:', 'HKLM:')) {
+            $key = "$hive\Software\Microsoft\Windows NT\CurrentVersion\Fonts"
+            $props = Get-ItemProperty $key -ErrorAction SilentlyContinue
+            if ($props -and @($props.PSObject.Properties.Name | Where-Object { $_ -like "$WINTAGE_FONT_FACE*" }).Count) { $found = $true; break }
+        }
+        if ($null -eq $found) { $found = $false }
+    }
+    $script:WintageFontPresent = $found
+    return $found
+}
+
+# The face a target should NAME. A stylesheet can carry a fallback chain
+# ("Verdana_m1, Verdana"), but a single settings value (MPC-HC's OSDFont) cannot:
+# naming an absent face there does not fall back to Verdana, it falls back to
+# whatever GDI substitutes. So the answer is what the machine can honour today,
+# and health computes it through this same function - one rule, no drift.
+function Get-WintageFontFace {
+    if (Test-WintageFontInstalled) { return $WINTAGE_FONT_FACE }
+    return $WINTAGE_FONT_FALLBACK
+}
+
+# Said once per run by any target whose text quality depends on the face, when
+# the face is absent. It states the consequence and the one-step fix rather than
+# doing anything to the machine.
+function Say-WintageFontAdvice([string]$label) {
+    if (Test-WintageFontInstalled) { return }
+    if ($script:WintageFontAdviceSaid) { return }
+    $script:WintageFontAdviceSaid = $true
+    Say "$label`: text will be ANTIALIASED - UI.md law 1 wants it sharp, and no stylesheet or setting can switch smoothing off." 'Yellow'
+    if (Test-Path $WINTAGE_FONT_SRC) {
+        Say "  Install the face once by hand and re-apply: right-click $WINTAGE_FONT_SRC -> Install (no admin needed)." 'Yellow'
+    } else {
+        Say "  The shipped face is missing from this checkout ($WINTAGE_FONT_SRC), so it cannot be named." 'Yellow'
+    }
+    Say '  Wintage deliberately does NOT install or remove fonts: a font family is resolved by (family, style),' 'DarkGray'
+    Say '  so deregistering one member re-points every consumer - including MS Shell Dlg 2 where it is aliased -' 'DarkGray'
+    Say '  at a surviving member, which turns the whole desktop italic. That is not a theme installer decision.' 'DarkGray'
+}
+
 # The currently-resolved install path for a target, or $null when it cannot be
 # resolved/validated. Existence of the path/marker IS the theming evidence for
 # the simple targets; the Electron targets get a full --status-json health read.
@@ -29,6 +106,7 @@ function Get-TargetCurrentPath([string]$key) {
         'terminal'  { $p = @(Get-WindowsTerminalSettingsPaths); if ($p.Count) { $p[0] } else { $null }; break }
         'conhost'   { if (Test-Path $CONHOST_KEY) { $CONHOST_KEY } else { $null }; break }
         'obs'       { if (Test-Path $OBS_CONFIG) { $OBS_CONFIG } else { $null }; break }
+        'qbittorrent' { if (Test-Path $QBT_INI) { $QBT_INI } else { $null }; break }
         'discord'   { $css = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (Test-Path $css) { $css } else { $null }; break }
         # W2-004: Total Commander health re-resolves through the SAME resolver
         # Apply uses (RedirectSection included), but the manifest-recorded
@@ -181,7 +259,11 @@ function Restore-ElectronStateSnapshot([string]$key, [string]$snap) {
         $dst = Join-Path $r $f
         if (Test-Path $src) {
             if ((Get-Item $src -ErrorAction SilentlyContinue).PSIsContainer) {
-                Restore-DirPreState $dst $src
+                # W2-001: Restore-DirPreState requires a STRUCTURED snapshot
+                # (Existed + SnapshotPath). A raw path collapses both branches
+                # and was historically deleting the relocated archive directory
+                # during a failed rollback. Pass the structured contract here.
+                Restore-DirPreState $dst @{ Existed = $true; SnapshotPath = $src }
             } else {
                 Copy-Item $src $dst -Force
             }
@@ -428,6 +510,27 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                 if ($managed -and $currentTheme -and ([IO.Path]::GetFullPath($currentTheme) -ne [IO.Path]::GetFullPath($managed))) { $reasons += 'current windows theme is not the Wintage-managed theme' }
             }
             'obs'       { $obsTheme = Join-Path $OBS_CONFIG 'themes\Wintage.ovt'; $obsMarker = Join-Path $OBS_CONFIG '.wintage-obs-palette'; if (-not (Test-Path $obsTheme) -or -not (Test-Path $obsMarker)) { $reasons += 'obs theme/marker missing' } else { $mv = (Read-Utf8 $obsMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "obs marker palette mismatch ($mv)" } } }
+            # W2-005 discipline: health probes the COMPLETE owned set - both theme
+            # files, the marker, AND both INI keys. qBittorrent rewrites its whole
+            # INI on exit, so a user toggling "Use custom UI theme" off (or picking
+            # another theme file) silently un-themes the app while every file is
+            # still on disk; the INI checks are what catch that.
+            'qbittorrent' {
+                $qCfg = Join-Path $QBT_THEME_DIR 'config.json'
+                $qQss = Join-Path $QBT_THEME_DIR 'stylesheet.qss'
+                if (-not (Test-Path $qCfg)) { $reasons += 'qbittorrent config.json missing' }
+                if (-not (Test-Path $qQss)) { $reasons += 'qbittorrent stylesheet.qss missing' }
+                if (-not (Test-Path $QBT_MARKER)) { $reasons += 'qbittorrent theme marker missing' }
+                else { $mv = (Read-Utf8 $QBT_MARKER).Trim(); if ($mv -ne $data.palette) { $reasons += "qbittorrent marker palette mismatch ($mv)" } }
+                if ($palTokens -and (Test-Path $qCfg) -and -not ((Read-Utf8 $qCfg) -match [regex]::Escape($palTokens.background))) {
+                    $reasons += 'qbittorrent config.json does not carry the recorded palette'
+                }
+                $qLines = (Read-Utf8 $currentPath) -split '\r?\n'
+                $qUse = Get-IniKey $qLines 'Preferences' 'General\UseCustomUITheme'
+                if ("$qUse".Trim() -ne 'true') { $reasons += "qbittorrent UseCustomUITheme is '$qUse' not 'true'" }
+                $qPath = Get-IniKey $qLines 'Preferences' 'General\CustomUIThemePath'
+                if (-not (Test-QbtThemePath $qPath $qCfg)) { $reasons += "qbittorrent CustomUIThemePath points elsewhere ($qPath)" }
+            }
             'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" }
                 # A console profile whose screen-buffer height fell at/below its
                 # window height has ZERO scrollback and no scrollbar. conhost
@@ -448,7 +551,7 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
             'totalcmd2' { $tc = Test-TotalCmdThemed $currentPath $palTokens; if ($tc -is [string]) { $reasons += $tc } }
             # W2-005: health compares EVERY owned registry value (the exact set
             # Invoke-MpcHc owns), not just one cheap marker.
-            'mpchc'     { $props = Get-ItemProperty $MPC_KEY -ErrorAction SilentlyContinue; if ($props) { if ($props.MPCTheme -ne 1) { $reasons += 'mpc MPCTheme not themed' }; if ($props.ModernThemeMode -ne 2) { $reasons += 'mpc ModernThemeMode not themed' }; if ($props.OSDFont -ne 'Verdana') { $reasons += 'mpc OSD font not themed' }; if ($props.OSDSize -ne 16) { $reasons += 'mpc OSD size not themed' }; if ($props.OSDTransparency -ne 0) { $reasons += 'mpc OSD transparency not themed' }; if ($props.OSDBorder -ne 1) { $reasons += 'mpc OSD border not themed' }; if ($props.TitleBarTextStyle -ne 1) { $reasons += 'mpc title bar text style not themed' } } else { $reasons += 'mpc settings key unreadable' } }
+            'mpchc'     { $props = Get-ItemProperty $MPC_KEY -ErrorAction SilentlyContinue; if ($props) { if ($props.MPCTheme -ne 1) { $reasons += 'mpc MPCTheme not themed' }; if ($props.ModernThemeMode -ne 2) { $reasons += 'mpc ModernThemeMode not themed' }; $wantFace = Get-WintageFontFace; if ($props.OSDFont -ne $wantFace) { $reasons += "mpc OSD font is '$($props.OSDFont)' not '$wantFace'" }; if ($props.OSDSize -ne 16) { $reasons += 'mpc OSD size not themed' }; if ($props.OSDTransparency -ne 0) { $reasons += 'mpc OSD transparency not themed' }; if ($props.OSDBorder -ne 1) { $reasons += 'mpc OSD border not themed' }; if ($props.TitleBarTextStyle -ne 1) { $reasons += 'mpc title bar text style not themed' } } else { $reasons += 'mpc settings key unreadable' } }
             'discord'   { $bdCss = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (-not (Test-Path $bdCss)) { $reasons += 'betterdiscord css missing' } elseif ($palTokens -and -not ((Read-Utf8 $bdCss) -match [regex]::Escape($palTokens.background))) { $reasons += 'betterdiscord css does not match the recorded palette' } }
             # CORE-012: $currentPath IS the resolved CSS file (see
             # Get-TargetCurrentPath); the old $cssFile variable is not defined in
@@ -679,6 +782,12 @@ function Restore-FilePreState($pre, [string]$file, [string]$bakFile) {
     elseif ($bakFile -and (Test-Path $bakFile)) { Remove-Item $bakFile -Force }
 }
 function Invoke-TargetCommit([string]$target, [string]$label, [scriptblock]$commit, [scriptblock]$restore) {
+    # W2-005: rollback is a CHECKED phase. The restore scriptblock must throw
+    # on any failure -- including native-program non-zero exits that PowerShell
+    # does not promote to terminating errors. The wrapper below captures every
+    # call's $LASTEXITCODE and any PowerShell error stream output, and throws
+    # a single composite message on rollback failure. The exact-restoration
+    # message below is only printed when the entire restore succeeded.
     try {
         & $commit
     } catch {
@@ -688,10 +797,26 @@ function Invoke-TargetCommit([string]$target, [string]$label, [scriptblock]$comm
                 Say "$label`: manifest commit failed - target restored to its exact pre-operation state." 'Yellow'
             } catch {
                 Say "$label`: manifest commit failed AND rollback failed - $($_.Exception.Message)" 'Red'
+                throw
             }
         }
         throw
     }
+}
+
+# W2-005: every native command in a rollback path goes through this helper
+# so a non-zero exit is treated as a failure (PowerShell does not promote
+# $LASTEXITCODE to a terminating error by itself; $ErrorActionPreference='Stop'
+# only does so for PowerShell errors). The captured stdout/stderr is folded
+# into the thrown message so a failing rollback never silently succeeds.
+function Invoke-Native([string]$label, [scriptblock]$cmd) {
+    $output = & $cmd 2>&1
+    $code = $LASTEXITCODE
+    if ($code -ne 0) {
+        $msg = ($output | ForEach-Object { "$_" }) -join "`n"
+        throw "$label`: native command FAILED with exit $code. Output: $msg"
+    }
+    return $output
 }
 
 # Whole-directory snapshots for targets whose mutation is directory-shaped (the
@@ -713,6 +838,25 @@ function Save-DirPreState([string]$dir) {
 }
 function Restore-DirPreState([string]$dir, $snap) {
     if (-not $snap) { return }
+    # W2-001: refuse malformed/non-structured snapshot values. A raw path or
+    # any object without explicit Existed/SnapshotPath fields must never be
+    # silently coerced into the absent-prestate branch (which would delete a
+    # live directory the snapshot was meant to restore).
+    $hasExisted = $false
+    $hasSnapshotPath = $false
+    if ($snap -is [hashtable]) {
+        $hasExisted = $snap.ContainsKey('Existed')
+        $hasSnapshotPath = $snap.ContainsKey('SnapshotPath')
+    } elseif ($snap -is [System.Collections.Specialized.OrderedDictionary]) {
+        $hasExisted = $snap.Contains('Existed')
+        $hasSnapshotPath = $snap.Contains('SnapshotPath')
+    } elseif ($snap.PSObject) {
+        $hasExisted = $snap.PSObject.Properties['Existed'] -ne $null
+        $hasSnapshotPath = $snap.PSObject.Properties['SnapshotPath'] -ne $null
+    }
+    if (-not ($hasExisted -and $hasSnapshotPath)) {
+        throw "Restore-DirPreState: malformed snapshot for '$dir' (expected @{ Existed = ...; SnapshotPath = ... }, got $($snap.GetType().FullName))"
+    }
     $existed = [bool]$snap.Existed
     $path = $snap.SnapshotPath
     if (-not $existed) {
@@ -723,17 +867,38 @@ function Restore-DirPreState([string]$dir, $snap) {
         return
     }
     if (-not $path -or -not (Test-Path $path)) { return }
-    # T-191 P0#12: materialise the restore in a temp sibling FIRST, then swap it
-    # in. A failed copy never touches the live dir; the temp is dropped on error.
-    $tmp = Join-Path (Split-Path $dir) ('.wintage-restore-' + [guid]::NewGuid().ToString('N'))
+    # W2-002: true two-phase swap. Phase 1 materialise snapshot to a temp
+    # sibling (the live dir is untouched at this point). Phase 2 retire the
+    # live dir into a recovery sibling, then rename the materialised temp into
+    # place. Either rename can fail, but the live content and the restored
+    # copy are both preserved as recovery locations until the swap is known
+    # good. A failed retire leaves the original at $dir; a failed final
+    # rename leaves BOTH the original and the restored copy recoverable.
+    $parent = Split-Path $dir
+    if (-not $parent) { $parent = '.' }
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+    $tmp = Join-Path $parent ('.wintage-restore-' + [guid]::NewGuid().ToString('N'))
+    $retired = $null
+    $swapFailures = @()
     try {
         Copy-Item $path $tmp -Recurse -Force
-        if ($dir -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
-        New-Item -ItemType Directory -Force -Path (Split-Path $dir) | Out-Null
-        Rename-Item $tmp ([IO.Path]::GetFileName($dir))
+        if (Test-Path $dir) {
+            $retired = Join-Path $parent ('.wintage-retired-' + [guid]::NewGuid().ToString('N'))
+            try { Rename-Item $dir $retired }
+            catch { $swapFailures += "retire: $($_.Exception.Message)"; throw }
+        }
+        try { Rename-Item $tmp ([IO.Path]::GetFileName($dir)) }
+        catch { $swapFailures += "swap: $($_.Exception.Message)"; throw }
+        # The restored copy is live; the retired copy may now be retired safely.
+        if ($retired -and (Test-Path $retired)) { Remove-Item $retired -Recurse -Force -ErrorAction SilentlyContinue }
     } catch {
-        if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
-        throw
+        # Preserve every surviving recovery location; do not claim exact
+        # restoration when the swap itself is incomplete.
+        $surviving = @()
+        if ($retired -and (Test-Path $retired)) { $surviving += $retired }
+        if (Test-Path $tmp) { $surviving += $tmp }
+        $detail = ($swapFailures -join '; ')
+        throw "Restore-DirPreState: two-phase swap INCOMPLETE for '$dir' ($detail). Recovery locations preserved: $([string]::Join('; ', $surviving))"
     } finally {
         # The captured snapshot is no longer needed once Restore finishes.
         if ($path -and (Test-Path $path)) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
@@ -756,18 +921,50 @@ function Invoke-WindowsTerminal {
         $m = Read-Manifest
         $recorded = if ($m.ContainsKey('terminal')) { @(Get-ManifestItems $m['terminal']) } else { @() }
         if (-not $recorded.Count) { $recorded = @($settingsPaths) }
+        # W2-007: every recorded item is reverted with --keep-recovery so the
+        # owned-field backup and the palette marker survive each individual
+        # call. A failed sibling keeps the recovery intact for a clean retry.
+        # The marker itself is only removed after the manifest commits (below),
+        # so a failed manifest commit can re-theme the recorded files
+        # without resorting to the palette for state reconstruction.
         $failedItems = @()
+        $revertedItems = @()
         foreach ($settings in $recorded) {
             try {
-                $args = @($helper, '--settings', $settings, '--revert')
+                $args = @($helper, '--settings', $settings, '--revert', '--keep-recovery')
                 if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw "Windows Terminal dry-run FAILED ($LASTEXITCODE) - see the message above." }; continue }
                 if ($PSCmdlet.ShouldProcess($settings, 'Restore the pre-Wintage settings')) {
                     & node $args
                     if ($LASTEXITCODE -ne 0) { throw "Windows Terminal revert failed for $settings" }
+                    $revertedItems += $settings
                 }
             } catch { $failedItems += $settings }
         }
-        if ($failedItems.Count) { throw "Windows Terminal revert INCOMPLETE for: $($failedItems -join '; ') - manifest kept." }
+        if ($failedItems.Count) {
+            # W2-007: an item-N failure must NOT leave items 1..N-1 consumed.
+            # Roll the already-reverted items BACK to their themed state from
+            # the preserved recovery so the manifest and the file system agree.
+            $rollbackErrs = @()
+            foreach ($settings in $revertedItems) {
+                try {
+                    # Re-apply the recorded palette to put the file back. A
+                    # final --revert --keep-recovery is safe to call again on
+                    # the same file because the recovery artifacts are still
+                    # on disk; this re-apply must precede the manifest commit.
+                    $palForRollback = $null
+                    if ($m.ContainsKey('terminal') -and $m['terminal'].palette) {
+                        $palForRollback = Join-Path $root "themes/$($m['terminal'].palette).json"
+                    }
+                    if ($palForRollback -and (Test-Path $palForRollback)) {
+                        Invoke-Native "Windows Terminal rollback re-theme of $settings" { & node $helper --settings $settings --palette $palForRollback }
+                    }
+                } catch { $rollbackErrs += "$settings`: $($_.Exception.Message)" }
+            }
+            if ($rollbackErrs.Count) {
+                throw "Windows Terminal revert INCOMPLETE for: $($failedItems -join '; ') AND rollback INCOMPLETE ($($rollbackErrs -join '; ')). Manifest and recovery preserved for manual recovery."
+            }
+            throw "Windows Terminal revert INCOMPLETE for: $($failedItems -join '; ') - already-reverted items were re-themed; manifest kept."
+        }
         # T-192 P2/B: the manifest transition is part of the revert transaction.
         # A failed Remove-ManifestEntry re-themes the recorded settings from the
         # recorded palette so state and ledger never disagree.
@@ -777,10 +974,29 @@ function Invoke-WindowsTerminal {
             $m = Read-Manifest
             if ($m.ContainsKey('terminal') -and $m['terminal'].palette) {
                 $palFile = Join-Path $root "themes/$($m['terminal'].palette).json"
-                foreach ($settings in $recorded) {
-                    if (Test-Path $settings) { & node $helper --settings $settings --palette $palFile 2>$null | Out-Null }
+                foreach ($settings in $revertedItems) {
+                    if (Test-Path $settings) {
+                        # W2-005: the rollback re-applies the recorded palette via
+                        # install-terminal.js. A non-zero exit is a rollback
+                        # failure and must throw, not just disappear into Out-Null.
+                        Invoke-Native "Windows Terminal rollback for $settings" { & node $helper --settings $settings --palette $palFile }
+                    }
                 }
             }
+        }
+        # W2-007: with the manifest transition committed, every reverted item
+        # is now safe to consume its recovery artifacts. A failure here is
+        # reported but does not undo the manifest removal - the recovery files
+        # are inert and can be cleaned up by the next revert or by hand.
+        $consumeErrs = @()
+        foreach ($settings in $revertedItems) {
+            try {
+                & node $helper --settings $settings --finalize-recovery
+                if ($LASTEXITCODE -ne 0) { throw "exit $LASTEXITCODE" }
+            } catch { $consumeErrs += "$settings`: $($_.Exception.Message)" }
+        }
+        if ($consumeErrs.Count) {
+            Say "Windows Terminal: recovery artifact consumption incomplete for: $($consumeErrs -join '; '). Run a clean Revert to clean them up." 'Yellow'
         }
         return
     }
@@ -800,8 +1016,17 @@ function Invoke-WindowsTerminal {
                 # CORE-006: roll back the previously applied items AND the failing
                 # current item - the helper writes settings before its marker, so
                 # a failure between the two leaves THIS item themed too.
+                $rollbackErrs = @()
                 foreach ($done in (@($applied) + @($settings))) {
-                    & node $helper --settings $done --revert 2>$null | Out-Null
+                    try {
+                        # W2-005: a failed revert here is a rollback failure that
+                        # must surface - the helper owns the item's recovery
+                        # markers and a silent failure would consume them.
+                        Invoke-Native "Windows Terminal revert of $done" { & node $helper --settings $done --revert }
+                    } catch { $rollbackErrs += "$done`: $($_.Exception.Message)" }
+                }
+                if ($rollbackErrs.Count) {
+                    throw "Windows Terminal patch failed for $settings AND rollback INCOMPLETE ($($rollbackErrs -join '; ')). Manifest was NOT updated; the marked settings still own their recovery artifacts."
                 }
                 throw "Windows Terminal patch failed for $settings - all mutated settings were reverted; the manifest was NOT updated."
             }
@@ -2072,6 +2297,10 @@ function Invoke-Obs {
             }
         }
         $pre = Save-ObsPreState
+        # The .ovt names Verdana_m1 first and falls back to Verdana (Qt cannot
+        # switch antialiasing off, so UI.md law 1 comes from the FACE). Advice
+        # only - Wintage never installs or removes fonts.
+        if (-not $DoRevert) { Say-WintageFontAdvice 'OBS Studio' }
         & node $args
         if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
         if ($DoRevert) {
@@ -2108,10 +2337,19 @@ function Invoke-MpcHc {
     # MPCTheme 1 = the dark UI. ModernThemeMode 2 = dark title bar too.
     # OSD: Verdana per UI.md law 1, a size on its ladder, zero transparency
     # (law 2 forbids it outright), and a border so it reads as a raised surface.
+    #
+    # The face is Verdana_m1 - the non-antialiased Verdana patch this repo ships -
+    # when the machine has it, because OSDFont is a plain GDI face name and there
+    # is no setting anywhere in MPC-HC to switch smoothing off. Law 1's
+    # "non-antialiased" therefore has to come from the font itself. Unlike a
+    # stylesheet this value carries NO fallback chain, so naming an absent face
+    # would hand the OSD to whatever GDI substitutes: the face is probed, never
+    # assumed, and Wintage does not install it (see the font note at the top).
+    $osdFont = Get-WintageFontFace
     $vals = @{
         MPCTheme         = 1
         ModernThemeMode  = 2
-        OSDFont          = 'Verdana'
+        OSDFont          = $osdFont
         OSDSize          = 16
         OSDTransparency  = 0
         OSDBorder        = 1
@@ -2132,10 +2370,19 @@ function Invoke-MpcHc {
             Invoke-TargetCommit 'mpchc' 'MPC-HC' {
                 Remove-ManifestEntry 'mpchc'
             } {
+                # W2-005: rollback re-applies the theme keys. Each registry
+                # write is checked, so a single failure does not silently
+                # claim exact restoration while leaving partial state behind.
+                $failed = @()
                 foreach ($k in $vals.Keys) {
                     $type = if ($vals[$k] -is [string]) { 'String' } else { 'DWord' }
-                    Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
+                    try {
+                        Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type -ErrorAction Stop
+                    } catch {
+                        $failed += "$k`: $($_.Exception.Message)"
+                    }
                 }
+                if ($failed.Count) { throw "MPC-HC: rollback registry writes failed ($($failed -join '; ')). Manifest kept; user must rerun or fix registry manually." }
             }
         }
         return
@@ -2155,11 +2402,15 @@ function Invoke-MpcHc {
         }
         else { Say "MPC-HC: keeping the existing backup at $bak (it holds the pre-Wintage state)" 'DarkGray' }
 
+        # OSDFont carries no fallback chain, so an absent face is reported rather
+        # than named. Wintage never installs the font itself.
+        Say-WintageFontAdvice 'MPC-HC'
+
         foreach ($k in $vals.Keys) {
             $type = if ($vals[$k] -is [string]) { 'String' } else { 'DWord' }
             Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
         }
-        Say 'MPC-HC: dark theme on, OSD set to Verdana 16, zero transparency, bordered.' 'Green'
+        Say "MPC-HC: dark theme on, OSD set to $osdFont 16, zero transparency, bordered." 'Green'
         Invoke-TargetCommit 'mpchc' 'MPC-HC' {
             Set-ManifestEntry 'mpchc' 'n/a' $MPC_KEY 'n/a' (Get-PayloadVersion)
         } {
@@ -2172,3 +2423,179 @@ function Invoke-MpcHc {
         Say '  MPC-HC rewrites these on exit - close it BEFORE applying, or re-apply after.' 'Yellow'
     }
 }
+
+# ─── qBittorrent ─────────────────────────────────────────────────────────────
+# Qt6 desktop client. qBittorrent loads an UNPACKED theme when
+# General\CustomUIThemePath names a config.json: it then reads that config.json
+# plus the stylesheet.qss beside it (FolderThemeSource). That is the mode this
+# target uses, deliberately over the packed .qbtheme bundle -- a .qbtheme is a Qt
+# Resource Collection file and would need a matching-major-version `rcc` binary on
+# the user's machine to produce, which is a compiler dependency for two text files.
+#
+# The theme is written into the user's own config directory (%APPDATA%\qBittorrent\
+# themes\wintage), so a qBittorrent update cannot take it with it. What an update
+# CAN do is nothing at all here: the two INI keys and the two files are all this
+# target owns.
+#
+# qBittorrent rewrites its whole INI when it exits, so an edit made while it is
+# running is discarded on close. The target refuses to run in that state rather
+# than reporting a success the next exit erases.
+
+$script:QBT_OWNED_INI_KEYS = @('General\UseCustomUITheme', 'General\CustomUIThemePath')
+
+# QSettings stores an INI string with backslashes doubled, and qBittorrent's own
+# Path type normalises to forward slashes. Both spellings name the same file, so
+# the comparison canonicalises before it judges.
+function Test-QbtThemePath([string]$value, [string]$expected) {
+    if (-not $value) { return $false }
+    $v = $value.Trim().Trim('"') -replace '\\\\', '\' -replace '/', '\'
+    try { $v = [IO.Path]::GetFullPath($v) } catch { return $false }
+    try { $e = [IO.Path]::GetFullPath($expected) } catch { return $false }
+    return $v.TrimEnd('\') -eq $e.TrimEnd('\')
+}
+
+# A BOM is not cosmetic in a QSettings INI: it would ride in front of the first
+# section header and turn `[Preferences]` into a section nobody looks for. The
+# file is written back as UTF-8 WITHOUT a BOM, CRLF, exactly as Qt wrote it.
+function Write-QbtIni([string]$path, $lines) {
+    $l = @($lines)
+    while ($l.Count -and $l[-1] -eq '') { $l = if ($l.Count -gt 1) { $l[0..($l.Count - 2)] } else { @() } }
+    Write-Utf8 $path (($l -join "`r`n") + "`r`n")
+}
+
+function Invoke-Qbittorrent {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+
+    if (-not (Test-Path $QBT_INI)) { Assert-TargetResolvable 'qBittorrent' $false; return }
+    # Test seam: a fixture redirects APPDATA, so the machine's own running
+    # qBittorrent is not the instance that owns the fixture INI and must not
+    # block it. Never set outside tests - for a real install the guard is the
+    # only thing standing between an applied theme and qBittorrent's exit
+    # rewriting the INI back over it.
+    $qbtRunning = if ($env:WINTAGE_TEST_ALLOW_RUNNING_QBT) { $null } else { Get-Process qbittorrent -ErrorAction SilentlyContinue }
+    if ($qbtRunning) {
+        throw 'qBittorrent: close qBittorrent and run this again - it rewrites qBittorrent.ini on exit and would discard the theme selection.'
+    }
+
+    $cfgFile = Join-Path $QBT_THEME_DIR 'config.json'
+    $qssFile = Join-Path $QBT_THEME_DIR 'stylesheet.qss'
+
+    # CORE-002 discipline: persistent first-touch recovery OUTSIDE the target,
+    # recording created-vs-replaced for the theme directory AND the original value
+    # (or absence) of every owned INI key. A repaint never overwrites it.
+    $recDir = Join-Path $WintageAppData 'recovery\qbittorrent'
+    $recMeta = Join-Path $recDir 'recovery.json'
+    $pristineDir = Join-Path $recDir 'pristine'
+
+    if ($DoRevert) {
+        if (-not (Assert-RevertSource 'qbittorrent' $recMeta 'qBittorrent')) { return }
+        if (-not $PSCmdlet.ShouldProcess($QBT_INI, 'Restore the pre-Wintage UI theme selection')) { return }
+        $meta = Read-Utf8 $recMeta | ConvertFrom-Json
+        $preIni = Save-FilePreState $QBT_INI $null
+        $preDir = Save-DirPreState $QBT_THEME_DIR
+        $preMarker = Save-FilePreState $QBT_MARKER $null
+
+        $lines = (Read-Utf8 $QBT_INI) -split '\r?\n'
+        foreach ($k in $script:QBT_OWNED_INI_KEYS) {
+            $orig = if ($meta.ini) { $meta.ini.$k } else { $null }
+            if ($null -ne $orig -and "$orig" -ne '') { $lines = Set-IniKey $lines 'Preferences' $k "$orig" }
+            else { $lines = Remove-IniKey $lines 'Preferences' $k }
+        }
+        Write-QbtIni $QBT_INI $lines
+
+        if ($meta.mode -eq 'replaced') {
+            if (-not (Test-Path $pristineDir)) { throw "qBittorrent: pristine recovery is missing ($pristineDir) - refusing to delete the live theme directory." }
+            # Restore-DirPreState CONSUMES the snapshot it is handed, so it is
+            # handed a working copy: the persistent pristine must survive until the
+            # manifest transition commits, or a failed transition would leave the
+            # revert unretryable (the one copy of the pre-Wintage directory gone).
+            $pristineWork = Join-Path $env:TEMP ('wintage-qbt-pristine-' + [guid]::NewGuid().ToString('N'))
+            Copy-Item $pristineDir $pristineWork -Recurse -Force
+            Restore-DirPreState $QBT_THEME_DIR @{ Existed = $true; SnapshotPath = $pristineWork }
+            Say "qBittorrent: restored the pre-Wintage $QBT_THEME_DIR" 'Green'
+        } elseif (Test-Path $QBT_THEME_DIR) {
+            Remove-Item $QBT_THEME_DIR -Recurse -Force
+            Say "qBittorrent: removed $QBT_THEME_DIR (Wintage-created, nothing pre-existed)" 'Green'
+        }
+        if (Test-Path $QBT_MARKER) { Remove-Item $QBT_MARKER -Force }
+        Say 'qBittorrent: restored the previous UI theme selection.' 'Green'
+
+        Invoke-TargetCommit 'qbittorrent' 'qBittorrent' {
+            Remove-ManifestEntry 'qbittorrent'
+        } {
+            Restore-FilePreState $preIni $QBT_INI $null
+            Restore-DirPreState $QBT_THEME_DIR $preDir
+            Restore-FilePreState $preMarker $QBT_MARKER $null
+        }
+        # Recovery is consumed ONLY after the manifest transition committed; a
+        # failed transition keeps it so a retry can finish the revert.
+        Remove-Item ($recMeta + '.provenance.json') -Force -ErrorAction SilentlyContinue
+        Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+        if (Test-Path $pristineDir) { Remove-Item $pristineDir -Recurse -Force -ErrorAction SilentlyContinue }
+        if ($preDir -and $preDir.SnapshotPath -and (Test-Path $preDir.SnapshotPath)) { Remove-Item $preDir.SnapshotPath -Recurse -Force -ErrorAction SilentlyContinue }
+        return
+    }
+
+    $built = Join-Path $out "qbittorrent/$PaletteSlug"
+    $builtCfg = Join-Path $built 'config.json'
+    $builtQss = Join-Path $built 'stylesheet.qss'
+    if (-not (Test-Path $builtCfg) -or -not (Test-Path $builtQss)) {
+        throw "qBittorrent: built output missing for '$PaletteSlug' ($built). Run 'node tools/build-desktop.js'."
+    }
+
+    if (-not $PSCmdlet.ShouldProcess($QBT_INI, "Install and select the Wintage $PaletteSlug UI theme")) { return }
+
+    $lines = (Read-Utf8 $QBT_INI) -split '\r?\n'
+    if (-not (Test-Path $recMeta)) {
+        New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+        $mode = if (Test-Path $QBT_THEME_DIR) { 'replaced' } else { 'created' }
+        if ($mode -eq 'replaced') {
+            if (Test-Path $pristineDir) { Remove-Item $pristineDir -Recurse -Force }
+            Copy-Item $QBT_THEME_DIR $pristineDir -Recurse -Force
+        }
+        $ownedIni = [ordered]@{}
+        foreach ($k in $script:QBT_OWNED_INI_KEYS) {
+            $v = Get-IniKey $lines 'Preferences' $k
+            $ownedIni[$k] = if ($null -ne $v) { "$v" } else { $null }
+        }
+        Write-Utf8 $recMeta (@{ mode = $mode; target = 'qbittorrent'; ini = $ownedIni; created = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
+        Write-RecoveryProvenance $recMeta 'qbittorrent'
+        Say "qBittorrent: recorded the pre-Wintage theme selection ($mode) -> $recMeta" 'DarkGray'
+    }
+
+    $preIni = Save-FilePreState $QBT_INI $null
+    $preDir = Save-DirPreState $QBT_THEME_DIR
+    $preMarker = Save-FilePreState $QBT_MARKER $null
+
+    New-Item -ItemType Directory -Force -Path $QBT_THEME_DIR | Out-Null
+    Copy-Item $builtCfg $cfgFile -Force
+    Copy-Item $builtQss $qssFile -Force
+    # UI.md law 1: Qt cannot switch antialiasing off, so the FACE carries it.
+    # stylesheet.qss names Verdana_m1 first and falls back to Verdana, so this is
+    # advice, never a mutation - see the font note at the top of this file.
+    Say-WintageFontAdvice 'qBittorrent'
+
+    # Forward slashes: qBittorrent's own Path type normalises to them, and a
+    # backslash would have to be written doubled in the INI (QSettings escaping) -
+    # one spelling with no escape rule beats two with one.
+    $iniPath = $cfgFile -replace '\\', '/'
+    $lines = Set-IniKey $lines 'Preferences' 'General\UseCustomUITheme' 'true'
+    $lines = Set-IniKey $lines 'Preferences' 'General\CustomUIThemePath' $iniPath
+    Write-QbtIni $QBT_INI $lines
+    Write-Utf8 $QBT_MARKER $PaletteSlug
+
+    Say "qBittorrent: installed the Wintage $PaletteSlug theme -> $QBT_THEME_DIR" 'Green'
+    Invoke-TargetCommit 'qbittorrent' 'qBittorrent' {
+        Set-ManifestEntry 'qbittorrent' $PaletteSlug $QBT_INI 'n/a' (Get-PayloadVersion)
+    } {
+        Restore-FilePreState $preIni $QBT_INI $null
+        Restore-DirPreState $QBT_THEME_DIR $preDir
+        Restore-FilePreState $preMarker $QBT_MARKER $null
+    }
+    if ($preDir -and $preDir.SnapshotPath -and (Test-Path $preDir.SnapshotPath)) { Remove-Item $preDir.SnapshotPath -Recurse -Force -ErrorAction SilentlyContinue }
+    Say '  Start qBittorrent to see it. Undo: .\install.ps1 -Target qbittorrent -Revert' 'DarkGray'
+    Say '  NOT reachable: qBittorrent draws its own toolbar/tray icons from its resource' 'Yellow'
+    Say '  bundle, so those keep their stock colours - the palette, the transfer-list state' 'Yellow'
+    Say '  colours, the log colours and the Win95 bevel geometry are what this target owns.' 'Yellow'
+}
+

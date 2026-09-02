@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  τα πάντα, μία παλέτα",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            ακύρωσε μία",
   "FbSoundOn": "FB SOUND: ΕΝΕΡΓΟ",
-  "StatusHint": "Διάλεξε θέμα, τσέκαρε τους στόχους, πάτησε APPLY. Η επεξεργασία οποιουδήποτε χρώματος το μετατρέπει σε Custom."
+  "StatusHint": "Διάλεξε θέμα, τσέκαρε τους στόχους, πάτησε APPLY. Η επεξεργασία οποιουδήποτε χρώματος το μετατρέπει σε Custom.",
+  "LanguageLabel": "Language"
 }

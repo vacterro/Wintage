@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  her şey, tek palet",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            birini geri al",
   "FbSoundOn": "FB SESİ: AÇIK",
-  "StatusHint": "Bir tema seçin, hedefleri işaretleyin, APPLY'a basın. Herhangi bir rengi düzenlemek onu Custom'a çevirir."
+  "StatusHint": "Bir tema seçin, hedefleri işaretleyin, APPLY'a basın. Herhangi bir rengi düzenlemek onu Custom'a çevirir.",
+  "LanguageLabel": "Language"
 }

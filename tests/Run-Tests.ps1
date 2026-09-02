@@ -590,7 +590,18 @@ $toolSuites = @(
     @{ Name = 'test-reapply.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-reapply.ps1"' },
     @{ Name = 'test-freebuff.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-freebuff.ps1"' },
     @{ Name = 'test-ownership.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-ownership.ps1"' },
-    @{ Name = 'test-electron-state.js'; Cmd = 'node "{0}\tools\test-electron-state.js"' }
+    @{ Name = 'test-electron-state.js'; Cmd = 'node "{0}\tools\test-electron-state.js"' },
+    # T-231: these five existed and passed but were reachable from NOTHING -- not
+    # from here and not from release.ps1 -- so the contracts they pin (the
+    # dir-prestate snapshot shape, Terminal's recorded-set health + the
+    # keep/finalize recovery ordering, recovery consumption ordering, the install
+    # epoch, portable-Electron path precedence) could regress through a release
+    # with every wired gate green. A suite nobody runs is documentation.
+    @{ Name = 'test-dir-prestate.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-dir-prestate.ps1"' },
+    @{ Name = 'test-terminal-recorded-set.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-terminal-recorded-set.ps1"' },
+    @{ Name = 'test-recovery-consumption.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-recovery-consumption.ps1"' },
+    @{ Name = 'test-epoch.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-epoch.ps1"' },
+    @{ Name = 'test-resolve-portable.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-resolve-portable.ps1"' }
 )
 foreach ($s in $toolSuites) {
     $invokeLine = ($s.Cmd -f $root)

@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  všetko, jedna paleta",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            vrátiť jeden",
   "FbSoundOn": "ZVUK FB: ZAPNUTÝ",
-  "StatusHint": "Vyberte tému, začiarknite ciele a stlačte APPLY. Úprava akejkoľvek farby ju prevedie do Custom."
+  "StatusHint": "Vyberte tému, začiarknite ciele a stlačte APPLY. Úprava akejkoľvek farby ju prevedie do Custom.",
+  "LanguageLabel": "Language"
 }

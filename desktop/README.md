@@ -60,6 +60,7 @@ in use.
 | `terminal` | Windows Terminal scheme + all-profile defaults, Terminus (TTF) for Windows | yes — settings are in your profile |
 | `conhost` | `HKCU\Console` defaults + every existing cmd/PowerShell profile | yes — exact touched-value snapshot |
 | `obs` | OBS 30.2+ `.ovt` variant + active `user.ini` theme ID | yes — it lives in your profile |
+| `qbittorrent` | unpacked Qt UI theme (`config.json` + `stylesheet.qss`) + the two `qBittorrent.ini` theme keys | yes — it lives in your profile |
 | `antigravity`, `vscode` | colour-theme extension in `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — it lives in your profile |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, see below | no — re-run the installer |
 | `claude` | Electron shim, patched in place — see below | no — an update makes a new `app-<version>` folder |
@@ -216,6 +217,56 @@ installs it into `%APPDATA%\obs-studio\themes`, and writes its stable theme ID t
 `user.ini`, so the chosen Wintage palette is already selected on the next launch.
 Close OBS before Apply or Revert: OBS rewrites `user.ini` on exit. The first apply
 backs up both the previous selection and any same-named theme byte-for-byte.
+
+### qBittorrent
+
+`qbittorrent` writes an **unpacked** Qt UI theme into
+`%APPDATA%\qBittorrent\themes\wintage` — a `config.json` (the `Palette.*` roles plus
+qBittorrent's own context colours: transfer-list states, log severities) and a
+`stylesheet.qss` beside it (the 2px bevels, square corners and Verdana that a palette
+cannot express) — then points `General\CustomUIThemePath` at that `config.json` and
+sets `General\UseCustomUITheme=true`.
+
+Unpacked rather than a `.qbtheme` bundle on purpose: a `.qbtheme` is a Qt Resource
+Collection file and would need a matching-major-version `rcc` binary on the machine to
+produce, which is a compiler dependency for two text files. qBittorrent reads the
+folder form natively (`FolderThemeSource`).
+
+Close qBittorrent before Apply or Revert: it rewrites the whole `qBittorrent.ini` on
+exit, so an edit made while it is running is discarded on close — the target refuses to
+run in that state rather than reporting a success the next exit erases. `-Revert`
+restores the two INI keys to their exact pre-Wintage values (or removes them if they
+were absent) and puts back any same-named theme folder byte-for-byte; unrelated
+`qBittorrent.ini` edits made after Apply survive.
+
+Not reachable: the toolbar and tray icons come from qBittorrent's own compiled
+resource bundle, so those keep their stock colours.
+
+### Fonts: named, never installed
+
+UI.md law 1 asks for Verdana with **no antialiasing**. A Qt stylesheet has no
+property for that, and MPC-HC's `OSDFont` is a plain GDI face name — so the only
+lever is the face itself. `Verdana_m1.ttf` in the repo root is a copy of Verdana
+carrying pre-rendered 1bpp bitmap strikes at 3–30 ppem, which a renderer uses in
+preference to smoothing the outline.
+
+The `qbittorrent` and `obs` stylesheets name `Verdana_m1, Verdana`, and `mpchc`
+names whichever of the two the machine actually resolves. **The installer never
+installs or uninstalls a font**, and that is deliberate rather than unfinished:
+
+A font family is resolved by (family, style). Register Regular + Bold + Italic and
+every consumer resolves correctly; deregister **one** member and every consumer
+asking for that family re-points at a surviving member. On a machine that aliases
+`MS Shell Dlg 2` — the Windows dialog font — onto that family through
+`HKLM\...\FontSubstitutes`, removing Regular turns the **entire desktop italic**,
+including window titles the DWM has already cached, and a logoff is needed to get
+it back. No amount of refcounting fixes that: the blast radius is machine-wide and
+a theme installer has no business there.
+
+So the face is a one-time, explicit user action: right-click `Verdana_m1.ttf` →
+**Install** (per-user, no admin needed), then re-apply the target. If the face is
+absent the targets say so once, name the fix, and fall back to stock Verdana —
+antialiased, but nothing is done to the machine behind your back.
 
 ### Electron apps
 

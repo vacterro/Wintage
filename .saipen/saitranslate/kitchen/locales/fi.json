@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  kaikki, yksi paletti",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            kumoa yksi",
   "FbSoundOn": "FB ÄÄNI: PÄÄLLÄ",
-  "StatusHint": "Valitse teema, merkitse kohteet, paina APPLY. Minkä tahansa värin muokkaaminen haarauttaa sen Customiksi."
+  "StatusHint": "Valitse teema, merkitse kohteet, paina APPLY. Minkä tahansa värin muokkaaminen haarauttaa sen Customiksi.",
+  "LanguageLabel": "Language"
 }

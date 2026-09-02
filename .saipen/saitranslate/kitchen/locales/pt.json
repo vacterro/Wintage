@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  tudo, uma paleta",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            desfazer um",
   "FbSoundOn": "SOM FB: LIGADO",
-  "StatusHint": "Escolha um tema, marque os alvos, pressione APPLY. Editar qualquer cor o transforma em Custom."
+  "StatusHint": "Escolha um tema, marque os alvos, pressione APPLY. Editar qualquer cor o transforma em Custom.",
+  "LanguageLabel": "Language"
 }

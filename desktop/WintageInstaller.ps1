@@ -134,13 +134,25 @@ function Contrast($a, $b) {
 # bottom/right for raised, swapped for sunken. Drawn by hand because every native
 # control style available here has either rounded corners or a gradient.
 function Draw-Bevel($g, $rect, $light, $dark, [bool]$raised = $true) {
+    # PERF-009: the previous implementation allocated 8 Drawing.Pen instances
+    # per bevel and relied on GC/finalization to release them. Reusing two
+    # Pens (top-left + bottom-right) per call and disposing them in `finally`
+    # keeps the WinForms GDI handle count flat across repeated invalidations.
     $tl = if ($raised) { $light } else { $dark }
     $br = if ($raised) { $dark } else { $light }
-    for ($i = 0; $i -lt 2; $i++) {
-        $g.DrawLine((New-Object Drawing.Pen $tl), $rect.Left + $i, $rect.Top + $i, $rect.Right - 1 - $i, $rect.Top + $i)
-        $g.DrawLine((New-Object Drawing.Pen $tl), $rect.Left + $i, $rect.Top + $i, $rect.Left + $i, $rect.Bottom - 1 - $i)
-        $g.DrawLine((New-Object Drawing.Pen $br), $rect.Left + $i, $rect.Bottom - 1 - $i, $rect.Right - 1 - $i, $rect.Bottom - 1 - $i)
-        $g.DrawLine((New-Object Drawing.Pen $br), $rect.Right - 1 - $i, $rect.Top + $i, $rect.Right - 1 - $i, $rect.Bottom - 1 - $i)
+    $penTL = $null; $penBR = $null
+    try {
+        $penTL = New-Object Drawing.Pen $tl
+        $penBR = New-Object Drawing.Pen $br
+        for ($i = 0; $i -lt 2; $i++) {
+            $g.DrawLine($penTL, $rect.Left + $i, $rect.Top + $i, $rect.Right - 1 - $i, $rect.Top + $i)
+            $g.DrawLine($penTL, $rect.Left + $i, $rect.Top + $i, $rect.Left + $i, $rect.Bottom - 1 - $i)
+            $g.DrawLine($penBR, $rect.Left + $i, $rect.Bottom - 1 - $i, $rect.Right - 1 - $i, $rect.Bottom - 1 - $i)
+            $g.DrawLine($penBR, $rect.Right - 1 - $i, $rect.Top + $i, $rect.Right - 1 - $i, $rect.Bottom - 1 - $i)
+        }
+    } finally {
+        if ($penTL) { try { $penTL.Dispose() } catch { } }
+        if ($penBR) { try { $penBR.Dispose() } catch { } }
     }
 }
 
@@ -798,17 +810,30 @@ $lstThemes.Add_DrawItem({
         $slug = if ($text -eq 'Custom') { '<custom>' } else { ($script:packs.Values | Where-Object { $_.label -eq $text } | Select-Object -First 1).slug }
         $g = $e.Graphics
         $g.TextRenderingHint = 'SingleBitPerPixelGridFit'
-        # A colour chip per row: picking a theme by name alone means opening every
-        # one to find out what it looks like.
-        if ($slug -and $slug -ne '<custom>') {
-            $t = $script:packs[$slug].tokens
-            $x = $e.Bounds.Right - 46
-            foreach ($k in @('background', 'surfaceRaised', 'borderHighlight', 'textPrimary')) {
-                $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.$k)), $x, $e.Bounds.Top + 4, 10, 10)
-                $x += 11
+        # PERF-009: cache brushes per row so the 4 chip fills + 1 text draw
+        # allocate at most 5 SolidBrush instances, all disposed before the
+        # draw returns. Without this every theme row leaked 5 GDI handles
+        # and the inventory grew linearly with the repaint count.
+        $disposable = New-Object 'System.Collections.Generic.List[System.IDisposable]'
+        try {
+            # A colour chip per row: picking a theme by name alone means opening every
+            # one to find out what it looks like.
+            if ($slug -and $slug -ne '<custom>') {
+                $t = $script:packs[$slug].tokens
+                $x = $e.Bounds.Right - 46
+                foreach ($k in @('background', 'surfaceRaised', 'borderHighlight', 'textPrimary')) {
+                    $b = New-Object Drawing.SolidBrush (C $t.$k)
+                    [void]$disposable.Add($b)
+                    $g.FillRectangle($b, $x, $e.Bounds.Top + 4, 10, 10)
+                    $x += 11
+                }
             }
+            $tb = New-Object Drawing.SolidBrush $e.ForeColor
+            [void]$disposable.Add($tb)
+            $g.DrawString($text, $FONT, $tb, $e.Bounds.Left + 2, $e.Bounds.Top + 2)
+        } finally {
+            foreach ($d in $disposable) { try { $d.Dispose() } catch { } }
         }
-        $g.DrawString($text, $FONT, (New-Object Drawing.SolidBrush $e.ForeColor), $e.Bounds.Left + 2, $e.Bounds.Top + 2)
     })
 
 $preview.Add_Paint({
@@ -818,77 +843,101 @@ $preview.Add_Paint({
         $g = $e.Graphics
         $g.TextRenderingHint = 'SingleBitPerPixelGridFit'
         $w = $preview.Width; $h = $preview.Height
-
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.background)), 0, 0, $w, $h)
-
-        # Title bar
-        $bar = New-Object Drawing.Rectangle 8, 8, ($w - 16), 22
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.surface)), $bar)
-        Draw-Bevel $g $bar (C $t.borderHighlight) (C $t.borderDark) $true
-        $g.DrawString('Wintage', $FONTB, (New-Object Drawing.SolidBrush (C $t.textPrimary)), 14, 12)
-
-        # Window body
-        $body = New-Object Drawing.Rectangle 8, 30, ($w - 16), ($h - 38)
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.backgroundSoft)), $body)
-        Draw-Bevel $g $body (C $t.borderHighlight) (C $t.borderDark) $false
-
-        $g.DrawString('Primary text on backgroundSoft', $FONT, (New-Object Drawing.SolidBrush (C $t.textPrimary)), 18, 40)
-        $g.DrawString('Secondary text', $FONT, (New-Object Drawing.SolidBrush (C $t.textSecondary)), 18, 58)
-        $g.DrawString('Muted / disabled', $FONT, (New-Object Drawing.SolidBrush (C $t.textMuted)), 18, 76)
-        $g.DrawString('A hyperlink', $FONT, (New-Object Drawing.SolidBrush (C $t.link)), 18, 94)
-
-        # Buttons: raised, pressed, disabled
-        $b1 = New-Object Drawing.Rectangle 18, 118, 84, 24
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.surfaceRaised)), $b1)
-        Draw-Bevel $g $b1 (C $t.borderHighlight) (C $t.borderDark) $true
-        $g.DrawString('OK', $FONT, (New-Object Drawing.SolidBrush (C $t.textPrimary)), 48, 124)
-
-        $b2 = New-Object Drawing.Rectangle 110, 118, 84, 24
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.surface)), $b2)
-        Draw-Bevel $g $b2 (C $t.borderHighlight) (C $t.borderDark) $false
-        $g.DrawString('Pressed', $FONT, (New-Object Drawing.SolidBrush (C $t.textPrimary)), 122, 124)
-
-        $b3 = New-Object Drawing.Rectangle 202, 118, 84, 24
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.surfaceRaised)), $b3)
-        Draw-Bevel $g $b3 (C $t.borderHighlight) (C $t.borderDark) $true
-        $g.DrawString('Disabled', $FONT, (New-Object Drawing.SolidBrush (C $t.textMuted)), 210, 124)
-
-        # Sunken input with a selection run
-        $inp = New-Object Drawing.Rectangle 18, 152, 268, 22
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.compareBack)), $inp)
-        Draw-Bevel $g $inp (C $t.borderHighlight) (C $t.borderDark) $false
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.selection)), 24, 156, 96, 14)
-        $g.DrawString('selected text', $FONT, (New-Object Drawing.SolidBrush (C $t.textPrimary)), 24, 155)
-
-        # Scrollbar
-        $track = New-Object Drawing.Rectangle 294, 152, 16, 96
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.backgroundSoft)), $track)
-        Draw-Bevel $g $track (C $t.borderHighlight) (C $t.borderDark) $false
-        $thumb = New-Object Drawing.Rectangle 294, 168, 16, 40
-        $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.surfaceRaised)), $thumb)
-        Draw-Bevel $g $thumb (C $t.borderHighlight) (C $t.borderDark) $true
-
-        # Semantic swatches - backgrounds only, never text (they fail AA as text)
-        $x = 18
-        foreach ($k in @('success', 'warning', 'danger')) {
-            $r = New-Object Drawing.Rectangle $x, 186, 78, 20
-            $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.$k)), $r)
-            Draw-Bevel $g $r (C $t.borderHighlight) (C $t.borderDark) $true
-            $g.DrawString($k, $FONT, (New-Object Drawing.SolidBrush (C $t.textPrimary)), ($x + 6), 189)
-            $x += 86
+        # PERF-009: cache SolidBrush instances per paint and dispose them on
+        # exit so repeated previews do not accumulate native GDI handles. A
+        # small dictionary keyed by hex colour avoids allocating a new brush
+        # for every FillRectangle / DrawString call inside the same paint.
+        $brushes = @{}
+        $disposable = New-Object 'System.Collections.Generic.List[System.IDisposable]'
+        function _b($k) {
+            if (-not $brushes.ContainsKey($k)) {
+                $br = New-Object Drawing.SolidBrush (C $t.$k)
+                $brushes[$k] = $br
+                [void]$disposable.Add($br)
+            }
+            return $brushes[$k]
         }
+        try {
+            $g.FillRectangle((_b 'background'), 0, 0, $w, $h)
 
-        # Surface ladder, so the three steps are visible as steps
-        $x = 18
-        foreach ($k in @('background', 'backgroundSoft', 'surface', 'surfaceRaised', 'surfaceAlt')) {
-            $r = New-Object Drawing.Rectangle $x, 216, 52, 26
-            $g.FillRectangle((New-Object Drawing.SolidBrush (C $t.$k)), $r)
-            Draw-Bevel $g $r (C $t.borderMuted) (C $t.borderDark) $true
-            $x += 54
+            # Title bar
+            $bar = New-Object Drawing.Rectangle 8, 8, ($w - 16), 22
+            $g.FillRectangle((_b 'surface'), $bar)
+            Draw-Bevel $g $bar (C $t.borderHighlight) (C $t.borderDark) $true
+            $g.DrawString('Wintage', $FONTB, (_b 'textPrimary'), 14, 12)
+
+            # Window body
+            $body = New-Object Drawing.Rectangle 8, 30, ($w - 16), ($h - 38)
+            $g.FillRectangle((_b 'backgroundSoft'), $body)
+            Draw-Bevel $g $body (C $t.borderHighlight) (C $t.borderDark) $false
+
+            $g.DrawString('Primary text on backgroundSoft', $FONT, (_b 'textPrimary'), 18, 40)
+            $g.DrawString('Secondary text', $FONT, (_b 'textSecondary'), 18, 58)
+            $g.DrawString('Muted / disabled', $FONT, (_b 'textMuted'), 18, 76)
+            $g.DrawString('A hyperlink', $FONT, (_b 'link'), 18, 94)
+
+            # Buttons: raised, pressed, disabled
+            $b1 = New-Object Drawing.Rectangle 18, 118, 84, 24
+            $g.FillRectangle((_b 'surfaceRaised'), $b1)
+            Draw-Bevel $g $b1 (C $t.borderHighlight) (C $t.borderDark) $true
+            $g.DrawString('OK', $FONT, (_b 'textPrimary'), 48, 124)
+
+            $b2 = New-Object Drawing.Rectangle 110, 118, 84, 24
+            $g.FillRectangle((_b 'surface'), $b2)
+            Draw-Bevel $g $b2 (C $t.borderHighlight) (C $t.borderDark) $false
+            $g.DrawString('Pressed', $FONT, (_b 'textPrimary'), 122, 124)
+
+            $b3 = New-Object Drawing.Rectangle 202, 118, 84, 24
+            $g.FillRectangle((_b 'surfaceRaised'), $b3)
+            Draw-Bevel $g $b3 (C $t.borderHighlight) (C $t.borderDark) $true
+            $g.DrawString('Disabled', $FONT, (_b 'textMuted'), 210, 124)
+
+            # Sunken input with a selection run
+            $inp = New-Object Drawing.Rectangle 18, 152, 268, 22
+            $g.FillRectangle((_b 'compareBack'), $inp)
+            Draw-Bevel $g $inp (C $t.borderHighlight) (C $t.borderDark) $false
+            $g.FillRectangle((_b 'selection'), 24, 156, 96, 14)
+            $g.DrawString('selected text', $FONT, (_b 'textPrimary'), 24, 155)
+
+            # Scrollbar
+            $track = New-Object Drawing.Rectangle 294, 152, 16, 96
+            $g.FillRectangle((_b 'backgroundSoft'), $track)
+            Draw-Bevel $g $track (C $t.borderHighlight) (C $t.borderDark) $false
+            $thumb = New-Object Drawing.Rectangle 294, 168, 16, 40
+            $g.FillRectangle((_b 'surfaceRaised'), $thumb)
+            Draw-Bevel $g $thumb (C $t.borderHighlight) (C $t.borderDark) $true
+
+            # Semantic swatches - backgrounds only, never text (they fail AA as text)
+            $x = 18
+            foreach ($k in @('success', 'warning', 'danger')) {
+                $r = New-Object Drawing.Rectangle $x, 186, 78, 20
+                $g.FillRectangle((_b $k), $r)
+                Draw-Bevel $g $r (C $t.borderHighlight) (C $t.borderDark) $true
+                $g.DrawString($k, $FONT, (_b 'textPrimary'), ($x + 6), 189)
+                $x += 86
+            }
+
+            # Surface ladder, so the three steps are visible as steps
+            $x = 18
+            foreach ($k in @('background', 'backgroundSoft', 'surface', 'surfaceRaised', 'surfaceAlt')) {
+                $r = New-Object Drawing.Rectangle $x, 216, 52, 26
+                $g.FillRectangle((_b $k), $r)
+                Draw-Bevel $g $r (C $t.borderMuted) (C $t.borderDark) $true
+                $x += 54
+            }
+        } finally {
+            foreach ($d in $disposable) { try { $d.Dispose() } catch { } }
         }
     })
 
 function Refresh-Swatches {
+    # PERF-009: dispose removed swatch controls so they do not pile up as
+    # orphaned native handles. WinForms.Controls.Clear() only detaches the
+    # references; the underlying control objects survive until GC finalises
+    # their handles.
+    foreach ($c in @($swatchPanel.Controls)) {
+        try { $c.Dispose() } catch { }
+    }
     $swatchPanel.Controls.Clear()
     $t = Get-ActiveTokens
     $y = 0; $col = 0
@@ -903,24 +952,31 @@ function Refresh-Swatches {
         $p.Add_Click({
                 $key = $this.Tag
                 $dlg = New-Object Windows.Forms.ColorDialog
-                $dlg.FullOpen = $true
-                $dlg.Color = $this.BackColor
-                if ($dlg.ShowDialog() -eq 'OK') {
-                    # Editing any swatch forks the palette into Custom rather than
-                    # mutating a shipped pack -- a theme the user did not author
-                    # must never change under them.
-                    if ($script:current -ne '<custom>') {
-                        $src = Get-ActiveTokens
-                        $script:custom = @{}
-                        foreach ($kk in $TOKENS) { $script:custom[$kk] = $src[$kk] }
-                        $script:current = '<custom>'
-                        $lstThemes.SelectedItem = 'Custom'
+                try {
+                    $dlg.FullOpen = $true
+                    $dlg.Color = $this.BackColor
+                    if ($dlg.ShowDialog() -eq 'OK') {
+                        # Editing any swatch forks the palette into Custom rather than
+                        # mutating a shipped pack -- a theme the user did not author
+                        # must never change under them.
+                        if ($script:current -ne '<custom>') {
+                            $src = Get-ActiveTokens
+                            $script:custom = @{}
+                            foreach ($kk in $TOKENS) { $script:custom[$kk] = $src[$kk] }
+                            $script:current = '<custom>'
+                            $lstThemes.SelectedItem = 'Custom'
+                        }
+                        $hex = '#{0:X2}{1:X2}{2:X2}' -f $dlg.Color.R, $dlg.Color.G, $dlg.Color.B
+                        $script:custom[$key] = $hex
+                        Refresh-Swatches
+                        $preview.Invalidate()
+                        Update-Info
                     }
-                    $hex = '#{0:X2}{1:X2}{2:X2}' -f $dlg.Color.R, $dlg.Color.G, $dlg.Color.B
-                    $script:custom[$key] = $hex
-                    Refresh-Swatches
-                    $preview.Invalidate()
-                    Update-Info
+                } finally {
+                    # PERF-009: deterministic disposal of the ColorDialog so the
+                    # per-click native handle does not accumulate during a long
+                    # swatch-editing session.
+                    try { $dlg.Dispose() } catch { }
                 }
             })
         $lbl = New-Object Windows.Forms.Label

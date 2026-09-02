@@ -418,6 +418,32 @@ function buildWindows(packs) {
   }
 }
 
+// ─── TARGET: qBittorrent ────────────────────────────────────────────────────
+// Qt6 desktop client. qBittorrent reads an UNPACKED theme directly: pointing
+// General\CustomUIThemePath at a config.json makes it a FolderThemeSource, which
+// reads that config.json plus a stylesheet.qss beside it. That path is chosen
+// deliberately over the packed .qbtheme bundle, which is a Qt Resource Collection
+// file and would need the matching-major-version `rcc` binary on the user's
+// machine to build -- a compiler dependency for what is two text files.
+//
+// Two halves, because neither reaches the other's surfaces: config.json owns the
+// Palette.* roles and qBittorrent's own context colours (transfer-list states,
+// log severities), and stylesheet.qss owns geometry -- the 2px bevels, square
+// corners and Verdana that UI.md requires and a palette cannot express.
+function buildQbittorrent(packs) {
+  const dir = path.join(DESKTOP, 'targets', 'qbittorrent');
+  const configTemplate = JSON.parse(fs.readFileSync(path.join(dir, 'template.config.json'), 'utf8').replace(/^\uFEFF/, ''));
+  const qssTemplate = fs.readFileSync(path.join(dir, 'template.qss'), 'utf8');
+  for (const pack of packs) {
+    const config = fill(configTemplate, pack.tokens, { label: pack.label, __file: 'qbittorrent/template.config.json' });
+    emit(path.join(OUT, 'qbittorrent', pack.slug, 'config.json'), JSON.stringify(config, null, 4) + '\n');
+    const qss = fill(qssTemplate, pack.tokens, { label: pack.label, __file: 'qbittorrent/template.qss' });
+    const left = /\$\{/.exec(qss);
+    if (left) throw new Error('unresolved placeholder in qbittorrent ' + pack.slug + ' near: ' + qss.slice(left.index, left.index + 60));
+    emit(path.join(OUT, 'qbittorrent', pack.slug, 'stylesheet.qss'), qss);
+  }
+}
+
 // Renaming or removing a palette used to leave its output behind forever: the
 // emit() path only ever writes, so desktop/out/<target>/nomadcode survived the
 // rename to codenomad and would have been installed as a ghost theme. Prune any
@@ -425,7 +451,7 @@ function buildWindows(packs) {
 // reflects themes/ exactly.
 function prune(packs) {
   const live = new Set(packs.map(p => p.slug));
-  for (const target of ['electron', 'browser', 'obsidian', 'obs', 'betterdiscord', 'windows']) {
+  for (const target of ['electron', 'browser', 'obsidian', 'obs', 'betterdiscord', 'windows', 'qbittorrent']) {
     const dir = path.join(OUT, target);
     if (!fs.existsSync(dir)) continue;
     for (const slug of fs.readdirSync(dir)) {
@@ -446,6 +472,7 @@ buildObsidian(packs);
 buildObs(packs);
 buildBetterDiscord(packs);
 buildWindows(packs);
+buildQbittorrent(packs);
 prune(packs);
 
 if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }

@@ -254,6 +254,29 @@ for (const seam of RELO_FAIL_SEAMS) {
   check('relo AFTER_OLD_RETIRE: no staging/old leftovers', !fs.readdirSync(R).some(n => n.startsWith('.wintage-')), true);
 }
 
+// ---- CORE-001: failure INSIDE rollback must not delete the only archive copy ----
+{
+  const R = mk('relo-rollback-fail');
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'));
+  const pre = fs.readFileSync(path.join(R, 'app.asar'));
+  const r = run('--resources "' + R + '" --palette goldendefault', { WINTAGE_TEST_FAIL_ROLLBACK_ASAR: '1' });
+  check('relo ROLLBACK_ASAR: exits NONZERO', r.code !== 0, true);
+  // CORE-001 invariant: the original archive bytes MUST survive somewhere on disk.
+  // Walk every preserved .wintage-* recovery directory looking for app.asar;
+  // the root asar may also be present when the rename eventually succeeded.
+  const entries = fs.existsSync(R) ? fs.readdirSync(R) : [];
+  const candidates = [path.join(R, 'app.asar')].concat(entries.filter(n => n.startsWith('.wintage-')).map(n => path.join(R, n, 'app.asar')));
+  const surviving = candidates.find(p => fs.existsSync(p));
+  check('relo ROLLBACK_ASAR: original archive bytes preserved somewhere on disk', !!surviving, true);
+  if (surviving) {
+    check('relo ROLLBACK_ASAR: preserved archive bytes are original', fs.readFileSync(surviving).equals(pre), true);
+  }
+  // The tool must report ROLLBACK INCOMPLETE rather than silently delete the only copy.
+  check('relo ROLLBACK_ASAR: output reports rollback INCOMPLETE', /INCOMPLETE/.test(r.out), true);
+  check('relo ROLLBACK_ASAR: output does NOT claim exact restoration', !/rolled back to the exact pre-operation state/.test(r.out), true);
+  check('relo ROLLBACK_ASAR: a recovery location is listed in output', /Recovery locations preserved:/.test(r.out), true);
+}
+
 // ---- T-190: in-place transaction rolls back on every injected failure (P0#8) ----
 const INPLACE_FAIL_SEAMS = ['WINTAGE_TEST_FAIL_AFTER_SIDECARS', 'WINTAGE_TEST_FAIL_AFTER_ASAR_WRITE', 'WINTAGE_TEST_FAIL_BEFORE_INTEGRITY'];
 for (const seam of INPLACE_FAIL_SEAMS) {

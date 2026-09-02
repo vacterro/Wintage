@@ -336,6 +336,43 @@ const REPAINTER_FIX = `(() => {
   // reimplementation of something that does not apply.
   function injectLate() { }
 
+  // CORE-015: the userscript counts every deliberately-suppressed throw in the
+  // hover surgery and the shadow-root pierce instead of hiding it, and exposes
+  // one snapshot through window.__wintageDiag(). The repainter body calls
+  // noteSuppressed() in those catch blocks, so the prelude MUST provide it or
+  // the extracted body would ReferenceError inside executeJavaScript -- which
+  // the user experiences as "the theme does nothing", with the error in a place
+  // nobody looks. The build's free-identifier gate is what caught exactly that.
+  //
+  // Same shape and same counter names as the userscript, deliberately: a bug
+  // report from a desktop app and one from the browser then read identically.
+  const DIAG = { hoverWalkThrows: 0, hoverAppendThrows: 0, sheetGenThrows: 0, shadowPierceThrows: 0, firstError: null };
+  function noteSuppressed(kind, e) {
+    DIAG[kind]++;
+    if (!DIAG.firstError) DIAG.firstError = { kind: kind, message: (e && e.message) ? e.message : String(e) };
+  }
+  try {
+    window.__wintageDiag = function () {
+      return {
+        version: W95_VERSION,
+        // The pack identity the shim was generated for. Read off the palette
+        // rather than interpolated from a slug placeholder: the build's resolver
+        // only substitutes the palette-token, FONT, VERSION and bevel
+        // placeholders, so a slug placeholder would survive into the shipped
+        // file and trip its own unresolved-placeholder gate.
+        background: T.background,
+        cssOnlyMode: CSS_ONLY_MODE,
+        suppressed: {
+          hoverWalkThrows: DIAG.hoverWalkThrows,
+          hoverAppendThrows: DIAG.hoverAppendThrows,
+          sheetGenThrows: DIAG.sheetGenThrows,
+          shadowPierceThrows: DIAG.shadowPierceThrows
+        },
+        firstError: DIAG.firstError
+      };
+    };
+  } catch (e) { }
+
 ` + REPAINTER_BODY + `
 
   return "repainter active";

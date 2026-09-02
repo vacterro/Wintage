@@ -94,6 +94,56 @@ function resolveExe() {
   })();
 }
 
+// ─── T-230: a sharing violation is not proof the app is running ──────────────
+// Every EBUSY/EPERM used to be reported as "the application is running - close
+// it completely". On Windows that is simply not what the code means: a file
+// written milliseconds ago is routinely still held by the AV scanner or the
+// search indexer, and the open handle is gone again within a few hundred ms.
+// Measured on this repo's own fixtures, 60 isolated clean applies against a
+// temp directory with no application anywhere: 1 failed with that message.
+//
+// Two costs, and the second is the one that matters. The release gate went red
+// on correct code roughly one run in twenty, which is how a gate stops being
+// believed. And a real user gets told to close an app that is not open, with no
+// path forward except guessing.
+//
+// So a retriable filesystem operation is retried with a short backoff before it
+// is called anything, and the message only claims the app is running when the
+// operation is STILL blocked after the transient window has passed. A genuinely
+// running Electron app holds its archive for as long as it runs, so it fails
+// every attempt and still produces the correct message; an indexer does not.
+const RETRIABLE_FS_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
+const FS_RETRY_DELAYS_MS = [25, 50, 100, 200, 400];
+
+function sleepSync(ms) {
+  // Node has no sync sleep; Atomics.wait on a throwaway buffer is the standard
+  // one and does not need a worker. This runs at most 5 times per operation.
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch (e) {
+    const until = Date.now() + ms;
+    while (Date.now() < until) { /* busy-wait fallback */ }
+  }
+}
+
+// Runs `fn` and retries only the codes above. Returns the value, or rethrows the
+// LAST error so the caller's own EBUSY/EPERM branch still sees a real verdict.
+function fsRetry(fn) {
+  if (process.env.WINTAGE_TEST_NO_FS_RETRY) return fn();
+  let lastErr = null;
+  for (let attempt = 0; attempt <= FS_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return fn();
+    } catch (e) {
+      lastErr = e;
+      if (!RETRIABLE_FS_CODES.has(e.code)) throw e;
+      if (attempt === FS_RETRY_DELAYS_MS.length) break;
+      sleepSync(FS_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+  throw lastErr;
+}
+
 // ─── Fuse handling (T-190 + CORE-007/CORE-008) ──────────────────────────────
 // The fuse flip is part of the install transaction: it happens ONLY after
 // classify + preflight + calculation, and a later failure restores the EXE.
@@ -131,11 +181,17 @@ function ensureDefusedForRepaint(exe) {
   if (d.changed) console.log('install-electron: successfully re-defused the app.');
 }
 
+// CORE-001: return any failure (instead of swallowing it) so the caller can
+// decide whether original EXE bytes are still on disk before nuking the backup.
 function restoreFuseIfDefused(exe) {
-  if (!exe) return;
+  if (!exe) return null;
   const bak = exe + '.wintage-fuse.bak';
-  if (!fs.existsSync(bak)) return;
-  try { fs.copyFileSync(bak, exe); fs.unlinkSync(bak); } catch (e) { }
+  if (!fs.existsSync(bak)) return null;
+  try { fs.copyFileSync(bak, exe); }
+  catch (e) { return { phase: 'fuse-restore-copy', exe: exe, backup: bak, error: e.message }; }
+  try { fs.unlinkSync(bak); }
+  catch (e) { return { phase: 'fuse-restore-unlink', exe: exe, backup: bak, error: e.message }; }
+  return null;
 }
 
 const hasRoot = () => fs.existsSync(asar);
@@ -303,7 +359,7 @@ if (has('revert')) {
       const pre = captureRevertPreState(asar, bak, exeNow);
       try {
         restoreFuseBackupForRevert(exeNow);
-        fs.copyFileSync(bak, asar);
+        fsRetry(() => fs.copyFileSync(bak, asar));
         fs.unlinkSync(bak);
         for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
           try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
@@ -311,7 +367,12 @@ if (has('revert')) {
         if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
         if (asarIsPatched() === true) throw new Error('verification failed: archive still patched after revert');
       } catch (e) {
-        restoreRevertPreState(pre, asar, bak, exeNow);
+        const rollbackFailures = restoreRevertPreState(pre, asar, bak, exeNow);
+        if (rollbackFailures.length) {
+          die('in-place revert failed (' + e.message + ') - rollback INCOMPLETE: ' +
+            rollbackFailures.map(f => f.phase + ': ' + f.error).join(' | ') +
+            '. Original archive preserved at ' + (fs.existsSync(bak) ? bak : (fs.existsSync(asar) ? asar : '(missing)')));
+        }
         die('in-place revert failed (' + e.message + ') - restored the exact pre-operation state.');
       }
       console.log('install-electron: restored original ' + path.basename(asar) + ' from backup');
@@ -349,8 +410,8 @@ if (has('revert')) {
         restoreFuseBackupForRevert(exeNow);
         if (fs.existsSync(movedAsar)) {
           if (fs.existsSync(asar)) die('both ' + asar + ' and ' + movedAsar + ' exist and the archive is ours — delete ' + appDir + ' by hand');
-          fs.renameSync(movedAsar, asar);
-          if (fs.existsSync(movedUnpacked)) fs.renameSync(movedUnpacked, unpacked);
+          fsRetry(() => fs.renameSync(movedAsar, asar));
+          if (fs.existsSync(movedUnpacked)) fsRetry(() => fs.renameSync(movedUnpacked, unpacked));
         }
         fs.rmSync(appDir, { recursive: true, force: true });
         if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
@@ -490,17 +551,35 @@ function captureRevertPreState(asarPath, bakPath, exePath) {
   }
   return s;
 }
+// CORE-001: return an array of failures instead of swallowing them. The caller
+// checks the result before deleting any recovery location.
 function restoreRevertPreState(pre, asarPath, bakPath, exePath) {
-  if (pre.asar !== null) { try { fs.writeFileSync(asarPath, pre.asar); } catch (e) { } }
-  if (pre.bak !== null) { try { fs.writeFileSync(bakPath, pre.bak); } catch (e) { } }
-  else { try { if (fs.existsSync(bakPath)) fs.unlinkSync(bakPath); } catch (e) { } }
+  const failures = [];
+  if (pre.asar !== null) {
+    try { fs.writeFileSync(asarPath, pre.asar); }
+    catch (e) { failures.push({ phase: 'asar-restore', path: asarPath, error: e.message }); }
+  }
+  if (pre.bak !== null) {
+    try { fs.writeFileSync(bakPath, pre.bak); }
+    catch (e) { failures.push({ phase: 'bak-restore', path: bakPath, error: e.message }); }
+  } else {
+    try { if (fs.existsSync(bakPath)) fs.unlinkSync(bakPath); }
+    catch (e) { failures.push({ phase: 'bak-unlink', path: bakPath, error: e.message }); }
+  }
   restoreSidecars(pre.sidecars);
   if (exePath && pre.exe !== null) {
-    try { fs.writeFileSync(exePath, pre.exe); } catch (e) { }
+    try { fs.writeFileSync(exePath, pre.exe); }
+    catch (e) { failures.push({ phase: 'exe-restore', path: exePath, error: e.message }); }
     const fb = exePath + '.wintage-fuse.bak';
-    if (pre.fuseBak !== null) { try { fs.writeFileSync(fb, pre.fuseBak); } catch (e) { } }
-    else { try { if (fs.existsSync(fb)) fs.unlinkSync(fb); } catch (e) { } }
+    if (pre.fuseBak !== null) {
+      try { fs.writeFileSync(fb, pre.fuseBak); }
+      catch (e) { failures.push({ phase: 'fuse-bak-restore', path: fb, error: e.message }); }
+    } else {
+      try { if (fs.existsSync(fb)) fs.unlinkSync(fb); }
+      catch (e) { failures.push({ phase: 'fuse-bak-unlink', path: fb, error: e.message }); }
+    }
   }
+  return failures;
 }
 function captureAppDir() {
   const snap = {};
@@ -510,14 +589,30 @@ function captureAppDir() {
   }
   return snap;
 }
+function appDirByteIdentical(dir, snap) {
+  for (const f of Object.keys(snap)) {
+    const p = path.join(dir, f);
+    if (snap[f].existed) {
+      if (!fs.existsSync(p)) return false;
+      try { if (!fs.readFileSync(p).equals(snap[f].buf)) return false; } catch (e) { return false; }
+    } else {
+      if (fs.existsSync(p)) return false;
+    }
+  }
+  return true;
+}
+// CORE-001: surface per-file failures. Caller verifies success before deleting
+// any external recovery location.
 function restoreAppDir(snap) {
+  const failures = [];
   for (const f of Object.keys(snap)) {
     const p = path.join(appDir, f);
     try {
       if (snap[f].existed) { fs.mkdirSync(appDir, { recursive: true }); fs.writeFileSync(p, snap[f].buf); }
       else if (fs.existsSync(p)) fs.unlinkSync(p);
-    } catch (e) { }
+    } catch (e) { failures.push({ phase: 'appdir-restore', file: f, path: p, error: e.message }); }
   }
+  return failures;
 }
 
 // ─── Apply: in-place mode (transactional, T-190) ────────────────────────────
@@ -547,7 +642,7 @@ function installInPlace() {
   // rollback authority — overwriting it with the current stock archive is what
   // makes Revert restore v-now instead of v-old.
   try {
-    fs.copyFileSync(asar, asarBak);
+    fsRetry(() => fs.copyFileSync(asar, asarBak));
   } catch (e) {
     if (e.code === 'EBUSY' || e.code === 'EPERM') {
       die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
@@ -650,27 +745,38 @@ function installRelocation() {
   // The swap: retire old relocation, move staging in, move archive + unpacked,
   // verify. ANY failure rolls back every mutation in reverse.
   const undo = [];
+  let oldRelocSnapshot = null;   // CORE-001: byte-content of the original (themed) appDir for rollback verification
   try {
     if (isUpdate && fs.existsSync(appDir)) {
-      fs.renameSync(appDir, oldReloc);
-      undo.push(() => fs.renameSync(oldReloc, appDir));
+      oldRelocSnapshot = captureAppDir();
+      fsRetry(() => fs.renameSync(appDir, oldReloc));
+      undo.push(() => fsRetry(() => fs.renameSync(oldReloc, appDir)));
     }
     if (process.env.WINTAGE_TEST_FAIL_AFTER_OLD_RETIRE) throw new Error('simulated post-retire failure (WINTAGE_TEST_FAIL_AFTER_OLD_RETIRE)');
 
-    fs.renameSync(staging, appDir);
-    undo.push(() => fs.renameSync(appDir, staging));
+    fsRetry(() => fs.renameSync(staging, appDir));
+    undo.push(() => fsRetry(() => fs.renameSync(appDir, staging)));
     if (process.env.WINTAGE_TEST_FAIL_AFTER_STAGING_MOVE) throw new Error('simulated post-staging-move failure (WINTAGE_TEST_FAIL_AFTER_STAGING_MOVE)');
 
     if (fs.existsSync(asar)) {
-      fs.renameSync(asar, movedAsar);
-      undo.push(() => fs.renameSync(movedAsar, asar));
+      fsRetry(() => fs.renameSync(asar, movedAsar));
+      undo.push(() => fsRetry(() => fs.renameSync(movedAsar, asar)));
+    }
+    if (process.env.WINTAGE_TEST_FAIL_ROLLBACK_ASAR) {
+      // CORE-001: simulate a rename failure during the rollback itself. The
+      // next reverse step tries to move movedAsar back to asar and fails, so
+      // the original archive must still be recoverable from a preserved
+      // recovery location (movedAsar) and the tool must NOT claim exact
+      // restoration.
+      undo[undo.length - 1] = () => { throw new Error('simulated rollback rename failure (WINTAGE_TEST_FAIL_ROLLBACK_ASAR)'); };
+      throw new Error('simulated asar-move failure (WINTAGE_TEST_FAIL_AFTER_ASAR_MOVE)');
     }
     if (process.env.WINTAGE_TEST_FAIL_AFTER_ASAR_MOVE) throw new Error('simulated post-asar-move failure (WINTAGE_TEST_FAIL_AFTER_ASAR_MOVE)');
 
     if (process.env.WINTAGE_TEST_FAIL_UNPACKED_MOVE) throw new Error('simulated unpacked-move failure (WINTAGE_TEST_FAIL_UNPACKED_MOVE)');
     if (fs.existsSync(unpacked)) {
-      fs.renameSync(unpacked, movedUnpacked);
-      undo.push(() => fs.renameSync(movedUnpacked, unpacked));
+      fsRetry(() => fs.renameSync(unpacked, movedUnpacked));
+      undo.push(() => fsRetry(() => fs.renameSync(movedUnpacked, unpacked)));
     }
 
     if (process.env.WINTAGE_TEST_FAIL_VERIFY) throw new Error('simulated verification failure (WINTAGE_TEST_FAIL_VERIFY)');
@@ -679,15 +785,53 @@ function installRelocation() {
     // Commit: obsolete relocation state is dropped only after everything is in place.
     if (fs.existsSync(oldReloc)) fs.rmSync(oldReloc, { recursive: true, force: true });
   } catch (e) {
-    while (undo.length) { try { undo.pop()(); } catch (e2) { } }
-    fs.rmSync(staging, { recursive: true, force: true });
-    fs.rmSync(oldReloc, { recursive: true, force: true });
-    restoreFuseIfDefused(resolveExe());
-    if (e.code === 'EBUSY' || e.code === 'EPERM') {
-      die('the application is running - close it completely (check the tray) and run this again.\n' +
-        '  Nothing was changed.');
+    // CORE-001: rollback is a CHECKED phase. Run the reverse operations in
+    // order, collect any per-step failure, and never delete a recovery
+    // location whose corresponding original state failed to come back. An
+    // exact-restoration message is only printed when every reverse step
+    // succeeded AND the original archive / app dir actually exists.
+    const undoFailures = [];
+    while (undo.length) {
+      const step = undo.pop();
+      try { step(); } catch (e2) { undoFailures.push({ step: e2.message || String(e2) }); }
     }
-    die('relocation failed (' + e.message + ') - rolled back to the exact pre-operation state.');
+    const fuseErr = restoreFuseIfDefused(resolveExe());
+    const originalAsarRestored = fs.existsSync(asar);
+    const originalAppDirRestored = oldRelocSnapshot ? appDirByteIdentical(appDir, oldRelocSnapshot) : (!fs.existsSync(appDir));
+    const rollbackOk = undoFailures.length === 0 && !fuseErr && originalAsarRestored && originalAppDirRestored;
+    if (rollbackOk) {
+      fs.rmSync(staging, { recursive: true, force: true });
+      fs.rmSync(oldReloc, { recursive: true, force: true });
+      if (e.code === 'EBUSY' || e.code === 'EPERM') {
+        die('the application is running - close it completely (check the tray) and run this again.\n' +
+          '  Nothing was changed.');
+      }
+      die('relocation failed (' + e.message + ') - rolled back to the exact pre-operation state.');
+    } else {
+      // Preserve every surviving recovery location; the user / a future
+      // recovery run may still extract the original archive from one of
+      // them. Do not lie about the result.
+      const surviving = [];
+      if (fs.existsSync(oldReloc)) surviving.push(oldReloc);
+      if (fs.existsSync(staging)) surviving.push(staging);
+      const exe = resolveExe();
+      if (exe) {
+        const fb = exe + '.wintage-fuse.bak';
+        if (fs.existsSync(fb)) surviving.push(fb);
+      }
+      const detail = [
+        undoFailures.length ? 'undo failures: ' + undoFailures.map(f => f.step).join(' | ') : null,
+        fuseErr ? ('fuse restore failed: ' + fuseErr.error) : null,
+        !originalAsarRestored ? 'original archive missing at ' + asar : null,
+        !originalAppDirRestored ? 'original app dir still themed at ' + appDir : null
+      ].filter(Boolean).join('; ');
+      if (e.code === 'EBUSY' || e.code === 'EPERM') {
+        die('the application is running - close it completely (check the tray) and run this again.\n' +
+          '  Nothing was changed.');
+      }
+      die('relocation failed (' + e.message + ') - rollback INCOMPLETE (' + detail + '). ' +
+        'Recovery locations preserved: ' + (surviving.length ? surviving.join('; ') : '(none)'));
+    }
   }
 
   console.log('install-electron: installed palette "' + palette + '" into ' + appDir + (isUpdate ? ' (replaced stale relocation; current version preserved as rollback source)' : ''));

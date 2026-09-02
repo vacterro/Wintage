@@ -47,5 +47,6 @@
   "HelpAll": "  .\\install.ps1 -Target all -Palette goldendefault  הכול, פלטה אחת",
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            בטל אחד",
   "FbSoundOn": "צליל FB: פועל",
-  "StatusHint": "בחרו נושא, סמנו יעדים, לחצו APPLY. עריכת כל צבע מבקעת אותו ל-Custom."
+  "StatusHint": "בחרו נושא, סמנו יעדים, לחצו APPLY. עריכת כל צבע מבקעת אותו ל-Custom.",
+  "LanguageLabel": "Language"
 }
