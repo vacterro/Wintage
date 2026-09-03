@@ -724,7 +724,7 @@ foreach ($name in $names) {
                 # T-192 P2/B: snapshot the THEMED state before the revert so a failed
                 # manifest transition can restore it instead of leaving the app
                 # unthemed while the manifest still claims an install.
-                $elSnap = Save-ElectronStateSnapshot $name
+                $elSnap = Save-ElectronStateSnapshot $name -Operation 'Revert'
                 $fbPatchSnap = if ($name -eq 'freebuff') { Save-FreeBuffPatchState $e.Resources } else { $null }
                 $revertFailures = @()
                 if ($name -eq 'freebuff') {

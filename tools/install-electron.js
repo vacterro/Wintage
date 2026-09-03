@@ -405,6 +405,7 @@ if (has('revert')) {
       if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
       const pre = captureRevertPreState(asar, asar + '.bak', exeNow);
       pre.movedAsar = fs.existsSync(movedAsar) ? fs.readFileSync(movedAsar) : null;
+      pre.movedUnpacked = fs.existsSync(movedUnpacked) ? { existed: true } : { existed: false };
       const appPre = captureAppDir();
       try {
         restoreFuseBackupForRevert(exeNow);
@@ -417,15 +418,47 @@ if (has('revert')) {
         if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
         if (appDirIsOurs() || !fs.existsSync(asar)) throw new Error('verification failed after relocation revert');
       } catch (e) {
-        // Re-roll the relocation back onto the archive and re-create app/.
-        if (pre.movedAsar !== null && fs.existsSync(asar)) {
-          try { fs.writeFileSync(movedAsar, pre.movedAsar); } catch (e2) { }
-          try { if (fs.existsSync(asar)) fs.unlinkSync(asar); } catch (e2) { }
+        const rollbackFailures = [];
+        if (pre.movedAsar !== null) {
+          try {
+            fs.mkdirSync(appDir, { recursive: true });
+            fs.writeFileSync(movedAsar, pre.movedAsar);
+          } catch (e2) {
+            rollbackFailures.push({ phase: 'moved-asar-restore', path: movedAsar, error: e2.message });
+          }
+          if (!rollbackFailures.length && fs.existsSync(asar)) {
+            try { fs.unlinkSync(asar); } catch (e2) {
+              rollbackFailures.push({ phase: 'root-asar-unlink', path: asar, error: e2.message });
+            }
+          }
         }
-        if (pre.movedAsar === null && fs.existsSync(asar)) { try { fs.renameSync(asar, movedAsar); } catch (e2) { } }
-        restoreAppDir(appPre);
-        restoreRevertPreState(pre, asar, asar + '.bak', exeNow);
-        die('relocation revert failed (' + e.message + ') - restored the exact pre-operation state.');
+        if (pre.movedAsar === null && fs.existsSync(asar)) {
+          try { fsRetry(() => fs.renameSync(asar, movedAsar)); } catch (e2) {
+            rollbackFailures.push({ phase: 'moved-asar-rename', path: movedAsar, error: e2.message });
+          }
+        }
+        const appDirFailures = restoreAppDir(appPre);
+        if (appDirFailures.length) rollbackFailures.push(...appDirFailures);
+        const revertPreFailures = restoreRevertPreState(pre, asar, asar + '.bak', exeNow);
+        if (revertPreFailures.length) rollbackFailures.push(...revertPreFailures);
+        const originalMovedAsarRestored = fs.existsSync(movedAsar) && pre.movedAsar !== null;
+        const originalAsarIntact = pre.movedAsar === null || fs.existsSync(asar);
+        const rollbackOk = rollbackFailures.length === 0 && originalMovedAsarRestored;
+        if (rollbackOk) {
+          die('relocation revert failed (' + e.message + ') - rolled back to the exact pre-operation state.');
+        } else {
+          const surviving = [];
+          if (fs.existsSync(movedAsar)) surviving.push(movedAsar);
+          if (fs.existsSync(movedUnpacked)) surviving.push(movedUnpacked);
+          if (fs.existsSync(asar)) surviving.push(asar);
+          const detail = [
+            ...rollbackFailures.map(f => f.phase + ': ' + f.error),
+            !originalMovedAsarRestored ? 'moved archive missing at ' + movedAsar : null,
+            !originalAsarIntact ? 'root archive missing at ' + asar : null
+          ].filter(Boolean).join('; ');
+          die('relocation revert failed (' + e.message + ') - rollback INCOMPLETE (' + detail + '). ' +
+            'Recovery locations preserved: ' + (surviving.length ? surviving.join('; ') : '(none)'));
+        }
       }
       console.log('install-electron: restored ' + path.basename(asar) + ' and removed ' + appDir);
       process.exit(0);
@@ -581,36 +614,52 @@ function restoreRevertPreState(pre, asarPath, bakPath, exePath) {
   }
   return failures;
 }
+function snapshotPath(p) {
+  if (!fs.existsSync(p)) return { existed: false };
+  if (fs.statSync(p).isDirectory()) {
+    return { existed: true, kind: 'dir', entries: fs.readdirSync(p).sort().map(f => [f, snapshotPath(path.join(p, f))]) };
+  }
+  return { existed: true, kind: 'file', buf: fs.readFileSync(p) };
+}
+function restorePath(p, snap) {
+  if (!snap.existed) { if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true }); return; }
+  if (snap.kind === 'dir') {
+    fs.mkdirSync(p, { recursive: true });
+    for (const [f, child] of snap.entries) restorePath(path.join(p, f), child);
+  } else {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, snap.buf);
+  }
+}
 function captureAppDir() {
   const snap = {};
   for (const f of ['package.json', 'shim.cjs', 'wintage.css', 'wintage-status.txt']) {
     const p = path.join(appDir, f);
-    snap[f] = fs.existsSync(p) ? { existed: true, buf: fs.readFileSync(p) } : { existed: false };
+    snap[f] = fs.existsSync(p) ? { existed: true, buf: fs.readFileSync(p), kind: 'file' } : { existed: false };
   }
+  snap['app.asar'] = snapshotPath(movedAsar);
+  snap['app.asar.unpacked'] = snapshotPath(movedUnpacked);
   return snap;
 }
 function appDirByteIdentical(dir, snap) {
   for (const f of Object.keys(snap)) {
-    const p = path.join(dir, f);
-    if (snap[f].existed) {
-      if (!fs.existsSync(p)) return false;
-      try { if (!fs.readFileSync(p).equals(snap[f].buf)) return false; } catch (e) { return false; }
-    } else {
-      if (fs.existsSync(p)) return false;
-    }
+    const actual = snapshotPath(path.join(dir, f));
+    if (!sameSnapshot(actual, snap[f])) return false;
   }
   return true;
 }
-// CORE-001: surface per-file failures. Caller verifies success before deleting
-// any external recovery location.
+function sameSnapshot(a, b) {
+  if (a.existed !== b.existed || a.kind !== b.kind) return false;
+  if (!a.existed) return true;
+  if (a.kind === 'file') return a.buf.equals(b.buf);
+  if (a.entries.length !== b.entries.length) return false;
+  return a.entries.every(([f, child], i) => b.entries[i][0] === f && sameSnapshot(child, b.entries[i][1]));
+}
 function restoreAppDir(snap) {
   const failures = [];
   for (const f of Object.keys(snap)) {
-    const p = path.join(appDir, f);
-    try {
-      if (snap[f].existed) { fs.mkdirSync(appDir, { recursive: true }); fs.writeFileSync(p, snap[f].buf); }
-      else if (fs.existsSync(p)) fs.unlinkSync(p);
-    } catch (e) { failures.push({ phase: 'appdir-restore', file: f, path: p, error: e.message }); }
+    try { restorePath(path.join(appDir, f), snap[f]); }
+    catch (e) { failures.push({ phase: 'appdir-restore', file: f, path: path.join(appDir, f), error: e.message }); }
   }
   return failures;
 }

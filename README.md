@@ -4,7 +4,31 @@
 <img width="876" height="618" alt="2026-08-01_230413" src="https://github.com/user-attachments/assets/5c1839ac-b977-46a0-9003-d6bffa9299a8" />
 [🤍 Support Developer](https://buymeacoffee.com/vacuum34)
 
-[EN](README.md) | [RU](README.ru.md) | [ET](README.et.md) | [Дед](README.ded.md)
+[English](README.md) | [Русский](locales/README.ru.md) | [Eesti](locales/README.et.md) | [Дед](locales/README.ded.md)
+
+<details>
+<summary><b>🌍 30+ Languages</b></summary>
+
+| Language | Readme | Language | Readme |
+|:---|:---|:---|:---|
+| 🇸🇦 العربية | [README.ar.md](locales/README.ar.md) | 🇧🇬 Български | [README.bg.md](locales/README.bg.md) |
+| 🇨🇿 Čeština | [README.cs.md](locales/README.cs.md) | 🇩🇰 Dansk | [README.da.md](locales/README.da.md) |
+| 🇩🇪 Deutsch | [README.de.md](locales/README.de.md) | 🇬🇷 Ελληνικά | [README.el.md](locales/README.el.md) |
+| 🇪🇸 Español | [README.es.md](locales/README.es.md) | 🇪🇪 Eesti | [README.et.md](locales/README.et.md) |
+| 🇫🇮 Suomi | [README.fi.md](locales/README.fi.md) | 🇫🇷 Français | [README.fr.md](locales/README.fr.md) |
+| 🇮🇱 עברית | [README.he.md](locales/README.he.md) | 🇮🇳 हिन्दी | [README.hi.md](locales/README.hi.md) |
+| 🇭🇷 Hrvatski | [README.hr.md](locales/README.hr.md) | 🇭🇺 Magyar | [README.hu.md](locales/README.hu.md) |
+| 🇮🇩 Bahasa Indonesia | [README.id.md](locales/README.id.md) | 🇮🇹 Italiano | [README.it.md](locales/README.it.md) |
+| 🇯🇵 日本語 | [README.ja.md](locales/README.ja.md) | 🇰🇷 한국어 | [README.ko.md](locales/README.ko.md) |
+| 🇳🇱 Nederlands | [README.nl.md](locales/README.nl.md) | 🇳🇴 Norsk | [README.no.md](locales/README.no.md) |
+| 🇵🇱 Polski | [README.pl.md](locales/README.pl.md) | 🇵🇹 Português | [README.pt.md](locales/README.pt.md) |
+| 🇷🇴 Română | [README.ro.md](locales/README.ro.md) | 🇷🇺 Русский | [README.ru.md](locales/README.ru.md) |
+| 🇸🇰 Slovenčina | [README.sk.md](locales/README.sk.md) | 🇸🇪 Svenska | [README.sv.md](locales/README.sv.md) |
+| 🇹🇭 ไทย | [README.th.md](locales/README.th.md) | 🇹🇷 Türkçe | [README.tr.md](locales/README.tr.md) |
+| 🇺🇦 Українська | [README.uk.md](locales/README.uk.md) | 🇻🇳 Tiếng Việt | [README.vi.md](locales/README.vi.md) |
+| 🇨🇳 中文 | [README.zh.md](locales/README.zh.md) | 🧓 Дед | [README.ded.md](locales/README.ded.md) |
+
+</details>
 
 _The modern web optimizes for aesthetics at the expense of usability. Rounded corners replace visual hierarchy, animations replace feedback, shadows replace structure, and minimalism often removes the very cues our brains rely on to understand an interface._
 

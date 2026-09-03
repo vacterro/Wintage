@@ -1,7 +1,13 @@
+# Board
+
 ## DOING
+
 ## TODO
+
 ## DONE
-- [x] W-000 spawn bootstrap, sub adopted by Core `qq` | verify: folder shape matches saihunt convention
-- [x] W-001 author complete Wintage wiki (8 pages) from current HEAD docs and package as status: ready | verify: OUTBOX carries all 7 required fields, version/palette/target stamps cross-checked vs HEAD docs
-- [x] W-002 FORCE-FRESH qq: restamp pages 1.26.1 -> 1.26.2, fix install.ps1 commands -> .\desktop\install.ps1, add desktop/out/ untracked note; package status: ready | verify: OUTBOX carries all 9 complete-package fields bound to 5e79f51 + fingerprint c66baf69 + role_revision 54a42475; zero 1.26.1 in kitchen
+
+- [x] W-009 prepare saiwiki -- force-fresh package bound to v1.30.0 HEAD (ffc13fd), 8/8 pages verified, version stamp 1.30.0, check-wiki-mirror PASS; OUTBOX status: ready | producer: saiwiki
+- [x] W-008 prepare saiwiki -- force-fresh rebind at a9399dc9 (superseded by W-009) | producer: saiwiki
+- [x] W-007 prepare saiwiki -- force-fresh rebind at 8867967 (superseded by W-009) | producer: saiwiki
+
 ## BLOCKED

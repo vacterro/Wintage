@@ -1,7 +1,7 @@
 ---
-phase: REVIEW
+phase: SHIP
 task: T-228
-next_action: "WAIT: manual-verify -- confirm the ship decision for T-225/226/227/228 recorded in .saipen/kitchen/digest.md"
+next_action: "PHASE SHIP T-228"
 blocker: none
 agent: opencode
 saipen_version: 7
@@ -10,12 +10,10 @@ saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN
 mode: full
 execution_intent: converge
 converge_target: ship
-goal_waves: 1
-goal_tickets: 3
-last_event: 756
+last_event: 791
 style_contract: ded-4ae736e4
-updated: 2026-09-02T09:48:00Z
-transition_from: VERIFY
+updated: "2026-09-03T22:00:58Z"
+transition_from: REVIEW
 ---
 
 # Active Work

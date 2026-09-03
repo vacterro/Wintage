@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.30.0
+// @version      1.31.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -79,7 +79,12 @@
         try {
           if (!window.__wintageExcludedReload) {
             window.__wintageExcludedReload = true;
-            location.reload();
+            try {
+              location.reload();
+            } catch (e) {
+              window.__wintageExcludedReload = false;
+              throw e;
+            }
           }
         } catch (e) { }
       }
@@ -133,6 +138,7 @@
   const HOST = (location.hostname || '').toLowerCase();
   const IS_X = /(^|\.)(x\.com|twitter\.com)$/.test(HOST);
   const IS_REDDIT = /(^|\.)(reddit\.com|redd\.it)$/.test(HOST);
+  const IS_GOOGLE = /(^|\.)google\.[a-z.]+$/.test(HOST);
   const HIGH_CHURN_HOST = /(^|\.)(chatgpt\.com|chat\.openai\.com|claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
   const CSS_ONLY_MODE = HIGH_CHURN_HOST;
 
@@ -420,12 +426,15 @@
   // ─── IMMEDIATE BACKGROUND ────────────────────────────────────────────────────
   // Must stay the first thing that touches the document so nothing white ever
   // paints, and it now paints the ACTIVE theme rather than a hardcoded golden.
-  document.documentElement.style.setProperty('background-color', T.background, 'important');
-  document.documentElement.style.setProperty('color', T.textPrimary, 'important');
-  document.documentElement.setAttribute('data-w95-dark', DARK ? '1' : '0');
-  document.documentElement.setAttribute('data-w95-theme', THEME_ID);
-  if (IS_X) document.documentElement.setAttribute('data-w95-x', '1');
-  if (IS_REDDIT) document.documentElement.setAttribute('data-w95-reddit', '1');
+  if (document.documentElement) {
+    document.documentElement.style.setProperty('background-color', T.background, 'important');
+    document.documentElement.style.setProperty('color', T.textPrimary, 'important');
+    document.documentElement.setAttribute('data-w95-dark', DARK ? '1' : '0');
+    document.documentElement.setAttribute('data-w95-theme', THEME_ID);
+    if (IS_X) document.documentElement.setAttribute('data-w95-x', '1');
+    if (IS_REDDIT) document.documentElement.setAttribute('data-w95-reddit', '1');
+    if (IS_GOOGLE) document.documentElement.setAttribute('data-w95-google', '1');
+  }
 
   // ─── THEME MENU ──────────────────────────────────────────────────────────────
   // Top frame only. The script runs in every frame (see FRAME ROLE above), so
@@ -492,7 +501,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.30.0';
+  const W95_VERSION = '1.31.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -746,9 +755,9 @@ input, textarea, select, option, button, code, pre, kbd, samp, tt,
   font-size: 12px !important;
   line-height: 1.2 !important;
 }
-h1 { font-size: 16px !important; line-height: 1.2 !important; }
-h2, h3, h4, h5, h6 { font-size: 14px !important; line-height: 1.2 !important; }
-small, sub, sup, figcaption { font-size: 10px !important; line-height: 1.2 !important; }
+h1 { font-size: 16px !important; line-height: 1.2 !important; color: ${T.textPrimary} !important; }
+h2, h3, h4, h5, h6 { font-size: 14px !important; line-height: 1.2 !important; color: ${T.textPrimary} !important; }
+small, sub, sup, figcaption { font-size: 10px !important; line-height: 1.2 !important; color: ${T.textSecondary} !important; }
 
 /* Weight sparingly (UI.md typography): sites reach for 200/300 hairlines and
    800/900 blacks, both of which read as noise at 12px non-antialiased. Two
@@ -762,6 +771,7 @@ small, sub, sup, figcaption { font-size: 10px !important; line-height: 1.2 !impo
 :root b, :root strong, :root th, :root h1, :root h2, :root h3, :root h4, :root h5, :root h6,
 :root summary, :root legend, :root label, :root button, :root [role="button"], :root .btn,
 :root [class~="button" i], :root [class~="btn" i] { font-weight: 700 !important; }
+:root b, :root strong { color: ${T.textPrimary} !important; }
 :root i, :root em, :root cite, :root var, :root address, :root dfn, :root q, :root blockquote { font-style: italic !important; }
 
 /* UI.md law 5 + the accessibility floor, together. The old link colour #9DD9F9
@@ -797,7 +807,10 @@ iframe[src*="amazon-adsystem.com" i], iframe[src*="taboola.com" i],
 iframe[src*="outbrain.com" i] {
   background-color: ${T.backgroundSoft} !important;
 }
-body, main, section, article, aside, footer, .container, .wrapper, .main, #main, #wrapper { background-color: transparent !important; }
+body, main, section, article, aside, footer,
+.container, [class*="container" i]:not([class*="button" i]):not([class*="btn" i]):not([class*="input" i]):not([class*="badge" i]):not([class*="card" i]):not([class*="item" i]):not([class*="popup" i]):not([class*="modal" i]):not([class*="dialog" i]):not([class*="menu" i]):not([class*="dropdown" i]):not([class*="tooltip" i]):not([class*="toast" i]):not([class*="alert" i]):not([class*="banner" i]),
+.wrapper, [class*="wrapper" i]:not([class*="button" i]):not([class*="btn" i]):not([class*="input" i]):not([class*="badge" i]):not([class*="card" i]):not([class*="item" i]):not([class*="popup" i]):not([class*="modal" i]):not([class*="dialog" i]):not([class*="menu" i]):not([class*="dropdown" i]):not([class*="tooltip" i]):not([class*="toast" i]):not([class*="alert" i]):not([class*="banner" i]),
+.main, #main, #wrapper { background-color: transparent !important; }
 
 *::selection, ::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
 
@@ -812,6 +825,28 @@ header, nav, [role="navigation"], [role="banner"],
 [class*="toolbar" i]:not([class*="ytp" i]), [id*="header" i]:not(h1):not(h2):not(h3), [id*="navbar" i], [id*="topbar" i] {
   background-color: ${T.surface} !important; background-image: none !important; color: ${T.textPrimary} !important;
   min-height: 20px !important;
+}
+header::before, header::after, nav::before, nav::after, footer::before, footer::after,
+[role="navigation"]::before, [role="navigation"]::after,
+[role="banner"]::before, [role="banner"]::after,
+[role="contentinfo"]::before, [role="contentinfo"]::after,
+[class*="header" i]::before, [class*="header" i]::after,
+[class*="navbar" i]::before, [class*="navbar" i]::after,
+[class*="nav-bar" i]::before, [class*="nav-bar" i]::after,
+[class*="topbar" i]::before, [class*="topbar" i]::after,
+[class*="top-bar" i]::before, [class*="top-bar" i]::after,
+[class*="footer" i]::before, [class*="footer" i]::after,
+[class*="toolbar" i]:not([class*="ytp" i])::before, [class*="toolbar" i]:not([class*="ytp" i])::after,
+[id*="header" i]::before, [id*="header" i]::after,
+[id*="navbar" i]::before, [id*="navbar" i]::after,
+[id*="topbar" i]::before, [id*="topbar" i]::after,
+[id*="footer" i]::before, [id*="footer" i]::after {
+  background-color: transparent !important;
+}
+[class*="icon" i], [class*="glyph" i], [class*="symbol" i] {
+  --fill: currentColor !important;
+  --icon-color: currentColor !important;
+  --svg-fill: currentColor !important;
 }
 
 /* 🚨 3D BEVELED BUTTONS 🚨
@@ -886,12 +921,12 @@ button::before, button::after, .btn::before, .btn::after,
    in the CSS while staying broken on screen. Not matching is the only thing that
    lets the app's own colour through — and it is also what keeps the OTHER states
    right without guessing what any of them are called. */
-button:not(.ytp-button) *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[class~="button" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-[class~="btn" i] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-span[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-a[role="button"] *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-.btn *:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
+button:not(.ytp-button) *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class~="button" i] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+[class~="btn" i] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+span[role="button"] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+a[role="button"] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
+.btn *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
@@ -981,8 +1016,8 @@ summary:focus-visible, [tabindex]:not([tabindex="-1"]):not(div):not(article):not
   outline: 1px dotted ${T.textPrimary} !important; outline-offset: -4px !important;
 }
 
-/* ChatGPT (chatgpt.com) Surface & Theme Variable Overrides */
-html[class*="dark"], body:has([class*="chatgpt"]), [data-message-author-role] {
+/* ChatGPT, Claude, Tailwind prose and modern web apps surface & text variable overrides */
+:root, html, body, [data-message-author-role], [class*="prose" i], .markdown {
   --main-surface-primary: ${T.background} !important;
   --main-surface-secondary: ${T.backgroundSoft} !important;
   --main-surface-tertiary: ${T.surface} !important;
@@ -992,6 +1027,38 @@ html[class*="dark"], body:has([class*="chatgpt"]), [data-message-author-role] {
   --bg-primary: ${T.background} !important;
   --bg-secondary: ${T.backgroundSoft} !important;
   --bg-tertiary: ${T.surface} !important;
+  --text-primary: ${T.textPrimary} !important;
+  --text-secondary: ${T.textSecondary} !important;
+  --text-tertiary: ${T.textMuted} !important;
+  --text-quaternary: ${T.textMuted} !important;
+  --text-muted: ${T.textMuted} !important;
+  --text-color: ${T.textPrimary} !important;
+  --color-text-primary: ${T.textPrimary} !important;
+  --color-text-secondary: ${T.textSecondary} !important;
+  --token-text-primary: ${T.textPrimary} !important;
+  --token-text-secondary: ${T.textSecondary} !important;
+  --token-text-tertiary: ${T.textMuted} !important;
+  --tw-prose-body: ${T.textPrimary} !important;
+  --tw-prose-headings: ${T.textPrimary} !important;
+  --tw-prose-lead: ${T.textSecondary} !important;
+  --tw-prose-links: ${T.link} !important;
+  --tw-prose-bold: ${T.textPrimary} !important;
+  --tw-prose-counters: ${T.textSecondary} !important;
+  --tw-prose-bullets: ${T.borderHighlight} !important;
+  --tw-prose-quotes: ${T.textPrimary} !important;
+  --tw-prose-captions: ${T.textMuted} !important;
+  --tw-prose-code: ${T.textPrimary} !important;
+  --tw-prose-invert-body: ${T.textPrimary} !important;
+  --tw-prose-invert-headings: ${T.textPrimary} !important;
+  --tw-prose-invert-lead: ${T.textSecondary} !important;
+  --tw-prose-invert-links: ${T.link} !important;
+  --tw-prose-invert-bold: ${T.textPrimary} !important;
+  --tw-prose-invert-counters: ${T.textSecondary} !important;
+  --tw-prose-invert-bullets: ${T.borderHighlight} !important;
+  --tw-prose-invert-quotes: ${T.textPrimary} !important;
+  --tw-prose-invert-captions: ${T.textMuted} !important;
+  --tw-prose-invert-code: ${T.textPrimary} !important;
+  --tw-prose-invert-pre-code: ${T.textPrimary} !important;
 }
 
 /* Inline code snippets (code:not(pre code), kbd, samp) */
@@ -1008,8 +1075,19 @@ p code, li code, blockquote code, td code, dd code, span code, code:not(pre code
   vertical-align: baseline !important;
   line-height: inherit !important;
 }
-p, li, dd, blockquote {
+p, li, dd, dt, blockquote {
   line-height: 1.4 !important;
+  color: ${T.textPrimary} !important;
+}
+
+/* Force soft theme text on message bubbles, markdown, and white-utility classes */
+[data-message-author-role], [data-message-author-role] p,
+.markdown, .markdown p, [class*="prose" i], [class*="prose" i] p,
+[class*="text-token-text" i], [class*="message" i] p,
+[class*="text-gray-100" i], [class*="text-gray-200" i], [class*="text-gray-50" i],
+[class*="text-white" i], [class*="dark:text-white" i],
+[class*="dark:text-gray-100" i], [class*="dark:text-gray-200" i] {
+  color: ${T.textPrimary} !important;
 }
 
 table { border-collapse: collapse !important; background-color: ${T.backgroundSoft} !important; border-spacing: 0 !important; }
@@ -1100,15 +1178,129 @@ hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important;
 
   html[data-w95-reddit="1"] {
     --color-neutral-content: ${T.textPrimary} !important;
+    --color-neutral-content-strong: ${T.textPrimary} !important;
     --color-neutral-content-weak: ${T.textSecondary} !important;
+    --color-neutral-content-muted: ${T.textMuted} !important;
     --color-neutral-background: ${T.backgroundSoft} !important;
     --color-neutral-background-weak: ${T.surface} !important;
+    --color-neutral-background-strong: ${T.surfaceRaised} !important;
+    --color-neutral-background-medium: ${T.surface} !important;
+    --color-tone-1: ${T.textPrimary} !important;
+    --color-tone-2: ${T.textSecondary} !important;
+    --color-tone-3: ${T.textMuted} !important;
+    --color-tone-4: ${T.textMuted} !important;
+    --color-tone-5: ${T.borderMuted} !important;
+    --color-tone-6: ${T.surfaceRaised} !important;
+    --color-tone-7: ${T.backgroundSoft} !important;
+    --color-primary: ${T.link} !important;
+    --color-secondary: ${T.textSecondary} !important;
     --shreddit-content-background: ${T.backgroundSoft} !important;
     --shreddit-post-background: ${T.surface} !important;
   }
   html[data-w95-reddit="1"] shreddit-post, html[data-w95-reddit="1"] shreddit-comment-tree,
-  html[data-w95-reddit="1"] shreddit-feed, html[data-w95-reddit="1"] faceplate-tracker {
+  html[data-w95-reddit="1"] shreddit-feed, html[data-w95-reddit="1"] faceplate-tracker,
+  html[data-w95-reddit="1"] shreddit-post h1, html[data-w95-reddit="1"] shreddit-post h2,
+  html[data-w95-reddit="1"] shreddit-post h3, html[data-w95-reddit="1"] shreddit-post p,
+  html[data-w95-reddit="1"] [slot="title"], html[data-w95-reddit="1"] [slot="title"] a,
+  html[data-w95-reddit="1"] a[slot="title"], html[data-w95-reddit="1"] a[id*="post-title"],
+  html[data-w95-reddit="1"] [id*="post-title"], html[data-w95-reddit="1"] [slot="text-body"],
+  html[data-w95-reddit="1"] [slot="text-body"] *, html[data-w95-reddit="1"] [data-testid="post-title"],
+  html[data-w95-reddit="1"] [data-testid="post-container"] a, html[data-w95-reddit="1"] [data-testid="post-container"] p,
+  html[data-w95-reddit="1"] [slot="comment"], html[data-w95-reddit="1"] .text-neutral-content-strong,
+  html[data-w95-reddit="1"] .text-neutral-content {
     color: ${T.textPrimary} !important;
+  }
+  html[data-w95-reddit="1"] [slot="title"]:hover, html[data-w95-reddit="1"] [slot="title"] a:hover,
+  html[data-w95-reddit="1"] a[slot="title"]:hover, html[data-w95-reddit="1"] a[id*="post-title"]:hover,
+  html[data-w95-reddit="1"] shreddit-post h1:hover, html[data-w95-reddit="1"] shreddit-post h2:hover,
+  html[data-w95-reddit="1"] shreddit-post h3:hover {
+    color: ${T.link} !important;
+    text-decoration: underline !important;
+  }
+  /* Reddit card overlays & stretched click-catchers must never be solidified */
+  html[data-w95-reddit="1"] a.absolute,
+  html[data-w95-reddit="1"] shreddit-post a[class*="absolute" i],
+  html[data-w95-reddit="1"] [class*="inset-0" i],
+  html[data-w95-reddit="1"] [class*="cover-link" i],
+  html[data-w95-reddit="1"] [class*="stretched-link" i] {
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  /* Inactive / un-opened hovercards must stay transparent and unbordered */
+  faceplate-hovercard:not([enter-done]):not([opened]):not([active]) {
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+  }
+  /* Reddit carousel & community highlights bleed fix */
+  html[data-w95-reddit="1"] shreddit-carousel > *,
+  html[data-w95-reddit="1"] [class*="highlight" i] {
+    background-color: ${T.surface} !important;
+  }
+  /* Reddit search header input tag alignment and ghost placeholder fix */
+  html[data-w95-reddit="1"] reddit-header-large input,
+  html[data-w95-reddit="1"] shreddit-app input[type="search"] {
+    height: auto !important;
+    min-height: 24px !important;
+  }
+  html[data-w95-reddit="1"] reddit-header-large [class*="placeholder" i],
+  html[data-w95-reddit="1"] #header-search [class*="placeholder" i] {
+    display: none !important;
+  }
+
+  /* Google Search & Material 3 / AI Overview surface tokens */
+  html[data-w95-google="1"] {
+    --color-surface: ${T.surface} !important;
+    --color-surface-variant: ${T.surfaceRaised} !important;
+    --color-surface-container: ${T.surface} !important;
+    --color-surface-container-high: ${T.surfaceRaised} !important;
+    --color-surface-container-highest: ${T.surfaceAlt} !important;
+    --color-surface-container-low: ${T.backgroundSoft} !important;
+    --color-surface-container-lowest: ${T.background} !important;
+    --color-background: ${T.backgroundSoft} !important;
+    --color-on-surface: ${T.textPrimary} !important;
+    --color-on-surface-variant: ${T.textSecondary} !important;
+    --color-on-background: ${T.textPrimary} !important;
+    --color-primary: ${T.link} !important;
+    --color-outline: ${T.borderMuted} !important;
+    --color-outline-variant: ${T.bevelLight} !important;
+    --m3c-surface: ${T.surface} !important;
+    --m3c-surface-container: ${T.surface} !important;
+    --m3c-surface-container-high: ${T.surfaceRaised} !important;
+    --m3c-surface-container-highest: ${T.surfaceAlt} !important;
+    --m3c-surface-container-low: ${T.backgroundSoft} !important;
+    --m3c-surface-container-lowest: ${T.background} !important;
+    --m3c-on-surface: ${T.textPrimary} !important;
+    --m3c-on-surface-variant: ${T.textSecondary} !important;
+    --m3c-outline: ${T.borderMuted} !important;
+    --m3c-outline-variant: ${T.bevelLight} !important;
+    --g-surface: ${T.surface} !important;
+    --g-surface-variant: ${T.surfaceRaised} !important;
+    --g-background: ${T.backgroundSoft} !important;
+    --g-color-surface: ${T.surface} !important;
+    --g-color-background: ${T.backgroundSoft} !important;
+    --center-column-background: ${T.backgroundSoft} !important;
+    --appbar-background: ${T.surface} !important;
+    --header-background: ${T.surface} !important;
+  }
+  /* Google AI Overview and Follow-up / Ask anything bar */
+  html[data-w95-google="1"] form:has([placeholder*="Ask" i]),
+  html[data-w95-google="1"] div:has(> form [placeholder*="Ask" i]),
+  html[data-w95-google="1"] div:has(> [placeholder*="Ask" i]),
+  html[data-w95-google="1"] [aria-label*="Ask" i],
+  html[data-w95-google="1"] [data-attrid*="overview" i],
+  html[data-w95-google="1"] [class*="conversational" i],
+  html[data-w95-google="1"] [class*="follow-up" i],
+  html[data-w95-google="1"] [class*="followup" i],
+  html[data-w95-google="1"] [jsname]:has([placeholder*="Ask" i]),
+  html[data-w95-google="1"] [jscontroller]:has([placeholder*="Ask" i]) {
+    background-color: ${T.surface} !important;
+    background-image: none !important;
+    color: ${T.textPrimary} !important;
+    border-color: ${T.borderDark} !important;
+    box-shadow: none !important;
   }
 
   yt-interaction, paper-ripple, .mdc-ripple-surface, .mdc-ripple-upgraded::before, .mdc-ripple-upgraded::after {
@@ -1250,6 +1442,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     :host b, :host strong, :host th, :host h1, :host h2, :host h3, :host h4, :host h5, :host h6,
     :host summary, :host legend, :host label, :host button, :host shreddit-button, :host [role="button"],
     :host .btn, :host [class~="button" i], :host [class~="btn" i] { font-weight: 700 !important; }
+    :host b, :host strong, :host p, :host li, :host dd, :host dt, :host h1, :host h2, :host h3, :host h4, :host h5, :host h6 { color: ${T.textPrimary} !important; }
     :host i, :host em, :host cite, :host var, :host dfn, :host q, :host blockquote { font-style: italic !important; }
     /* No 99,999-second hover freeze here either. Shadow-tree pseudo-elements
        are exactly where shimmer loaders and decorative hover layers tend to live,
@@ -1260,10 +1453,16 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     input, textarea, select, option, button, code, pre, kbd, samp, tt, [class*="code" i], [class*="mono" i] { font-family: ${FONT} !important; }
      :host {
        --radius: 0px; --shreddit-border-radius: 0px; --md-sys-shape-corner-full: 0px;
-       --color-neutral-content: ${T.textPrimary}; --color-neutral-content-weak: ${T.textSecondary};
+       --color-neutral-content: ${T.textPrimary}; --color-neutral-content-strong: ${T.textPrimary};
+       --color-neutral-content-weak: ${T.textSecondary}; --color-neutral-content-muted: ${T.textMuted};
+       --color-tone-1: ${T.textPrimary}; --color-tone-2: ${T.textSecondary};
        --color-neutral-background: ${T.backgroundSoft}; --color-neutral-background-weak: ${T.surface};
        --shreddit-content-background: ${T.backgroundSoft}; --shreddit-post-background: ${T.surface};
+       --m3c-surface: ${T.surface}; --m3c-surface-container: ${T.surface}; --color-surface: ${T.surface};
        background-color: transparent !important; background-image: none !important; color: ${T.textPrimary} !important;
+     }
+     [slot="title"], [slot="title"] a, a[slot="title"], a[id*="post-title"], [id*="post-title"] {
+       color: ${T.textPrimary} !important;
      }
     /* Ad-iframe load-flash fix, scoped to known ad hosts only — see GLOBAL_CSS note (unconditional would break transparent widget overlays) */
     iframe[src*="doubleclick.net" i], iframe[src*="googlesyndication.com" i],
@@ -1381,17 +1580,20 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // Being last is a POSITION, not a copy. Moving the one sheet we already have
   // to the end of <head> buys the identical cascade order for nothing.
   function injectLate() {
-    const existing = document.querySelector('style[data-w95="global"]');
-    const target = document.head || document.documentElement;
-    if (existing) {
-      // Already last? Then there is nothing to do and no reason to touch the DOM.
-      if (target.lastElementChild !== existing) target.appendChild(existing);
-      return;
-    }
-    // The early injection never happened (document-start raced a hostile page).
-    injectStyle(document, 'global', GLOBAL_CSS);
-    const s = document.querySelector('style[data-w95="global"]');
-    if (s) target.appendChild(s);
+    try {
+      const existing = document.querySelector('style[data-w95="global"]');
+      const target = document.head || document.documentElement;
+      if (!target) return;
+      if (existing) {
+        // Already last? Then there is nothing to do and no reason to touch the DOM.
+        if (target.lastElementChild !== existing) target.appendChild(existing);
+        return;
+      }
+      // The early injection never happened (document-start raced a hostile page).
+      injectStyle(document, 'global', GLOBAL_CSS);
+      const s = document.querySelector('style[data-w95="global"]');
+      if (s && target.lastElementChild !== s) target.appendChild(s);
+    } catch (e) { }
   }
   // --- REPAINTER START ---
 
@@ -1553,9 +1755,9 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     return c ? ICONISH.test(c) : false;
   }
 
-  const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape';
+  const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape, [class*="screen-pause" i], [class*="player-screen" i], [class*="video-screen" i], [class*="vjs-text-track" i], [class*="inset-0" i], [class*="stretched-link" i], [class*="cover-link" i]';
   const SHADOW_SKIP_TAGS = new Set(['YTD-LOGO', 'YT-ICON', 'YT-ICON-SHAPE', 'YT-IMG-SHADOW', 'YTD-AVATAR-SHAPE', 'YT-AVATAR-SHAPE', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
-  const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR)$/i;
+  const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR|TEMPLATE|NOSCRIPT|AUDIO|SOURCE|TRACK|OPTION|OPTGROUP)$/i;
 
   const piercedRoots = new Set();
 
@@ -1655,6 +1857,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     if (!rules) return;
     for (let i = 0; i < rules.length; i++) {
       const r = rules[i];
+      if (r.type === 7) continue; // CSSRule.KEYFRAMES_RULE has no :hover rules
       try {
         if (r.selectorText && r.selectorText.indexOf(':hover') !== -1) stripHoverRule(r);
         if (r.cssRules && r.cssRules.length) walkRules(r); // @media/@supports/@layer/nesting
@@ -1825,7 +2028,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         }
         const cbg = parseRGB(cs.backgroundColor);
         if (cbg && cbg.a > 0.3 && !PALETTE_RGB.has(cs.backgroundColor)) {
-          w.push(el, 'background-color', T.surfaceRaised);
+          w.push(el, 'background-color', isIconish(el) ? T.textPrimary : T.surfaceRaised);
         }
       }
       return;
@@ -1995,20 +2198,42 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
             try { stack = document.elementsFromPoint(cx, cy); } catch (e) { }
           }
           const at = stack ? stack.indexOf(el) : -1;
+          let isOverMediaOrCanvas = false;
           for (let k = at + 1; at >= 0 && k < stack.length; k++) {
-            const under = stack[k];
-            if (under === document.body || under === document.documentElement) continue;
-            if (under.contains(el)) continue;
-            w.push(el, 'background-color', T.surfaceRaised,
-              el, 'background-image', 'none',
-              el, 'color', T.textPrimary,
-              el, 'border-width', '2px',
-              el, 'border-style', 'solid',
-              el, 'border-color', T.bevelLight + ' ' + T.borderDark + ' ' + T.borderDark + ' ' + T.bevelLight,
-              el, 'box-shadow', 'none',
-              // The bevel is added to a box the site already sized; absorb it.
-              el, 'box-sizing', 'border-box');
-            break;
+            const u = stack[k];
+            if (u.tagName === 'VIDEO' || u.tagName === 'AUDIO' || u.tagName === 'CANVAS' ||
+                u.tagName === 'IMG' || u.tagName === 'PICTURE' || u.tagName === 'SVG' ||
+                (u.closest && u.closest('video, audio, canvas, img, picture, svg')) ||
+                (u.querySelector && u.querySelector('video, audio, canvas, img, picture, svg'))) {
+              isOverMediaOrCanvas = true;
+              break;
+            }
+          }
+          if (!isOverMediaOrCanvas) {
+            for (let k = at + 1; at >= 0 && k < stack.length; k++) {
+              const under = stack[k];
+              if (under === document.body || under === document.documentElement) continue;
+              if (under.contains(el)) continue;
+              // Internal card/post layers (stretched links, click-catchers, card overlays)
+              // share an ancestor card/post/article with under: solidifying them obscures the card text.
+              const elComp = el.closest && el.closest('article, [class*="card" i], [class*="post" i], [class*="item" i], shreddit-post');
+              const underComp = under.closest && under.closest('article, [class*="card" i], [class*="post" i], [class*="item" i], shreddit-post');
+              if (elComp && underComp && elComp === underComp) continue;
+              if (el.tagName === 'A' ||
+                  (el.matches && el.matches('[class*="inset-0" i], [class*="stretched-link" i], [class*="cover-link" i]'))) {
+                continue;
+              }
+              w.push(el, 'background-color', T.surfaceRaised,
+                el, 'background-image', 'none',
+                el, 'color', T.textPrimary,
+                el, 'border-width', '2px',
+                el, 'border-style', 'solid',
+                el, 'border-color', T.bevelLight + ' ' + T.borderDark + ' ' + T.borderDark + ' ' + T.bevelLight,
+                el, 'box-shadow', 'none',
+                // The bevel is added to a box the site already sized; absorb it.
+                el, 'box-sizing', 'border-box');
+              break;
+            }
           }
         }
       }
@@ -2142,6 +2367,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   function shouldSkip(el) {
     const tag = (el.tagName || '').toUpperCase();
     if (TAG_SKIP.test(tag)) return true;
+    if (el.namespaceURI === 'http://www.w3.org/2000/svg' && tag !== 'SVG') return true;
     if (tag === 'INPUT') {
       const t = (el.type || '').toLowerCase();
       // Natively-rendered controls: repainting them hides the checked state.
@@ -2150,6 +2376,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       if (t === 'range' || t === 'color' || t === 'file') return true;
     }
     if (el.closest && el.closest('button')) return true;
+    if (el.closest && el.closest('video, audio')) return true;
     // CSS above owns CodeNomad's native semantic state dot. Repainting it would
     // erase the working/idle distinction after the first mutation batch.
     try { if (el.matches && el.matches('.status-indicator.session-status > .status-dot')) return true; } catch (e) { }
@@ -2170,8 +2397,8 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // turn a new framework's mutation storm into a space heater. Once tripped, the
   // CSS theme remains active but all JavaScript repaint work stops for this page.
   const MUTATION_WINDOW_MS = 2000;
-  const MUTATION_RECORD_LIMIT = 3500;
-  const MUTATION_WORK_LIMIT_MS = 300;
+  const MUTATION_RECORD_LIMIT = 10000;
+  const MUTATION_WORK_LIMIT_MS = 600;
   const ADDED_NODE_BUDGET = 500;
   let mutationWindowStart = performance.now();
   let mutationRecords = 0;
@@ -2286,6 +2513,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         if (m.type === 'childList') {
           const target = m.target;
           if (target && target.nodeType === 1) {
+            if (target.hasAttribute && target.hasAttribute('data-w95')) continue;
             const tag = (target.tagName || '').toUpperCase();
             if (tag === 'STYLE' || (tag === 'LINK' && (target.rel || '').toLowerCase().includes('stylesheet'))) {
               styleishAdded = true;
@@ -2294,6 +2522,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         }
         for (const node of m.addedNodes) {
           if (node.nodeType !== 1) continue;
+          if (node.hasAttribute && node.hasAttribute('data-w95')) continue;
           if (addedCollected < collectionBudget) {
             added.push(node);
             addedCollected++;
@@ -2366,8 +2595,9 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   const mainObserver = new MutationObserver(onMutations);
   const shadowObserver = new MutationObserver(onMutations);
 
-  if (!CSS_ONLY_MODE && document.documentElement) {
-    mainObserver.observe(document.documentElement, {
+  if (!CSS_ONLY_MODE) {
+    const obsTarget = document.documentElement || document;
+    mainObserver.observe(obsTarget, {
       childList: true,
       subtree: true,
       attributes: true,
@@ -2505,7 +2735,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     // NodeList for huge documents or shadow roots, and the budget yields at
     // the exact node where it runs out. Per-root cursors persist across
     // continuation sweeps; a new full lap starts a fresh state.
-    const budget = force ? FORCE_BUDGET : Infinity;
+    const budget = FORCE_BUDGET;
     let remaining = budget;
     let incomplete = false;
     const docCursors = forceRootCursors;
@@ -2570,6 +2800,8 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         docCursors.clear();
         forceLapActive = false;
       }
+    } else if (!force && incomplete && !repainterSuspended && !document.hidden) {
+      requestLightSweep();
     }
   }
 

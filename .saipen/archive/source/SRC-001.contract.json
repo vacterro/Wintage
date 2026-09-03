@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-001:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Implement the 41-ticket AUDIT_ALL_3 handoff captured in this body (3 waves: CORE, SECOND WAVE, PERFORMANCE) against Wintage main."
+    }
+  },
+  "derived_at": "2026-09-03T21:52:21Z",
+  "derived_from": "SRC-001",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "f31d4156c5e4bb8bd38c7f3a68ebeeeeb9c6b63b12a9636445fc54af41cc8430"
+}

@@ -193,7 +193,7 @@ function Get-ElectronExe([string]$key) {
     return $null
 }
 
-function Save-ElectronStateSnapshot([string]$key) {
+function Save-ElectronStateSnapshot([string]$key, [string]$Operation = 'Apply') {
     $e = $ELECTRON[$key]
     $snap = Join-Path $env:TEMP ("wintage-elstate-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $snap -Force | Out-Null
@@ -206,8 +206,11 @@ function Save-ElectronStateSnapshot([string]$key) {
     # --status-json tells us which mutation class we are in: themed states =
     # repaint = lightweight snapshot (small files only); everything else keeps
     # the full pre-state.
-    $st = Get-ElectronStatus $key
-    $repaintOnly = $st -and $st.state -in @('themed-inplace', 'themed-relocated')
+    # CORE-001: a Revert of a themed-relocated target deletes the moved archive
+    # during the operation; the snapshot MUST carry the archive too, otherwise
+    # a failed child rollback leaves no recoverable copy on disk. The lightweight
+    # path is now strictly opt-in via -Operation Repaint.
+    $repaintOnly = $Operation -eq 'Repaint'
     if ($repaintOnly) {
         $appf = Join-Path $snap 'appfiles'
         New-Item -ItemType Directory -Path $appf -Force | Out-Null

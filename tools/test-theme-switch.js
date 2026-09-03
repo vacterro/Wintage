@@ -39,7 +39,7 @@ const check = (label, got, want) => {
   if (!ok) bad++;
 };
 
-function run({ gm, stored, isTop, isX, isReddit }) {
+function run({ gm, stored, isTop, isX, isReddit, isGoogle }) {
   const painted = {}, attrs = {}, menu = [];
   let reloads = 0, wrote = null;
   const el = {
@@ -52,6 +52,7 @@ function run({ gm, stored, isTop, isX, isReddit }) {
     IS_TOP: isTop,
     IS_X: !!isX,
     IS_REDDIT: !!isReddit,
+    IS_GOOGLE: !!isGoogle,
     console
   };
   if (gm) {
@@ -121,7 +122,7 @@ check('clicking another theme reloads', r.reloads, 1);
   const ctx = {
     document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
     location: { reload: () => { reloads++; } },
-    IS_TOP: true, IS_X: false, IS_REDDIT: false, console,
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, IS_GOOGLE: false, console,
     GM_getValue: (k, d) => d,
     GM_setValue: () => { throw new Error('storage quota'); },
     GM_registerMenuCommand: (l, f) => menu.push([l, f])
@@ -146,9 +147,13 @@ check('X host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false);
 r = run({ gm: true, stored: DEFAULT_THEME, isTop: true, isReddit: true });
 check('Reddit host -> data-w95-reddit', r.attrs['data-w95-reddit'], '1');
 check('Reddit host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
+r = run({ gm: true, stored: DEFAULT_THEME, isTop: true, isGoogle: true });
+check('Google host -> data-w95-google', r.attrs['data-w95-google'], '1');
+check('Google host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
 r = run({ gm: true, stored: DEFAULT_THEME, isTop: true });
 check('ordinary host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
 check('ordinary host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false);
+check('ordinary host -> no data-w95-google', 'data-w95-google' in r.attrs, false);
 
 // 9. CORE-014: a refused reload must not leave a silent split brain.
 //    The write lands before the navigation, so a blocked reload leaves storage on
@@ -163,7 +168,7 @@ check('ordinary host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false
   const ctx = {
     document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
     location: { reload: () => { reloads++; throw new Error('navigation refused'); } },
-    IS_TOP: true, IS_X: false, IS_REDDIT: false,
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, IS_GOOGLE: false,
     console: { warn: (m) => warns.push(String(m)), log: console.log, error: console.error },
     GM_getValue: (k, d) => d,
     GM_setValue: (k, v) => { wrote = [k, v]; },
@@ -198,7 +203,7 @@ check('ordinary host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false
   const ctx = {
     document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
     location: { reload: () => { reloads++; } },
-    IS_TOP: true, IS_X: false, IS_REDDIT: false, console,
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, IS_GOOGLE: false, console,
     // First read resolves THEME_ID; the menu block reads the same binding, so a
     // slug that exists resolves normally. To reach the pending branch the stored
     // slug must be valid AND different from the painted one, which the source
