@@ -49,14 +49,32 @@ const block = src.substring(excludeIdx, blockEnd);
 // Build a minimal browser shim that the extracted block can capture / call.
 function makeBrowser(initialHref) {
   const listeners = { popstate: [], hashchange: [] };
-  const calls = { reload: 0, pushState: 0, replaceState: 0 };
+  const calls = { reload: 0, pushState: 0, replaceState: 0, suspend: 0, suspendReason: null, order: [], throwOnReload: false };
   const origPush = function () { calls.pushState++; return undefined; };
   const origReplace = function () { calls.replaceState++; return undefined; };
   const ctx = {
-    location: { href: initialHref, reload: function () { calls.reload++; } },
+    location: {
+      href: initialHref,
+      // CORE-003: the default here is the dangerous case the audit named -- the
+      // call RETURNS and the document stays alive. A stub that unloads would
+      // hide every state question that follows.
+      reload: function () {
+        calls.reload++;
+        calls.order.push('reload');
+        if (calls.throwOnReload) throw new Error('navigation refused');
+      }
+    },
     history: {
       pushState: function () { return origPush.apply(this, arguments); },
       replaceState: function () { return origReplace.apply(this, arguments); }
+    },
+    // The real one is idempotent and permanent for the document; the stub has to
+    // be too, or "did we suspend once" cannot be told from "did we spin".
+    suspendRepainter: function (reason) {
+      if (calls.suspend > 0) return;
+      calls.suspend++;
+      calls.suspendReason = reason;
+      calls.order.push('suspend');
     },
     window: {
       addEventListener: function (name, fn) { (listeners[name] || (listeners[name] = [])).push(fn); }
@@ -222,6 +240,63 @@ function runBlock(block, initialHref) {
   ctx.location.href = 'https://example.com/settings';
   ctx.history.pushState({}, '', '/settings');
   check('double install: original pushState called once', calls.pushState - before, 1);
+}
+
+// ---- Test 9: CORE-003 -- quarantine happens BEFORE the reload request ----
+// Reload is a request, not a state transition. The old guard set a latch, asked
+// to reload, and left the repainter running if the document survived -- on a
+// route the script explicitly excludes. Safety must not depend on navigation.
+{
+  const { ctx, calls, captured } = runBlock(block, 'https://example.com/dashboard');
+  captured.setupRouteGuard();
+  ctx.location.href = 'https://example.com/oauth/authorize';
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  check('quarantine: repainter suspended', calls.suspend, 1);
+  check('quarantine: named reason', calls.suspendReason, 'excluded-route');
+  check('quarantine: suspended BEFORE the reload was requested', calls.order, ['suspend', 'reload']);
+  // The reload returned normally and the document is still alive: further
+  // transitions must not re-enter repaint work or storm the navigation.
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  ctx.history.replaceState({}, '', '/oauth/authorize');
+  check('quarantine: surviving document does not reload again', calls.reload, 1);
+  check('quarantine: suspension is not repeated', calls.suspend, 1);
+}
+
+// ---- Test 10: the latch tracks the ROUTE, not "a reload was once asked for" --
+// A one-way boolean could only be cleared by a synchronous throw, so an
+// excluded -> allowed -> different-excluded journey in a surviving document
+// never asked again and stayed unguarded for the rest of its life.
+{
+  const { ctx, calls, captured } = runBlock(block, 'https://example.com/dashboard');
+  captured.setupRouteGuard();
+  ctx.location.href = 'https://example.com/oauth/authorize';
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  check('route latch: first excluded route reloads', calls.reload, 1);
+  check('route latch: latch records the url', ctx.window.__wintageExcludedReload, 'https://example.com/oauth/authorize');
+  ctx.location.href = 'https://example.com/dashboard';
+  ctx.history.pushState({}, '', '/dashboard');
+  check('route latch: cleared on an allowed route', ctx.window.__wintageExcludedReload, null);
+  check('route latch: an allowed route does not reload', calls.reload, 1);
+  check('route latch: quarantine STAYS in force', calls.suspend, 1);
+  ctx.location.href = 'https://stripe.com/payment';
+  ctx.history.pushState({}, '', '/payment');
+  check('route latch: a later excluded route is guarded again', calls.reload, 2);
+}
+
+// ---- Test 11: a synchronous reload throw leaves a retryable state ----
+{
+  const { ctx, calls, captured } = runBlock(block, 'https://example.com/dashboard');
+  captured.setupRouteGuard();
+  calls.throwOnReload = true;
+  ctx.location.href = 'https://example.com/oauth/authorize';
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  check('throwing reload: attempted once', calls.reload, 1);
+  check('throwing reload: does not throw out of the history hook', true, true);
+  check('throwing reload: latch cleared so a retry is possible', ctx.window.__wintageExcludedReload, null);
+  check('throwing reload: quarantine still applied', calls.suspend, 1);
+  calls.throwOnReload = false;
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  check('throwing reload: the retry happens', calls.reload, 2);
 }
 
 console.log(bad ? '\n' + bad + ' failure(s)' : '\nspa exclude safety test PASS');

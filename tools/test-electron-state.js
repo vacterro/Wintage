@@ -277,6 +277,36 @@ for (const seam of RELO_FAIL_SEAMS) {
   check('relo ROLLBACK_ASAR: a recovery location is listed in output', /Recovery locations preserved:/.test(r.out), true);
 }
 
+// ---- CORE-002 (SRC-004): the unpacked rename is part of the revert transaction ----
+// Revert renames app/app.asar.unpacked back to root. Rollback restored the moved
+// copy but never undid that rename, so the tree ended with BOTH copies while the
+// tool printed "the exact pre-operation state" -- and a duplicate at root is what
+// the next Apply's state classifier reads.
+{
+  const R = mk('relo-revert-unpacked');
+  buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'));
+  fs.mkdirSync(path.join(R, 'app.asar.unpacked', 'native'), { recursive: true });
+  fs.writeFileSync(path.join(R, 'app.asar.unpacked', 'native', 'addon.node'), 'NATIVE-BYTES');
+  let r = run('--resources "' + R + '" --palette goldendefault');
+  check('relo revert-unpacked: apply exits 0', r.code, 0);
+  check('relo revert-unpacked: unpacked moved with the archive',
+    fs.existsSync(path.join(R, 'app', 'app.asar.unpacked', 'native', 'addon.node')), true);
+  check('relo revert-unpacked: root unpacked is gone after apply',
+    fs.existsSync(path.join(R, 'app.asar.unpacked')), false);
+
+  r = run('--resources "' + R + '" --revert', { WINTAGE_TEST_FAIL_AFTER_REVERT: '1' });
+  check('relo revert-unpacked: failed revert exits NONZERO', r.code !== 0, true);
+  const atRoot = fs.existsSync(path.join(R, 'app.asar.unpacked'));
+  const atMoved = fs.existsSync(path.join(R, 'app', 'app.asar.unpacked'));
+  check('relo revert-unpacked: exactly one unpacked copy survives', [atRoot, atMoved], [false, true]);
+  check('relo revert-unpacked: the surviving copy has its native payload',
+    fs.existsSync(path.join(R, 'app', 'app.asar.unpacked', 'native', 'addon.node'))
+      && fs.readFileSync(path.join(R, 'app', 'app.asar.unpacked', 'native', 'addon.node'), 'utf8') === 'NATIVE-BYTES',
+    true);
+  check('relo revert-unpacked: rollback claim is honest',
+    /rolled back to the exact pre-operation state/.test(r.out), true);
+}
+
 // ---- T-190: in-place transaction rolls back on every injected failure (P0#8) ----
 const INPLACE_FAIL_SEAMS = ['WINTAGE_TEST_FAIL_AFTER_SIDECARS', 'WINTAGE_TEST_FAIL_AFTER_ASAR_WRITE', 'WINTAGE_TEST_FAIL_BEFORE_INTEGRITY'];
 for (const seam of INPLACE_FAIL_SEAMS) {

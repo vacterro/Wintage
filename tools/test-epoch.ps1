@@ -34,7 +34,7 @@ function check($label, $cond) {
 }
 
 if ($List) {
-    Write-Host "test-epoch.ps1 (8 tests):"
+    Write-Host "test-epoch.ps1 (10 tests):"
     Write-Host "  1. absent-epoch-creates-exactly-once-and-is-stable"
     Write-Host "  2. valid-epoch-is-returned-unmodified"
     Write-Host "  3. corrupt-json-throws-and-preserves-original-bytes"
@@ -43,6 +43,8 @@ if ($List) {
     Write-Host "  6. pre-existing-id-supplies-stamped-recovery-stays-verifiable"
     Write-Host "  7. corrupt-epoch-does-not-rotate-and-foreign-stamp-stays-foreign"
     Write-Host "  8. dot-source-of-common-ps1-is-the-only-loader"
+    Write-Host "  9. concurrent-first-create-barrier-two-processes-one-identity"
+    Write-Host " 10. concurrent-first-create-barrier-four-processes-one-identity"
     exit 0
 }
 
@@ -199,10 +201,92 @@ try {
 try {
     Reset-AppData 'static' | Out-Null
     $src = Get-Content $common -Raw
-    $count = ([regex]::Matches($src, 'install-epoch\.json')).Count
-    check 'static: install-epoch.json referenced exactly once in common.ps1 (single resolver)' ($count -eq 1)
+    # Single RESOLVER: the epoch path may only ever be derived once, through
+    # $WintageAppData. (The W2-003 cleanup filter names the creation-temp
+    # pattern, which is a different string and does not resolve anything.)
+    $count = ([regex]::Matches($src, [regex]::Escape("Join-Path `$WintageAppData 'install-epoch.json'"))).Count
+    check 'static: install-epoch.json resolved exactly once in common.ps1 (single resolver)' ($count -eq 1)
+    $lockCount = ([regex]::Matches($src, [regex]::Escape("Join-Path `$WintageAppData 'install-epoch.lock'"))).Count
+    check 'static: the epoch lock path also has exactly one resolver' ($lockCount -eq 1)
     Cleanup-AppData
 } finally { }
+
+# ---- Tests 9+10: W2-003 -- concurrent first creation yields ONE identity ----
+# Barrier-synchronised children all observe "epoch absent" at the same moment.
+# The old absent-check + private GUID + forced rename let every child return
+# its OWN id; the loser's recovery provenance was then stamped with an identity
+# the persisted file never carried, and Assert-RecoveryProvenance later rejected
+# Wintage's own backup as foreign. The lock must make every child return the
+# persisted winner, and provenance written by EVERY child must verify.
+function Invoke-ConcurrentFirstCreate {
+    param([int]$Children)
+    $dir = Reset-AppData ("race$Children")
+    $goFile = Join-Path $dir 'go'
+    $childFile = Join-Path $dir 'epoch-child.ps1'
+    Write-Utf8 $childFile @'
+param($appData, $common, $goFile, $i)
+$ErrorActionPreference = 'Stop'
+$env:WINTAGE_APPDATA = $appData
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)
+. $common
+$script:WintageAppData = $appData
+Set-Content -LiteralPath (Join-Path $appData "ready-$i") -Value 'r'
+$deadline = (Get-Date).AddSeconds(30)
+while (-not (Test-Path $goFile) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 20 }
+if (-not (Test-Path $goFile)) { Set-Content (Join-Path $appData "result-$i") 'TIMEOUT|False'; exit 0 }
+$id = Get-InstallEpoch
+$recovery = Join-Path $appData "recovery-$i.bin"
+[System.IO.File]::WriteAllBytes($recovery, [byte[]]@(1, 2, 3))
+Write-RecoveryProvenance $recovery 'race-target'
+$verified = $false
+try { Assert-RecoveryProvenance $recovery 'race-target' 'race-target' | Out-Null; $verified = $true } catch { }
+Set-Content -LiteralPath (Join-Path $appData "result-$i") -Value "$id|$verified"
+exit 0
+'@
+    $jobs = @()
+    for ($i = 1; $i -le $Children; $i++) {
+        $jobs += Start-Process powershell -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+            $childFile, $dir, $common, $goFile, "$i"
+        ) -PassThru -WindowStyle Hidden
+    }
+    # Barrier: wait until every child is parked on the go-file, then release.
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-ChildItem $dir -Filter 'ready-*' -ErrorAction SilentlyContinue).Count -lt $Children -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 20
+    }
+    Set-Content -LiteralPath $goFile -Value 'go'
+    $jobs | ForEach-Object { $_.WaitForExit(60000) | Out-Null }
+    $p = & $epochPath
+    $ids = @()
+    $allVerified = $true
+    for ($i = 1; $i -le $Children; $i++) {
+        $resultFile = Join-Path $dir "result-$i"
+        if (-not (Test-Path $resultFile)) { $allVerified = $false; continue }
+        $parts = (Get-Content $resultFile -Raw).Trim() -split '\|'
+        $ids += $parts[0]
+        if ($parts[1] -ne 'True') { $allVerified = $false }
+    }
+    $persisted = $null
+    if (Test-Path $p) { $persisted = ([System.IO.File]::ReadAllText($p, $script:Utf8NoBom) | ConvertFrom-Json).id }
+    $races = @{
+        Ids = $ids
+        AllReturnedPersisted = ($ids.Count -eq $Children) -and (($ids | Where-Object { $_ -ne $persisted }).Count -eq 0)
+        Persisted = $persisted
+        AllVerified = $allVerified
+    }
+    Cleanup-AppData
+    return $races
+}
+
+foreach ($n in 2, 4) {
+    $r = Invoke-ConcurrentFirstCreate -Children $n
+    check "race-$n`: every child returned an id" ($r.Ids.Count -eq $n)
+    check "race-$n`: all children returned the PERSISTED winner" $r.AllReturnedPersisted
+    check "race-$n`: persisted id looks like a 32-char hex GUID" ($r.Persisted -match '^[0-9a-f]{32}$')
+    check "race-$n`: recovery written by every child self-verifies" $r.AllVerified
+}
 
 $env:WINTAGE_APPDATA = $prevAppData
 

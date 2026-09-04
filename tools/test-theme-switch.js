@@ -185,43 +185,53 @@ check('ordinary host -> no data-w95-google', 'data-w95-google' in r.attrs, false
   check('refused reload: does not throw out of the callback', true, true);
 }
 
-// 10. CORE-014: storage naming a palette the document is NOT painting (a switch
-//     made in another tab, or the refused reload above) surfaces a pending row.
+// 10. CORE-003/CORE-014: the pending row is created by the RUNTIME event that
+//     creates the split brain -- a switch that persisted while the reload was
+//     refused -- and is BEHAVIOURALLY reachable. The old startup predicate
+//     (STORED_THEME_ID !== THEME_ID && THEMES[STORED_THEME_ID]) could never be
+//     true: a valid stored slug becomes THEME_ID one line after it is read, and
+//     an invalid one fails the THEMES lookup. A recovery row that cannot appear
+//     is worse than none, because it reads as covered.
 {
   r = run({ gm: true, stored: 'testpal', isTop: true });
-  check('painting the stored palette -> no pending row', r.menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
+  check('healthy startup -> no pending row', r.menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
 }
 {
-  // The document paints DEFAULT_THEME (its own THEME_ID), while storage says
-  // testpal: only reachable when a previous switch persisted without reloading.
-  // Simulated by handing GM_getValue the stored slug but forcing the resolved
-  // theme to differ is not possible from outside, so the honest check is the
-  // inverse of the case above plus the row's own wiring: a pending row, when it
-  // exists, must reload and nothing else.
   const menu = [];
   let reloads = 0;
+  let refuse = true;
   const ctx = {
     document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
-    location: { reload: () => { reloads++; } },
-    IS_TOP: true, IS_X: false, IS_REDDIT: false, IS_GOOGLE: false, console,
-    // First read resolves THEME_ID; the menu block reads the same binding, so a
-    // slug that exists resolves normally. To reach the pending branch the stored
-    // slug must be valid AND different from the painted one, which the source
-    // only produces after a failed reload; the source shape is asserted instead.
+    location: { reload: () => { reloads++; if (refuse) throw new Error('navigation refused'); } },
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, IS_GOOGLE: false,
+    console: { warn() { }, log: console.log, error: console.error },
     GM_getValue: (k, d) => d,
     GM_setValue: () => { },
     GM_registerMenuCommand: (l, f) => menu.push([l, f])
   };
   vm.createContext(ctx);
   vm.runInContext('(function(){\n' + slice + '\n}).call(this)', ctx);
-  check('healthy switch -> no pending row', menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
+  check('before any switch -> no pending row', menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
+  menu.find(m => m[0] === '○ Test Palette')[1]();
+  const pending = menu.filter(m => m[0].startsWith('⟳ '));
+  check('refused reload registers exactly one pending row', pending.length, 1);
+  check('the pending row names the palette that is waiting', pending[0][0], '⟳ Apply pending theme: Test Palette');
+  // Clicking it must retry the navigation and nothing else.
+  refuse = false;
+  const before = reloads;
+  pending[0][1]();
+  check('the pending row retries the reload', reloads - before, 1);
+  // A second refused switch must not stack a second row.
+  refuse = true;
+  menu.find(m => m[0] === '○ Test Palette')[1]();
+  check('a second refusal does not stack rows', menu.filter(m => m[0].startsWith('⟳ ')).length, 1);
 }
-// The pending row is source-gated on STORED_THEME_ID !== THEME_ID; pin that the
-// guard and the recovery action both exist, so a refactor cannot quietly drop the
-// only surface that reports the split-brain state.
+// Source pins: the constant and the recovery action must both still exist, and
+// the unreachable predicate must NOT come back.
 check('source declares STORED_THEME_ID', /const STORED_THEME_ID = requested;/.test(src), true);
-check('pending row is gated on a real divergence',
-  /STORED_THEME_ID && STORED_THEME_ID !== THEME_ID && THEMES\[STORED_THEME_ID\]/.test(src), true);
+check('the unreachable startup predicate is gone',
+  /STORED_THEME_ID && STORED_THEME_ID !== THEME_ID && THEMES\[STORED_THEME_ID\]/.test(src), false);
+check('pending state is runtime, not a startup constant', /let pendingThemeId = null;/.test(src), true);
 check('pending row offers a reload', /Apply pending theme: '/.test(src), true);
 
 console.log(bad ? '\n' + bad + ' failure(s)' : '\ntheme-switch test PASS');

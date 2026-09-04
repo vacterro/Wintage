@@ -245,9 +245,33 @@ function Load-CustomPaths {
 }
 
 function Save-CustomPaths {
+    $lockStream = $null
     try {
         $dir = Split-Path $script:pathsFile -Parent
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        # W2-007: paths.json is read-modify-written by TWO processes -- this window
+        # and install.ps1's Save-PathPreference. The atomic temp+rename below
+        # prevents torn JSON but not a LOST UPDATE: if both read state S, each
+        # merges its own keys into S and the second rename silently deletes the
+        # other's freshly added key, while both report success. The whole
+        # read -> merge -> write -> replace sequence therefore runs under the same
+        # named lock file the CLI writer takes (%APPDATA%\Wintage\paths.lock).
+        # Bounded retry, never an indefinite wait: a crashed holder's handle is
+        # already released by the OS, so a stuck lock means a live writer.
+        $lockPath = Join-Path $dir 'paths.lock'
+        for ($attempt = 0; $attempt -lt 100; $attempt++) {
+            try {
+                $lockStream = [System.IO.File]::Open($lockPath,
+                    [System.IO.FileMode]::OpenOrCreate,
+                    [System.IO.FileAccess]::ReadWrite,
+                    [System.IO.FileShare]::None)
+                break
+            }
+            catch [System.IO.IOException] {
+                Start-Sleep -Milliseconds (10 + (Get-Random -Maximum 40))
+            }
+        }
+        if ($null -eq $lockStream) { throw "could not acquire the paths.json lock at $lockPath after 100 attempts." }
         # paths.json has two writers. The GUI owns $PATH_TARGETS; install.ps1 owns
         # the rest of common.ps1's canonical key set (codenomad, workbuddy,
         # portable). Rebuilding the file from $PATH_TARGETS alone DELETED every
@@ -256,7 +280,8 @@ function Save-CustomPaths {
         # unrelated save (T-196). Read what is on disk, keep every key this surface
         # does not own byte-for-byte, and write only our own from live state -- a
         # GUI key whose folder vanished is still dropped, which is the load-time
-        # contract above.
+        # contract above. The read happens AFTER the lock is held, so the merge is
+        # based on the latest committed state rather than a pre-lock snapshot.
         $o = [ordered]@{}
         if (Test-Path -LiteralPath $script:pathsFile) {
             try {
@@ -272,6 +297,10 @@ function Save-CustomPaths {
             }
         }
         foreach ($k in $PATH_TARGETS) { if ($script:customPaths.ContainsKey($k)) { $o[$k] = $script:customPaths[$k] } }
+        # W2-007 test seam: widen the read -> write window so a concurrency gate
+        # can prove the lock is what serialises this update. Never set outside
+        # tests. (The CLI writer carries the same seam.)
+        if ($env:WINTAGE_TEST_PATHS_WRITE_DELAY_MS) { Start-Sleep -Milliseconds ([int]$env:WINTAGE_TEST_PATHS_WRITE_DELAY_MS) }
         $json = ($o | ConvertTo-Json)
         # Atomic write, same contract as the CLI manifest: a half-written
         # paths.json must never replace a good one, so the new content lands in a
@@ -290,17 +319,32 @@ function Save-CustomPaths {
         else { Write-Warning $message }
         return $false
     }
+    finally {
+        if ($lockStream) { $lockStream.Dispose() }
+    }
     return $true
 }
 
 # $true if a folder is now known for this target, $false if the user backed out.
+# W2-007: a failed SAVE also returns $false. The previous form called
+# Save-CustomPaths and returned $true unconditionally, so a persistence failure
+# left the target checked and logged "folder set to ..." for a path that lives
+# only in this session -- session and disk disagreeing with nothing on screen
+# saying so. The in-memory value is rolled back to what it was, because the
+# caller's contract is "a folder is now KNOWN for this target", and a value that
+# will not survive the window is not known.
 function Ask-CustomPath([string]$key) {
     $dlg = New-Object Windows.Forms.FolderBrowserDialog
     $dlg.Description = "Select folder for $key"
     $dlg.SelectedPath = if ($script:customPaths.ContainsKey($key)) { $script:customPaths[$key] } else { $PATH_DEFAULTS[$key] }
     if ($dlg.ShowDialog() -ne 'OK') { return $false }
+    $had = $script:customPaths.ContainsKey($key)
+    $previous = if ($had) { $script:customPaths[$key] } else { $null }
     $script:customPaths[$key] = $dlg.SelectedPath
-    Save-CustomPaths
+    if (-not (Save-CustomPaths)) {
+        if ($had) { $script:customPaths[$key] = $previous } else { $script:customPaths.Remove($key) }
+        return $false
+    }
     return $true
 }
 

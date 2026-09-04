@@ -1,7 +1,7 @@
 ---
 phase: SHIP
-task: T-228
-next_action: "PHASE SHIP T-228"
+task: T-234
+next_action: "PHASE SHIP T-234"
 blocker: none
 agent: opencode
 saipen_version: 7
@@ -10,44 +10,42 @@ saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN
 mode: full
 execution_intent: converge
 converge_target: ship
-last_event: 791
+last_event: 855
 style_contract: ded-4ae736e4
-updated: "2026-09-03T22:00:58Z"
+updated: "2026-09-04T23:07:10Z"
 transition_from: REVIEW
 ---
 
 # Active Work
 
-T-228 (qBittorrent target + native-font policy) and the three HUNT findings T-225/226/227 are all built, verified with instrument controls, and reviewed. Nothing is shipped: no commit, no tag, no push.
+T-234 executes the SRC-004 audit inbox layer (audit/2.md, 19 findings). Eighteen are terminal. The last one is split out as T-240 rather than claimed here. Nothing in this pass is shipped: no commit, no tag, no push. v1.31.0 (eebcacb) is the last published release.
 
-## T-225 CORE-013 -- route guard was not idempotent
+## SRC-004 coverage, current
 
-`wintage.user.js:73-76`. `setupRouteGuard()` wrapped `history.pushState`/`replaceState` with no latch, so a second run in the same document (in-place Tampermonkey update, manual re-inject, a manager re-evaluating on same-document navigation) wrapped the FIRST wrapper: `guard()` fired twice per transition, one extra `popstate`+`hashchange` listener stacked per pass, and layer one held a permanent reference to layer two. Invisible: the guard still worked, it just cost double and grew on every re-inject. Fix is a `window.__wintageRouteGuard` latch (window, not module scope -- a second run gets a fresh scope and the same window); a host that refuses the write falls through deliberately, because one wrap too many beats no safety guard.
+VERIFIED (18): R001 CORE-001 Terminal owned-state snapshot schema 2, R002 CORE-002 relocation-revert unpacked rename, R003 CORE-003 excluded-route quarantine + per-url latch, R004 CORE-004 stale theme-switch harness (shipped as T-236), R005 CORE-005 present-empty INI keys, R006 W2-001 windows-theme epoch finalize, R007 W2-002 OBS recovery parse + case, R008 W2-003 install-epoch first-create race, R009 W2-004 transaction boundary, R010 W2-005 checked + honest rollback, R011 W2-006 -WhatIf zero-write, R012 W2-007 paths.json serialized update, R013 PERF-001 recovery memory, R014 PERF-002 bounded mutation intake, R015 PERF-003 bounded light discovery, R016 PERF-004 shadow-root lifetime, R018 PERF-006 WCO frame latch, R019 PERF-007 injection epoch + CSS key.
 
-verify: `node tools/test-spa-exclude.js` 26/26 PASS (test 8, 6 new assertions). Control: latch deleted -> 4 FAIL, exit 1.
+UNKNOWN (1): R017 PERF-005, the GUI dispatch model. Split out as T-240 on the TODO board with its own verify bar, because that bar is process count and UI responsiveness during a real multi-target Apply -- a fixture would measure the fixture.
 
-## T-226 CORE-014 -- refused reload left a silent split brain
+## Wave 5 (this pass): recovery scaled in RAM with the size of the app it protected
 
-`wintage.user.js:376-386, 447-500`. The menu writes `GM_setValue` then calls `location.reload()`. The write has to land first (the palette is read at the next document-start), so a refused navigation -- a cancelled `beforeunload`, a host blocking programmatic navigation -- left storage on the NEW palette while the page kept painting the OLD one, with nothing on screen saying so. Reads as "the switcher is broken", and the next reload silently "fixes" it. Fix: `STORED_THEME_ID` (the pre-fallback storage value), reload in try/catch, one `console.warn` naming the palette and the manual step, and a `⟳ Apply pending theme` menu row gated on `STORED_THEME_ID !== THEME_ID`. No DOM banner is possible at document-start; the menu is the one channel the host page cannot style away.
+`tools/install-electron.js`. Recovery was stacked whole-binary Buffers across BOTH transaction layers. `captureRevertPreState` read the live archive, its `.bak`, the executable and the fuse backup into memory; `captureAppDir` then read the MOVED archive and the whole `app.asar.unpacked` tree into more Buffers, so the same archive was resident TWICE (`pre.movedAsar` and `appPre['app.asar']`); `installInPlace` held a full pre-patch Buffer in ADDITION to the `.bak` copy it had just written; and the parent PowerShell transaction was independently copying all of it to disk anyway. Measured by the audit at +192.1 MiB RSS for a 64 MiB archive plus a 64 MiB unpacked file.
 
-verify: `node tools/test-theme-switch.js` 40/40 PASS (cases 9+10, 11 new assertions). Control: reverted to bare `location.reload()` -> harness aborts on the uncaught throw = pre-fix behaviour, exit 1.
+Recovery is now a durable on-disk vault plus in-memory identity (size + streamed SHA-256 through a 64 KiB window). `sameSnapshot` compares size+digest instead of `Buffer.equals`, and `describePath` answers the byte-identical question without copying at all.
 
-## T-227 CORE-015 -- silent catches in the hover CSSOM surgery
+Three consequences beyond the memory, and they are why this shape was chosen: the vault is DURABLE, so recovery evidence survives an incomplete rollback and is named in every INCOMPLETE message; the relocation-revert rollback restores the app dir FIRST, because that snapshot owns the moved archive's bytes; and the in-place rollback reads the `.bak`, digest-verified against the live archive before the first write, so an unverified copy can never become the rollback authority.
 
-`wintage.user.js:519-547` plus four catch sites (1578, 1637, 1661, 1703). 25 empty catches exist; most are legitimate at document-start, but four hid real failures in the hover surgery and the shadow pierce, where the visible symptom is "the site's hover highlight is still there" -- indistinguishable from a missing feature, with nothing to diagnose. Fix: `DIAG` counters + `noteSuppressed()` + `window.__wintageDiag()`; first error retained with kind and message; deliberately no per-throw logging (a CSS-in-JS page would flood the console). Declared with the cross-cutting constants rather than beside the hover surgery, because `pierceShadow` sits above it and a `const` used before its line is a TDZ ReferenceError. `desktop/targets/electron/shim.cjs` mirrors the same counters -- the build's free-identifier gate caught the missing symbol, which would otherwise have been a ReferenceError inside `executeJavaScript`, i.e. "the theme does nothing".
+Vault lifetime is deliberate: dropped on exit for a clean run, retained ONLY when the rollback could not put everything back. A rename-only stock->relocation apply copies nothing and creates no vault at all.
 
-verify: `node tools/test-diag-counters.js` 18/18 PASS (new gate). Control: one catch reverted to silent -> 5 FAIL, exit 1. The clean-sheet control proves a permanently non-zero counter cannot pass.
-
-## Review finding, repaired (P2, self-inflicted)
-
-A `git stash push/pop` round-trip used to prove EOL provenance normalised 4 lone LFs inside `GLOBAL_CSS` to CRLF under `core.autocrlf=true`. That made `desktop/out` stale, and `install.ps1`'s `build --check` then failed 3 PS sub-suites. `node tools/build-desktop.js` regenerated 32 files; content-neutral (the generated CSS byte-compares identical to the live installed qBittorrent theme), no source semantics touched.
+verify: `node tools/test-perf-recovery.js` 56 PASS (new gate, wired into Run-Tests and release.ps1). Relocation Revert peak RSS 16/64/256 MiB fixtures -> 47.1/48.0/48.3 MiB; in-place lane 16/256 -> 48.7/51.8 MiB. Seven instrument controls, each red for its own reason, source restored byte-identical by SHA256.
 
 ## Full matrix, current
 
-10 JS gates green (check-css, theme-switch, spa-exclude, diag-counters, repainter-polarity, electron-shim, theme-packs, shim-payloads, terminal-font, electron-state) + 4 `--check` contracts (build-desktop, apply-themes, derive-palette, import-fastprompter). `tests/Run-Tests.ps1` ALL PASSED. 6 PS sub-suites green. `release.ps1` wires both new gates; the Run-Tests gate-existence check confirms both are reachable.
+17 Node gates PASS (check-css, theme-switch, spa-exclude, diag-counters, perf-bounded, perf-lanes, perf-recovery, fs-retry, repainter-polarity, electron-shim, theme-packs, shim-payloads, terminal-font, electron-state, check-wiki-mirror, terminal-ownership, recovery-lifecycle) + 4 `--check` contracts clean. `tests/Run-Tests.ps1` ALL TESTS PASSED, 14 of 14 tool suites exit 0, every release gate reachable. No temp vault leaked across a full run.
 
-Goal counters: waves=1, tickets=3 (T-225, T-226, T-227 each passed VERIFY). Valve untripped (cap 3 waves / 20 tickets).
+## SAIOPS is refused in this project, deliberately
+
+`E-837` records it in full: fast validation demands a CONSECUTIVE E-ID chain, and this project carries two documented T-222-era stub-backfill gaps (E-703->E-717, E-718->E-722). E-774 relaxed that rule in the shared install; the saipen project has since reverted it and proved on a fixture that the relaxed rule accepts a forged log line. So E-837..E-850 are hand-appended with no `[op: ...]` id and the validator's `[saio]` provenance check lists them by design.
 
 ## Not shipped, and untracked files that must ride along
 
-`tools/test-diag-counters.js` and `tools/test-spa-exclude.js` are untracked but now release gates -- a ship must stage them or `release.ps1` fails on a missing gate. `desktop/targets/qbittorrent/` (T-228) is likewise untracked. `tools/test-perf-bounded.js` stays out: 1 FAIL against a future baseline (PERF-009), ticket-class per E-738.
+`tools/test-transaction-boundary.ps1`, `tools/test-perf-lanes.js`, `tools/test-perf-recovery.js`, `tools/test-terminal-ownership.js` and `tools/test-recovery-lifecycle.js` are untracked but wired into `Run-Tests`; a ship must stage them or the suite fails on a missing gate. `desktop/out` was regenerated in wave 4 (16 shims changed) -- it is gitignored, so a ship must not stage it but must not skip the rebuild either.

@@ -54,51 +54,11 @@
       "actionable": true,
       "class": "requirement",
       "text": "W2-006: P1 install.ps1 first-touch recovery creates directories, copies the pristine file and writes recovery metadata before the ShouldProcess gate, so -WhatIf mutates disk."
-    },
-    "SRC-004:R012": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "W2-007: P2 paths.json is read-modify-written unlocked from two places, and Ask-CustomPath reports success unconditionally so a failed save still logs folder set."
-    },
-    "SRC-004:R013": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-001: P1 Electron transaction snapshots read whole files into memory and copy the same archive twice, and the PowerShell lightweight snapshot branch is dead because -Operation Repaint is passed nowhere."
-    },
-    "SRC-004:R014": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-002: P1 mutation intake is unbounded in node cardinality: the addedNodes loop walks the full tail past the collection budget, and the shim queues every added node before its own budget with identity-only dedupe."
-    },
-    "SRC-004:R015": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-003: P1 the light sweep lane materializes the whole not-done NodeList before consulting the budget, and lightPending is cleared after the sweep so one isolated request always costs two sweeps."
-    },
-    "SRC-004:R016": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-004: P1 piercedRoots holds strong references and nothing observes removedNodes or unobserves, so detached shadow roots are retained until a suspend."
-    },
-    "SRC-004:R017": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-005: P1 the installer GUI spawns one blocking child process per checked target for Apply, Revert and listing, and repeats build-desktop --check and the fuse probe per target with no cache."
-    },
-    "SRC-004:R018": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-006: P2 the shim WCO_FIX schedules a raw requestAnimationFrame per resize and geometrychange with no frame latch, and re-queries plus measures every control each frame."
-    },
-    "SRC-004:R019": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-007: P2 the shim injection epoch bumps on in-page navigation and every ready/finish-load event calls inject, while only the newest CSS key is stored and nothing is ever removed."
     }
   },
-  "derived_at": "2026-09-03T22:32:02Z",
+  "derived_at": "2026-09-03T22:32:00Z",
   "derived_from": "SRC-004",
-  "interpretation_revision": 19,
+  "interpretation_revision": 11,
   "schema_version": 1,
   "source_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699"
 }

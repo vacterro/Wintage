@@ -142,7 +142,22 @@ const SCROLL_FIX = `(() => {
   let settlePasses = 0;
   let settleNeeded = false;
 
-  const hasWork = () => dirty.size || trees.length || activeTrees.length;
+  // PERF-002 (SRC-004): the queue is bounded and ancestor-collapsed. Two
+  // measured shapes broke the nominal BUDGET=200:
+  //   20,000 flat added roots  -> 20,001 extra getComputedStyle calls over 101
+  //                               animation frames (intake was unbounded);
+  //    1,000 NESTED added roots -> 501,500 getComputedStyle calls over 2,508
+  //                               frames, because a queued parent and its
+  //                               descendants each walked the same subtree.
+  // Identity dedupe cannot see that: parent and child are different objects.
+  const MAX_TREE_ROOTS = 64;
+  const MAX_DIRTY = 2000;
+  let treeOverflow = false;
+  // PERF-002: head index instead of Array.prototype.shift, which is O(n) per
+  // removal and therefore O(n^2) over a drained queue. Everything below treeHead
+  // is already consumed, so pending work is trees.length - treeHead.
+  let treeHead = 0;
+  const hasWork = () => dirty.size || (trees.length - treeHead) > 0 || activeTrees.length || treeOverflow;
   const queueFrame = () => {
     if (frameQueued) return;
     frameQueued = true;
@@ -150,20 +165,66 @@ const SCROLL_FIX = `(() => {
   };
   const queueDirty = el => {
     if (!el || el.nodeType !== 1) return;
+    // PERF-002: the dirty set is bounded by the same rule as the root queue. An
+    // attribute storm delivers one record per element, and one Set entry per
+    // record is exactly the per-node retention this finding is about. Past the
+    // cap the whole document is re-walked once instead -- a superset of every
+    // entry that would have been dropped.
+    if (dirty.size >= MAX_DIRTY) { treeOverflow = true; queueFrame(); return; }
     dirty.add(el);
     queueFrame();
   };
   const queueTree = root => {
     if (!root || root.nodeType !== 1 || treeRoots.has(root)) return;
+    // Ancestor collapse: an already-queued ancestor will walk this subtree, so
+    // queueing the descendant only duplicates the walk. Cheap because the check
+    // is O(depth) against a Set, never O(queue).
+    for (let p = root.parentNode; p; p = p.parentNode) {
+      if (treeRoots.has(p)) return;
+    }
+    // The reverse direction: this root subsumes queued descendants. Drop them
+    // rather than walking their subtrees twice. Only the UNCONSUMED span is
+    // scanned, and entries are nulled in place so treeHead stays valid.
+    if (treeRoots.size && root.contains) {
+      for (let i = treeHead; i < trees.length; i++) {
+        const queued = trees[i];
+        if (!queued || queued === root || !root.contains(queued)) continue;
+        trees[i] = null;
+        treeRoots.delete(queued);
+      }
+    }
+    if (treeRoots.size >= MAX_TREE_ROOTS) {
+      // Overflow is ONE bounded continuation token, not one entry per node: the
+      // next frame re-walks from documentElement, which is a superset of every
+      // root we are dropping here. Nothing is lost, and memory stops scaling
+      // with the size of the insertion burst.
+      treeOverflow = true;
+      queueFrame();
+      return;
+    }
     treeRoots.add(root);
     trees.push(root);
     queueFrame();
+  };
+  const takeRoot = () => {
+    while (treeHead < trees.length) {
+      const root = trees[treeHead];
+      trees[treeHead++] = null;
+      if (treeHead > 32 && treeHead * 2 >= trees.length) { trees.splice(0, treeHead); treeHead = 0; }
+      if (root) return root;
+    }
+    if (trees.length) { trees.length = 0; treeHead = 0; }
+    if (treeOverflow) {
+      treeOverflow = false;
+      return document.documentElement;
+    }
+    return null;
   };
   const nextTreeNode = () => {
     for (;;) {
       let state = activeTrees[activeTrees.length - 1];
       if (!state) {
-        const root = trees.shift();
+        const root = takeRoot();
         if (!root) return null;
         treeRoots.delete(root);
         state = { stack: [root] };
@@ -563,17 +624,47 @@ const AD_BLOCK = `(() => {
   };
   hideAds(document);
   let queued = false;
-  const added = new Set();
+  // PERF-002 (SRC-004): the same overlapping-root shape SCROLL_FIX had. Every
+  // added element was retained until the frame, and then hideAds(root) ran a
+  // descendant query FOR EACH retained root -- so a parent and its children in
+  // one batch each queried the same subtree. Measured on the pre-fix payload:
+  // 1,000 nested added roots -> 499,500 descendant visits in ONE frame. Identity
+  // dedupe cannot see that, because a parent and a child are different objects.
+  const MAX_AD_ROOTS = 64;
+  let added = [];
+  let addedOverflow = false;
+  const queueAdRoot = node => {
+    if (!node || node.nodeType !== 1) return;
+    for (const root of added) {
+      if (root === node) return;
+      // An already-queued ancestor's query covers this node's subtree.
+      if (root.contains && root.contains(node)) return;
+    }
+    // This node subsumes queued descendants; drop them instead of querying the
+    // same subtree twice.
+    if (node.contains) added = added.filter(root => !node.contains(root));
+    if (added.length >= MAX_AD_ROOTS) { addedOverflow = true; return; }
+    added.push(node);
+  };
   new MutationObserver(records => {
     for (const r of records) {
-      for (const node of r.addedNodes) if (node.nodeType === 1) added.add(node);
+      for (const node of r.addedNodes) queueAdRoot(node);
     }
-    if (queued || !added.size) return;
+    if (queued || (!added.length && !addedOverflow)) return;
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
-      for (const root of added) hideAds(root);
-      added.clear();
+      // Overflow is ONE document-wide pass, which is a strict superset of every
+      // root that was dropped -- bounded work instead of one query per node.
+      if (addedOverflow) {
+        addedOverflow = false;
+        added = [];
+        hideAds(document);
+        return;
+      }
+      const batch = added;
+      added = [];
+      for (const root of batch) hideAds(root);
     });
   }).observe(document.documentElement, { childList: true, subtree: true });
 
@@ -718,8 +809,25 @@ const WCO_FIX = `(() => {
   let passes = 0;
   const settle = () => { if (++passes < 4) { apply(); setTimeout(settle, 700); } };
   setTimeout(settle, 700);
-  window.addEventListener("resize", () => requestAnimationFrame(apply));
-  try { wco.addEventListener("geometrychange", () => requestAnimationFrame(apply)); } catch (e) { }
+
+  // PERF-006: ONE geometry scan per rendered frame. requestAnimationFrame does
+  // NOT coalesce separately queued callbacks, so the old
+  // \`() => requestAnimationFrame(apply)\` handlers queued one complete
+  // querySelectorAll + getBoundingClientRect pass per EVENT. Measured on the
+  // pre-fix payload: 100 resize events before a frame -> 100 queued callbacks
+  // and 100,000 extra rect reads, 99 of which measured geometry that was
+  // already superseded. The latch is cleared immediately BEFORE apply() runs,
+  // so an event arriving during the scan still schedules the next frame -- the
+  // latest geometry always wins, which is why this is a latch and not a
+  // debounce (a debounce would make the controls visibly lag the window).
+  let frameQueued = false;
+  const queueApply = () => {
+    if (frameQueued) return;
+    frameQueued = true;
+    requestAnimationFrame(() => { frameQueued = false; apply(); });
+  };
+  window.addEventListener("resize", queueApply);
+  try { wco.addEventListener("geometrychange", queueApply); } catch (e) { }
 
   return "window-controls overlay fix installed";
 })()`;
@@ -853,12 +961,25 @@ if (css) {
             .catch(err => stamp('themereassert FAILED: ' + (err && err.message)));
         }
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
-        wc.insertCSS(payload, { cssOrigin: 'author' })
+        // PERF-007: retire the previous key BEFORE installing a replacement, and
+        // only store the new key once insertCSS resolved. Storing first meant the
+        // sole removal handle advanced to the newest insertion and every earlier
+        // stylesheet became unreachable. A stale key from a document that is
+        // already gone rejects harmlessly -- that is expected on a real
+        // navigation, so it is swallowed rather than reported as a failure.
+        const previousKey = wc.__wintageCssKey;
+        const install = () => wc.insertCSS(payload, { cssOrigin: 'author' })
           .then(key => { wc.__wintageCssKey = key; stamp('injected ' + payload.length + ' bytes into ' + url); })
           .catch(err => {
             stamp('FAILED: ' + (err && err.message));
             console.error('[wintage] insertCSS failed:', err && err.message);
           });
+        if (previousKey && typeof wc.removeInsertedCSS === 'function') {
+          wc.__wintageCssKey = null;
+          Promise.resolve(wc.removeInsertedCSS(previousKey)).catch(() => { }).then(install);
+        } else {
+          install();
+        }
       };
       wc.on('dom-ready', inject);
       wc.on('did-finish-load', inject);
@@ -868,7 +989,18 @@ if (css) {
       // even if the URL string is identical. Bump the epoch on the same
       // navigation hook the renderer treats as a new top document.
       wc.on('did-navigate', () => { injectedEpoch++; });
-      wc.on('did-navigate-in-page', (_e, _url, isMainFrame) => { if (isMainFrame) injectedEpoch++; });
+      // PERF-007 (SRC-004): did-navigate-in-page must NOT bump the epoch. A
+      // same-document history/SPA navigation keeps the same document, the same
+      // renderer and the same inserted stylesheet -- but bumping the epoch made
+      // the next did-frame-finish-load (a child iframe finishing, which happens
+      // constantly in an SPA) look like a fresh uninjected document. Measured on
+      // the pre-fix handler: one in-page navigation followed by one frame-finish
+      // took inserts from 1 to 2 and executeJavaScript calls from 4 to 8, and
+      // wc.__wintageCssKey advanced to the newest key so the previous stylesheet
+      // could never be removed by key. The renderer-side latches (
+      // window.__wintageScrollFix and friends) limited the functional damage to
+      // duplicate CSS and wasted IPC, which is exactly why nothing ever showed
+      // it. A real reload still reinjects: that fires did-navigate.
     });
 
     // ─── THE NATIVE CAPTION STRIP ───────────────────────────────────────────

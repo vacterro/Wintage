@@ -144,6 +144,102 @@ function fsRetry(fn) {
   throw lastErr;
 }
 
+// ─── PERF-001: recovery bytes live on DISK, not in RAM ──────────────────────
+// Recovery here used to be stacked whole-binary Buffers. captureRevertPreState
+// read the live archive, its backup, the executable and the fuse backup into
+// memory; captureAppDir then read the MOVED archive and the complete
+// app.asar.unpacked tree into more Buffers -- so the same archive was resident
+// TWICE (`pre.movedAsar` and `appPre['app.asar']`) while the parent PowerShell
+// transaction was independently copying all of it to disk anyway. Measured on a
+// relocation fixture with a 64 MiB archive plus a 64 MiB unpacked file: RSS went
+// from 24.6 MiB to 216.7 MiB, +192.1 MiB, for a mutation set of a few KB.
+//
+// Memory now scales with the SIDECARS (kilobytes), not with the application. The
+// large files are copied once into a vault directory and the in-memory snapshot
+// carries only presence, kind, size and a streamed SHA-256 -- enough to verify a
+// restore without reading either side whole.
+//
+// Two properties fall out of this and both matter more than the memory:
+//   * the vault is DURABLE, so recovery evidence survives an incomplete rollback
+//     instead of vanishing with the process, and it is reported as a recovery
+//     location like every other one;
+//   * comparison is by size+digest, so `appDirByteIdentical` no longer has to
+//     re-read an entire tree into Buffers to answer one boolean.
+let vaultRoot = null;
+let vaultSeq = 0;
+let vaultKeep = false;
+function vaultDir() {
+  if (vaultRoot) return vaultRoot;
+  // A sibling of the OS temp dir, not of `resources`: a vault inside the tree
+  // being mutated would be captured by the next snapshot of that tree. The
+  // prefix is deliberately NOT `wintage-recovery-` -- test-recovery-lifecycle.js
+  // already owns that one for its fixtures, and two unrelated things sharing a
+  // temp prefix is how a leak check ends up counting someone else's directories.
+  vaultRoot = fs.mkdtempSync(path.join(require('os').tmpdir(), 'wintage-vault-'));
+  return vaultRoot;
+}
+// The vault is transient by default -- it exists for the duration of ONE
+// operation. It is retained ONLY when the rollback could not put everything
+// back, because then it is the last copy of the user's bytes and deleting it
+// would turn a recoverable failure into data loss. `keepVault()` is called from
+// exactly those paths, next to the message that names it as a recovery location.
+function keepVault() { vaultKeep = true; }
+process.on('exit', () => {
+  if (vaultKeep || !vaultRoot) return;
+  try { fs.rmSync(vaultRoot, { recursive: true, force: true }); } catch (e) { }
+});
+// PERF-001 measurement seam. The audit's bar is "child-process peak RSS stays
+// approximately FIXED as fixture size grows, instead of growing roughly one byte
+// of RSS per recovery byte", and peak RSS is a property only the child can
+// report -- spawnSync returns no rusage on Windows. Printed to stderr so it can
+// never be mistaken for tool output. Never set outside tests.
+if (process.env.WINTAGE_TEST_REPORT_RSS) {
+  process.on('exit', () => {
+    try {
+      const ru = process.resourceUsage();
+      process.stderr.write('wintage-rss: ' + ru.maxRSS + '\n');
+    } catch (e) { }
+  });
+}
+function vaultStore(srcPath) {
+  const name = 'v' + (++vaultSeq) + '-' + path.basename(srcPath);
+  const dst = path.join(vaultDir(), name);
+  fsRetry(() => fs.copyFileSync(srcPath, dst));
+  return name;
+}
+function vaultPath(name) { return path.join(vaultDir(), name); }
+function vaultRestore(name, dstPath) {
+  fs.mkdirSync(path.dirname(dstPath), { recursive: true });
+  fsRetry(() => fs.copyFileSync(vaultPath(name), dstPath));
+}
+// Bounded: a 64 KiB window regardless of file size.
+function hashFile(p) {
+  const crypto = require('crypto');
+  const h = crypto.createHash('sha256');
+  const fd = fs.openSync(p, 'r');
+  try {
+    const buf = Buffer.alloc(65536);
+    for (;;) {
+      const n = fs.readSync(fd, buf, 0, buf.length, null);
+      if (!n) break;
+      h.update(buf.subarray(0, n));
+    }
+  } finally { fs.closeSync(fd); }
+  return h.digest('hex');
+}
+// Identity WITHOUT copying: what a comparison needs and nothing more.
+function describePath(p) {
+  if (!fs.existsSync(p)) return { existed: false };
+  const st = fs.statSync(p);
+  if (st.isDirectory()) {
+    return {
+      existed: true, kind: 'dir',
+      entries: fs.readdirSync(p).sort().map(f => [f, describePath(path.join(p, f))])
+    };
+  }
+  return { existed: true, kind: 'file', size: st.size, sha: hashFile(p) };
+}
+
 // ─── Fuse handling (T-190 + CORE-007/CORE-008) ──────────────────────────────
 // The fuse flip is part of the install transaction: it happens ONLY after
 // classify + preflight + calculation, and a later failure restores the EXE.
@@ -369,9 +465,13 @@ if (has('revert')) {
       } catch (e) {
         const rollbackFailures = restoreRevertPreState(pre, asar, bak, exeNow);
         if (rollbackFailures.length) {
+          // PERF-001: the vault holds the pre-operation bytes and must outlive
+          // this process when the rollback could not put them back.
+          keepVault();
           die('in-place revert failed (' + e.message + ') - rollback INCOMPLETE: ' +
             rollbackFailures.map(f => f.phase + ': ' + f.error).join(' | ') +
-            '. Original archive preserved at ' + (fs.existsSync(bak) ? bak : (fs.existsSync(asar) ? asar : '(missing)')));
+            '. Original archive preserved at ' + (fs.existsSync(bak) ? bak : (fs.existsSync(asar) ? asar : '(missing)')) +
+            (vaultRoot && fs.existsSync(vaultRoot) ? '. Recovery vault: ' + vaultRoot : ''));
         }
         die('in-place revert failed (' + e.message + ') - restored the exact pre-operation state.');
       }
@@ -404,8 +504,19 @@ if (has('revert')) {
     if (c.state === 'themed-relocated') {
       if (dryRun) { console.log('install-electron: would restore ' + movedAsar + ' -> ' + asar + ' and remove ' + appDir); process.exit(0); }
       const pre = captureRevertPreState(asar, asar + '.bak', exeNow);
-      pre.movedAsar = fs.existsSync(movedAsar) ? fs.readFileSync(movedAsar) : null;
+      // PERF-001: `pre.movedAsar` used to be a SECOND full Buffer of the moved
+      // archive, while captureAppDir() below already snapshots the very same file
+      // as appPre['app.asar'] -- the same 64 MiB resident twice for one rollback.
+      // Only the PRESENCE fact is kept here; the bytes come from the app-dir
+      // snapshot (now a vault reference), which is the single representation.
+      pre.movedAsarExisted = fs.existsSync(movedAsar);
       pre.movedUnpacked = fs.existsSync(movedUnpacked) ? { existed: true } : { existed: false };
+      // CORE-002: the revert also RENAMES the unpacked directory back to root.
+      // Rollback restored the moved copy but left the root one behind, so the
+      // tree ended with both -- and still printed "the exact pre-operation
+      // state". Whether root/unpacked existed BEFORE decides whether removing
+      // it is undoing our own rename or deleting something that was not ours.
+      pre.rootUnpackedExisted = fs.existsSync(unpacked);
       const appPre = captureAppDir();
       try {
         restoreFuseBackupForRevert(exeNow);
@@ -419,31 +530,43 @@ if (has('revert')) {
         if (appDirIsOurs() || !fs.existsSync(asar)) throw new Error('verification failed after relocation revert');
       } catch (e) {
         const rollbackFailures = [];
-        if (pre.movedAsar !== null) {
-          try {
-            fs.mkdirSync(appDir, { recursive: true });
-            fs.writeFileSync(movedAsar, pre.movedAsar);
-          } catch (e2) {
-            rollbackFailures.push({ phase: 'moved-asar-restore', path: movedAsar, error: e2.message });
-          }
-          if (!rollbackFailures.length && fs.existsSync(asar)) {
+        // The app-dir restore comes FIRST now: it owns the moved archive's bytes,
+        // so the root copy can only be dropped once the moved one is back.
+        const appDirFailures = restoreAppDir(appPre);
+        if (appDirFailures.length) rollbackFailures.push(...appDirFailures);
+        if (pre.movedAsarExisted) {
+          if (!rollbackFailures.length && fs.existsSync(movedAsar) && fs.existsSync(asar)) {
             try { fs.unlinkSync(asar); } catch (e2) {
               rollbackFailures.push({ phase: 'root-asar-unlink', path: asar, error: e2.message });
             }
           }
-        }
-        if (pre.movedAsar === null && fs.existsSync(asar)) {
+        } else if (fs.existsSync(asar)) {
           try { fsRetry(() => fs.renameSync(asar, movedAsar)); } catch (e2) {
             rollbackFailures.push({ phase: 'moved-asar-rename', path: movedAsar, error: e2.message });
           }
         }
-        const appDirFailures = restoreAppDir(appPre);
-        if (appDirFailures.length) rollbackFailures.push(...appDirFailures);
+        // CORE-002: undo the unpacked rename too. `restoreAppDir` puts the moved
+        // copy back, so leaving the root copy in place duplicates it -- and a
+        // duplicate at root is what the next Apply's state classifier reads.
+        if (!pre.rootUnpackedExisted && fs.existsSync(unpacked)) {
+          try { fs.rmSync(unpacked, { recursive: true, force: true }); } catch (e2) {
+            rollbackFailures.push({ phase: 'root-unpacked-remove', path: unpacked, error: e2.message });
+          }
+        }
         const revertPreFailures = restoreRevertPreState(pre, asar, asar + '.bak', exeNow);
         if (revertPreFailures.length) rollbackFailures.push(...revertPreFailures);
-        const originalMovedAsarRestored = fs.existsSync(movedAsar) && pre.movedAsar !== null;
-        const originalAsarIntact = pre.movedAsar === null || fs.existsSync(asar);
-        const rollbackOk = rollbackFailures.length === 0 && originalMovedAsarRestored;
+        const originalMovedAsarRestored = fs.existsSync(movedAsar) && pre.movedAsarExisted;
+        const originalAsarIntact = !pre.movedAsarExisted || fs.existsSync(asar);
+        // CORE-002: the unpacked directory is part of "the exact pre-operation
+        // state". Claiming exact restoration while it is missing, or while our
+        // own rename is still sitting at root, is the false claim this branch
+        // exists to avoid making.
+        const movedUnpackedRestored = !pre.movedUnpacked.existed || fs.existsSync(movedUnpacked);
+        const rootUnpackedClean = pre.rootUnpackedExisted || !fs.existsSync(unpacked);
+        const rollbackOk = rollbackFailures.length === 0
+          && originalMovedAsarRestored
+          && movedUnpackedRestored
+          && rootUnpackedClean;
         if (rollbackOk) {
           die('relocation revert failed (' + e.message + ') - rolled back to the exact pre-operation state.');
         } else {
@@ -451,10 +574,18 @@ if (has('revert')) {
           if (fs.existsSync(movedAsar)) surviving.push(movedAsar);
           if (fs.existsSync(movedUnpacked)) surviving.push(movedUnpacked);
           if (fs.existsSync(asar)) surviving.push(asar);
+          if (fs.existsSync(unpacked)) surviving.push(unpacked);
+          // PERF-001: the vault is DURABLE recovery evidence, so it is named as a
+          // recovery location like every other one, and retained past exit.
+          // Without this the honest INCOMPLETE report would omit the copy that
+          // actually holds the bytes.
+          if (vaultRoot && fs.existsSync(vaultRoot)) { keepVault(); surviving.push(vaultRoot + ' (recovery vault)'); }
           const detail = [
             ...rollbackFailures.map(f => f.phase + ': ' + f.error),
             !originalMovedAsarRestored ? 'moved archive missing at ' + movedAsar : null,
-            !originalAsarIntact ? 'root archive missing at ' + asar : null
+            !originalAsarIntact ? 'root archive missing at ' + asar : null,
+            !movedUnpackedRestored ? 'moved unpacked directory missing at ' + movedUnpacked : null,
+            !rootUnpackedClean ? 'our unpacked rename is still live at ' + unpacked : null
           ].filter(Boolean).join('; ');
           die('relocation revert failed (' + e.message + ') - rollback INCOMPLETE (' + detail + '). ' +
             'Recovery locations preserved: ' + (surviving.length ? surviving.join('; ') : '(none)'));
@@ -570,17 +701,22 @@ function restoreSidecars(snap) {
 // fuse backup); restoreRevertPreState puts it all back if the restore fails part
 // way. Without this a failure between "copy backup over the live archive" and
 // "delete the sidecars" leaves a torn install.
+//
+// PERF-001: the three LARGE members (archive, backup archive, executable) go to
+// the durable vault; only their identity stays resident. The sidecars are
+// kilobytes and stay in memory, which is what makes restoreSidecars usable from
+// a catch block that must not perform its own copies.
 function captureRevertPreState(asarPath, bakPath, exePath) {
   const s = {
-    asar: fs.existsSync(asarPath) ? fs.readFileSync(asarPath) : null,
-    bak: fs.existsSync(bakPath) ? fs.readFileSync(bakPath) : null,
+    asar: fs.existsSync(asarPath) ? vaultStore(asarPath) : null,
+    bak: fs.existsSync(bakPath) ? vaultStore(bakPath) : null,
     sidecars: snapshotSidecars(),
     exe: null, fuseBak: null,
   };
   if (exePath && fs.existsSync(exePath)) {
-    s.exe = fs.readFileSync(exePath);
+    s.exe = vaultStore(exePath);
     const fb = exePath + '.wintage-fuse.bak';
-    if (fs.existsSync(fb)) s.fuseBak = fs.readFileSync(fb);
+    if (fs.existsSync(fb)) s.fuseBak = vaultStore(fb);
   }
   return s;
 }
@@ -589,11 +725,11 @@ function captureRevertPreState(asarPath, bakPath, exePath) {
 function restoreRevertPreState(pre, asarPath, bakPath, exePath) {
   const failures = [];
   if (pre.asar !== null) {
-    try { fs.writeFileSync(asarPath, pre.asar); }
+    try { vaultRestore(pre.asar, asarPath); }
     catch (e) { failures.push({ phase: 'asar-restore', path: asarPath, error: e.message }); }
   }
   if (pre.bak !== null) {
-    try { fs.writeFileSync(bakPath, pre.bak); }
+    try { vaultRestore(pre.bak, bakPath); }
     catch (e) { failures.push({ phase: 'bak-restore', path: bakPath, error: e.message }); }
   } else {
     try { if (fs.existsSync(bakPath)) fs.unlinkSync(bakPath); }
@@ -601,11 +737,11 @@ function restoreRevertPreState(pre, asarPath, bakPath, exePath) {
   }
   restoreSidecars(pre.sidecars);
   if (exePath && pre.exe !== null) {
-    try { fs.writeFileSync(exePath, pre.exe); }
+    try { vaultRestore(pre.exe, exePath); }
     catch (e) { failures.push({ phase: 'exe-restore', path: exePath, error: e.message }); }
     const fb = exePath + '.wintage-fuse.bak';
     if (pre.fuseBak !== null) {
-      try { fs.writeFileSync(fb, pre.fuseBak); }
+      try { vaultRestore(pre.fuseBak, fb); }
       catch (e) { failures.push({ phase: 'fuse-bak-restore', path: fb, error: e.message }); }
     } else {
       try { if (fs.existsSync(fb)) fs.unlinkSync(fb); }
@@ -614,12 +750,16 @@ function restoreRevertPreState(pre, asarPath, bakPath, exePath) {
   }
   return failures;
 }
+// PERF-001: a snapshot is IDENTITY plus a vault reference for file content. The
+// previous form built a Buffer per file, recursively, so a relocation snapshot
+// of a themed app dir held the moved archive AND the whole unpacked tree in RAM.
 function snapshotPath(p) {
   if (!fs.existsSync(p)) return { existed: false };
   if (fs.statSync(p).isDirectory()) {
     return { existed: true, kind: 'dir', entries: fs.readdirSync(p).sort().map(f => [f, snapshotPath(path.join(p, f))]) };
   }
-  return { existed: true, kind: 'file', buf: fs.readFileSync(p) };
+  const st = fs.statSync(p);
+  return { existed: true, kind: 'file', size: st.size, sha: hashFile(p), vault: vaultStore(p) };
 }
 function restorePath(p, snap) {
   if (!snap.existed) { if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true }); return; }
@@ -627,15 +767,14 @@ function restorePath(p, snap) {
     fs.mkdirSync(p, { recursive: true });
     for (const [f, child] of snap.entries) restorePath(path.join(p, f), child);
   } else {
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, snap.buf);
+    vaultRestore(snap.vault, p);
   }
 }
 function captureAppDir() {
   const snap = {};
   for (const f of ['package.json', 'shim.cjs', 'wintage.css', 'wintage-status.txt']) {
     const p = path.join(appDir, f);
-    snap[f] = fs.existsSync(p) ? { existed: true, buf: fs.readFileSync(p), kind: 'file' } : { existed: false };
+    snap[f] = snapshotPath(p);
   }
   snap['app.asar'] = snapshotPath(movedAsar);
   snap['app.asar.unpacked'] = snapshotPath(movedUnpacked);
@@ -643,7 +782,8 @@ function captureAppDir() {
 }
 function appDirByteIdentical(dir, snap) {
   for (const f of Object.keys(snap)) {
-    const actual = snapshotPath(path.join(dir, f));
+    // describePath reads size + streamed digest; it never materialises a file.
+    const actual = describePath(path.join(dir, f));
     if (!sameSnapshot(actual, snap[f])) return false;
   }
   return true;
@@ -651,7 +791,10 @@ function appDirByteIdentical(dir, snap) {
 function sameSnapshot(a, b) {
   if (a.existed !== b.existed || a.kind !== b.kind) return false;
   if (!a.existed) return true;
-  if (a.kind === 'file') return a.buf.equals(b.buf);
+  // PERF-001: size + SHA-256 instead of Buffer.equals. Same verdict for the
+  // question actually being asked ("is this byte-identical to the pre-state"),
+  // without holding either side in memory.
+  if (a.kind === 'file') return a.size === b.size && a.sha === b.sha;
   if (a.entries.length !== b.entries.length) return false;
   return a.entries.every(([f, child], i) => b.entries[i][0] === f && sameSnapshot(child, b.entries[i][1]));
 }
@@ -682,7 +825,6 @@ function installInPlace() {
     process.exit(0);
   }
 
-  const preAsar = fs.readFileSync(asar);
   const preSidecars = snapshotSidecars();
   const asarBak = asar + '.bak';
 
@@ -697,6 +839,15 @@ function installInPlace() {
       die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
     }
     throw e;
+  }
+  // PERF-001: the pre-patch archive used to be held as a whole Buffer (`preAsar`)
+  // in ADDITION to the on-disk `.bak` copy written one line above -- the same
+  // archive twice, one of them redundant, at exactly the moment memory pressure
+  // is least welcome. The rollback below restores from the checked on-disk copy.
+  // Taken AFTER the copy so a failed copy never leaves a half-written authority.
+  const preAsarDesc = describePath(asar);
+  if (!fs.existsSync(asarBak) || describePath(asarBak).sha !== preAsarDesc.sha) {
+    die('the pristine backup at ' + asarBak + ' does not match the live archive - refusing to patch without a verified rollback source. Nothing was changed.');
   }
 
   // The fuse flip belongs to this transaction (T-190).
@@ -720,9 +871,20 @@ function installInPlace() {
   } catch (e) {
     if (fd) { try { fs.closeSync(fd); } catch (e2) { } }
     // Restore the EXACT pre-operation state: asar byte-exact, sidecars as-were.
-    try { fs.writeFileSync(asar, preAsar); } catch (e2) { }
+    // PERF-001: from the verified on-disk `.bak` instead of a second in-memory
+    // copy of the archive. The copy was checked against the live archive by
+    // digest before the first write, so this is the same bytes -- and unlike a
+    // Buffer it survives the process, which is what makes an honest INCOMPLETE
+    // report possible when even this restore fails.
+    let asarRestoreErr = null;
+    try { fsRetry(() => fs.copyFileSync(asarBak, asar)); }
+    catch (e2) { asarRestoreErr = e2.message; }
     restoreSidecars(preSidecars);
     restoreFuseIfDefused(resolveExe());
+    if (asarRestoreErr) {
+      die('in-place apply failed (' + e.message + ') - rollback INCOMPLETE: could not restore the archive from ' +
+        asarBak + ' (' + asarRestoreErr + '). The pristine archive is preserved there.');
+    }
     if (e.code === 'EBUSY' || e.code === 'EPERM') {
       die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
     }
@@ -868,6 +1030,9 @@ function installRelocation() {
         const fb = exe + '.wintage-fuse.bak';
         if (fs.existsSync(fb)) surviving.push(fb);
       }
+      // PERF-001: the vault carries the pre-operation app-dir bytes for the
+      // updated-relocated path; retain and name it.
+      if (vaultRoot && fs.existsSync(vaultRoot)) { keepVault(); surviving.push(vaultRoot + ' (recovery vault)'); }
       const detail = [
         undoFailures.length ? 'undo failures: ' + undoFailures.map(f => f.step).join(' | ') : null,
         fuseErr ? ('fuse restore failed: ' + fuseErr.error) : null,

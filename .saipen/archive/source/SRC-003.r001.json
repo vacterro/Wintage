@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-003:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Implement the 17-ticket 2026-09-02 quick3 audit campaign captured in this body (waves CORE/SECOND WAVE/PERFORMANCE, baseline main@ffc13fd, archive e404dbb8)."
+    }
+  },
+  "derived_at": "2026-09-03T22:22:25Z",
+  "derived_from": "SRC-003",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "eb71f73b21c0231b78cf6a9a12c546965b094547c61f08d93a8e4ef4b15ad756"
+}

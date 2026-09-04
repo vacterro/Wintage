@@ -176,6 +176,28 @@ try {
     node (Join-Path $PSScriptRoot 'tools/test-perf-bounded.js')
     if ($LASTEXITCODE -ne 0) { throw "Performance bounding test failed - release aborted" }
 
+    # PERF-002/003/004/006/007 (SRC-004): the repaint and injection lanes have to
+    # stay bounded by the budgets they advertise. The pre-fix code iterated 20,000
+    # addedNodes to do 500 units of work, walked the same subtree once per queued
+    # root (501,500 getComputedStyle calls for 1,000 nested roots), materialised a
+    # 12,000-entry NodeList before consulting a 2,500-node budget, kept detached
+    # shadow roots registered with the shared observer forever, queued one full
+    # layout scan per resize EVENT, and treated same-document SPA navigation as a
+    # new document so stylesheets stacked. None of it is visible from outside:
+    # the theme still looks right and the machine just costs more.
+    node (Join-Path $PSScriptRoot 'tools/test-perf-lanes.js')
+    if ($LASTEXITCODE -ne 0) { throw "Performance lane test failed - release aborted" }
+
+    # PERF-001 (SRC-004): the Electron transaction used to hold whole-binary
+    # recovery Buffers in BOTH the parent PowerShell and the child Node layer --
+    # the same moved archive resident twice, measured at +192 MiB RSS for a 64 MiB
+    # app, precisely during Apply/Revert. Recovery is now a durable on-disk vault
+    # plus size+digest identity; this gate builds 16/64/256 MiB fixtures, reads the
+    # child's own peak RSS, and re-proves that every failure seam still restores
+    # those large files byte-exactly.
+    node (Join-Path $PSScriptRoot 'tools/test-perf-recovery.js')
+    if ($LASTEXITCODE -ne 0) { throw "Recovery memory test failed - release aborted" }
+
     # T-230: on Windows a file written milliseconds earlier is routinely still held
     # by the AV scanner or the search indexer. install-electron used to report every
     # such sharing violation as "the application is running - close it completely",

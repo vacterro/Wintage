@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.31.0
+// @version      1.32.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -75,17 +75,41 @@
       window.__wintageRouteGuard = true;
     } catch (e) { }
     const guard = function () {
+      // CORE-003: reload is a REQUEST, not a state transition. If the navigation
+      // is refused, cancelled, intercepted, or simply returns without unloading,
+      // this document stays alive -- and it used to stay alive with the whole
+      // repaint machinery running on a route the script explicitly excludes.
+      // Quarantine FIRST, then ask to reload: the safety boundary must not
+      // depend on the navigation succeeding.
       if (isExcludedUrl(location.href)) {
+        // Best-effort: `suspendRepainter` is hoisted, but the observers it
+        // disconnects are declared far below, so a same-tick route change during
+        // script evaluation could reach it in the temporal dead zone. Losing the
+        // suspension is survivable; throwing out of a history hook is not.
+        try { suspendRepainter('excluded-route'); } catch (e) { }
         try {
-          if (!window.__wintageExcludedReload) {
-            window.__wintageExcludedReload = true;
+          // The latch records WHICH url a reload was already requested for, not
+          // merely that one was. A one-way boolean could only ever be cleared by
+          // a synchronous throw, so an excluded -> allowed -> excluded journey
+          // in a surviving document never asked again.
+          if (window.__wintageExcludedReload !== location.href) {
+            window.__wintageExcludedReload = location.href;
             try {
               location.reload();
             } catch (e) {
-              window.__wintageExcludedReload = false;
+              window.__wintageExcludedReload = null;
               throw e;
             }
           }
+        } catch (e) { }
+      } else {
+        // Back on an allowed route in a document that survived the request.
+        // Clear the latch so a later excluded route is guarded again; the
+        // quarantine deliberately STAYS, because thousands of inline !important
+        // writes are already on this document and un-suspending mid-life is a
+        // bigger risk than leaving it CSS-only until the next load.
+        try {
+          if (window.__wintageExcludedReload) window.__wintageExcludedReload = null;
         } catch (e) { }
       }
     };
@@ -390,12 +414,17 @@
   const THEME_ID = THEMES[requested] ? requested
     : (THEMES[DEFAULT_THEME] ? DEFAULT_THEME : Object.keys(THEMES)[0]);
   const T = THEMES[THEME_ID].tokens;
-  // CORE-014: what STORAGE says, before the fallback above collapses it onto a
-  // real pack. The menu compares the two: when storage names a valid palette this
-  // document is not painting, the switch was persisted and the reload did not
-  // land, so the pending choice has to stay visible instead of looking like a
-  // switcher that silently did nothing.
+  // CORE-014/CORE-003: what STORAGE says, before the fallback above collapses it
+  // onto a real pack. Kept for diagnostics and for the pending-palette recovery:
+  // note that at startup it can never disagree with THEME_ID in a way the old
+  // menu predicate could detect (a valid slug IS adopted at :390, an invalid one
+  // fails the THEMES lookup), so the pending row is driven by RUNTIME state set
+  // when a switch persists without reloading -- never by this constant.
   const STORED_THEME_ID = requested;
+  // The palette storage now names but this document is not painting. Mutable on
+  // purpose: it is set by the switch callback when the reload does not land.
+  let pendingThemeId = null;
+  let pendingRowRegistered = false;
 
   function lum({ r, g, b }) {
     const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
@@ -463,6 +492,23 @@
   // pending palette is re-advertised there on the next registration pass, and
   // the failure is stated once in the console with the exact recovery step.
   if (IS_TOP && typeof GM_registerMenuCommand === 'function') {
+    // CORE-003: the recovery row is registered AT THE MOMENT the split-brain
+    // state is created, not from a startup comparison. The old predicate
+    // (`STORED_THEME_ID !== THEME_ID && THEMES[STORED_THEME_ID]`) was
+    // algebraically unreachable: a valid stored slug is adopted as THEME_ID one
+    // line after it is read, so the two can only differ when the slug is invalid
+    // -- and then the THEMES lookup is false. The row it advertised could never
+    // appear, which is worse than not advertising it.
+    const registerPendingRow = function (id) {
+      pendingThemeId = id;
+      if (pendingRowRegistered) return;
+      pendingRowRegistered = true;
+      try {
+        GM_registerMenuCommand('⟳ Apply pending theme: ' + THEMES[id].label, function () {
+          try { location.reload(); } catch (e) { }
+        });
+      } catch (e) { pendingRowRegistered = false; }
+    };
     for (const id of Object.keys(THEMES)) {
       const active = id === THEME_ID;
       GM_registerMenuCommand((active ? '● ' : '○ ') + THEMES[id].label, function () {
@@ -472,21 +518,15 @@
           location.reload();
         } catch (e) {
           // Navigation refused. Storage is already the new palette, so say so
-          // rather than letting the tab look unchanged for no stated reason.
+          // rather than letting the tab look unchanged for no stated reason,
+          // and put a working retry in the one channel the host cannot style.
+          registerPendingRow(id);
           try {
             console.warn('[Wintage] theme set to "' + id + '" but this tab could not reload (' +
               (e && e.message ? e.message : 'navigation refused') +
               '). Reload the page manually to apply it.');
           } catch (e2) { }
         }
-      });
-    }
-    // Only shown when storage names a palette this document is NOT painting --
-    // i.e. exactly the failed-reload state above, or a switch made in another
-    // tab. On a healthy switch the reload lands and this row never exists.
-    if (STORED_THEME_ID && STORED_THEME_ID !== THEME_ID && THEMES[STORED_THEME_ID]) {
-      GM_registerMenuCommand('⟳ Apply pending theme: ' + THEMES[STORED_THEME_ID].label, function () {
-        try { location.reload(); } catch (e) { }
       });
     }
     GM_registerMenuCommand('🤍 Support developer', function () {
@@ -501,7 +541,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.31.0';
+  const W95_VERSION = '1.32.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -1761,6 +1801,19 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
 
   const piercedRoots = new Set();
 
+  // PERF-004 (SRC-004): the observer options are declared ONCE, here, because
+  // the registration has to be rebuilt later (see pruneShadowRegistry) and a
+  // rebuild that does not match the original registration silently changes what
+  // is observed. Declared beside piercedRoots rather than beside the observer so
+  // pierceShadow -- which sits above the observer -- can read it without a TDZ
+  // ReferenceError.
+  const SHADOW_OBS_OPTS = {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'bgcolor', 'background', 'style']
+  };
+
   function pierceShadow(host) {
     const tag = (host.tagName || '').toUpperCase();
     if (SHADOW_SKIP_TAGS.has(tag)) return;
@@ -1769,12 +1822,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     try {
       injectStyle(host.shadowRoot, 'shadow', SHADOW_CSS);
       if (!CSS_ONLY_MODE) {
-        shadowObserver.observe(host.shadowRoot, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['class', 'bgcolor', 'background', 'style']
-        });
+        shadowObserver.observe(host.shadowRoot, SHADOW_OBS_OPTS);
         stylesDirty = true;
       }
     } catch (e) { noteSuppressed('shadowPierceThrows', e); }
@@ -2427,6 +2475,9 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     // was already injected into them.
     try { piercedRoots.clear(); } catch (e) { }
     try { forceRootCursors.clear(); } catch (e) { }
+    // PERF-003 (SRC-004): the light registry is the same class of retention --
+    // a Set of elements that nothing will ever drain once the lane is dead.
+    try { lightDirty.clear(); } catch (e) { }
     forceLapActive = false;
     try {
       document.documentElement.setAttribute('data-w95-perf', 'css-only');
@@ -2450,6 +2501,55 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     if (now - mutationWindowStart >= MUTATION_WINDOW_MS) resetMutationWindow(now);
     mutationWorkMs += ms;
     if (mutationWorkMs > MUTATION_WORK_LIMIT_MS) suspendRepainter(reason);
+  }
+
+  // PERF-004 (SRC-004): detached shadow roots had TWO retention owners and only
+  // one of them was ever released. runSweeper pruned piercedRoots and
+  // forceRootCursors, but MutationObserver has no per-target unobserve, so the
+  // detached root stayed a registered target of the shared shadowObserver until
+  // the whole observer was disconnected -- i.e. until suspendRepainter or the
+  // page died. Worse, onMutations handled no removedNodes at all, so a quiet
+  // removal scheduled no cleanup: a measured removal-only batch produced zero
+  // force requests and zero light requests, and the registry only shrank when
+  // some unrelated work happened to run a sweep.
+  //
+  // The repair is deliberately NOT a walk of every removed subtree (that costs
+  // O(removed nodes) on exactly the batches that are already large). It scans
+  // piercedRoots -- bounded by how many roots we pierced -- drops the
+  // disconnected ones, and if any went away rebuilds the shared observer's
+  // registration from the survivors. Pending records are taken before the
+  // disconnect and handed straight back to onMutations, so a legitimate shadow
+  // mutation delivered in the same tick is not dropped.
+  let shadowPruneQueued = false;
+  function pruneShadowRegistry() {
+    shadowPruneQueued = false;
+    if (repainterSuspended) return;
+    let removedAny = false;
+    piercedRoots.forEach(root => {
+      try {
+        if (!root.host || !root.host.isConnected) {
+          piercedRoots.delete(root);
+          forceRootCursors.delete(root);
+          removedAny = true;
+        }
+      } catch (e) { }
+    });
+    if (!removedAny || CSS_ONLY_MODE) return;
+    try {
+      const pending = shadowObserver.takeRecords();
+      shadowObserver.disconnect();
+      piercedRoots.forEach(root => {
+        try { shadowObserver.observe(root, SHADOW_OBS_OPTS); } catch (e) { }
+      });
+      if (pending && pending.length) onMutations(pending);
+    } catch (e) { }
+  }
+  function requestShadowPrune() {
+    if (shadowPruneQueued || repainterSuspended || !piercedRoots.size) return;
+    shadowPruneQueued = true;
+    // Bounded, one-shot, and never a poll: only a batch that actually carried
+    // removals gets here.
+    setTimeout(pruneShadowRegistry, 250);
   }
 
   function onMutations(mutations) {
@@ -2477,6 +2577,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       let collectionBudget = ADDED_NODE_BUDGET;
       let addedTruncatedDuringCollection = false;
       let addedCollected = 0;
+      let removalSeen = false;
       for (const m of batch) {
         // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
         // CSS-in-JS) — re-process them or they keep stale baked-in colors.
@@ -2497,6 +2598,10 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
               // PERF-005 (SRC-002): the cooldown contract promised the next
               // light sweep would revisit. There was no such request. Now
               // there is: requestLightSweep coalesces and stays floor-limited.
+              // PERF-003 (SRC-004): register the element explicitly so the
+              // light pass does not have to rediscover it with a document-wide
+              // negative selector.
+              markLightDirty(t);
               requestLightSweep();
             } else {
               attrCooldown.set(t, now);
@@ -2519,31 +2624,38 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
               styleishAdded = true;
             }
           }
+          // PERF-004 (SRC-004): a batch that carried removals schedules ONE
+          // bounded shadow-registry cleanup. Only the FACT of a removal is read
+          // here -- never the removed nodes themselves, which is what keeps this
+          // O(1) per record on exactly the batches that are already large.
+          if (m.removedNodes && m.removedNodes.length) removalSeen = true;
         }
-        for (const node of m.addedNodes) {
+        for (let ni = 0; ni < m.addedNodes.length; ni++) {
+          // PERF-002 (SRC-004): STOP at the budget. The previous loop kept
+          // iterating every remaining entry after the 500th just to discover it
+          // existed -- measured on one 20,000-node childList record:
+          // iteratedAddedNodes = 20,000 for processCalls = 500. The tail is now
+          // never touched, so intake cost stops scaling with the size of a
+          // framework bulk insert. Nothing is lost: truncation requests a force
+          // sweep below, and a force pass re-scans stylesheets unconditionally
+          // (scanStyles = force || stylesDirty), which is what the old per-node
+          // tail peek for STYLE/LINK was protecting.
+          //
+          // The record loop itself continues -- attribute records after this
+          // point still need their process() call, and that walk is bounded by
+          // MUTATION_RECORD_LIMIT rather than by node cardinality.
+          if (addedCollected >= collectionBudget) { addedTruncatedDuringCollection = true; break; }
+          const node = m.addedNodes[ni];
           if (node.nodeType !== 1) continue;
           if (node.hasAttribute && node.hasAttribute('data-w95')) continue;
-          if (addedCollected < collectionBudget) {
-            added.push(node);
-            addedCollected++;
-            if (!styleishAdded) {
-              const tag = (node.tagName || '').toUpperCase();
-              if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
-                styleishAdded = true;
-              } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
-                styleishAdded = true;
-              }
-            }
-          } else {
-            addedTruncatedDuringCollection = true;
-            // PERF-003 guardrail: even past the cutoff, peek for stylesheet
-            // nodes so stylesDirty can be set conservatively. One read is
-            // cheaper than retaining thousands of refs.
-            if (!styleishAdded && node.nodeType === 1) {
-              const tag = (node.tagName || '').toUpperCase();
-              if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
-                styleishAdded = true;
-              }
+          added.push(node);
+          addedCollected++;
+          if (!styleishAdded) {
+            const tag = (node.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
+              styleishAdded = true;
             }
           }
         }
@@ -2589,6 +2701,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         }
       }
       flushWrites(w);
+      if (removalSeen) requestShadowPrune();
       addWorkPressure(performance.now() - workStarted, 'mutation-work');
     }, 60);
   }
@@ -2672,15 +2785,22 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       const force = forcePassesOwed > 0;
       if (force) forcePassesOwed--;
 
+      // PERF-003 (SRC-004): CONSUME the light token before the pass it caused.
+      // It used to be read again after runSweeper returned, so the still-true
+      // token scheduled a second identical pass -- measured: one isolated
+      // requestLightSweep() produced 2 timer callbacks and 2 sweeps, the second
+      // re-running the full dirty selector with nothing left to do. Re-arming
+      // now happens only if a NEW request arrived DURING the pass.
+      if (!force) lightPending = false;
+
       runSweeper(force);
 
-      // Drainable scheduler (PERF-005): after a light pass, if more light work
-      // arrived meanwhile, re-arm (floor-limited). After a force pass that
-      // exhausted its budget, runSweeper already re-armed itself when
-      // incomplete. Here we re-arm only for pending light work that was NOT
-      // consumed by this run, and only when the force debt is gone -- so a
-      // light request can never starve behind an endless force cycle.
-      if (!force && lightPending) {
+      // Drainable scheduler (PERF-005): after a light pass, re-arm only when a
+      // light request arrived while this pass was running (lightPending was
+      // cleared above, so a true value can only come from during-pass work) or
+      // bounded dirty work remains. After a force pass that exhausted its
+      // budget, runSweeper already re-armed itself when incomplete.
+      if (!force && (lightPending || lightDirty.size)) {
         lightPending = false;
         lastSweepEnd = Date.now();
         scheduleSweep(MIN_SWEEP_GAP, 'light');
@@ -2710,6 +2830,24 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // ever scheduled. This is the missing bounded light-work request: mark
   // lightPending and re-arm. It coalesces (one timer), stays floor-limited,
   // and a light pass never turns into an endless force cycle.
+  //
+  // PERF-003 (SRC-004): the light lane now carries its OWN bounded dirty
+  // registry instead of rediscovering work with a document-wide negative
+  // selector. `root.querySelectorAll('*:not([data-w95-done])')` materialised
+  // the COMPLETE matching NodeList before the 2500-node budget was consulted --
+  // measured at 12,000 materialised matches for 2,500 process() calls -- and on
+  // a settled page it still made the selector engine walk every root to return
+  // nothing. Every caller that clears the done marker without immediately
+  // re-processing registers the element here, so discovery is O(dirty), not
+  // O(document). Past the cap the work is promoted ONCE to the force lane,
+  // which is a strict superset and already incremental.
+  const LIGHT_DIRTY_MAX = 2000;
+  const lightDirty = new Set();
+  function markLightDirty(el) {
+    if (!el || el.nodeType !== 1) return;
+    if (lightDirty.size >= LIGHT_DIRTY_MAX) { requestForceSweep(); return; }
+    lightDirty.add(el);
+  }
   function requestLightSweep() {
     if (repainterSuspended || document.hidden) return;
     if (lightPending) { if (!sweepTimer) scheduleSweep(MIN_SWEEP_GAP, 'light'); return; }
@@ -2740,10 +2878,29 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     let incomplete = false;
     const docCursors = forceRootCursors;
     const freshLap = force && !forceLapActive;
-    for (const root of searchRoots) {
-      if (remaining <= 0) { incomplete = true; break; }
-      let state = force ? docCursors.get(root) : null;
-      if (force) {
+    if (!force) {
+      // PERF-003 (SRC-004): the light lane drains its OWN bounded registry and
+      // never touches the root list. The old form ran
+      // `root.querySelectorAll('*:not([data-w95-done])')` for EVERY search root,
+      // which materialises the complete matching NodeList BEFORE the budget is
+      // consulted -- measured at 12,000 materialised matches to do 2,500 units
+      // of work -- and on a settled document it still made the selector engine
+      // walk every root to return nothing. The registry holds exactly the
+      // elements that lost their done marker without being re-processed,
+      // wherever they live, so shadow roots are covered without a per-root
+      // query. An overflow was already promoted to the force lane at
+      // registration time.
+      for (const el of lightDirty) {
+        if (remaining <= 0) { incomplete = true; break; }
+        lightDirty.delete(el);
+        if (!el.isConnected) continue;
+        try { process(el, false, w); } catch (e) { }
+        remaining--;
+      }
+    } else {
+      for (const root of searchRoots) {
+        if (remaining <= 0) { incomplete = true; break; }
+        let state = docCursors.get(root);
         if (!state) {
           // PERF-002: TreeWalker.NodeFilter.SHOW_ELEMENT only. No full
           // querySelectorAll materialisation. The walker advances one node at
@@ -2755,11 +2912,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         } else if (state.done) {
           continue;
         }
-      } else {
-        state = { walker: null, total: 0 };
-      }
-      try {
-        if (force) {
+        try {
           // Walk incrementally until the global budget is exhausted, then
           // resume on the next slice from this exact walker.
           while (remaining > 0) {
@@ -2770,21 +2923,8 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
             remaining--;
           }
           if (!state.done) { incomplete = true; }
-        } else {
-          // Light pass over only nodes that lost their done marker. The CSS
-          // selector resolves to ~nothing on a settled page (zero-work idle),
-          // unlike a TreeWalker that would walk every node. The global budget
-          // still caps the work when a flood of cooldown-dirty elements
-          // appears; an overflow becomes a force reverify.
-          const all = root.querySelectorAll ? root.querySelectorAll('*:not([data-w95-done])') : [];
-          for (let i = 0; i < all.length; i++) {
-            if (remaining <= 0) { incomplete = true; break; }
-            process(all[i], false, w);
-            remaining--;
-          }
-          if (incomplete) break;
-        }
-      } catch (e) { if (force) incomplete = true; }
+        } catch (e) { incomplete = true; }
+      }
     }
     flushWrites(w);
     addWorkPressure(performance.now() - sweepStarted, 'sweep-work');

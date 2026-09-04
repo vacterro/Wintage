@@ -97,16 +97,29 @@ function mergeTheme(baseText, overlayText) {
 }
 
 if (finalizeRevert) {
+  // W2-001: finalize RETIRES the epoch; it does not erase it. The old code did
+  // the exact opposite of the lifecycle documented above: it deleted
+  // `Wintage.original.theme` -- the file --revert had just handed back as the
+  // theme to ACTIVATE, so Windows was left with CurrentTheme pointing at a file
+  // Wintage removed a moment later -- and it removed the retired marker, which
+  // no code has ever written. That made the `firstApply` retirement branch
+  // unreachable, so a later Apply could not tell a completed lifecycle from a
+  // repaint inside a live epoch.
+  //
+  // What survives: the restoration snapshot and its original-path evidence,
+  // because the just-completed Revert may still be referencing them. What goes:
+  // the markers that assert a LIVE install (palette, active-path) and the
+  // recovery material Revert has already consumed (the replaced-theme bytes and
+  // the created marker). The snapshot itself is never deleted here; the next
+  // fresh Apply re-baselines it in place, so the path Windows holds stays valid.
   if (!dryRun) {
-    remove(original);
-    remove(originalPath);
     remove(existingBackup);
     remove(createdMarker);
     remove(paletteMarker);
     remove(activePathMarker);
-    remove(epochRetired);
+    writeAtomic(epochRetired, 'retired by Wintage --finalize-revert\n');
   }
-  console.log(JSON.stringify({ finalized: true }));
+  console.log(JSON.stringify({ finalized: true, retired: true }));
   process.exit(0);
 }
 

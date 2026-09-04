@@ -692,9 +692,12 @@ function Restore-TotalCmdOwned([string]$ini, [string]$iniBak, [switch]$Keep) {
         if (-not $snapshot.owned.$s) { continue }
         foreach ($prop in $snapshot.owned.$s.PSObject.Properties) {
             $val = $prop.Value
-            if ($null -ne $val -and "$val" -ne '') {
-                if (Get-IniKey $current $s $prop.Name) { $current = Set-IniKey $current $s $prop.Name "$val" }
-                else { $current = Set-IniKey $current $s $prop.Name "$val" }
+            # CORE-005: $null is the ONLY absence sentinel. A captured '' is a
+            # real `Key=` entry and must be restored as one; the old
+            # `$null -ne $val -and "$val" -ne ''` test collapsed present-empty
+            # into absent, silently changing the configuration's shape.
+            if ($null -ne $val) {
+                $current = Set-IniKey $current $s $prop.Name "$val"
             } else {
                 $current = Remove-IniKey $current $s $prop.Name
             }
@@ -787,23 +790,31 @@ function Restore-FilePreState($pre, [string]$file, [string]$bakFile) {
 function Invoke-TargetCommit([string]$target, [string]$label, [scriptblock]$commit, [scriptblock]$restore) {
     # W2-005: rollback is a CHECKED phase. The restore scriptblock must throw
     # on any failure -- including native-program non-zero exits that PowerShell
-    # does not promote to terminating errors. The wrapper below captures every
-    # call's $LASTEXITCODE and any PowerShell error stream output, and throws
-    # a single composite message on rollback failure. The exact-restoration
-    # message below is only printed when the entire restore succeeded.
+    # does not promote to terminating errors. Every native command in a restore
+    # callback goes through Invoke-Native below, which turns a non-zero exit
+    # into a throw; a callback that swallows one silently is the defect this
+    # wrapper cannot see from here.
+    #
+    # The exact-restoration message is printed ONLY when the entire restore
+    # succeeded, and a double failure reports BOTH errors: the original commit
+    # exception is captured before the rollback runs, because a bare `throw`
+    # from the rollback catch replaced it with the rollback's own message and
+    # the reason the commit failed was lost exactly when both phases had.
     try {
         & $commit
     } catch {
+        $commitError = $_
         if ($restore) {
             try {
                 & $restore
                 Say "$label`: manifest commit failed - target restored to its exact pre-operation state." 'Yellow'
             } catch {
-                Say "$label`: manifest commit failed AND rollback failed - $($_.Exception.Message)" 'Red'
-                throw
+                $rollbackMessage = $_.Exception.Message
+                Say "$label`: manifest commit failed AND rollback failed - $rollbackMessage" 'Red'
+                throw "$label`: manifest commit FAILED ($($commitError.Exception.Message)) AND rollback FAILED ($rollbackMessage). The target is in an INCOMPLETE state; every persistent recovery artifact was kept for a retry."
             }
         }
-        throw
+        throw $commitError
     }
 }
 
@@ -1043,7 +1054,18 @@ function Invoke-WindowsTerminal {
         Invoke-TargetCommit 'terminal' 'Windows Terminal' {
             Set-ManifestEntryMulti 'terminal' $PaletteSlug (@($applied | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
         } {
-            foreach ($done in $applied) { & node $helper --settings $done --revert 2>$null | Out-Null }
+            # W2-005: every item's revert is CHECKED. This used to be a bare
+            # `& node ... 2>$null | Out-Null`, so a helper that exited non-zero
+            # left the settings themed while the wrapper printed "restored to
+            # its exact pre-operation state" -- the one message that must never
+            # be a guess. Failures are collected so one bad item does not hide
+            # the rest, then thrown as a single rollback failure.
+            $revertErrs = @()
+            foreach ($done in $applied) {
+                try { Invoke-Native "Windows Terminal rollback revert of $done" { & node $helper --settings $done --revert } }
+                catch { $revertErrs += "$done`: $($_.Exception.Message)" }
+            }
+            if ($revertErrs.Count) { throw "Windows Terminal: rollback revert FAILED for $($revertErrs.Count) of $($applied.Count) settings files ($($revertErrs -join '; '))." }
         }
     }
 }
@@ -1199,14 +1221,20 @@ function Invoke-Conhost {
             # owning install epoch so a foreign copy can never be adopted later.
             Write-RecoveryProvenance $CONHOST_BACKUP 'conhost'
         }
-        foreach ($key in $keys) {
-            foreach ($name in $values.Keys) {
-                Set-ConhostValue $key.PSPath $name $values[$name]
-            }
-        }
-        Say "Console Host: applied $PaletteSlug + $CONSOLE_FONT to $($keys.Count) registry profile(s)." 'Green'
-        Say "  Restart cmd/PowerShell windows: new font cells + guaranteed $CONSOLE_SCROLLBACK_HEIGHT-line scrollback (zero-history consoles are fixed)." 'Yellow'
+        # W2-004: the registry writes and the manifest commit are ONE transaction.
+        # The per-key writes used to run BEFORE Invoke-TargetCommit, so a failure
+        # part-way through (a protected profile key, a permissions change) left
+        # some profiles themed and some stock with the manifest untouched. The
+        # rollback below restores the complete owned set from the snapshot, which
+        # is exactly what a partial-write failure needs.
         Invoke-TargetCommit 'conhost' 'Console Host' {
+            foreach ($key in $keys) {
+                foreach ($name in $values.Keys) {
+                    Set-ConhostValue $key.PSPath $name $values[$name]
+                }
+            }
+            Say "Console Host: applied $PaletteSlug + $CONSOLE_FONT to $($keys.Count) registry profile(s)." 'Green'
+            Say "  Restart cmd/PowerShell windows: new font cells + guaranteed $CONSOLE_SCROLLBACK_HEIGHT-line scrollback (zero-history consoles are fixed)." 'Yellow'
             Set-ManifestEntry 'conhost' $PaletteSlug $CONHOST_KEY 'n/a' (Get-PayloadVersion)
         } {
             # Manifest commit failed: restore every owned value to the exact
@@ -2242,7 +2270,15 @@ function Invoke-Obs {
     param([switch]$DoRevert, [string]$PaletteSlug)
 
     if (-not (Test-Path $OBS_CONFIG)) { Assert-TargetResolvable 'OBS Studio' $false; return }
-    if (Get-Process obs64 -ErrorAction SilentlyContinue) {
+    # Test seam: a fixture redirects APPDATA, so the machine's own running OBS is
+    # not the instance that owns the fixture config and must not block it. Never
+    # set outside tests - for a real install this guard is the only thing between
+    # an applied theme and OBS rewriting user.ini on exit. (Without the seam a
+    # gate on a developer machine with OBS open passes for the WRONG reason: the
+    # run refuses before it mutates anything, which looks exactly like a clean
+    # rollback.)
+    $obsRunning = if ($env:WINTAGE_TEST_ALLOW_RUNNING_OBS) { $null } else { Get-Process obs64 -ErrorAction SilentlyContinue }
+    if ($obsRunning) {
         throw 'OBS Studio: close OBS and Apply again so it cannot overwrite user.ini on exit.'
     }
     if (-not $node) { throw 'OBS Studio: node is required to patch user.ini safely.' }
@@ -2250,16 +2286,19 @@ function Invoke-Obs {
     $helper = Join-Path $root 'tools/install-obs.js'
     $theme = Join-Path $out "obs/$PaletteSlug/Wintage.ovt"
     if (-not $DoRevert -and -not (Test-Path $theme)) { throw "No OBS build for palette '$PaletteSlug'." }
-    $args = @($helper, '--config', $OBS_CONFIG)
+    # NOT named $args: the helper call now runs inside a scriptblock, and $args
+    # is that scriptblock's OWN automatic variable (empty), so `& node $args`
+    # there would silently invoke node with no arguments at all.
+    $obsArgs = @($helper, '--config', $OBS_CONFIG)
     if ($DoRevert) {
         # CORE-010/CORE-001: parent-coordinated revert. The helper restores the
         # target but KEEPS its persistent recovery (--keep-recovery); the parent
         # consumes it via --finalize-revert ONLY after the manifest transition
         # commits. A failed transition can then restore every artifact exactly.
-        $args += @('--revert', '--keep-recovery')
-    } else { $args += @('--theme', $theme, '--palette', $PaletteSlug) }
+        $obsArgs += @('--revert', '--keep-recovery')
+    } else { $obsArgs += @('--theme', $theme, '--palette', $PaletteSlug) }
     $action = if ($DoRevert) { 'Restore previous OBS theme and selection' } else { "Install and activate Wintage $PaletteSlug" }
-    if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'OBS Studio dry-run FAILED - see the message above.' }; return }
+    if ($WhatIfPreference) { & node ($obsArgs + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'OBS Studio dry-run FAILED - see the message above.' }; return }
 
     # CORE-010: the complete helper-owned OBS set is ONE transaction. The parent
     # snapshots user.ini (the ONE authoritative settings file - the helper never
@@ -2277,15 +2316,38 @@ function Invoke-Obs {
         return $snap
     }
     function Restore-ObsPreState($snap) {
+        # W2-005: a rollback that swallows its own failures is indistinguishable
+        # from one that worked, and Invoke-TargetCommit prints "exact
+        # pre-operation state" on exactly that silence. Every write is attempted
+        # (one unwritable file must not abandon the rest), then the result is
+        # VERIFIED against the snapshot bytes and any mismatch is thrown.
+        $errs = @()
         foreach ($rel in $snap.Keys) {
             $dst = Join-Path $OBS_CONFIG $rel
             try {
                 if ($null -ne $snap[$rel]) {
                     New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
                     [System.IO.File]::WriteAllBytes($dst, $snap[$rel])
-                } elseif (Test-Path $dst) { Remove-Item $dst -Force -ErrorAction SilentlyContinue }
-            } catch { }
+                } elseif (Test-Path $dst) { Remove-Item $dst -Force }
+            } catch { $errs += "$rel`: $($_.Exception.Message)" }
         }
+        foreach ($rel in $snap.Keys) {
+            $dst = Join-Path $OBS_CONFIG $rel
+            if ($null -ne $snap[$rel]) {
+                if (-not (Test-Path $dst)) { $errs += "$rel`: still missing after restore"; continue }
+                # The read itself can fail (the path is a directory now, an ACL
+                # changed): that is a verification FAILURE, not an exception to
+                # escape with, or the composed INCOMPLETE message below never
+                # reaches the caller.
+                try {
+                    $now = [System.IO.File]::ReadAllBytes($dst)
+                    if ($now.Length -ne $snap[$rel].Length -or [System.Convert]::ToBase64String($now) -ne [System.Convert]::ToBase64String($snap[$rel])) {
+                        $errs += "$rel`: restored bytes differ from the pre-operation snapshot"
+                    }
+                } catch { $errs += "$rel`: cannot be read back for verification - $($_.Exception.Message)" }
+            } elseif (Test-Path $dst) { $errs += "$rel`: still present although it did not exist before" }
+        }
+        if ($errs.Count) { throw "OBS Studio: rollback INCOMPLETE ($($errs -join '; ')). Every recovery artifact was kept." }
     }
 
     if ($PSCmdlet.ShouldProcess($OBS_CONFIG, $action)) {
@@ -2304,10 +2366,15 @@ function Invoke-Obs {
         # switch antialiasing off, so UI.md law 1 comes from the FACE). Advice
         # only - Wintage never installs or removes fonts.
         if (-not $DoRevert) { Say-WintageFontAdvice 'OBS Studio' }
-        & node $args
-        if ($LASTEXITCODE -ne 0) { throw 'OBS Studio theme patch failed.' }
+        # W2-004: the transaction covers snapshot -> MUTATE -> manifest commit as
+        # ONE operation. The helper call used to sit OUTSIDE Invoke-TargetCommit,
+        # so a helper that mutated user.ini/the .ovt/the recovery files and THEN
+        # failed (an injected late-write failure reproduces it) threw past the
+        # snapshot taken one line earlier: OBS stayed themed, the manifest was
+        # never entered, and the pre-state that existed in memory was discarded.
         if ($DoRevert) {
             Invoke-TargetCommit 'obs' 'OBS Studio' {
+                Invoke-Native 'OBS Studio theme revert' { & node $obsArgs }
                 Remove-ManifestEntry 'obs'
             } { Restore-ObsPreState $pre }
             # The manifest transition committed: the persistent recovery the
@@ -2316,6 +2383,7 @@ function Invoke-Obs {
             if ($LASTEXITCODE -ne 0) { throw 'OBS Studio: recovery finalize FAILED - the manifest is already removed; remove the .wintage recovery files by hand if they remain.' }
         } else {
             Invoke-TargetCommit 'obs' 'OBS Studio' {
+                Invoke-Native 'OBS Studio theme patch' { & node $obsArgs }
                 Set-ManifestEntry 'obs' $PaletteSlug $OBS_CONFIG 'n/a' (Get-PayloadVersion)
             } { Restore-ObsPreState $pre }
             # W2-001: the helper's recovery files are now authoritative - stamp
@@ -2409,16 +2477,23 @@ function Invoke-MpcHc {
         # than named. Wintage never installs the font itself.
         Say-WintageFontAdvice 'MPC-HC'
 
-        foreach ($k in $vals.Keys) {
-            $type = if ($vals[$k] -is [string]) { 'String' } else { 'DWord' }
-            Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
-        }
-        Say "MPC-HC: dark theme on, OSD set to $osdFont 16, zero transparency, bordered." 'Green'
+        # W2-004: the owned registry writes and the manifest commit are ONE
+        # transaction. The loop used to run BEFORE Invoke-TargetCommit, so a
+        # failure after the first value was written left MPC-HC part-themed with
+        # the manifest untouched; the rollback re-imports the exact backup.
         Invoke-TargetCommit 'mpchc' 'MPC-HC' {
+            foreach ($k in $vals.Keys) {
+                $type = if ($vals[$k] -is [string]) { 'String' } else { 'DWord' }
+                Set-ItemProperty -Path $MPC_KEY -Name $k -Value $vals[$k] -Type $type
+            }
+            Say "MPC-HC: dark theme on, OSD set to $osdFont 16, zero transparency, bordered." 'Green'
             Set-ManifestEntry 'mpchc' 'n/a' $MPC_KEY 'n/a' (Get-PayloadVersion)
         } {
             # The backup holds the EXACT pre-apply values; re-import restores them.
-            & reg import $bak 2>&1 | Out-Null
+            # W2-005: `reg` is a native program, so its exit status is the only
+            # signal it failed. Unchecked, a failed import left the themed
+            # registry in place under an "exact pre-operation state" message.
+            Invoke-Native "MPC-HC rollback reg import of $bak" { & reg import $bak 2>&1 }
         }
         Say '  NOT reachable: the player chrome colours are compiled into MPC-HC and no' 'Yellow'
         Say '  registry value exposes them, so this target cannot take a palette. Only the' 'Yellow'
@@ -2494,36 +2569,50 @@ function Invoke-Qbittorrent {
         if (-not (Assert-RevertSource 'qbittorrent' $recMeta 'qBittorrent')) { return }
         if (-not $PSCmdlet.ShouldProcess($QBT_INI, 'Restore the pre-Wintage UI theme selection')) { return }
         $meta = Read-Utf8 $recMeta | ConvertFrom-Json
+        # W2-004: preflight every required recovery dependency BEFORE the first
+        # mutation. The pristine check used to run after the INI rewrite, so a
+        # missing pristine threw with the live INI already half-reverted and the
+        # manifest never entered -- a state the ledger never recorded.
+        if ($meta.mode -eq 'replaced' -and -not (Test-Path $pristineDir)) {
+            throw "qBittorrent: pristine recovery is missing ($pristineDir) - refusing to revert: nothing was changed."
+        }
         $preIni = Save-FilePreState $QBT_INI $null
         $preDir = Save-DirPreState $QBT_THEME_DIR
         $preMarker = Save-FilePreState $QBT_MARKER $null
 
-        $lines = (Read-Utf8 $QBT_INI) -split '\r?\n'
-        foreach ($k in $script:QBT_OWNED_INI_KEYS) {
-            $orig = if ($meta.ini) { $meta.ini.$k } else { $null }
-            if ($null -ne $orig -and "$orig" -ne '') { $lines = Set-IniKey $lines 'Preferences' $k "$orig" }
-            else { $lines = Remove-IniKey $lines 'Preferences' $k }
-        }
-        Write-QbtIni $QBT_INI $lines
-
-        if ($meta.mode -eq 'replaced') {
-            if (-not (Test-Path $pristineDir)) { throw "qBittorrent: pristine recovery is missing ($pristineDir) - refusing to delete the live theme directory." }
-            # Restore-DirPreState CONSUMES the snapshot it is handed, so it is
-            # handed a working copy: the persistent pristine must survive until the
-            # manifest transition commits, or a failed transition would leave the
-            # revert unretryable (the one copy of the pre-Wintage directory gone).
-            $pristineWork = Join-Path $env:TEMP ('wintage-qbt-pristine-' + [guid]::NewGuid().ToString('N'))
-            Copy-Item $pristineDir $pristineWork -Recurse -Force
-            Restore-DirPreState $QBT_THEME_DIR @{ Existed = $true; SnapshotPath = $pristineWork }
-            Say "qBittorrent: restored the pre-Wintage $QBT_THEME_DIR" 'Green'
-        } elseif (Test-Path $QBT_THEME_DIR) {
-            Remove-Item $QBT_THEME_DIR -Recurse -Force
-            Say "qBittorrent: removed $QBT_THEME_DIR (Wintage-created, nothing pre-existed)" 'Green'
-        }
-        if (Test-Path $QBT_MARKER) { Remove-Item $QBT_MARKER -Force }
-        Say 'qBittorrent: restored the previous UI theme selection.' 'Green'
-
+        # W2-004: MUTATE -> manifest commit is ONE transaction. The INI rewrite,
+        # the pristine restore and the marker removal used to run before
+        # Invoke-TargetCommit, so a mid-revert failure (an unreadable pristine
+        # copy, a locked marker) threw past the snapshot: the live INI was already
+        # rewritten and the manifest still said installed.
         Invoke-TargetCommit 'qbittorrent' 'qBittorrent' {
+            $revertLines = (Read-Utf8 $QBT_INI) -split '\r?\n'
+            foreach ($k in $script:QBT_OWNED_INI_KEYS) {
+                $orig = if ($meta.ini) { $meta.ini.$k } else { $null }
+                # CORE-005: $null is the ONLY absence sentinel; an originally
+                # present `Key=` (empty string) is restored as present-empty.
+                if ($null -ne $orig) { $revertLines = Set-IniKey $revertLines 'Preferences' $k "$orig" }
+                else { $revertLines = Remove-IniKey $revertLines 'Preferences' $k }
+            }
+            Write-QbtIni $QBT_INI $revertLines
+
+            if ($meta.mode -eq 'replaced') {
+                # Restore-DirPreState CONSUMES the snapshot it is handed, so it is
+                # handed a working copy: the persistent pristine must survive until
+                # the manifest transition commits, or a failed transition would
+                # leave the revert unretryable (the one copy of the pre-Wintage
+                # directory gone).
+                $pristineWork = Join-Path $env:TEMP ('wintage-qbt-pristine-' + [guid]::NewGuid().ToString('N'))
+                Copy-Item $pristineDir $pristineWork -Recurse -Force
+                Restore-DirPreState $QBT_THEME_DIR @{ Existed = $true; SnapshotPath = $pristineWork }
+                Say "qBittorrent: restored the pre-Wintage $QBT_THEME_DIR" 'Green'
+            } elseif (Test-Path $QBT_THEME_DIR) {
+                Remove-Item $QBT_THEME_DIR -Recurse -Force
+                Say "qBittorrent: removed $QBT_THEME_DIR (Wintage-created, nothing pre-existed)" 'Green'
+            }
+            if (Test-Path $QBT_MARKER) { Remove-Item $QBT_MARKER -Force }
+            Say 'qBittorrent: restored the previous UI theme selection.' 'Green'
+
             Remove-ManifestEntry 'qbittorrent'
         } {
             Restore-FilePreState $preIni $QBT_INI $null
@@ -2570,25 +2659,30 @@ function Invoke-Qbittorrent {
     $preDir = Save-DirPreState $QBT_THEME_DIR
     $preMarker = Save-FilePreState $QBT_MARKER $null
 
-    New-Item -ItemType Directory -Force -Path $QBT_THEME_DIR | Out-Null
-    Copy-Item $builtCfg $cfgFile -Force
-    Copy-Item $builtQss $qssFile -Force
-    # UI.md law 1: Qt cannot switch antialiasing off, so the FACE carries it.
-    # stylesheet.qss names Verdana_m1 first and falls back to Verdana, so this is
-    # advice, never a mutation - see the font note at the top of this file.
-    Say-WintageFontAdvice 'qBittorrent'
-
-    # Forward slashes: qBittorrent's own Path type normalises to them, and a
-    # backslash would have to be written doubled in the INI (QSettings escaping) -
-    # one spelling with no escape rule beats two with one.
-    $iniPath = $cfgFile -replace '\\', '/'
-    $lines = Set-IniKey $lines 'Preferences' 'General\UseCustomUITheme' 'true'
-    $lines = Set-IniKey $lines 'Preferences' 'General\CustomUIThemePath' $iniPath
-    Write-QbtIni $QBT_INI $lines
-    Write-Utf8 $QBT_MARKER $PaletteSlug
-
-    Say "qBittorrent: installed the Wintage $PaletteSlug theme -> $QBT_THEME_DIR" 'Green'
+    # W2-004: the transaction covers MUTATE -> manifest commit as one operation.
+    # The directory creation, the two copies, the INI rewrite and the marker used
+    # to run BEFORE Invoke-TargetCommit, so a failure among them (a copy onto a
+    # locked file, a full disk) threw past the snapshot taken three lines earlier:
+    # qBittorrent kept a half-installed theme and the manifest never recorded it.
     Invoke-TargetCommit 'qbittorrent' 'qBittorrent' {
+        New-Item -ItemType Directory -Force -Path $QBT_THEME_DIR | Out-Null
+        Copy-Item $builtCfg $cfgFile -Force
+        Copy-Item $builtQss $qssFile -Force
+        # UI.md law 1: Qt cannot switch antialiasing off, so the FACE carries it.
+        # stylesheet.qss names Verdana_m1 first and falls back to Verdana, so this
+        # is advice, never a mutation - see the font note at the top of this file.
+        Say-WintageFontAdvice 'qBittorrent'
+
+        # Forward slashes: qBittorrent's own Path type normalises to them, and a
+        # backslash would have to be written doubled in the INI (QSettings
+        # escaping) - one spelling with no escape rule beats two with one.
+        $iniPath = $cfgFile -replace '\\', '/'
+        $applyLines = Set-IniKey $lines 'Preferences' 'General\UseCustomUITheme' 'true'
+        $applyLines = Set-IniKey $applyLines 'Preferences' 'General\CustomUIThemePath' $iniPath
+        Write-QbtIni $QBT_INI $applyLines
+        Write-Utf8 $QBT_MARKER $PaletteSlug
+        Say "qBittorrent: installed the Wintage $PaletteSlug theme -> $QBT_THEME_DIR" 'Green'
+
         Set-ManifestEntry 'qbittorrent' $PaletteSlug $QBT_INI 'n/a' (Get-PayloadVersion)
     } {
         Restore-FilePreState $preIni $QBT_INI $null

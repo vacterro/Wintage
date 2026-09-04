@@ -165,19 +165,64 @@ function hasOwned(obj, pathStr) {
   return o != null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, parts[parts.length - 1]);
 }
 
+// CORE-001: presence and value are SEPARATE facts. `null` cannot carry both,
+// because a user may legitimately configure `"colorScheme": null` and a
+// snapshot that records absence the same way makes Revert delete a real
+// setting. Every owned scalar is stored as a cell instead.
+function ownedCell(obj, pathStr) {
+  return hasOwned(obj, pathStr)
+    ? { present: true, value: getIn(obj, pathStr) }
+    : { present: false };
+}
+
+// CORE-001: Apply normalises a legacy top-level `profiles` ARRAY into
+// `{ defaults, list }`. That is a destructive representation change, so the
+// original container form is recorded and restored; without it Revert leaves
+// the user with a shape they never wrote.
+function profilesShapeOf(settings) {
+  if (!Object.prototype.hasOwnProperty.call(settings, 'profiles')) return { kind: 'absent' };
+  const value = settings.profiles;
+  if (Array.isArray(value)) return { kind: 'array' };
+  if (value && typeof value === 'object') return { kind: 'object' };
+  return { kind: 'other', value };
+}
+
+// CORE-001: Apply drops every scheme named Wintage before inserting its own.
+// A user who happens to own a scheme by that name loses it permanently, so the
+// displaced entries are captured verbatim and restored on Revert. Ownership is
+// "this entry was not here before Apply", never "the name matches".
+function schemesShapeOf(settings) {
+  if (!Object.prototype.hasOwnProperty.call(settings, 'schemes')) {
+    return { kind: 'absent', displaced: [] };
+  }
+  const value = settings.schemes;
+  if (Array.isArray(value)) {
+    return { kind: 'array', displaced: value.filter((item) => item && item.name === 'Wintage') };
+  }
+  return { kind: 'other', value, displaced: [] };
+}
+
 // A legacy whole-file backup (pre-T-189) is still usable: parse it and extract
 // only the owned fields, so an old install reverts without time-travelling the
 // rest of the file.
 function readOwnedSnapshot(backupPathOrObject) {
   if (backupPathOrObject && typeof backupPathOrObject === 'object') {
-    if (backupPathOrObject.__wintage_owned) return backupPathOrObject;
-    // legacy whole-file backup
+    if (backupPathOrObject.__wintage_owned) return upgradeSnapshot(backupPathOrObject);
+    // legacy whole-file backup: the file itself IS the pre-Apply document, so
+    // presence, container shape and displaced schemes are all recoverable from
+    // it exactly. This path loses nothing.
+    const file = backupPathOrObject;
     return {
       __wintage_owned: true,
-      colorScheme: hasOwned(backupPathOrObject, OWNED_FIELDS.colorScheme) ? getIn(backupPathOrObject, OWNED_FIELDS.colorScheme) : null,
-      font: hasOwned(backupPathOrObject, OWNED_FIELDS.font) ? getIn(backupPathOrObject, OWNED_FIELDS.font) : null,
-      antialiasingMode: hasOwned(backupPathOrObject, OWNED_FIELDS.antialiasingMode) ? getIn(backupPathOrObject, OWNED_FIELDS.antialiasingMode) : null,
-      historySize: hasOwned(backupPathOrObject, OWNED_FIELDS.historySize) ? getIn(backupPathOrObject, OWNED_FIELDS.historySize) : null
+      schema: 2,
+      fields: {
+        colorScheme: ownedCell(file, OWNED_FIELDS.colorScheme),
+        font: ownedCell(file, OWNED_FIELDS.font),
+        antialiasingMode: ownedCell(file, OWNED_FIELDS.antialiasingMode),
+        historySize: ownedCell(file, OWNED_FIELDS.historySize)
+      },
+      profiles: profilesShapeOf(file),
+      schemes: schemesShapeOf(file)
     };
   }
   if (fs.existsSync(backupPathOrObject)) {
@@ -186,38 +231,135 @@ function readOwnedSnapshot(backupPathOrObject) {
   return null;
 }
 
-// Presence-aware merge (CORE-015): a snapshot field whose original value was
-// explicitly 0 must be restored as 0, and an absent field stays deleted.
-function mergeOwnedField(current, pathStr, snapValue) {
-  if (snapValue !== null && snapValue !== undefined) setIn(current, pathStr, snapValue);
+// CORE-001: a schema-1 snapshot records only four scalars and overloads `null`
+// for absence. It is migrated DELIBERATELY rather than reinterpreted: `null`
+// keeps its old meaning (absent) because that is what the writer meant, and the
+// facts schema 1 never recorded are marked unknown so Revert leaves those
+// structures alone instead of inventing a shape.
+function upgradeSnapshot(snap) {
+  if (Number(snap.schema) >= 2) {
+    return {
+      __wintage_owned: true,
+      schema: 2,
+      fields: {
+        colorScheme: normalizeCell(snap.fields && snap.fields.colorScheme),
+        font: normalizeCell(snap.fields && snap.fields.font),
+        antialiasingMode: normalizeCell(snap.fields && snap.fields.antialiasingMode),
+        historySize: normalizeCell(snap.fields && snap.fields.historySize)
+      },
+      profiles: snap.profiles && snap.profiles.kind ? snap.profiles : { kind: 'unknown' },
+      schemes: snap.schemes && snap.schemes.kind
+        ? { displaced: [], ...snap.schemes }
+        : { kind: 'unknown', displaced: [] }
+    };
+  }
+  const legacyCell = (value) => (value === null || value === undefined
+    ? { present: false }
+    : { present: true, value });
+  return {
+    __wintage_owned: true,
+    schema: 2,
+    migrated_from: 1,
+    fields: {
+      colorScheme: legacyCell(snap.colorScheme),
+      font: legacyCell(snap.font),
+      antialiasingMode: legacyCell(snap.antialiasingMode),
+      historySize: legacyCell(snap.historySize)
+    },
+    profiles: { kind: 'unknown' },
+    schemes: { kind: 'unknown', displaced: [] }
+  };
+}
+
+function normalizeCell(cell) {
+  if (cell && typeof cell === 'object' && 'present' in cell) {
+    return cell.present ? { present: true, value: cell.value } : { present: false };
+  }
+  return { present: false };
+}
+
+// Presence-aware merge (CORE-001/CORE-015): a snapshot field whose original
+// value was explicitly 0 -- or explicitly null -- is restored as written, and
+// only a field that was genuinely absent stays deleted.
+function mergeOwnedField(current, pathStr, cell) {
+  if (cell && cell.present) setIn(current, pathStr, cell.value);
   else delIn(current, pathStr);
 }
 
 // Merge the owned fields from the snapshot into the CURRENT settings, removing
 // the Wintage scheme. Everything else in the current file survives untouched.
 function mergeOwnedIntoCurrent(current, snap) {
-  mergeOwnedField(current, OWNED_FIELDS.colorScheme, snap.colorScheme);
+  const fields = snap.fields;
+  mergeOwnedField(current, OWNED_FIELDS.colorScheme, fields.colorScheme);
   const curFont = getIn(current, OWNED_FIELDS.font);
-  if (snap.font && typeof snap.font === 'object' && !Array.isArray(snap.font)) {
+  const fontCell = fields.font;
+  const snapFont = fontCell.present ? fontCell.value : undefined;
+  if (snapFont && typeof snapFont === 'object' && !Array.isArray(snapFont)) {
     const merged = (curFont && typeof curFont === 'object' && !Array.isArray(curFont)) ? curFont : {};
     for (const k of OWNED_FONT_KEYS) {
-      if (k in snap.font) merged[k] = snap.font[k];
+      if (k in snapFont) merged[k] = snapFont[k];
       else delete merged[k];
     }
     setIn(current, OWNED_FIELDS.font, merged);
+  } else if (fontCell.present) {
+    // The original font was a scalar/null/array: restore it verbatim rather
+    // than stripping keys off a value that never had them.
+    setIn(current, OWNED_FIELDS.font, snapFont);
   } else {
     if (curFont && typeof curFont === 'object') {
       for (const k of OWNED_FONT_KEYS) delete curFont[k];
       if (Object.keys(curFont).length === 0) delIn(current, OWNED_FIELDS.font);
     }
   }
-  mergeOwnedField(current, OWNED_FIELDS.antialiasingMode, snap.antialiasingMode);
-  mergeOwnedField(current, OWNED_FIELDS.historySize, snap.historySize);
-  if (Array.isArray(current.schemes)) {
-    current.schemes = current.schemes.filter((s) => !s || s.name !== 'Wintage');
-    if (current.schemes.length === 0) delete current.schemes;   // the apply created it
-  }
+  mergeOwnedField(current, OWNED_FIELDS.antialiasingMode, fields.antialiasingMode);
+  mergeOwnedField(current, OWNED_FIELDS.historySize, fields.historySize);
+  restoreSchemes(current, snap.schemes);
+  restoreProfilesShape(current, snap.profiles);
   return current;
+}
+
+// CORE-001: remove ONLY what Apply inserted and put back what it displaced.
+// `schemes` is deleted again only when Apply is the reason it exists.
+function restoreSchemes(current, shape) {
+  const kind = shape && shape.kind;
+  if (kind === 'other') {
+    current.schemes = shape.value;
+    return;
+  }
+  if (!Array.isArray(current.schemes)) return;
+  const displaced = (shape && Array.isArray(shape.displaced)) ? shape.displaced : [];
+  const survivors = current.schemes.filter((s) => !s || s.name !== 'Wintage');
+  current.schemes = survivors.concat(displaced);
+  // 'unknown' is a schema-1 snapshot: it never recorded whether `schemes`
+  // existed before, so removing the key is a guess. Keep the (now empty) array
+  // rather than deleting a structure we cannot prove Apply created.
+  if (current.schemes.length === 0 && kind === 'absent') delete current.schemes;
+}
+
+// CORE-001: put the legacy ARRAY container back, but only when doing so loses
+// nothing. A user who added real content under `profiles.defaults` after Apply
+// cannot have it expressed in the array form, and their edit outranks the
+// cosmetics of the original shape.
+function restoreProfilesShape(current, shape) {
+  const kind = shape && shape.kind;
+  if (kind === 'other') {
+    current.profiles = shape.value;
+    return;
+  }
+  if (kind === 'absent') {
+    const p = current.profiles;
+    const emptyDefaults = !p || !p.defaults || Object.keys(p.defaults).length === 0;
+    const onlyDefaults = !p || Object.keys(p).every((k) => k === 'defaults');
+    if (emptyDefaults && onlyDefaults) delete current.profiles;
+    return;
+  }
+  if (kind !== 'array') return;
+  const p = current.profiles;
+  if (!p || typeof p !== 'object' || Array.isArray(p) || !Array.isArray(p.list)) return;
+  const defaults = p.defaults;
+  const defaultsEmpty = !defaults || (typeof defaults === 'object' && Object.keys(defaults).length === 0);
+  const extraKeys = Object.keys(p).filter((k) => k !== 'list' && k !== 'defaults');
+  if (defaultsEmpty && extraKeys.length === 0) current.profiles = p.list;
 }
 
 if (finalizeRecovery) {
@@ -297,13 +439,21 @@ for (const key of required) {
 const settings = fs.existsSync(settingsPath) ? readJsonc(settingsPath) : {};
 // Owned-field snapshot captured from the ORIGINAL file before any mutation, so
 // Revert can restore exactly these fields into whatever the file has become.
-// Presence-aware (CORE-015): historySize: 0 is captured as 0, not null.
+// CORE-001: presence is recorded separately from value, and the two structures
+// Apply rewrites destructively -- the `profiles` container form and the schemes
+// it displaces -- are recorded too. Without them Revert cannot reconstruct the
+// pre-Apply document even though every gate passes.
 const ownedSnapshot = {
   __wintage_owned: true,
-  colorScheme: hasOwned(settings, OWNED_FIELDS.colorScheme) ? getIn(settings, OWNED_FIELDS.colorScheme) : null,
-  font: hasOwned(settings, OWNED_FIELDS.font) ? getIn(settings, OWNED_FIELDS.font) : null,
-  antialiasingMode: hasOwned(settings, OWNED_FIELDS.antialiasingMode) ? getIn(settings, OWNED_FIELDS.antialiasingMode) : null,
-  historySize: hasOwned(settings, OWNED_FIELDS.historySize) ? getIn(settings, OWNED_FIELDS.historySize) : null
+  schema: 2,
+  fields: {
+    colorScheme: ownedCell(settings, OWNED_FIELDS.colorScheme),
+    font: ownedCell(settings, OWNED_FIELDS.font),
+    antialiasingMode: ownedCell(settings, OWNED_FIELDS.antialiasingMode),
+    historySize: ownedCell(settings, OWNED_FIELDS.historySize)
+  },
+  profiles: profilesShapeOf(settings),
+  schemes: schemesShapeOf(settings)
 };
 if (Array.isArray(settings.profiles)) {
   settings.profiles = { defaults: {}, list: settings.profiles };

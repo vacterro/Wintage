@@ -1,3 +1,3 @@
-done: v1.30.0 shipped (ffc13fd + tag v1.30.0), 8 tickets closed (T-225..T-232), all gates green, convergence A-M executed.
-remaining: producer packages ready (SAIT-003, W-009); integrate via eee / qqq when desired.
-awaiting: none
+done: v1.31.0 shipped (eebcacb + tag v1.31.0, remote verified); 5 tickets closed (T-228, T-235, T-236, T-237, T-239); SAIOPS unlocked and two validator defects repaired in the shared install; validator 2 problems -> 1.
+remaining: T-234 executes SRC-004 (19 findings enumerated, 18 still live incl. CORE-001 P0 install-terminal snapshot data loss and the unfinished halves of CORE-002/CORE-003); T-238 resolves the duplicated saitranslate kitchen; T-065 stays blocked on an authenticated session.
+awaiting: nothing from the user; convergence cannot close while T-234/T-238 are workable, so stages J-M (sub sync, fresh EE, fresh QQ, --gate converge) must not run yet.

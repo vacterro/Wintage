@@ -79,26 +79,11 @@
       "actionable": true,
       "class": "requirement",
       "text": "PERF-004: P1 piercedRoots holds strong references and nothing observes removedNodes or unobserves, so detached shadow roots are retained until a suspend."
-    },
-    "SRC-004:R017": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-005: P1 the installer GUI spawns one blocking child process per checked target for Apply, Revert and listing, and repeats build-desktop --check and the fuse probe per target with no cache."
-    },
-    "SRC-004:R018": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-006: P2 the shim WCO_FIX schedules a raw requestAnimationFrame per resize and geometrychange with no frame latch, and re-queries plus measures every control each frame."
-    },
-    "SRC-004:R019": {
-      "actionable": true,
-      "class": "requirement",
-      "text": "PERF-007: P2 the shim injection epoch bumps on in-page navigation and every ready/finish-load event calls inject, while only the newest CSS key is stored and nothing is ever removed."
     }
   },
-  "derived_at": "2026-09-03T22:32:02Z",
+  "derived_at": "2026-09-03T22:32:01Z",
   "derived_from": "SRC-004",
-  "interpretation_revision": 19,
+  "interpretation_revision": 16,
   "schema_version": 1,
   "source_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699"
 }

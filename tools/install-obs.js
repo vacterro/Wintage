@@ -150,26 +150,63 @@ function setIniValue(source, section, key, value) {
   return bom + lines.join(eol) + (finalEol || !lines.length ? eol : '');
 }
 
+// W2-002: writers match section/key names case-INSENSITIVELY (see the two
+// patterns below), so readers must too. They did not, and the asymmetry is
+// silent: OBS writes `[appearance] theme=System`, the snapshot recorded
+// `existed:false`, and Revert then DELETED the user's real selection instead of
+// restoring it. Lookup is normalised here; the file's own spelling is never
+// rewritten, because only lookup semantics were ever ambiguous.
+function iniLookup(ini, section, key) {
+  const sections = (ini && ini.sections) || {};
+  const sectionName = Object.keys(sections).find((s) => s.toLowerCase() === section.toLowerCase());
+  if (sectionName === undefined) return undefined;
+  const body = sections[sectionName] || {};
+  const keyName = Object.keys(body).find((k) => k.toLowerCase() === key.toLowerCase());
+  return keyName === undefined ? undefined : body[keyName];
+}
+
 // Read the Theme-key snapshot. New format is JSON {existed, value}; a legacy
 // whole-file .bak is parsed as INI and its Theme key extracted (T-189).
+//
+// W2-002: the format is chosen by an UNAMBIGUOUS rule and a JSON payload is
+// then validated strictly. Previously malformed JSON, or JSON of the wrong
+// shape, fell through to the INI branch and came back as a perfectly
+// well-formed-looking `{existed:false,value:null}` -- which the fail-closed
+// preflight accepted and Revert then used to delete a live Theme key. A
+// recovery file we cannot read must be UNREADABLE, not quietly reinterpreted.
 function readThemeSnapshot() {
   if (!exists(themeKeyBackup)) return null;
-  const raw = fs.readFileSync(themeKeyBackup, 'utf8').trim();
-  if (raw.startsWith('{')) {
-    try {
-      const j = JSON.parse(raw);
-      if (typeof j.existed === 'boolean') return j;
-    } catch (e) { /* fall through to INI */ }
+  const raw = fs.readFileSync(themeKeyBackup, 'utf8').replace(/^\uFEFF/, '').trim();
+  // JSON is selected by an UNAMBIGUOUS rule: anything opening with `{` is JSON,
+  // and a payload opening with `[` counts as legacy INI only when it actually
+  // begins with an INI section header -- `[]` is a JSON array, not an empty
+  // section, and the old `{`-only test let it sneak into the INI branch.
+  const jsonPayload = raw.startsWith('{')
+    || (raw.startsWith('[') && !/^\s*\[[^\]\r\n]+\]\s*($|\r?\n)/.test(raw));
+  if (jsonPayload) {
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { return null; }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    if (typeof parsed.existed !== 'boolean') return null;
+    // The value contract is part of the schema, not a detail: `existed: true`
+    // with a non-string value cannot be written back into an INI, and
+    // `existed: false` with a value is a contradiction about what was there.
+    if (parsed.existed) {
+      if (typeof parsed.value !== 'string') return null;
+    } else if (parsed.value !== null && parsed.value !== undefined) {
+      return null;
+    }
+    return { existed: parsed.existed, value: parsed.existed ? parsed.value : null };
   }
   const ini = parseIni(raw);
-  const v = (ini.sections[THEME_SECTION] || {})[THEME_KEY];
+  const v = iniLookup(ini, THEME_SECTION, THEME_KEY);
   return { existed: v !== undefined, value: v === undefined ? null : v };
 }
 
 function currentThemeKeyValue() {
   if (!exists(userIni)) return undefined;
   const ini = parseIni(fs.readFileSync(userIni, 'utf8'));
-  return (ini.sections[THEME_SECTION] || {})[THEME_KEY];
+  return iniLookup(ini, THEME_SECTION, THEME_KEY);
 }
 
 // ─── Revert preflight: the COMPLETE required recovery set (CORE-001) ────────
@@ -274,7 +311,10 @@ fs.mkdirSync(configDir, { recursive: true });
 // first generation is never overwritten by a repaint (CORE-001).
 if (!exists(userIniCreated) && !exists(themeKeyBackup)) {
   const current = exists(userIni) ? parseIni(fs.readFileSync(userIni, 'utf8')) : { sections: {} };
-  const v = (current.sections[THEME_SECTION] || {})[THEME_KEY];
+  // W2-002: the same case-insensitive lookup the writers use. Reading it
+  // case-sensitively recorded `existed:false` for OBS's own lowercase
+  // `[appearance] theme=`, and Revert then deleted the key it should restore.
+  const v = iniLookup(current, THEME_SECTION, THEME_KEY);
   writeAtomic(themeKeyBackup, `${JSON.stringify({ existed: v !== undefined, value: v === undefined ? null : v }, null, 2)}\n`);
   if (!exists(userIni)) { writeAtomic(userIniCreated, ''); }
 }
@@ -288,5 +328,15 @@ if (!exists(ovtCreated) && !exists(ovtBackup)) {
 const originalIni = exists(userIni) ? fs.readFileSync(userIni, 'utf8') : '';
 writeAtomic(userIni, setIniValue(originalIni, THEME_SECTION, THEME_KEY, THEME_ID));
 writeAtomic(themeFile, theme);
+// W2-004 test seam: a LATE failure, after user.ini, the theme file and the
+// recovery artifacts are already on disk but before the palette marker commits.
+// That is the exact shape the parent's snapshot exists for, and it was the one
+// shape no gate covered: the helper exited nonzero and the PowerShell parent
+// threw past the snapshot it had taken one line earlier. Never set outside
+// tests.
+if (process.env.WINTAGE_TEST_FAIL_AFTER_OBS_THEME) {
+  console.error('OBS: injected late-write failure (WINTAGE_TEST_FAIL_AFTER_OBS_THEME)');
+  process.exit(1);
+}
 writeAtomic(markerFile, `${palette}\n`);
 console.log(`OBS Studio: installed and activated ${palette}`);

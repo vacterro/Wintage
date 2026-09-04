@@ -908,28 +908,44 @@ foreach ($name in $names) {
 
     if (-not (Test-Path $t.Built)) { throw "Built output missing: $($t.Built). Run 'node tools/build-desktop.js'." }
 
-    # Capture the pristine ONLY on the first-ever apply of this target. A repaint
-    # (dest exists, recovery already captured) must never overwrite the pristine
-    # snapshot with Wintage output (P1#15).
-    if (-not (Test-Path $recoveryMeta)) {
-        New-Item -ItemType Directory -Force -Path $recoveryDir | Out-Null
-        $mode = if (Test-Path $dest) { 'replaced' } else { 'created' }
-        if ($mode -eq 'replaced') {
-            New-Item -ItemType Directory -Force -Path $pristineDir | Out-Null
-            Copy-Item (Join-Path $dest '*') $pristineDir -Recurse -Force
-            Say "$($t.Name): captured the pre-Wintage folder at $pristineDir (persistent recovery)" 'DarkGray'
-        }
-        Write-Utf8 $recoveryMeta (@{ mode = $mode; target = $name } | ConvertTo-Json)
-    }
-
+    # W2-006: first-touch recovery creation is a WRITE, so it belongs inside the
+    # committed Apply branch, after ShouldProcess approves mutation. It used to
+    # run BEFORE the gate, so `-WhatIf` -- the dry run whose contract is
+    # read-only -- became the first writer of persistent recovery state (or
+    # crashed on a recovery.json write whose directory the suppressed
+    # New-Item never created). For a real Apply the ordering contract is
+    # unchanged: pristine is still captured before the destination is touched.
     if ($PSCmdlet.ShouldProcess($dest, 'Install Wintage themes')) {
+        # Capture the pristine ONLY on the first-ever apply of this target. A
+        # repaint (dest exists, recovery already captured) must never overwrite
+        # the pristine snapshot with Wintage output (P1#15).
+        if (-not (Test-Path $recoveryMeta)) {
+            New-Item -ItemType Directory -Force -Path $recoveryDir | Out-Null
+            $mode = if (Test-Path $dest) { 'replaced' } else { 'created' }
+            if ($mode -eq 'replaced') {
+                New-Item -ItemType Directory -Force -Path $pristineDir | Out-Null
+                Copy-Item (Join-Path $dest '*') $pristineDir -Recurse -Force
+                Say "$($t.Name): captured the pre-Wintage folder at $pristineDir (persistent recovery)" 'DarkGray'
+            }
+            Write-Utf8 $recoveryMeta (@{ mode = $mode; target = $name } | ConvertTo-Json)
+        }
         $preDest = Save-DirPreState $dest
-        New-Item -ItemType Directory -Force -Path $dest | Out-Null
-        Copy-Item (Join-Path $t.Built '*') -Destination $dest -Recurse -Force
-        $count = (Get-ChildItem (Join-Path $dest 'themes') -Filter '*.json').Count
-        Say "$($t.Name): installed $count themes -> $dest" 'Green'
-        Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
+        # W2-004: the transaction covers snapshot -> MUTATE -> manifest commit as
+        # ONE operation. The directory creation and the recursive copy used to run
+        # BEFORE Invoke-TargetCommit, so a failure mid-copy (a locked file, a full
+        # disk) threw past the snapshot taken one line earlier: the extension
+        # directory was left half-written and the manifest never recorded it.
         Invoke-TargetCommit $name $t.Name {
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            Copy-Item (Join-Path $t.Built '*') -Destination $dest -Recurse -Force
+            # W2-004 test seam: fail AFTER the destination was mutated but before
+            # the manifest commits. That is the shape the pre-state snapshot
+            # exists for, and the shape that used to escape it because the copy
+            # ran outside the transaction. Never set outside tests.
+            if ($env:WINTAGE_TEST_FAIL_AFTER_EXT_COPY) { throw 'simulated post-copy failure (WINTAGE_TEST_FAIL_AFTER_EXT_COPY)' }
+            $count = (Get-ChildItem (Join-Path $dest 'themes') -Filter '*.json').Count
+            Say "$($t.Name): installed $count themes -> $dest" 'Green'
+            Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
             Set-ManifestEntry $name $Palette $dest 'n/a' (Get-PayloadVersion)
         } { Restore-DirPreState $dest $preDest }
     }

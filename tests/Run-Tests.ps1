@@ -601,7 +601,41 @@ $toolSuites = @(
     @{ Name = 'test-terminal-recorded-set.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-terminal-recorded-set.ps1"' },
     @{ Name = 'test-recovery-consumption.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-recovery-consumption.ps1"' },
     @{ Name = 'test-epoch.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-epoch.ps1"' },
-    @{ Name = 'test-resolve-portable.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-resolve-portable.ps1"' }
+    @{ Name = 'test-resolve-portable.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-resolve-portable.ps1"' },
+    # CORE-001 (SRC-004): Apply -> Revert must return the Windows Terminal
+    # document to its pre-Apply state. Three representation losses made that
+    # false on the SUCCESS path (exit 0 both halves), so nothing red ever
+    # appeared: an explicit null was deleted, a legacy top-level profiles ARRAY
+    # came back as an object, and a user's own scheme named Wintage was removed.
+    @{ Name = 'test-terminal-ownership.js'; Cmd = 'node "{0}\tools\test-terminal-ownership.js"' },
+    # W2-001/W2-002 (SRC-004): recovery-lifecycle contracts for the windows-theme
+    # and OBS helpers. One deleted the file it had just told Windows to activate;
+    # the other's recovery parser reinterpreted malformed JSON as legacy INI and
+    # its case-sensitive reads snapshotted OBS's own lowercase theme key as
+    # absent, so Revert deleted a real user selection.
+    @{ Name = 'test-recovery-lifecycle.js'; Cmd = 'node "{0}\tools\test-recovery-lifecycle.js"' },
+    # CORE-005 + W2-004/005/006/007 (SRC-004): the transaction boundary and the
+    # honesty of what a rollback claims. Every one of these was invisible on the
+    # happy path -- a present-empty INI key deleted on Revert, a mutation that
+    # happened OUTSIDE the transaction its snapshot was taken for, a rollback
+    # whose native command could fail unnoticed under an "exact pre-operation
+    # state" message, a -WhatIf that wrote persistent recovery, and two
+    # paths.json writers that could each lose the other's key while both
+    # reported success.
+    @{ Name = 'test-transaction-boundary.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-transaction-boundary.ps1"' },
+    # PERF-002/003/004/006/007 (SRC-004): the repaint and injection lanes must be
+    # bounded by the budgets they advertise. Every finding here was invisible from
+    # outside -- the theme looked right and the machine just cost more -- so the
+    # gate counts primitive calls (getComputedStyle, querySelectorAll, insertCSS,
+    # requestAnimationFrame) against the real source rather than asserting shape.
+    @{ Name = 'test-perf-lanes.js'; Cmd = 'node "{0}\tools\test-perf-lanes.js"' },
+    # PERF-001 (SRC-004): Electron recovery must not scale in MEMORY with the size
+    # of the application it protects. The pre-fix code stacked whole-binary
+    # Buffers across both transaction layers (+192 MiB RSS for a 64 MiB archive);
+    # recovery is now a durable on-disk vault plus size+digest identity. Builds
+    # 16/64/256 MiB fixtures and measures the child's own peak RSS, then proves
+    # every failure seam still restores those large files byte-exactly.
+    @{ Name = 'test-perf-recovery.js'; Cmd = 'node "{0}\tools\test-perf-recovery.js"' }
 )
 foreach ($s in $toolSuites) {
     $invokeLine = ($s.Cmd -f $root)

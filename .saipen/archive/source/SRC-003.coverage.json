@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-003:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "SUPERSEDED",
+      "evidence": "E-818",
+      "text": "Implement the 17-ticket 2026-09-02 quick3 audit campaign captured in this body (waves CORE/SECOND WAVE/PERFORMANCE, baseline main@ffc13fd, archive e404dbb8).",
+      "verification": null,
+      "work": "T-239"
+    }
+  },
+  "schema_version": 1
+}

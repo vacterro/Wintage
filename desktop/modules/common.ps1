@@ -346,36 +346,76 @@ function Test-PayloadUpToDate([string]$recorded, [string]$current) {
 function Get-InstallEpoch {
     $epochFile = Join-Path $WintageAppData 'install-epoch.json'
     New-Item -ItemType Directory -Force -Path $WintageAppData | Out-Null
-    if (Test-Path $epochFile) {
-        $raw = Read-Utf8 $epochFile
+    # W2-003: first creation must be a race with exactly one winner. The old
+    # absent-check + private GUID + forced rename let two concurrent processes
+    # each observe "absent", each write a valid file, and each return its OWN
+    # id -- the loser then stamped recovery provenance with an identity the
+    # persisted file never carried, and Assert-RecoveryProvenance later
+    # rejected Wintage's own backup as foreign. The fix is a real OS lock on a
+    # dedicated lock file held across the whole absent-check + create + re-read
+    # sequence: every loser re-reads the winner and returns THAT id. The lock
+    # is acquired with a retry so a crashed holder (whose handle the OS has
+    # already released) cannot wedge the epoch forever, and it is always
+    # released in the finally below.
+    #
+    # Lock ordering: nothing may acquire a target lock and then call this
+    # while another path holds the epoch lock and wants a target lock. Every
+    # caller reaches Get-InstallEpoch either outside any target lock or while
+    # holding only that one target lock and acquiring the epoch lock alone,
+    # so no inverse acquisition path exists.
+    $lockPath = Join-Path $WintageAppData 'install-epoch.lock'
+    $lockStream = $null
+    for ($attempt = 0; $attempt -lt 100; $attempt++) {
         try {
-            $parsed = $raw | ConvertFrom-Json
-        } catch {
-            throw "install epoch at $epochFile is corrupt (cannot parse JSON) -- refusing to rotate the install identity because every recovery file on this machine is stamped with it. Preserve the original bytes or delete the file by hand after a backup."
+            $lockStream = [System.IO.File]::Open($lockPath,
+                [System.IO.FileMode]::OpenOrCreate,
+                [System.IO.FileAccess]::ReadWrite,
+                [System.IO.FileShare]::None)
+            break
+        } catch [System.IO.IOException] {
+            Start-Sleep -Milliseconds (10 + (Get-Random -Maximum 40))
         }
-        # Tolerant of an id that arrives as any single scalar (string/number/guid);
-        # strict on shape -- a non-object root, a missing id, or an empty id is
-        # corruption, not "no identity".
-        if ($null -eq $parsed -or $parsed -is [System.Array] -or $parsed -is [string] -or $parsed -is [int] -or $parsed -is [bool]) {
-            throw "install epoch at $epochFile is not a JSON object -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
-        }
-        if ($parsed -isnot [System.Collections.IDictionary] -and $parsed -isnot [PSCustomObject]) {
-            throw "install epoch at $epochFile has an unrecognised shape -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
-        }
-        $id = $parsed.id
-        if ($null -eq $id -or ($id -isnot [string]) -or -not $id.Trim()) {
-            throw "install epoch at $epochFile has no usable id field -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
-        }
-        return $id.ToString()
     }
-    $id = [guid]::NewGuid().ToString('N')
-    # Write atomically: same-directory temp + rename, so a crash between the
-    # Write-Utf8 and the rename can never leave a half-written epoch on disk
-    # that the next call would read as corrupt.
-    $tmp = "$epochFile.tmp-$([guid]::NewGuid().ToString('N'))"
-    Write-Utf8 $tmp (@{ id = $id; firstSeen = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
-    Move-Item -LiteralPath $tmp -Destination $epochFile -Force
-    return $id
+    if ($null -eq $lockStream) { throw "could not acquire the install-epoch lock at $lockPath after 100 attempts." }
+    try {
+        if (Test-Path $epochFile) {
+            $raw = Read-Utf8 $epochFile
+            try {
+                $parsed = $raw | ConvertFrom-Json
+            } catch {
+                throw "install epoch at $epochFile is corrupt (cannot parse JSON) -- refusing to rotate the install identity because every recovery file on this machine is stamped with it. Preserve the original bytes or delete the file by hand after a backup."
+            }
+            # Tolerant of an id that arrives as any single scalar (string/number/guid);
+            # strict on shape -- a non-object root, a missing id, or an empty id is
+            # corruption, not "no identity".
+            if ($null -eq $parsed -or $parsed -is [System.Array] -or $parsed -is [string] -or $parsed -is [int] -or $parsed -is [bool]) {
+                throw "install epoch at $epochFile is not a JSON object -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
+            }
+            if ($parsed -isnot [System.Collections.IDictionary] -and $parsed -isnot [PSCustomObject]) {
+                throw "install epoch at $epochFile has an unrecognised shape -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
+            }
+            $id = $parsed.id
+            if ($null -eq $id -or ($id -isnot [string]) -or -not $id.Trim()) {
+                throw "install epoch at $epochFile has no usable id field -- refusing to rotate the install identity. Preserve the original bytes or delete the file by hand after a backup."
+            }
+            return $id.ToString()
+        }
+        $id = [guid]::NewGuid().ToString('N')
+        # Write atomically: same-directory temp + rename, so a crash between the
+        # Write-Utf8 and the rename can never leave a half-written epoch on disk
+        # that the next call would read as corrupt.
+        $tmp = "$epochFile.tmp-$([guid]::NewGuid().ToString('N'))"
+        Write-Utf8 $tmp (@{ id = $id; firstSeen = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
+        Move-Item -LiteralPath $tmp -Destination $epochFile -Force
+        # Clean abandoned creation temps from crashed writers (deterministic:
+        # anything matching the creation pattern that is not the file itself).
+        Get-ChildItem -LiteralPath $WintageAppData -Filter 'install-epoch.json.tmp-*' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike ($tmp + '*') } |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        return $id
+    } finally {
+        $lockStream.Dispose()
+    }
 }
 
 # Stamp a recovery source with its owning install epoch. Written at the same
@@ -492,23 +532,54 @@ function Read-ManifestQuiet { try { return Read-Manifest } catch { return @{} } 
 # Persist a validated explicit portable-path override into paths.json, atomically
 # (W2-004): the CLI owns these keys, so a fresh process without the flag reuses
 # what the previous successful run remembered - one source of truth.
+# W2-007: serialized update. paths.json has two writers -- this CLI function
+# and the GUI's Save-CustomPaths. Atomic file rename stops torn JSON but does
+# not stop a lost update: if both read state S concurrently, each merges its
+# own keys and the second rename silently deletes the other's freshly added
+# entries. The fix is a dedicated lock file held across the whole read -> merge
+# -> write-temp -> move sequence for BOTH writers.
 function Save-PathPreference([string]$key, [string]$path) {
     if (-not $key -or -not $path) { return }
     if ($key -notin $script:PATHS_KEYS) { return }
-    $o = [ordered]@{}
-    if (Test-Path $PathsPath) {
+    $dir = Split-Path $PathsPath -Parent
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $lockPath = Join-Path $dir 'paths.lock'
+    $lockStream = $null
+    for ($attempt = 0; $attempt -lt 100; $attempt++) {
         try {
-            $existing = (Read-Utf8 $PathsPath).Trim() | ConvertFrom-Json
-            foreach ($prop in $existing.PSObject.Properties) { $o[$prop.Name] = $prop.Value }
-        } catch { }
+            $lockStream = [System.IO.File]::Open($lockPath,
+                [System.IO.FileMode]::OpenOrCreate,
+                [System.IO.FileAccess]::ReadWrite,
+                [System.IO.FileShare]::None)
+            break
+        } catch [System.IO.IOException] {
+            Start-Sleep -Milliseconds (10 + (Get-Random -Maximum 40))
+        }
     }
-    $o[$key] = $path
-    New-Item -ItemType Directory -Force -Path (Split-Path $PathsPath -Parent) | Out-Null
-    $tmp = $PathsPath + '.tmp-' + [guid]::NewGuid().ToString('N')
+    if ($null -eq $lockStream) { throw "could not acquire paths.json lock at $lockPath after 100 attempts." }
     try {
-        Write-Utf8 $tmp (($o | ConvertTo-Json) + "`n")
-        Move-Item $tmp $PathsPath -Force
-    } finally { if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue } }
+        $o = [ordered]@{}
+        if (Test-Path $PathsPath) {
+            try {
+                $existing = (Read-Utf8 $PathsPath).Trim() | ConvertFrom-Json
+                foreach ($prop in $existing.PSObject.Properties) { $o[$prop.Name] = $prop.Value }
+            } catch { }
+        }
+        # W2-007 test seam: widen the read -> write window so a concurrency gate
+        # can prove the lock is what serialises the update rather than luck. With
+        # the lock held this delay is inside the critical section; without it both
+        # writers read the same state and the second replace loses the first's
+        # key. Never set outside tests.
+        if ($env:WINTAGE_TEST_PATHS_WRITE_DELAY_MS) { Start-Sleep -Milliseconds ([int]$env:WINTAGE_TEST_PATHS_WRITE_DELAY_MS) }
+        $o[$key] = $path
+        $tmp = $PathsPath + '.tmp-' + [guid]::NewGuid().ToString('N')
+        try {
+            Write-Utf8 $tmp (($o | ConvertTo-Json) + "`n")
+            Move-Item $tmp $PathsPath -Force
+        } finally { if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue } }
+    } finally {
+        $lockStream.Dispose()
+    }
 }
 
 # CORE-004: the ONLY independently verifiable legacy Wintage identity for a
