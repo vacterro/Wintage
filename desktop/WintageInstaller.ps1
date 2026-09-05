@@ -1083,6 +1083,72 @@ function Invoke-NodeTool([string[]]$argsList) {
     $code
 }
 
+# PERF-005 (T-240): ONE async batch worker per Apply/Revert instead of one
+# blocking child per target. Start-BatchJob launches a single background job
+# running install.ps1 -Selected with the whole checked set, so the WinForms
+# thread never blocks on N serial process startups; a Forms.Timer polls the job
+# on the UI thread and the completion scriptblock (also UI thread) reports
+# per-target results, refreshes the listing and re-enables the buttons.
+# Per-target granularity is preserved: install.ps1 prints "$name: FAILED" per
+# failed target plus one "Install incomplete: ... (a, b)" summary line, and the
+# completion handler parses both.
+function Start-BatchJob([string[]]$argsList, [scriptblock]$onDone) {
+    $job = Start-Job -ScriptBlock {
+        param($innerArgs)
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $out = & powershell @innerArgs 2>&1
+        $code = $LASTEXITCODE
+        $ErrorActionPreference = $prev
+        [pscustomobject]@{ Output = @($out); ExitCode = $code }
+    } -ArgumentList (, $argsList)
+    $timer = New-Object Windows.Forms.Timer
+    $timer.Interval = 250
+    $timer.Add_Tick({
+        if ($job.State -eq 'Running') { return }
+        $timer.Stop()
+        $timer.Dispose()
+        try {
+            $result = Receive-Job $job
+        } catch {
+            Say-Log ('BATCH FAILED: ' + $_.Exception.Message)
+            $result = [pscustomobject]@{ Output = @(); ExitCode = 1 }
+        } finally {
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+        }
+        & $onDone $result
+    })
+    $timer.Start()
+    Say-Log 'batch worker started - the window stays responsive while it runs.'
+}
+
+# Build the single -Selected argument list for a batch Apply/Revert from the
+# checked rows, carrying the same per-target path overrides the serial loop did.
+function Get-BatchArgs([string[]]$keys, [string]$slug, [switch]$isRevert) {
+    $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Selected", ($keys -join ','))
+    if (-not $isRevert) { $argsList += @("-Palette", $slug) }
+    else { $argsList += "-Revert" }
+    if ($keys -contains 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
+    if ($keys -contains 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
+    if ($keys -contains 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
+    $argsList
+}
+
+# Parse the failed target names out of a batch worker result: per-target
+# "$name: FAILED" lines plus the "Install incomplete: N target(s) failed (a, b)"
+# summary. Returns the de-duplicated key list.
+function Get-BatchFailures($result) {
+    $failed = @()
+    foreach ($line in @($result.Output)) {
+        $s = $line.ToString()
+        $m = [regex]::Match($s, '^(\S+)\s*:\s*FAILED')
+        if ($m.Success) { $failed += $m.Groups[1].Value }
+        $m2 = [regex]::Match($s, 'failed \((.*?)\)\.?\s*$')
+        if ($m2.Success) { $failed += @($m2.Groups[1].Value -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+    }
+    @($failed | Sort-Object -Unique)
+}
+
 # T-192 P1#26: Save/Delete-Custom are ONE transaction. The pack is mutated, then
 # the generators run; if EITHER generator fails, the previous custom.json is
 # restored and the generated outputs are regenerated from it - source and
@@ -1152,36 +1218,38 @@ $btnDelCustom.Add_Click({
 
 $btnApply.Add_Click({
         $btnApply.Enabled = $false
+        $btnRevert.Enabled = $false
         try {
             $slug = if ($script:current -eq '<custom>') { Save-Custom; 'custom' } else { $script:current }
             $checked = @(Get-CheckedTargetItems)
-            if (-not $checked) { Say-Log 'nothing selected'; return }
-            $failed = @()
-            foreach ($item in $checked) {
-                $key = ($item -split '\s+')[0]
-                $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Palette", $slug)
-                if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
-                if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
-                if ($key -eq 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
-                $child = Invoke-ChildPowerShell $argsList
-                foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
-                if ($child.ExitCode -eq 0) { Say-Log ("$key`: PASS") }
-                else { Say-Log ("$key`: FAIL (exit $($child.ExitCode))"); $failed += $key }
-            }
-            Load-Targets
-            Update-FbButtonsVisibility
-            if ($failed.Count) {
-                $status.Text = "Applied '$slug' with $($failed.Count) failure(s): $($failed -join ', '). See the log - nothing more was installed for those targets."
-                $status.ForeColor = [System.Drawing.Color]::Firebrick
-            } else {
-                # A later success must visibly reset the failure colour (T-189).
-                $status.Text = "Applied '$slug'. Restart any app that was themed."
-                $tokensNow = Get-ActiveTokens
-                if ($tokensNow) { $status.ForeColor = C $tokensNow.textPrimary }
+            if (-not $checked) { Say-Log 'nothing selected'; $btnApply.Enabled = $true; $btnRevert.Enabled = $true; return }
+            $keys = @($checked | ForEach-Object { ($_ -split '\s+')[0] })
+            # PERF-005 (T-240): ONE async batch worker for the whole checked set.
+            # The completion block runs on the UI thread via the Forms.Timer.
+            $doneSlug = $slug
+            Start-BatchJob (Get-BatchArgs $keys $slug) {
+                param($child)
+                try {
+                    foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+                    $failed = @(Get-BatchFailures $child)
+                    if ($child.ExitCode -ne 0 -and -not $failed.Count) { $failed = @($keys) }
+                    Load-Targets
+                    Update-FbButtonsVisibility
+                    if ($failed.Count) {
+                        $status.Text = "Applied '$doneSlug' with $($failed.Count) failure(s): $($failed -join ', '). See the log - nothing more was installed for those targets."
+                        $status.ForeColor = [System.Drawing.Color]::Firebrick
+                    } else {
+                        # A later success must visibly reset the failure colour (T-189).
+                        $status.Text = "Applied '$doneSlug'. Restart any app that was themed."
+                        $tokensNow = Get-ActiveTokens
+                        if ($tokensNow) { $status.ForeColor = C $tokensNow.textPrimary }
+                    }
+                }
+                catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message); $status.Text = 'Apply failed - see the log.' }
+                finally { $btnApply.Enabled = $true; $btnRevert.Enabled = $true }
             }
         }
-        catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message); $status.Text = 'Apply failed - see the log.' }
-        finally { $btnApply.Enabled = $true }
+        catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message); $status.Text = 'Apply failed - see the log.'; $btnApply.Enabled = $true; $btnRevert.Enabled = $true }
     })
 
 $btnSelectAll.Add_Click({
@@ -1200,28 +1268,35 @@ $btnSelectNone.Add_Click({
     })
 
 $btnRevert.Add_Click({
-        $failed = @()
-        foreach ($item in @(Get-CheckedTargetItems)) {
-            $key = (($item) -split '\s+')[0]
-            $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Target", $key, "-Revert")
-            if ($key -eq 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
-            if ($key -eq 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
-            if ($key -eq 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
-            $child = Invoke-ChildPowerShell $argsList
-            foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
-            if ($child.ExitCode -eq 0) { Say-Log ("$key`: PASS (reverted)") }
-            else { Say-Log ("$key`: FAIL (exit $($child.ExitCode))"); $failed += $key }
+        $btnApply.Enabled = $false
+        $btnRevert.Enabled = $false
+        try {
+            $checkedNow = @(Get-CheckedTargetItems)
+            if (-not $checkedNow) { Say-Log 'nothing selected'; $btnApply.Enabled = $true; $btnRevert.Enabled = $true; return }
+            $keys = @($checkedNow | ForEach-Object { ($_ -split '\s+')[0] })
+            # PERF-005 (T-240): ONE async batch worker for the whole checked set.
+            Start-BatchJob (Get-BatchArgs $keys '' -isRevert) {
+                param($child)
+                try {
+                    foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+                    $failed = @(Get-BatchFailures $child)
+                    if ($child.ExitCode -ne 0 -and -not $failed.Count) { $failed = @($keys) }
+                    Load-Targets
+                    if ($failed.Count) {
+                        $status.Text = "Revert incomplete: $($failed.Count) target(s) failed ($($failed -join ', ')). See the log."
+                        $status.ForeColor = [System.Drawing.Color]::Firebrick
+                    } else {
+                        # A later success must visibly reset the failure colour (T-189).
+                        $status.Text = 'Revert done - the marked targets are back to their pre-Wintage state.'
+                        $tokensNow = Get-ActiveTokens
+                        if ($tokensNow) { $status.ForeColor = C $tokensNow.textPrimary }
+                    }
+                }
+                catch { Say-Log ('REVERT FAILED: ' + $_.Exception.Message); $status.Text = 'Revert failed - see the log.' }
+                finally { $btnApply.Enabled = $true; $btnRevert.Enabled = $true }
+            }
         }
-        Load-Targets
-        if ($failed.Count) {
-            $status.Text = "Revert incomplete: $($failed.Count) target(s) failed ($($failed -join ', ')). See the log."
-            $status.ForeColor = [System.Drawing.Color]::Firebrick
-        } else {
-            # A later success must visibly reset the failure colour (T-189).
-            $status.Text = 'Revert done - the marked targets are back to their pre-Wintage state.'
-            $tokensNow = Get-ActiveTokens
-            if ($tokensNow) { $status.ForeColor = C $tokensNow.textPrimary }
-        }
+        catch { Say-Log ('REVERT FAILED: ' + $_.Exception.Message); $status.Text = 'Revert failed - see the log.'; $btnApply.Enabled = $true; $btnRevert.Enabled = $true }
     })
 
 $lstThemes.Add_SelectedIndexChanged({

@@ -20,6 +20,13 @@
 param(
     [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'saipenview', 'smartvac', 'wildrift', 'all')]
     [string]$Target,
+    # PERF-005 (T-240): batch mode for the GUI. A comma-separated selected set
+    # (e.g. -Selected "vscode,obs") that feeds the SAME $names dispatcher below
+    # in ONE worker process, with ONE shared build verification. Mutually
+    # exclusive with -Target. Deliberately NOT named $Targets: that collides
+    # case-insensitively with the $TARGETS config hashtable and broke every
+    # invocation at metadata validation (E-851).
+    [string]$Selected,
     [string]$Palette = 'goldendefault',
     [string]$Language,
     [switch]$Revert,
@@ -217,6 +224,11 @@ if (-not $CodeNomadPath -and $pathsJson.ContainsKey('codenomad')) { $CodeNomadPa
 if (-not $WorkBuddyPath -and $pathsJson.ContainsKey('workbuddy')) { $WorkBuddyPath = $pathsJson['workbuddy'] }
 if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $PortableBrowserRoot = $pathsJson['portable'] }
 
+# PERF-005 (T-240): batch-mode guards, BEFORE any mode branch (-Reapply/-Status
+# exit before the dispatcher, so a conflict rejected only there would never fire).
+if ($Target -and $Selected) { throw '-Target and -Selected are mutually exclusive - pass exactly one of them.' }
+if ($Selected -and ($Reapply -or $Status -or $RegisterLogonTask -or $UnregisterLogonTask)) { throw '-Selected runs a batch Apply/Revert - it cannot be combined with -Reapply, -Status or logon-task switches.' }
+
 # ---- Reapply mode: read manifest, probe TARGET health, re-apply unhealthy targets ----
 # The decision is target health, not just the Wintage payload version (T-189):
 # an application update or a moved install leaves payloadVersion unchanged while
@@ -340,7 +352,7 @@ if ($Status) {
     exit 0
 }
 
-if (-not $Target) {
+if (-not $Target -and -not $Selected) {
     # The whole point of the listing is answering three questions at once: is the app
     # here, is it themed, and WHICH palette is on it. Without the third column,
     # "which one did I put on Freebuff again" has no answer short of reading JSON.
@@ -374,15 +386,28 @@ if (-not $Target) {
                 Where-Object { $_.Name -notmatch '^(Uninstall|elevate|Squirrel|Update)' } |
                 Sort-Object Length -Descending | Select-Object -First 1
             if ($exe -and $node) {
-                try {
-                    $prevEap = $ErrorActionPreference
-                    $ErrorActionPreference = 'Continue'
-                    $fuse = & node (Join-Path $root 'tools/electron-fuses.js') $exe.FullName 2>$null
-                    $ErrorActionPreference = $prevEap
-                    if ($LASTEXITCODE -ne 0) { $blocked = 'listing failed' }
-                    elseif ($fuse -match 'NOT themeable') { $blocked = 'fused shut' }
-                } catch {
-                    $blocked = 'listing failed'
+                # PERF-005 (T-240): unchanged-file fuse cache. The listing runs at
+                # startup AND after every Apply/Revert, and each run re-scanned
+                # every Electron executable (128 MiB read for one unchanged 64 MiB
+                # exe across two listings). The verdict is cached on disk keyed on
+                # exe identity (path + size + mtimeUtc); ANY change or ANY doubt
+                # (missing/corrupt cache, unreadable exe) means a fresh scan.
+                # Fail-closed: a cache entry is only ever a past SCAN result, an
+                # unscanned exe is never accepted as safe from the cache.
+                $blocked = Get-CachedFuseBlocked $exe.FullName
+                if ($null -eq $blocked) {
+                    try {
+                        $prevEap = $ErrorActionPreference
+                        $ErrorActionPreference = 'Continue'
+                        $fuse = & node (Join-Path $root 'tools/electron-fuses.js') $exe.FullName 2>$null
+                        $ErrorActionPreference = $prevEap
+                        if ($LASTEXITCODE -ne 0) { $blocked = 'listing failed' }
+                        elseif ($fuse -match 'NOT themeable') { $blocked = 'fused shut' }
+                        else { $blocked = '' }
+                        Set-CachedFuseBlocked $exe.FullName $blocked
+                    } catch {
+                        $blocked = 'listing failed'
+                    }
                 }
             }
         }
@@ -583,13 +608,39 @@ if ($orphans.Count) {
     Say ((T 'SkippedByTargets') -f ($orphans -join ', ')) 'Yellow'
 }
 
-$names = if ($Target -eq 'all') { $known } else { @($Target) }
+# PERF-005 (T-240): the batch set. Split, trimmed, de-duplicated and validated
+# against the known set -- an unknown name is a hard error, never a silent
+# skip, because a GUI typo that quietly themes nothing is worse than a failed
+# run.
+$selectedList = @()
+if ($Selected) {
+    $selectedList = @($Selected -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if (-not $selectedList.Count) { throw '-Selected is empty - pass a comma-separated target list (e.g. -Selected "vscode,obs").' }
+    # De-duplicate keeping first-seen order: a doubled name would otherwise run
+    # the target twice behind one batch flag.
+    $seen = @{}
+    $selectedList = @($selectedList | Where-Object { -not $seen.ContainsKey($_) -and ($seen[$_] = $true) })
+    $unknown = @($selectedList | Where-Object { $known -notcontains $_ })
+    if ($unknown.Count) { throw "-Selected names unknown target(s): $($unknown -join ', ') (known: $($known -join ', '))." }
+}
+
+$names = if ($Target -eq 'all') { $known } elseif ($selectedList.Count) { $selectedList } else { @($Target) }
+
+# PERF-005 (T-240): a -Selected batch shares ONE build verification across the
+# whole batch, exactly as `-Target all` already does with $allBuildCurrent.
+# The dispatch loop below applies it per PRESENT build-consuming target.
+$selectedBuildCurrent = $null   # $null = unknown (no node), $true/$false = check result
+if ($selectedList.Count -and $node) {
+    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
+    $selectedBuildCurrent = ($LASTEXITCODE -eq 0)
+}
 
 # Strict-target semantics (T-189): an explicitly-requested target (or a
 # manifest-recorded one reached via -Reapply) must not silently skip an absent
 # prerequisite — absence is a FAIL there, while `-Target all` legitimately SKIPs
 # software that simply is not installed. Handlers consult $script:StrictTarget.
-$script:StrictTarget = $Target -and $Target -ne 'all'
+# A -Selected batch is explicit too: every name in it was asked for by name.
+$script:StrictTarget = ($Target -and $Target -ne 'all') -or $selectedList.Count -gt 0
 
 $dispatchFailures = @()
 
@@ -638,15 +689,17 @@ foreach ($name in $names) {
         # target and then fail the manifest commit.
         $null = Read-Manifest
 
-    # T-190: for `-Target all`, a PRESENT build-consuming target needs a
-    # verifiable current build; absent build-consuming targets are skipped by
-    # their own handlers. Native/source-tree targets are never blocked.
-    if ($Target -eq 'all' -and $name -in $BUILD_CONSUMING -and -not $Force) {
+    # T-190: for `-Target all` (and PERF-005 -Selected batches), a PRESENT
+    # build-consuming target needs a verifiable current build; absent
+    # build-consuming targets are skipped by their own handlers.
+    # Native/source-tree targets are never blocked.
+    if (($Target -eq 'all' -or $selectedList.Count) -and $name -in $BUILD_CONSUMING -and -not $Force) {
         $present = Get-TargetCurrentPath $name
         if (-not $present -and $TARGETS.ContainsKey($name)) { $present = $TARGETS[$name].Dir }
         if ($present) {
             if (-not $node) { throw "${name}: cannot verify the generated build without Node (use -Force to accept unverified output)." }
-            if ($allBuildCurrent -eq $false) { throw "${name}: the generated build is stale - run 'node tools/build-desktop.js' (or use -Force)." }
+            $batchCurrent = if ($Target -eq 'all') { $allBuildCurrent } else { $selectedBuildCurrent }
+            if ($batchCurrent -eq $false) { throw "${name}: the generated build is stale - run 'node tools/build-desktop.js' (or use -Force)." }
         }
     }
 

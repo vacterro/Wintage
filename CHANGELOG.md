@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.33.0] - 2026-09-05
+
+- Fixed (PERF-005, SRC-004:R017, T-240): the installer GUI spawned one BLOCKING install.ps1 child per checked target on the WinForms thread, re-ran `node tools/build-desktop.js --check` once per target, and re-scanned every Electron executable for the fuse sentinel on each listing. install.ps1 now takes a `-Selected "a,b,c"` batch set that feeds the same `$names` dispatcher in ONE worker process with ONE shared build verification (explicit StrictTarget semantics, de-duplicated, validated against the known set); the fuse verdict is cached on disk keyed on exe path+size+mtime and fail-closed (any change or doubt rescans); the GUI runs ONE async batch worker per Apply/Revert via Start-Job plus a Forms.Timer so the window stays responsive, with per-target failure parsing preserved. Single-target CLI and `-Target all` behaviour are unchanged.
+- SRC-004 closes with this release: all 19 findings terminal VERIFIED with evidence (18 in v1.32.0 under T-234, PERF-005 here under T-240).
+
 ## [1.32.0] - 2026-09-04
 
 - Audit repair: the external audit inbox layer audit/2.md (SRC-004, 19 findings) is executed as T-234. 18 of 19 findings are terminal and VERIFIED with evidence. PERF-005 (R017) is split to T-240 with its own verify bar: it is the installer GUI dispatch model (one blocking install.ps1 child per checked target on the WinForms thread, one redundant build-desktop --check per target, an uncached fuse rescan of every Electron executable), whose repair can only be verified by process count and UI responsiveness during a live multi-target Apply -- a fixture would measure the fixture.

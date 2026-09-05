@@ -525,6 +525,54 @@ function Test-ElectronApp($resources) {
     (Test-Path (Join-Path $resources 'app.asar')) -or (Test-Path (Join-Path $resources 'app/app.asar'))
 }
 
+# PERF-005 (T-240): unchanged-file fuse-verdict cache for the install.ps1
+# listing. Keyed on exe identity (path + size + mtimeUtc ticks); ANY mismatch
+# or ANY doubt (missing/corrupt cache file, unreadable exe) returns $null and
+# the caller scans fresh. Fail-closed: only a past SCAN result is ever cached,
+# an unscanned exe is never reported safe from here.
+#
+# ponytail: best-effort write, no paths.lock. A lost update or torn write only
+# costs one rescan (the next read treats a corrupt file as a miss); correctness
+# never depends on the cache. Add locking when concurrent listings contend.
+function Get-CachedFuseBlocked([string]$exePath) {
+    try {
+        $item = Get-Item -LiteralPath $exePath -ErrorAction Stop
+        $cacheFile = Join-Path $WintageAppData 'fuse-cache.json'
+        if (-not (Test-Path $cacheFile)) { return $null }
+        $cache = Get-Content -LiteralPath $cacheFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        $entry = $cache.PSObject.Properties[$exePath]
+        if (-not $entry) { return $null }
+        $v = $entry.Value
+        if ($v.size -ne $item.Length) { return $null }
+        if ($v.mtime -ne $item.LastWriteTimeUtc.Ticks) { return $null }
+        return [string]$v.blocked
+    } catch { return $null }
+}
+
+function Set-CachedFuseBlocked([string]$exePath, [string]$blocked) {
+    try {
+        $item = Get-Item -LiteralPath $exePath -ErrorAction Stop
+        $cacheFile = Join-Path $WintageAppData 'fuse-cache.json'
+        $cache = @{}
+        if (Test-Path $cacheFile) {
+            try {
+                $raw = Get-Content -LiteralPath $cacheFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                foreach ($p in $raw.PSObject.Properties) { $cache[$p.Name] = $p.Value }
+            } catch { $cache = @{} }
+        }
+        $cache[$exePath] = [pscustomobject]@{
+            size    = $item.Length
+            mtime   = $item.LastWriteTimeUtc.Ticks
+            blocked = $blocked
+        }
+        $dir = Split-Path $cacheFile -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        $tmp = "$cacheFile.tmp"
+        [System.IO.File]::WriteAllText($tmp, ($cache | ConvertTo-Json -Depth 4), $script:Utf8NoBom)
+        Move-Item -LiteralPath $tmp -Destination $cacheFile -Force
+    } catch { }
+}
+
 # Read the manifest without letting a corrupt file abort a LISTING or a path
 # probe. Callers that would write let the real Read-Manifest throw.
 function Read-ManifestQuiet { try { return Read-Manifest } catch { return @{} } }
