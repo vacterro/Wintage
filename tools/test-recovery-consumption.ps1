@@ -1,25 +1,34 @@
-# Recovery-consumption ordering regression suite (T-206 / W2-009).
+# Recovery-consumption ordering regression suite (T-206 / W2-009 / SRC-005 W2-003).
 #
 # Wintage-owned source files (SmartVac, WildRift, SAIPENVIEW) Revert by
 # copying a per-target `<file>.bak` backup back over the themed file and
-# then removing the backup. The audit caught that the original code deleted
+# then consuming the backup. The audit caught that the original code deleted
 # the backup BEFORE the manifest removal committed -- a process kill at that
 # seam strands `manifest says installed + no recovery`, a permanent
-# fail-closed state the user cannot recover from. The fix defers the backup
-# removal INTO the commit scriptblock, so it only happens if the manifest
-# removal succeeds. Restore-FilePreState (in-memory prestate) is the safety
-# net for an in-process commit failure.
+# fail-closed state the user cannot recover from. The first fix deferred the
+# deletion INTO the commit scriptblock; SRC-005 W2-003 hardened that into a
+# retire-first protocol, because a scriptblock is NOT an atomic primitive:
+# the backup is RENAMED to a `<file>.wintage-retired` tombstone BEFORE
+# Invoke-TargetCommit, the manifest entry is removed inside the commit, the
+# tombstone is deleted only after the manifest transition succeeded
+# (post-commit GC), and a failed commit renames the tombstone back so the
+# retry keeps its recovery authority. Restore-FilePreState (in-memory
+# prestate) remains the safety net for the live file on a commit failure.
 #
 # This test enforces:
 #   1. The structural invariant -- for each of the three Revert call sites
-#      (Invoke-SmartVac, Invoke-WildRift, Invoke-Saipenview), the
-#      `Remove-Item $bakFile` line must live INSIDE an Invoke-TargetCommit
-#      scriptblock, not before it. A regression that reintroduces the
-#      pre-commit removal is caught by static read.
-#   2. The behavioural round-trip -- Save-FilePreState captures live+bak
+#      (Invoke-SmartVac, Invoke-WildRift, Invoke-Saipenview), no code line
+#      between `Copy-Item $bakFile` and `Invoke-TargetCommit` deletes the
+#      backup (`Remove-Item $bakFile`), and the retire-first rename to the
+#      tombstone is present. Full-line PowerShell comments are stripped
+#      before matching, so a comment naming the old defect cannot satisfy
+#      or trip the assertion.
+#   2. The commit scriptblock removes the manifest entry and performs the
+#      post-commit tombstone GC (`Remove-Item $retire`), NOT a backup
+#      deletion.
+#   3. The behavioural round-trip -- Save-FilePreState captures live+bak
 #      bytes, and Restore-FilePreState reconstructs both exactly after a
-#      failed commit (which the deferral makes possible even if the commit
-#      is followed by an immediate Remove-Item in the same scriptblock).
+#      failed commit.
 #
 #   .\tools\test-recovery-consumption.ps1          # all tests
 #   .\tools\test-recovery-consumption.ps1 -List    # list tests
@@ -41,89 +50,70 @@ function check($label, $cond) {
     else { Write-Host "FAIL: $label" -ForegroundColor Red; $script:fail++ }
 }
 
+# Strip full-line PowerShell comments so prose in code comments can never
+# satisfy or trip a structural assertion.
+function Remove-CommentLines([string]$text) {
+    return (($text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n")
+}
+
 if ($List) {
-    Write-Host "test-recovery-consumption.ps1 (5 tests):"
-    Write-Host "  1. SmartVac Revert does NOT Remove-Item bakFile before Invoke-TargetCommit"
-    Write-Host "  2. WildRift Revert does NOT Remove-Item bakFile before Invoke-TargetCommit"
-    Write-Host "  3. SAIPENVIEW Revert does NOT Remove-Item bakFile before Invoke-TargetCommit"
-    Write-Host "  4. SmartVac Revert Remove-Item bakFile is INSIDE the commit scriptblock"
+    Write-Host "test-recovery-consumption.ps1 (6 tests):"
+    Write-Host "  1. SmartVac Revert: retire-first rename, no backup deletion, before Invoke-TargetCommit"
+    Write-Host "  2. WildRift Revert: retire-first rename, no backup deletion, before Invoke-TargetCommit"
+    Write-Host "  3. SAIPENVIEW Revert: retire-first rename, no backup deletion, before Invoke-TargetCommit"
+    Write-Host "  4. SmartVac commit scriptblock: Remove-ManifestEntry + post-commit tombstone GC"
     Write-Host "  5. Restore-FilePreState byte-exact round-trip after a failed commit"
+    Write-Host "  6. WildRift + SAIPENVIEW commit scriptblocks: post-commit tombstone GC"
     exit 0
 }
 
 # ------------------------------------------------------------------ fixtures
 $src = Get-Content $targets -Raw
 $commonSrc = Get-Content $common -Raw
-check 'BetterDiscord: replaced recovery without pristine fails closed' ($src -match 'if \(\$meta\.mode -eq ''replaced''\) \{\s*if \(-not \(Test-Path \$pristine\)\) \{ throw .*refusing to delete the live CSS')
+check 'BetterDiscord: replaced recovery without pristine fails closed' ($src -match 'if \(\$meta\.mode -eq ''replaced'' -and -not \(Test-Path \$pristine\)\)')
 check 'TotalCmd: health captures value after matched key prefix' ($src -match '\$v = \$line\.Substring\(\$m\.Index \+ \$m\.Length\)')
 check 'MPC-HC: missing OSDTransparency is unhealthy' ($src -match '\$props\.OSDTransparency -ne 0')
 check 'Portable Electron: process names accept arrays' ($commonSrc -match 'Resolve-PortableElectron\(\[string\]\$key, \[string\]\$explicitPath, \[hashtable\]\$remembered, \[string\[\]\]\$processName')
 
-# ---- Test 1..3: structural guard. Read the SOURCE file directly and
-# assert that each function's Revert branch does NOT carry a bare
-# `Remove-Item $bakFile` between the `Copy-Item $bakFile` and the
-# `Invoke-TargetCommit` call. The pre-fix code had the `Remove-Item`
-# on its own line BEFORE `Invoke-TargetCommit`; the fix moved it
-# INSIDE the commit scriptblock (after the `Invoke-TargetCommit` line).
-# A simple grep on the interleaving window catches reintroductions.
-function Get-Interleave([string]$text, [string]$funcName) {
-    # Find the Revert branch inside the function.
-    $fidx = $text.IndexOf("function $funcName")
-    if ($fidx -lt 0) { return $null }
-    $ridx = $text.IndexOf('if ($DoRevert) {', $fidx)
-    if ($ridx -lt 0) { return $null }
-    # The Revert branch ends at the next `return` line that is followed
-    # by the Apply branch (`if (-not $PSCmdlet.ShouldProcess`).
-    $aidx = $text.IndexOf('if (-not $PSCmdlet.ShouldProcess', $ridx)
-    if ($aidx -lt 0) { return $null }
-    # Extract the revert block: from `if ($DoRevert)` to where the Apply
-    # branch starts. Then find the first Copy-Item $bakFile and the first
-    # Invoke-TargetCommit inside it.
-    $block = $text.Substring($ridx, $aidx - $ridx)
-    $cIdx = $block.IndexOf('Copy-Item $bakFile')
+# ---- Tests 1..6: W2-002 (mutation-before-transaction) + W2-003
+# (retire-first tombstone) combined contract, asserted structurally from the
+# SOURCE. For each source-backed target the Revert branch must:
+#   (a) wrap the LIVE mutation (Copy-Item $bakFile $pyFile) and the retire-first
+#       rename (Rename-Item $bakFile $retire) INSIDE the commit scriptblock, so
+#       a failure after the snapshot but before the manifest transition rolls the
+#       captured pre-state back (W2-002);
+#   (b) remove the manifest entry and GC the tombstone only after the commit is
+#       known good, and never delete the backup itself (W2-003);
+#   (c) restore the tombstone on a manifest-commit failure (rollback callback).
+# The old W2-003-only tests asserted Copy-Item BEFORE Invoke-TargetCommit; that
+# ordering is exactly the defect W2-002 repairs, so they are replaced by (a).
+function Extract-RollbackScriptblock([string]$block) {
+    # Second top-level { } after the first Invoke-TargetCommit is the rollback.
     $tIdx = $block.IndexOf('Invoke-TargetCommit')
-    if ($cIdx -lt 0 -or $tIdx -lt 0 -or $cIdx -ge $tIdx) { return $null }
-    # Return the slice BETWEEN Copy-Item and Invoke-TargetCommit (exclusive).
-    return $block.Substring($cIdx, $tIdx - $cIdx)
+    if ($tIdx -lt 0) { return $null }
+    $first = Extract-ScriptblockFrom $block ($block.IndexOf('{', $tIdx))
+    if ($null -eq $first) { return $null }
+    $afterFirst = $block.IndexOf('}', $block.IndexOf('{', $tIdx))
+    # Find the rollback opener: the first '{' after the commit block closes.
+    $depth = 0
+    $start = $block.IndexOf('{', $tIdx)
+    for ($i = $start; $i -lt $block.Length; $i++) {
+        if ($block[$i] -eq '{') { $depth++ }
+        elseif ($block[$i] -eq '}') { $depth--; if ($depth -eq 0) { $afterFirst = $i; break } }
+    }
+    $rbStart = $block.IndexOf('{', $afterFirst + 1)
+    if ($rbStart -lt 0) { return $null }
+    return (Extract-ScriptblockFrom $block $rbStart)
 }
-
-$svSlice = Get-Interleave $src 'Invoke-SmartVac'
-$wrSlice = Get-Interleave $src 'Invoke-WildRift'
-$svpSlice = Get-Interleave $src 'Invoke-Saipenview'
-
-function Has-BakRemoval([string]$slice) {
-    if ($null -eq $slice) { return $true }
-    return $slice -match 'Remove-Item\s+\$bakFile'
-}
-
-check 'SmartVac: no Remove-Item bakFile between Copy-Item and Invoke-TargetCommit' (-not (Has-BakRemoval $svSlice))
-check 'WildRift: no Remove-Item bakFile between Copy-Item and Invoke-TargetCommit' (-not (Has-BakRemoval $wrSlice))
-check 'SAIPENVIEW: no Remove-Item bakFile between Copy-Item and Invoke-TargetCommit' (-not (Has-BakRemoval $svpSlice))
-
-# ---- Test 4: the commit scriptblock now performs the removal ----
-# The commit scriptblock lives between Invoke-TargetCommit '...' '...' {
-# and the closing } before the restore scriptblock. We extract it from the
-# revert slice and assert it carries `Remove-ManifestEntry` AND
-# `Remove-Item $bakFile`.
-function Extract-CommitScriptblock([string]$block) {
-    # The structure is: Invoke-TargetCommit '<key>' '<label>' { <commit> } { <restore> }
-    $commitStart = $block.IndexOf('Invoke-TargetCommit')
-    if ($commitStart -lt 0) { return $null }
-    $openBrace = $block.IndexOf('{', $commitStart)
+function Extract-ScriptblockFrom([string]$block, $openBrace) {
     if ($openBrace -lt 0) { return $null }
-    # Match braces to find the close of the commit scriptblock.
     $depth = 0
     for ($i = $openBrace; $i -lt $block.Length; $i++) {
-        $c = $block[$i]
-        if ($c -eq '{') { $depth++ }
-        elseif ($c -eq '}') {
-            $depth--
-            if ($depth -eq 0) { return $block.Substring($openBrace + 1, $i - $openBrace - 1) }
-        }
+        if ($block[$i] -eq '{') { $depth++ }
+        elseif ($block[$i] -eq '}') { $depth--; if ($depth -eq 0) { return $block.Substring($openBrace + 1, $i - $openBrace - 1) } }
     }
     return $null
 }
-
 # Rebuild a revert block (with the Invoke-TargetCommit) for the scriptblock
 # extraction: find the function and slice to the Apply branch.
 function Get-RevertBlock([string]$text, [string]$funcName) {
@@ -135,13 +125,33 @@ function Get-RevertBlock([string]$text, [string]$funcName) {
     if ($aidx -lt 0) { return $null }
     return $text.Substring($ridx, $aidx - $ridx)
 }
+function Extract-CommitScriptblock([string]$block) {
+    $tIdx = $block.IndexOf('Invoke-TargetCommit')
+    if ($tIdx -lt 0) { return $null }
+    return (Extract-ScriptblockFrom $block ($block.IndexOf('{', $tIdx)))
+}
 
-$svRevert = Get-RevertBlock $src 'Invoke-SmartVac'
-$svCommit = Extract-CommitScriptblock $svRevert
-check 'SmartVac: commit scriptblock exists' ($null -ne $svCommit)
-if ($svCommit) {
-    check 'SmartVac: commit scriptblock calls Remove-ManifestEntry smartvac' ($svCommit -match "Remove-ManifestEntry\s+'smartvac'")
-    check 'SmartVac: commit scriptblock calls Remove-Item $bakFile'     ($svCommit -match 'Remove-Item\s+\$bakFile')
+foreach ($fn in @('Invoke-SmartVac', 'Invoke-WildRift', 'Invoke-Saipenview')) {
+    # The live target variable differs per handler (pyFile vs cssFile).
+    $liveVar = if ($fn -eq 'Invoke-Saipenview') { 'cssFile' } else { 'pyFile' }
+    $rb = Get-RevertBlock $src $fn
+    $revert = Remove-CommentLines $rb
+    $commit = Extract-CommitScriptblock $revert
+    $rollback = Extract-RollbackScriptblock $revert
+    check "${fn}: revert branch has a commit scriptblock" ($null -ne $commit)
+    if ($commit) {
+        # (a) W2-002: live mutation + retire rename are INSIDE the commit block.
+        check "${fn}: W2-002 live mutation (Copy-Item bak->live) is inside the commit scriptblock" ($commit -match "Copy-Item\s+\`$bakFile\s+\`$$liveVar")
+        check "${fn}: W2-002 retire-first rename is inside the commit scriptblock" ($commit -match 'Rename-Item\s+\$bakFile\s+\$retire')
+        # (b) W2-003: manifest removal + post-commit tombstone GC, never bak deletion.
+        $manifestKey = $fn -replace '^Invoke-', ''
+        $manifestKey = $manifestKey.Substring(0, 1).ToLower() + $manifestKey.Substring(1)
+        check "${fn}: commit scriptblock removes the manifest entry" ($commit -match "Remove-ManifestEntry\s+'$manifestKey'")
+        check "${fn}: commit scriptblock does post-commit tombstone GC (Remove-Item \$retire)" ($commit -match 'Remove-Item\s+\$retire')
+        check "${fn}: commit scriptblock never deletes the backup itself" (-not ($commit -match 'Remove-Item\s+\$bakFile'))
+    }
+    # (c) rollback callback restores the tombstone on manifest-commit failure.
+    check "${fn}: rollback callback restores the tombstone (Rename-Item \$retire \$bakFile)" ($null -ne $rollback -and $rollback -match 'Rename-Item\s+\$retire\s+\$bakFile')
 }
 
 # ---- Test 5: behavioural round-trip ----

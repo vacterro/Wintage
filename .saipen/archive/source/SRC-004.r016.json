@@ -1,0 +1,89 @@
+{
+  "clauses": {
+    "SRC-004:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001: P0 install-terminal.js owned-state snapshot cannot reconstruct the pre-Apply Windows Terminal document: presence is not encoded separately from value so explicit nulls are deleted, the legacy profiles-array container shape is not captured, and a pre-existing user scheme named Wintage is permanently removed by Revert."
+    },
+    "SRC-004:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002: P1 install-electron relocation Revert rollback is still incomplete: the root app.asar.unpacked rename is not undone, captureRevertPreState carries no root-unpacked field, and rollbackOk ignores it so the tool can still claim exact restoration."
+    },
+    "SRC-004:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003: P1 wintage.user.js excluded-route handling beyond the reload latch: no repainter suspension or quarantine when an excluded URL is detected, and the pending-theme menu row predicate is unreachable as written."
+    },
+    "SRC-004:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004: P1 tools/test-theme-switch.js stale real-source harness aborts the release gate with a ReferenceError instead of running its assertions."
+    },
+    "SRC-004:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-005: P2 targets.ps1 Get-IniKey recovery semantics discard the empty-string vs absent distinction when restoring Total Commander and qBittorrent owned INI keys."
+    },
+    "SRC-004:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-001: P1 install-windows-theme.js finalizeRevert removes the file Revert returns as the activation target, and the epochRetired branch is unreachable because nothing writes the marker."
+    },
+    "SRC-004:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-002: P1 install-obs.js readThemeSnapshot falls through a failed JSON parse into parseIni and returns a truthy empty snapshot, and the theme key is read case-sensitively while the writers are case-insensitive."
+    },
+    "SRC-004:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-003: P1 common.ps1 Get-InstallEpoch returns its own freshly generated GUID without re-reading the persisted winner and takes no lock, so concurrent first creation yields divergent epochs."
+    },
+    "SRC-004:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-004: P1 several targets mutate state before Invoke-TargetCommit: OBS snapshot-then-throw, qBittorrent Revert INI write before the pristine check, qBittorrent Apply, MPC-HC registry writes, and the generic install.ps1 path."
+    },
+    "SRC-004:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-005: P1 native rollback callers ignore exit codes: the node settings revert and reg import are unchecked, Invoke-TargetCommit rethrows bare in its rollback catch, and it prints exact restoration without verifying state."
+    },
+    "SRC-004:R011": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-006: P1 install.ps1 first-touch recovery creates directories, copies the pristine file and writes recovery metadata before the ShouldProcess gate, so -WhatIf mutates disk."
+    },
+    "SRC-004:R012": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-007: P2 paths.json is read-modify-written unlocked from two places, and Ask-CustomPath reports success unconditionally so a failed save still logs folder set."
+    },
+    "SRC-004:R013": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-001: P1 Electron transaction snapshots read whole files into memory and copy the same archive twice, and the PowerShell lightweight snapshot branch is dead because -Operation Repaint is passed nowhere."
+    },
+    "SRC-004:R014": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-002: P1 mutation intake is unbounded in node cardinality: the addedNodes loop walks the full tail past the collection budget, and the shim queues every added node before its own budget with identity-only dedupe."
+    },
+    "SRC-004:R015": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-003: P1 the light sweep lane materializes the whole not-done NodeList before consulting the budget, and lightPending is cleared after the sweep so one isolated request always costs two sweeps."
+    },
+    "SRC-004:R016": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-004: P1 piercedRoots holds strong references and nothing observes removedNodes or unobserves, so detached shadow roots are retained until a suspend."
+    }
+  },
+  "derived_at": "2026-09-03T22:32:01Z",
+  "derived_from": "SRC-004",
+  "interpretation_revision": 16,
+  "schema_version": 1,
+  "source_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699"
+}

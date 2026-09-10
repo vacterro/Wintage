@@ -1,7 +1,7 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.33.0
+// @version      1.34.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -70,10 +70,28 @@
     // run gets a fresh module scope and the same window. A window that refuses
     // the write (locked-down host object) falls through deliberately: one wrap
     // too many is strictly better than no safety guard at all.
-    try {
-      if (window.__wintageRouteGuard) return;
-      window.__wintageRouteGuard = true;
-    } catch (e) { }
+    //
+    // SRC-005 CORE-002: the latch used to be ONE boolean committed BEFORE any
+    // hook was installed, so it really meant "installation was ATTEMPTED" while
+    // callers read it as "the guard is complete". A single hook assignment
+    // throwing (a locked-down host, an extension fighting for history.pushState)
+    // left the marker set with that hook missing forever: reinjection returned
+    // early and same-document pushState could walk into an excluded OAuth or
+    // payment route with no quarantine at all. The latch is now a per-component
+    // state object -- pushState, replaceState and the listeners each track their
+    // own installation, reinjection retries ONLY the still-missing parts, and
+    // the wrapped function itself carries a marker so a hook wrapped by any
+    // earlier version of this script is recognised without guessing. A legacy
+    // boolean `true` from an older build still means "listeners were installed
+    // by that pass" (they always were when the old latch survived); the history
+    // hooks are re-derived from the marker, not from the latch, so nothing is
+    // ever re-wrapped on top of an existing layer.
+    let state = null;
+    try { state = window.__wintageRouteGuard; } catch (e) { state = null; }
+    if (!state || typeof state !== 'object' || !('push' in state)) {
+      state = { push: false, replace: false, listeners: state === true };
+      try { window.__wintageRouteGuard = state; } catch (e) { }
+    }
     const guard = function () {
       // CORE-003: reload is a REQUEST, not a state transition. If the navigation
       // is refused, cancelled, intercepted, or simply returns without unloading,
@@ -113,24 +131,51 @@
         } catch (e) { }
       }
     };
-    try {
-      const origPush = history.pushState;
-      history.pushState = function () {
-        const ret = origPush.apply(this, arguments);
-        guard();
-        return ret;
-      };
-    } catch (e) { }
-    try {
-      const origReplace = history.replaceState;
-      history.replaceState = function () {
-        const ret = origReplace.apply(this, arguments);
-        guard();
-        return ret;
-      };
-    } catch (e) { }
-    try { window.addEventListener('popstate', guard); } catch (e) { }
-    try { window.addEventListener('hashchange', guard); } catch (e) { }
+    // Each component installs independently and flips its own flag only on
+    // success, so one hostile hook can no longer poison the record of the
+    // others -- and a partially-installed guard is REPAIRED by the next run
+    // instead of being pinned as complete.
+    if (!state.push) {
+      const ps = (typeof history !== 'undefined') ? history.pushState : null;
+      if (ps && ps.__wintageWrapped) {
+        state.push = true;
+      } else {
+        try {
+          const origPush = ps;
+          history.pushState = function () {
+            const ret = origPush.apply(this, arguments);
+            guard();
+            return ret;
+          };
+          try { history.pushState.__wintageWrapped = true; } catch (e) { }
+          state.push = true;
+        } catch (e) { }
+      }
+    }
+    if (!state.replace) {
+      const rs = (typeof history !== 'undefined') ? history.replaceState : null;
+      if (rs && rs.__wintageWrapped) {
+        state.replace = true;
+      } else {
+        try {
+          const origReplace = rs;
+          history.replaceState = function () {
+            const ret = origReplace.apply(this, arguments);
+            guard();
+            return ret;
+          };
+          try { history.replaceState.__wintageWrapped = true; } catch (e) { }
+          state.replace = true;
+        } catch (e) { }
+      }
+    }
+    if (!state.listeners) {
+      try {
+        window.addEventListener('popstate', guard);
+        window.addEventListener('hashchange', guard);
+        state.listeners = true;
+      } catch (e) { }
+    }
   }
 
   if (isExcludedUrl(location.href)) return;
@@ -509,24 +554,54 @@
         });
       } catch (e) { pendingRowRegistered = false; }
     };
+    // One idempotent recovery helper for BOTH refusal classes: the synchronous
+    // throw and the survival-probe hit below. Two paths, one row, one warning.
+    const reportPendingTheme = function (id, reason) {
+      registerPendingRow(id);
+      try {
+        console.warn('[Wintage] theme set to "' + id + '" but this tab could not reload (' + reason +
+          '). Reload the page manually to apply it.');
+      } catch (e2) { }
+    };
+    // SRC-005 CORE-001: `location.reload()` returning normally does NOT prove
+    // the old document will unload. A cancelled `beforeunload` -- or a host that
+    // silently declines programmatic navigation -- leaves THIS document alive
+    // while storage already selects the new palette: the exact split brain
+    // CORE-014 fixed for the throwing class only. The catch cannot see it, so
+    // the switch arms a one-shot survival probe: an actual pagehide/beforeunload
+    // disarms it, and if the timer fires while the same document is still alive,
+    // the pending row and the warning are emitted through the same helper the
+    // throw path uses. No live repaint across palettes; the reload stays the
+    // architecture.
+    const armSurvivalProbe = function (id) {
+      if (typeof setTimeout !== 'function') return;
+      let survived = true;
+      const disarm = function () { survived = false; };
+      try { addEventListener('pagehide', disarm, { once: true }); } catch (e) { }
+      try { addEventListener('beforeunload', disarm, { once: true }); } catch (e) { }
+      setTimeout(function () {
+        try { removeEventListener('pagehide', disarm); } catch (e) { }
+        try { removeEventListener('beforeunload', disarm); } catch (e) { }
+        if (!survived) return;
+        reportPendingTheme(id, 'the reload was cancelled without unloading this document');
+      }, 350);
+    };
     for (const id of Object.keys(THEMES)) {
       const active = id === THEME_ID;
       GM_registerMenuCommand((active ? '● ' : '○ ') + THEMES[id].label, function () {
         if (active) return;
         try { GM_setValue(THEME_KEY, id); } catch (e) { return; }
+        let reloadThrew = false;
         try {
           location.reload();
         } catch (e) {
+          reloadThrew = true;
           // Navigation refused. Storage is already the new palette, so say so
           // rather than letting the tab look unchanged for no stated reason,
           // and put a working retry in the one channel the host cannot style.
-          registerPendingRow(id);
-          try {
-            console.warn('[Wintage] theme set to "' + id + '" but this tab could not reload (' +
-              (e && e.message ? e.message : 'navigation refused') +
-              '). Reload the page manually to apply it.');
-          } catch (e2) { }
+          reportPendingTheme(id, e && e.message ? e.message : 'navigation refused');
         }
+        if (!reloadThrew) armSurvivalProbe(id);
       });
     }
     GM_registerMenuCommand('🤍 Support developer', function () {
@@ -541,7 +616,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.33.0';
+  const W95_VERSION = '1.34.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';

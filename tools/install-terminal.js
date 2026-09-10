@@ -23,9 +23,17 @@ const dryRun = process.argv.includes('--dry-run');
 // (or a normal revert on a fully-cleaned manifest) consumes the artifacts.
 const keepRecovery = process.argv.includes('--keep-recovery');
 const finalizeRecovery = process.argv.includes('--finalize-recovery');
+// SRC-002 CORE-001: finalize authorized by the COMMITTED manifest transition.
+// Production removes the manifest entry first; the palette marker is recovery
+// state that manifest removal never touches, so the caller that actually
+// committed passes --manifest-committed and the helper consumes the marker
+// together with the backup/created artifacts. Without the flag the old
+// fail-safe stands: a marker still present means the manifest may still claim
+// the item and finalize refuses.
+const manifestCommitted = process.argv.includes('--manifest-committed');
 
 if (!settingsPath || (!revert && !finalizeRecovery && !palettePath)) {
-  console.error('Usage: install-terminal.js --settings PATH (--palette PACK | --revert [--keep-recovery] | --finalize-recovery) [--dry-run]');
+  console.error('Usage: install-terminal.js --settings PATH (--palette PACK | --revert [--keep-recovery] | --finalize-recovery [--manifest-committed]) [--dry-run]');
   process.exit(2);
 }
 
@@ -365,14 +373,17 @@ function restoreProfilesShape(current, shape) {
 if (finalizeRecovery) {
   // W2-007: --finalize-recovery can run standalone (no --revert) to consume
   // the recovery artifacts after the caller has confirmed the manifest
-  // transition committed. It only runs when the manifest is no longer
-  // claiming ownership (marker absent), so the caller cannot accidentally
-  // delete the still-needed recovery.
-  if (fs.existsSync(markerPath)) {
-    console.error(`Windows Terminal: --finalize-recovery refused for ${settingsPath} - the palette marker is still present, the manifest still claims this item. Revert it first or pass --keep-recovery.`);
+  // transition committed. Without --manifest-committed it only runs when the
+  // marker is absent (the old defense: the marker doubling as ownership
+  // proof). With --manifest-committed the marker is consumed WITH the other
+  // artifacts, because the committed transition is the authorization the old
+  // contract demanded but no production path ever performed.
+  if (fs.existsSync(markerPath) && !manifestCommitted) {
+    console.error(`Windows Terminal: --finalize-recovery refused for ${settingsPath} - the palette marker is still present, the manifest still claims this item. Revert it first or pass --manifest-committed after the manifest commit.`);
     process.exit(1);
   }
   const consumed = [];
+  if (fs.existsSync(markerPath)) { fs.unlinkSync(markerPath); consumed.push(markerPath); }
   if (fs.existsSync(backupPath)) { fs.unlinkSync(backupPath); consumed.push(backupPath); }
   if (fs.existsSync(createdPath)) { fs.unlinkSync(createdPath); consumed.push(createdPath); }
   console.log(`Windows Terminal: finalised recovery for ${settingsPath} (${consumed.length} artifact(s) consumed).`);
@@ -380,8 +391,26 @@ if (finalizeRecovery) {
 }
 
 if (revert) {
+  // CORE-003 dry-run must answer the SAME fail-closed question the real
+  // revert asks. The old branch exited 0 before evaluating the ownership and
+  // recovery invariants below, so -WhatIf could bless a revert that was
+  // guaranteed to fail and the caller trusted that preflight.
   if (dryRun) {
-    console.log(`Windows Terminal: would restore the Wintage-owned fields into ${settingsPath}`);
+    if (fs.existsSync(markerPath) && !fs.existsSync(createdPath) && !fs.existsSync(backupPath)) {
+      console.error(`Windows Terminal: ${settingsPath} is Wintage-themed (palette marker present) but the recovery backup is missing - cannot restore an unverifiable state; nothing would be changed.`);
+      process.exit(1);
+    }
+    if (fs.existsSync(createdPath)) {
+      console.log(`Windows Terminal: would remove the Wintage-created ${settingsPath}`);
+    } else if (fs.existsSync(backupPath)) {
+      if (!readOwnedSnapshot(backupPath)) {
+        console.error(`Windows Terminal: the recovery backup at ${backupPath} is corrupt - cannot restore an unverifiable state; nothing would be changed.`);
+        process.exit(1);
+      }
+      console.log(`Windows Terminal: would restore the Wintage-owned fields into ${settingsPath}`);
+    } else {
+      console.log('Windows Terminal: no Wintage backup to restore.');
+    }
     process.exit(0);
   }
   // CORE-009: expected ownership must be explicit at the helper boundary. When
@@ -513,6 +542,12 @@ if (dryRun) {
 }
 
 fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+// Recovery capture happens only when neither artifact exists. Within one
+// ownership epoch that is correct: a repaint must keep the FIRST apply's
+// pre-state so Revert restores the original user values. A STALE previous
+// cycle (marker/recovery left behind by an unclosed revert) is production's
+// problem to detect - the helper cannot see the manifest, so targets.ps1
+// refuses an Apply whose marker no manifest entry claims.
 if (!fs.existsSync(backupPath) && !fs.existsSync(createdPath)) {
   if (fs.existsSync(settingsPath)) {
     // Snapshot ONLY the owned fields, never the whole file (T-189).

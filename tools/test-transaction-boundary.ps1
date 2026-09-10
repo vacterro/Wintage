@@ -371,6 +371,41 @@ check 'w2005 sweep: restore callbacks were located' ($restoreBlocks.Count -ge 10
 $unchecked = @($restoreBlocks | Where-Object { $_ -match '&\s+(node|reg|cmd|powershell|pwsh)\b' -and $_ -notmatch 'Invoke-Native' })
 check 'w2005 sweep: NO restore callback runs a native program without Invoke-Native' ($unchecked.Count -eq 0)
 
+# W2-002 structural guard (SRC-005:R006): the mutation-before-transaction class
+# is invisible at runtime because the failure window needs an injected fault.
+# Guard the SOURCE SHAPE instead: for every handler that takes a byte/dir
+# pre-state snapshot, the known mutation primitives must not appear BETWEEN the
+# Save-*PreState call and the Invoke-TargetCommit that owns its rollback. The
+# windows are scanned with comments stripped, and the allowed pattern is the
+# R009/R006 shape (mutation inside the commit scriptblock), where the mutation
+# line sits AFTER the Invoke-TargetCommit anchor.
+function Test-MutationWindow([string]$text, [string]$saveCall, [string[]]$mutators, [string]$label) {
+    $clean = $text -replace '(?s)#[^\r\n]*', ''
+    $bad = @()
+    $idx = 0
+    while ($true) {
+        $s = $clean.IndexOf($saveCall, $idx)
+        if ($s -lt 0) { break }
+        $idx = $s + 1
+        # The transaction anchor is the NEXT Invoke-TargetCommit after the
+        # snapshot (or end of file if the handler forgot one).
+        $t = $clean.IndexOf('Invoke-TargetCommit', $s)
+        $end = if ($t -ge 0) { $t } else { $clean.Length }
+        $window = $clean.Substring($s, $end - $s)
+        foreach ($m in $mutators) {
+            if ($window -match $m) { $bad += ('{0}: {1} between {2} and the transaction (offset {3})' -f $label, $m, $saveCall, $s) }
+        }
+    }
+    return $bad
+}
+$mutPrimitives = @('Write-Utf8BomLines\b', 'Write-Utf8\s', '\[IO\.File\]::WriteAllBytes', 'Copy-Item\s+\$bakFile', 'Copy-Item\s+\$built', 'Copy-Item\s+\$bak\s|Copy-Item\s+\$pristine', 'Remove-Item\s+\$bdCss\b', 'Remove-Item\s+\$dest\b', 'Remove-Item\s+\$iniBak\b')
+$w2bad = @()
+$w2bad += Test-MutationWindow $txSrc 'Save-FilePreState' $mutPrimitives 'targets.ps1'
+$installSrc = Get-Content (Join-Path $root 'desktop\install.ps1') -Raw
+$w2bad += Test-MutationWindow $installSrc 'Save-DirPreState' @('Remove-Item\s+\$dest\b', 'Copy-Item.*\$pristineDir', 'Remove-Item\s+-Recurse.*\$dest') 'install.ps1'
+check 'w2002: no live mutation between a pre-state snapshot and its transaction' ($w2bad.Count -eq 0)
+if ($w2bad.Count) { $w2bad | ForEach-Object { Write-Host "  $($_)" -ForegroundColor Red } }
+
 # A restore that cannot reproduce the snapshot must say INCOMPLETE, not stay
 # quiet and let the wrapper print exact restoration. OBS's restore is the one
 # with a byte snapshot to verify against, so it is the one that can be checked.

@@ -716,24 +716,28 @@ foreach ($name in $names) {
         # (manifest.json + .wintage-palette + any subdirectories the tool stages).
         # Snapshot it before the tool runs so a failed manifest commit can restore
         # the exact pre-operation stage, never a half-written one.
+        # SRC-005 W2-002: the CHILD INVOCATION itself is part of the mutation
+        # and runs INSIDE the commit scriptblock. It used to run before the
+        # wrapper, so a nonzero child exit (or the strict-profile refusal)
+        # AFTER the child had already altered the stage threw past the
+        # snapshot: the stage stayed half-written and the manifest unchanged.
+        # Now every post-snapshot terminating error restores the captured
+        # pre-stage through the rollback callback before failing.
         $preStage = Save-DirPreState $BrowserStageRoot
-        $browserOut = & powershell @browserArgs 2>&1
-        if ($LASTEXITCODE -ne 0) { throw 'Browser theme installer failed.' }
-        if (-not $Revert -and $script:StrictTarget -and ($browserOut -match 'no installed or portable profiles')) {
-            throw 'browsers: no Chromium profiles found - expected to be present (strict target), refusing to record an install.'
-        }
-        if ($Revert) {
-            Invoke-TargetCommit 'browsers' 'Chromium browsers' {
+        Invoke-TargetCommit 'browsers' 'Chromium browsers' {
+            $script:browserOut = & powershell @browserArgs 2>&1
+            if ($LASTEXITCODE -ne 0) { throw 'Browser theme installer failed.' }
+            if (-not $Revert -and $script:StrictTarget -and ($script:browserOut -match 'no installed or portable profiles')) {
+                throw 'browsers: no Chromium profiles found - expected to be present (strict target), refusing to record an install.'
+            }
+            if ($Revert) {
                 Remove-ManifestEntry 'browsers'
-            } { Restore-DirPreState $BrowserStageRoot $preStage }
-        } else {
-            Invoke-TargetCommit 'browsers' 'Chromium browsers' {
+            } else {
                 Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion)
-            } { Restore-DirPreState $BrowserStageRoot $preStage }
-            # W2-004: remember a validated portable browser root for later runs.
-            if ($PortableBrowserRoot) { Save-PathPreference 'portable' $PortableBrowserRoot }
-        }
-        if ($preStage) { Remove-Item $preStage -Recurse -Force -ErrorAction SilentlyContinue }
+            }
+        } { Restore-DirPreState $BrowserStageRoot $preStage }
+        # W2-004: remember a validated portable browser root for later runs.
+        if (-not $Revert -and $PortableBrowserRoot) { Save-PathPreference 'portable' $PortableBrowserRoot }
         continue
     }
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
@@ -925,17 +929,25 @@ foreach ($name in $names) {
                 if (Test-Path $recoveryMeta) {
                     $meta = Read-Utf8 $recoveryMeta | ConvertFrom-Json
                     if ($meta.mode -eq 'replaced' -and (Test-Path $pristineDir)) {
-                        Remove-Item $dest -Recurse -Force
-                        New-Item -ItemType Directory -Force -Path $dest | Out-Null
-                        Copy-Item (Join-Path $pristineDir '*') $dest -Recurse -Force
+                        # SRC-005 W2-002: the live directory swap runs INSIDE the
+                        # commit scriptblock. It used to run before the wrapper,
+                        # so a failure between the snapshot and the wrapper left
+                        # the destination half-swapped with the rollback
+                        # snapshot unreachable and the manifest unchanged.
+                        Invoke-TargetCommit $name $t.Name {
+                            Remove-Item $dest -Recurse -Force
+                            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+                            Copy-Item (Join-Path $pristineDir '*') $dest -Recurse -Force
+                            Remove-ManifestEntry $name
+                        } { Restore-DirPreState $dest $preDest }
                         Say "$($t.Name): restored the pre-Wintage directory from $pristineDir" 'Green'
                     } else {
-                        Remove-Item $dest -Recurse -Force
+                        Invoke-TargetCommit $name $t.Name {
+                            Remove-Item $dest -Recurse -Force
+                            Remove-ManifestEntry $name
+                        } { Restore-DirPreState $dest $preDest }
                         Say "$($t.Name): removed $dest (Wintage-created, nothing pre-existed to restore)" 'Green'
                     }
-                    Invoke-TargetCommit $name $t.Name {
-                        Remove-ManifestEntry $name
-                    } { Restore-DirPreState $dest $preDest }
                 } else {
                     $m = Read-Manifest
                     if ($m.ContainsKey($name)) {
@@ -944,11 +956,13 @@ foreach ($name in $names) {
                     if (Test-LegacyWintageExtension $dest) {
                         # A genuinely identifiable legacy Wintage directory: the
                         # built extension's own package.json proves it.
-                        Remove-Item $dest -Recurse -Force
-                        Say "$($t.Name): removed the verified legacy Wintage extension directory $dest" 'Green'
+                        # SRC-005 W2-002: the removal runs INSIDE the commit
+                        # scriptblock (same reason as the recovery branches).
                         Invoke-TargetCommit $name $t.Name {
+                            Remove-Item $dest -Recurse -Force
                             Remove-ManifestEntry $name
                         } { Restore-DirPreState $dest $preDest }
+                        Say "$($t.Name): removed the verified legacy Wintage extension directory $dest" 'Green'
                     } else {
                         Say "$($t.Name): nothing to revert - $dest is not a verified Wintage extension and no recovery state exists; it was left untouched." 'DarkYellow'
                     }
@@ -974,13 +988,29 @@ foreach ($name in $names) {
         # the pristine snapshot with Wintage output (P1#15).
         if (-not (Test-Path $recoveryMeta)) {
             New-Item -ItemType Directory -Force -Path $recoveryDir | Out-Null
+            # W2-004: a crash between an older direct write and its rename can
+            # leave a `.wintage-tmp-*` sibling behind; those orphans are never
+            # recovery authority, so sweep them at first-touch.
+            Get-ChildItem -LiteralPath $recoveryDir -Filter '*.wintage-tmp-*' -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
             $mode = if (Test-Path $dest) { 'replaced' } else { 'created' }
             if ($mode -eq 'replaced') {
-                New-Item -ItemType Directory -Force -Path $pristineDir | Out-Null
-                Copy-Item (Join-Path $dest '*') $pristineDir -Recurse -Force
+                # W2-004: capture into a temp sibling and promote with one
+                # rename, so a crash can never leave a partial pristine that a
+                # later Test-Path check would trust. The meta record is written
+                # AFTER the pristine exists, so meta-presence implies a complete
+                # capture (a replaced-mode pristine that vanished anyway fails
+                # closed in Revert, keeping the manifest as evidence).
+                $tmpPristine = "$pristineDir.wintage-tmp-" + [guid]::NewGuid().ToString('N')
+                New-Item -ItemType Directory -Force -Path $tmpPristine | Out-Null
+                try {
+                    Copy-Item (Join-Path $dest '*') $tmpPristine -Recurse -Force
+                    Move-Item -LiteralPath $tmpPristine -Destination $pristineDir -Force
+                } finally {
+                    if (Test-Path -LiteralPath $tmpPristine) { Remove-Item -LiteralPath $tmpPristine -Recurse -Force -ErrorAction SilentlyContinue }
+                }
                 Say "$($t.Name): captured the pre-Wintage folder at $pristineDir (persistent recovery)" 'DarkGray'
             }
-            Write-Utf8 $recoveryMeta (@{ mode = $mode; target = $name } | ConvertTo-Json)
+            Write-Utf8Atomic $recoveryMeta (@{ mode = $mode; target = $name } | ConvertTo-Json) -ValidateJson
         }
         $preDest = Save-DirPreState $dest
         # W2-004: the transaction covers snapshot -> MUTATE -> manifest commit as

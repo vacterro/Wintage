@@ -727,8 +727,19 @@ function Test-SourceProvenanceChanged([string]$liveText, [string]$backupText, [s
 }
 
 function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [string]$label) {
+    # W2-004: both the first-touch copy and the rebase write go through the
+    # ATOMIC recovery writers. The old direct writes could leave a truncated or
+    # partial authoritative backup on its final name when a crash landed after
+    # the destination was opened/truncated but before the bytes were complete;
+    # every later Test-Path-based repeat path would then keep treating the
+    # damaged file as recovery authority. The atomic writer only replaces the
+    # final path once the complete bytes sit in a validated temp sibling, so the
+    # previous authoritative backup survives every interrupted write.
     if (-not (Test-Path $bakFile)) {
-        Copy-Item $liveFile $bakFile -Force
+        # W2-004: orphans from an interrupted earlier write are never recovery
+        # authority, so sweep them at first-touch and start clean.
+        Get-ChildItem -LiteralPath (Split-Path $bakFile -Parent) -Filter ($(Split-Path $bakFile -Leaf) + '.wintage-tmp-*') -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-FileAtomic $liveFile $bakFile
         # W2-001: the backup is now the revert source - stamp it with the epoch.
         Write-RecoveryProvenance $bakFile $kind
         return
@@ -757,7 +768,10 @@ function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [
         $m = [regex]::Match($bak, '(?s)TOKENS\s*=\s*\{.*?\}')
         if ($m.Success) { $newPristine = [regex]::Replace($newPristine, '(?s)TOKENS\s*=\s*\{.*?\}', $m.Value) }
     }
-    Write-Utf8 $bakFile $newPristine
+    # W2-004: the rebase materializes the new pristine in a temp sibling and
+    # promotes it with one atomic rename - the old authoritative backup is only
+    # replaced after the replacement is complete.
+    Write-Utf8Atomic $bakFile $newPristine
     # W2-001: the rebased backup is still OUR recovery - re-stamp it.
     Write-RecoveryProvenance $bakFile $kind
     Say "$label : the source changed since the last Wintage touch - rollback base re-based (owned token values kept from the previous pristine)." 'Yellow'
@@ -880,7 +894,15 @@ function Restore-DirPreState([string]$dir, $snap) {
         if ($dir -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
         return
     }
-    if (-not $path -or -not (Test-Path $path)) { return }
+    # SRC-005 CORE-003: a missing authoritative snapshot is NOT a successful
+    # no-op. Existed=true means the pre-operation directory was captured, and
+    # Restore is the rollback authority for it; when that snapshot is gone the
+    # live directory cannot be restored to a known-good pre-state, and the old
+    # silent `return` let Invoke-TargetCommit print "exact pre-operation state"
+    # over a lie. Fail closed BEFORE touching the live directory.
+    if (-not $path -or -not (Test-Path $path)) {
+        throw "Restore-DirPreState: the authoritative snapshot for '$dir' is missing ($path) - refusing to restore an unverifiable directory; the live state was left untouched and is the only recovery authority."
+    }
     # W2-002: true two-phase swap. Phase 1 materialise snapshot to a temp
     # sibling (the live dir is untouched at this point). Phase 2 retire the
     # live dir into a recovery sibling, then rename the materialised temp into
@@ -894,6 +916,7 @@ function Restore-DirPreState([string]$dir, $snap) {
     $tmp = Join-Path $parent ('.wintage-restore-' + [guid]::NewGuid().ToString('N'))
     $retired = $null
     $swapFailures = @()
+    $swapOk = $false
     try {
         Copy-Item $path $tmp -Recurse -Force
         if (Test-Path $dir) {
@@ -903,6 +926,7 @@ function Restore-DirPreState([string]$dir, $snap) {
         }
         try { Rename-Item $tmp ([IO.Path]::GetFileName($dir)) }
         catch { $swapFailures += "swap: $($_.Exception.Message)"; throw }
+        $swapOk = $true
         # The restored copy is live; the retired copy may now be retired safely.
         if ($retired -and (Test-Path $retired)) { Remove-Item $retired -Recurse -Force -ErrorAction SilentlyContinue }
     } catch {
@@ -914,8 +938,12 @@ function Restore-DirPreState([string]$dir, $snap) {
         $detail = ($swapFailures -join '; ')
         throw "Restore-DirPreState: two-phase swap INCOMPLETE for '$dir' ($detail). Recovery locations preserved: $([string]::Join('; ', $surviving))"
     } finally {
-        # The captured snapshot is no longer needed once Restore finishes.
-        if ($path -and (Test-Path $path)) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
+        # SRC-005 CORE-003: consume the snapshot ONLY on a known-good restore.
+        # The old unconditional finally deleted the authoritative snapshot even
+        # when the swap threw -- turning a recoverable failure into data loss
+        # by removing the very bytes the rollback needed. It is now kept as the
+        # primary recovery authority on every incomplete path.
+        if ($swapOk -and $path -and (Test-Path $path)) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -965,6 +993,9 @@ function Invoke-WindowsTerminal {
                     # final --revert --keep-recovery is safe to call again on
                     # the same file because the recovery artifacts are still
                     # on disk; this re-apply must precede the manifest commit.
+                    # SRC-002 CORE-001: no Test-Path guard - a Wintage-created
+                    # item is legitimately absent after the revert half, and it
+                    # is exactly the case that must be re-themed on rollback.
                     $palForRollback = $null
                     if ($m.ContainsKey('terminal') -and $m['terminal'].palette) {
                         $palForRollback = Join-Path $root "themes/$($m['terminal'].palette).json"
@@ -982,6 +1013,14 @@ function Invoke-WindowsTerminal {
         # T-192 P2/B: the manifest transition is part of the revert transaction.
         # A failed Remove-ManifestEntry re-themes the recorded settings from the
         # recorded palette so state and ledger never disagree.
+        # SRC-002 CORE-001: the re-theme runs for EVERY reverted item,
+        # regardless of whether settings.json currently exists. For an item
+        # Wintage originally created, the failed commit leaves no settings file
+        # behind (the revert deleted it and --keep-recovery kept the created
+        # marker); skipping it there would "restore" a state where the manifest
+        # still owns an absent file. install-terminal.js recreates the file and
+        # preserves the kept recovery (it re-captures only when neither backup
+        # nor created marker exists).
         Invoke-TargetCommit 'terminal' 'Windows Terminal' {
             Remove-ManifestEntry 'terminal'
         } {
@@ -989,23 +1028,28 @@ function Invoke-WindowsTerminal {
             if ($m.ContainsKey('terminal') -and $m['terminal'].palette) {
                 $palFile = Join-Path $root "themes/$($m['terminal'].palette).json"
                 foreach ($settings in $revertedItems) {
-                    if (Test-Path $settings) {
-                        # W2-005: the rollback re-applies the recorded palette via
-                        # install-terminal.js. A non-zero exit is a rollback
-                        # failure and must throw, not just disappear into Out-Null.
-                        Invoke-Native "Windows Terminal rollback for $settings" { & node $helper --settings $settings --palette $palFile }
-                    }
+                    # SRC-002 CORE-001: no Test-Path guard - a Wintage-created
+                    # item is legitimately absent after the revert half, and it
+                    # is exactly the case that must be re-themed on rollback.
+                    # W2-005: the rollback re-applies the recorded palette via
+                    # install-terminal.js. A non-zero exit is a rollback
+                    # failure and must throw, not just disappear into Out-Null.
+                    Invoke-Native "Windows Terminal rollback for $settings" { & node $helper --settings $settings --palette $palFile }
                 }
             }
         }
-        # W2-007: with the manifest transition committed, every reverted item
-        # is now safe to consume its recovery artifacts. A failure here is
-        # reported but does not undo the manifest removal - the recovery files
-        # are inert and can be cleaned up by the next revert or by hand.
+        # W2-007 / SRC-002 CORE-001: with the manifest transition committed,
+        # every reverted item finalizes its recovery. The marker is recovery
+        # state the manifest removal never touches, so the helper is called
+        # with --manifest-committed and consumes marker + backup/created
+        # together. Leaving the marker behind here guaranteed that the next
+        # Apply reused the PREVIOUS ownership cycle's snapshot (stale user
+        # values resurrected on a later revert) and that install.ps1 kept
+        # reporting the target as themed after a successful Revert.
         $consumeErrs = @()
         foreach ($settings in $revertedItems) {
             try {
-                & node $helper --settings $settings --finalize-recovery
+                & node $helper --settings $settings --finalize-recovery --manifest-committed
                 if ($LASTEXITCODE -ne 0) { throw "exit $LASTEXITCODE" }
             } catch { $consumeErrs += "$settings`: $($_.Exception.Message)" }
         }
@@ -1018,6 +1062,17 @@ function Invoke-WindowsTerminal {
     # Multi-settings apply is transactional (T-190): EVERY file is preflighted
     # first, then each is mutated; if item N fails, items 1..N-1 are reverted to
     # their owned-field state so no themed file is left without a manifest.
+    # SRC-002 CORE-001: a marker with NO manifest entry is a stale recovery
+    # from an unclosed previous ownership cycle. Applying over it makes the
+    # helper reuse the OLD cycle's pre-state, so a later Revert resurrects
+    # obsolete user values. Fail closed and demand a clean Revert.
+    $mApply = Read-Manifest
+    $manifestItems = if ($mApply.ContainsKey('terminal')) { @(Get-ManifestItems $mApply['terminal']) } else { @() }
+    foreach ($settings in $settingsPaths) {
+        if ((Test-Path ($settings + '.wintage-palette')) -and -not ($manifestItems -contains [IO.Path]::GetFullPath($settings).TrimEnd('\'))) {
+            throw "Windows Terminal: $settings carries a Wintage marker but no manifest entry claims it - a previous revert did not finalize. Run a clean Revert before applying."
+        }
+    }
     $applied = @()
     foreach ($settings in $settingsPaths) {
         $args = @($helper, '--settings', $settings)
@@ -1254,6 +1309,184 @@ function Invoke-Conhost {
     }
 }
 
+# ─── Windows theme verified rollback (SRC-005:R009 / W2-005) ─────────────────
+# Restore-WindowsPreState is the ROLLBACK PRIMITIVE for the windows target and
+# it is VERIFIED: a successful return proves the owned pre-operation state (the
+# DWM AccentColorInactive value, every captured owned theme file, and the
+# CurrentTheme selection) because every mutation is checked with
+# -ErrorAction Stop and every result is read back afterwards. Anything less
+# throws one aggregated error naming the failing resources, so
+# Invoke-TargetCommit can never print "exact pre-operation state" over an
+# unverified restore, and the activation-failure path can never claim a
+# restoration it did not prove.
+function Test-WintageBytesEqual($a, $b) {
+    if ($null -eq $a -and $null -eq $b) { return $true }
+    if ($null -eq $a -or $null -eq $b) { return $false }
+    $ab = @([byte[]]$a); $bb = @([byte[]]$b)
+    if ($ab.Count -ne $bb.Count) { return $false }
+    for ($i = 0; $i -lt $ab.Count; $i++) { if ($ab[$i] -ne $bb[$i]) { return $false } }
+    return $true
+}
+
+function Invoke-WindowsThemeActivation([string]$themePath) {
+    # Microsoft documents ShellExecute as the supported installer path for
+    # .theme files. Show=0 asks the Personalization host to stay hidden while
+    # applying; Windows may ignore that hint, but the colours are selected
+    # immediately. ShellExecute returning is NOT proof the theme became
+    # current - callers confirm by polling CurrentTheme.
+    $shell = New-Object -ComObject Shell.Application
+    try { $shell.ShellExecute([string]$themePath, '', '', 'open', 0) }
+    finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
+}
+
+function Restore-WindowsPreState {
+    param([bool]$PreAccentExists, $PreAccent, $PreCurrentTheme, $PreThemeState)
+    $failures = @()
+    $accentFailed = $false
+
+    # 1. Owned DWM accent value: exact restore or removal, checked.
+    if ($PreAccentExists) {
+        try {
+            New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $PreAccent -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+        } catch {
+            $accentFailed = $true
+            $failures += "AccentColorInactive: rollback write FAILED ($($_.Exception.Message))"
+        }
+    } elseif (Test-Path -LiteralPath $WINDOWS_DWM_KEY) {
+        try {
+            Remove-ItemProperty -LiteralPath $WINDOWS_DWM_KEY -Name AccentColorInactive -ErrorAction Stop
+        } catch {
+            $accentFailed = $true
+            $failures += "AccentColorInactive: rollback removal FAILED ($($_.Exception.Message))"
+        }
+    }
+
+    # 2. Owned theme files. Phase A: remove Wintage*.theme files the failed
+    # operation created (anything outside the captured pre-state set). Phase B:
+    # put every captured pre-state file back byte-exactly, or re-create the
+    # absence of one that did not exist before. Deletion alone is never
+    # treated as proof - phase 4 verifies everything below.
+    $prePaths = @($PreThemeState | ForEach-Object { [IO.Path]::GetFullPath([string]$_.Path) })
+    $fileFailed = @{}
+    foreach ($t in @(Get-ChildItem -LiteralPath $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue)) {
+        $full = [IO.Path]::GetFullPath($t.FullName)
+        if ($prePaths -contains $full) { continue }
+        try { Remove-Item -LiteralPath $full -Force -ErrorAction Stop }
+        catch {
+            $fileFailed[$full] = $true
+            $failures += "operation-created theme file '$full': removal FAILED ($($_.Exception.Message))"
+        }
+    }
+    foreach ($item in @($PreThemeState)) {
+        $full = [IO.Path]::GetFullPath([string]$item.Path)
+        try {
+            if ($item.Exists) {
+                New-Item -ItemType Directory -Force -Path (Split-Path $full -Parent) -ErrorAction Stop | Out-Null
+                [IO.File]::WriteAllBytes($full, $item.Bytes)
+            } elseif (Test-Path -LiteralPath $full) {
+                Remove-Item -LiteralPath $full -Force -ErrorAction Stop
+            }
+        } catch {
+            $fileFailed[$full] = $true
+            $failures += "owned theme file '$full': rollback FAILED ($($_.Exception.Message))"
+        }
+    }
+
+    # 3. CurrentTheme: dispatch the previous theme through the supported
+    # activation path, then CONFIRM Windows actually selected it again within
+    # a bounded poll of HKCU CurrentTheme (normalized full-path compare). A
+    # successful dispatch is not evidence; only convergence is.
+    if ($PreCurrentTheme -and (Test-Path -LiteralPath $PreCurrentTheme)) {
+        $now = $null
+        try { $now = (Get-ItemProperty -LiteralPath $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction Stop).CurrentTheme } catch { }
+        if (-not $now -or ([IO.Path]::GetFullPath([string]$now) -ne [IO.Path]::GetFullPath([string]$PreCurrentTheme))) {
+            $dispatchFailed = $false
+            try { Invoke-WindowsThemeActivation ([string]$PreCurrentTheme) }
+            catch {
+                $dispatchFailed = $true
+                $failures += "CurrentTheme: rollback dispatch FAILED ($($_.Exception.Message))"
+            }
+            if (-not $dispatchFailed) {
+                $converged = $false
+                for ($attempt = 0; $attempt -lt 50; $attempt++) {
+                    Start-Sleep -Milliseconds 100
+                    $now = (Get-ItemProperty -LiteralPath $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+                    if ($now -and ([IO.Path]::GetFullPath([string]$now) -eq [IO.Path]::GetFullPath([string]$PreCurrentTheme))) { $converged = $true; break }
+                }
+                if (-not $converged) {
+                    $failures += "CurrentTheme: did not return to '$PreCurrentTheme' within the bounded rollback window (last known: '$now')"
+                }
+            }
+        }
+    }
+
+    # 4. Verification: read the owned state back. A resource whose rollback
+    # mutation already failed is not re-verified (its failure is recorded
+    # above); everything else must PROVE the captured pre-state or the whole
+    # rollback is declared INCOMPLETE.
+    if (-not $accentFailed) {
+        if ($PreAccentExists) {
+            try {
+                $dwm = Get-Item -LiteralPath $WINDOWS_DWM_KEY -ErrorAction Stop
+                if (@($dwm.GetValueNames()) -notcontains 'AccentColorInactive') { throw 'AccentColorInactive is absent after the rollback write' }
+                $nowVal = $dwm.GetValue('AccentColorInactive', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                if ($nowVal -ne $PreAccent) { throw "value is $nowVal, captured pre-state was $PreAccent" }
+            } catch {
+                $failures += "AccentColorInactive: rollback verification FAILED ($($_.Exception.Message))"
+            }
+        } elseif (Test-Path -LiteralPath $WINDOWS_DWM_KEY) {
+            try {
+                if (@((Get-Item -LiteralPath $WINDOWS_DWM_KEY -ErrorAction Stop).GetValueNames()) -contains 'AccentColorInactive') {
+                    throw 'AccentColorInactive is still present after the rollback removal'
+                }
+            } catch {
+                $failures += "AccentColorInactive: rollback verification FAILED ($($_.Exception.Message))"
+            }
+        }
+        # A DWM key that no longer exists plus a pre-state without the value is
+        # exactly the captured absence - nothing to verify.
+    }
+    foreach ($item in @($PreThemeState)) {
+        $full = [IO.Path]::GetFullPath([string]$item.Path)
+        if ($fileFailed.ContainsKey($full)) { continue }
+        try {
+            $existsNow = Test-Path -LiteralPath $full
+            if ($item.Exists) {
+                if (-not $existsNow) { throw 'the file is missing after the rollback write' }
+                if (-not (Test-WintageBytesEqual ([IO.File]::ReadAllBytes($full)) $item.Bytes)) { throw 'bytes differ from the captured pre-state' }
+            } elseif ($existsNow) {
+                throw 'the file is still present after the rollback removal'
+            }
+        } catch {
+            $failures += "owned theme file '$full': rollback verification FAILED ($($_.Exception.Message))"
+        }
+    }
+    foreach ($t in @(Get-ChildItem -LiteralPath $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue)) {
+        $full = [IO.Path]::GetFullPath($t.FullName)
+        if ($prePaths -notcontains $full -and -not $fileFailed.ContainsKey($full)) {
+            $failures += "operation-created theme file '$full': still present after the rollback removal"
+        }
+    }
+
+    if ($failures.Count) {
+        throw ("Windows theme rollback FAILED - the owned pre-state is INCOMPLETE: " + ($failures -join ' | ') + ". Recovery artifacts were kept for a retry.")
+    }
+}
+
+# The activation-not-confirmed path rolls back through the SAME verified
+# primitive. Restoration is claimed only after verification succeeded; a
+# failed rollback becomes an honest double failure naming the resource, and
+# the recovery artifacts are never deleted just because a rollback ran.
+function Invoke-WindowsActivationRecovery {
+    param([string]$ActivationFailure, [bool]$PreAccentExists, $PreAccent, $PreCurrentTheme, $PreThemeState)
+    try {
+        Restore-WindowsPreState -PreAccentExists $PreAccentExists -PreAccent $PreAccent -PreCurrentTheme $PreCurrentTheme -PreThemeState $PreThemeState
+    } catch {
+        throw "$ActivationFailure ROLLBACK ALSO FAILED - the owned Windows pre-state is INCOMPLETE ($($_.Exception.Message)). The manifest was NOT updated and every recovery artifact was kept for a retry."
+    }
+    throw "$ActivationFailure The owned Windows pre-state was verified restored, so the manifest was NOT updated. Re-run to retry."
+}
+
 function Invoke-WindowsTheme {
     param([switch]$DoRevert, [string]$PaletteSlug)
 
@@ -1296,36 +1529,11 @@ function Invoke-WindowsTheme {
     $preThemeState = @($preThemePaths | ForEach-Object {
         [pscustomobject]@{
             Path = $_
-            Exists = (Test-Path $_)
-            Bytes = if (Test-Path $_) { [IO.File]::ReadAllBytes($_) } else { $null }
+            Exists = (Test-Path -LiteralPath $_)
+            Bytes = if (Test-Path -LiteralPath $_) { [IO.File]::ReadAllBytes($_) } else { $null }
         }
     })
-    function Restore-WindowsPreState {
-        if ($preAccentExists) {
-            New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $preAccent -PropertyType DWord -Force | Out-Null
-        } else {
-            Remove-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -ErrorAction SilentlyContinue
-        }
-        foreach ($t in @(Get-ChildItem $WINDOWS_THEMES_DIR -Filter 'Wintage*.theme' -ErrorAction SilentlyContinue)) {
-            if (-not ($preThemeState.Path -contains $t.FullName)) { Remove-Item -LiteralPath $t.FullName -Force -ErrorAction SilentlyContinue }
-        }
-        foreach ($item in $preThemeState) {
-            if ($item.Exists) {
-                New-Item -ItemType Directory -Force -Path (Split-Path $item.Path -Parent) | Out-Null
-                [IO.File]::WriteAllBytes($item.Path, $item.Bytes)
-            } elseif (Test-Path $item.Path) {
-                Remove-Item $item.Path -Force -ErrorAction SilentlyContinue
-            }
-        }
-        if ($preCurrentTheme -and (Test-Path $preCurrentTheme)) {
-            $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
-            if (-not $now -or [IO.Path]::GetFullPath($now) -ne [IO.Path]::GetFullPath($preCurrentTheme)) {
-                $restoreShell = New-Object -ComObject Shell.Application
-                try { $restoreShell.ShellExecute([string]$preCurrentTheme, '', '', 'open', 0) }
-                finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($restoreShell) }
-            }
-        }
-    }
+    $rollbackArgs = @{ PreAccentExists = [bool]$preAccentExists; PreAccent = $preAccent; PreCurrentTheme = $preCurrentTheme; PreThemeState = $preThemeState }
 
     $helperOutput = @(& node $args)
     if ($LASTEXITCODE -ne 0) { throw 'Windows theme preparation failed.' }
@@ -1341,12 +1549,7 @@ function Invoke-WindowsTheme {
         New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $inactiveAccent -PropertyType DWord -Force | Out-Null
     }
 
-    # Microsoft documents ShellExecute as the supported installer path for .theme
-    # files. Show=0 asks the Personalization host to stay hidden while applying;
-    # Windows may ignore that hint, but the colours are selected immediately.
-    $shell = New-Object -ComObject Shell.Application
-    try { $shell.ShellExecute([string]$payload.activate, '', '', 'open', 0) }
-    finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
+    Invoke-WindowsThemeActivation ([string]$payload.activate)
     $activated = $false
     for ($attempt = 0; $attempt -lt 50; $attempt++) {
         Start-Sleep -Milliseconds 100
@@ -1378,11 +1581,11 @@ function Invoke-WindowsTheme {
         }
     }
     if (-not $activated) {
-        # P1#27: activation was not confirmed - restore the exact owned pre-state
-        # (DWM accent + any Wintage*.theme this run created) and keep the DWM
-        # backup as the recovery authority. Never throw after partial mutation.
-        Restore-WindowsPreState
-        throw 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts - the owned pre-state was restored, so the manifest was NOT updated. Re-run to retry.'
+        # P1#27: activation was not confirmed - roll back through the VERIFIED
+        # primitive. The success message below is only reachable when the
+        # restore actually proved the captured pre-state; a failed rollback
+        # throws an INCOMPLETE double failure naming the resource.
+        Invoke-WindowsActivationRecovery -ActivationFailure 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts.' @rollbackArgs
     }
     foreach ($oldTheme in @($payload.cleanup)) {
         if (-not $oldTheme) { continue }
@@ -1402,7 +1605,7 @@ function Invoke-WindowsTheme {
         Invoke-TargetCommit 'windows' 'Windows system theme' {
             Remove-ManifestEntry 'windows'
         } {
-            Restore-WindowsPreState
+            Restore-WindowsPreState @rollbackArgs
         }
         # W2-003: retire the snapshot epoch ONLY after the manifest transition
         # committed. The next Apply re-baselines from the then-current theme.
@@ -1414,7 +1617,7 @@ function Invoke-WindowsTheme {
         Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'
         Invoke-TargetCommit 'windows' 'Windows system theme' {
             Set-ManifestEntry 'windows' $PaletteSlug $WINDOWS_THEMES_DIR 'n/a' (Get-PayloadVersion)
-        } { Restore-WindowsPreState }
+        } { Restore-WindowsPreState @rollbackArgs }
     }
 }
 
@@ -1483,12 +1686,16 @@ function Invoke-TotalCmd {
                 # stays), so a retry can finish cleanly instead of repeating the
                 # strip forever with installed.json still claiming an install.
                 $preLegacy = Save-FilePreState $ini $null
-                Write-Utf8BomLines $ini $newLines
-                Say "$($appName): no backup found - stripped the colour keys from [Colors]/[ColorsDark] only." 'Yellow'
-                Say "  Colours you had set there before Wintage cannot be restored from here." 'Yellow'
+                # SRC-005 W2-002: the live strip itself runs INSIDE the commit
+                # scriptblock. It used to run before the wrapper, so a write
+                # failure left a half-stripped INI while the manifest entry and
+                # the unreachable rollback snapshot both survived untouched.
                 Invoke-TargetCommit $manifestName $appName {
+                    Write-Utf8BomLines $ini $newLines
                     Remove-ManifestEntry $manifestName
                 } { Restore-FilePreState $preLegacy $ini $null }
+                Say "$($appName): no backup found - stripped the colour keys from [Colors]/[ColorsDark] only." 'Yellow'
+                Say "  Colours you had set there before Wintage cannot be restored from here." 'Yellow'
             }
         }
         return
@@ -1548,11 +1755,10 @@ function Invoke-TotalCmd {
 
         # Snapshot ONLY the owned keys (with their original values/absence) once,
         # BEFORE any mutation - never a whole-file copy (T-189).
-        if (-not (Test-Path $iniBak)) {
+        $needSnapshot = -not (Test-Path $iniBak)
+        if ($needSnapshot) {
             $snapshotJson = Save-TotalCmdSnapshot $lines $recentFilterIds
             New-Item -ItemType Directory -Force -Path (Split-Path $iniBak -Parent) | Out-Null
-            Write-Utf8 $iniBak $snapshotJson
-            Say "$($appName): snapshotted the Wintage-owned keys -> $(Split-Path $iniBak -Leaf)" 'DarkGray'
         }
 
         $newLines = @()
@@ -1600,13 +1806,22 @@ function Invoke-TotalCmd {
                 $finalLines += "InactiveTitleText=$titleInFg"
             }
         }
-        Write-Utf8BomLines $ini $finalLines
-        $recentNote = if ($recentFilterIds.Count) { "; recent-file indicator themed ($($recentFilterIds.Count) filter(s))" } else { '; no existing recent-file filter found' }
-        Say "$($appName): applied $PaletteSlug$recentNote" 'Green'
-        # T-192 P2/B: a manifest-commit failure restores the exact pre-mutation ini.
+        # SRC-005 W2-002: the live INI write and the owned-key backup write run
+        # INSIDE the commit scriptblock. They used to run before the wrapper,
+        # so a write failure left the INI half-themed (or the backup written
+        # for an INI never themed) while the rollback snapshot sat unreachable.
         Invoke-TargetCommit $manifestName $appName {
+            if ($needSnapshot) {
+                # W2-004: the owned-key snapshot is rollback authority, so it is
+                # written ATOMICALLY and validated as JSON before the rename.
+                Write-Utf8Atomic $iniBak $snapshotJson -ValidateJson
+            }
+            Write-Utf8BomLines $ini $finalLines
             Set-ManifestEntry $manifestName $PaletteSlug $ini 'n/a' (Get-PayloadVersion)
         } { Restore-FilePreState $preIni $ini $iniBak }
+        if ($needSnapshot) { Say "$($appName): snapshotted the Wintage-owned keys -> $(Split-Path $iniBak -Leaf)" 'DarkGray' }
+        $recentNote = if ($recentFilterIds.Count) { "; recent-file indicator themed ($($recentFilterIds.Count) filter(s))" } else { '; no existing recent-file filter found' }
+        Say "$($appName): applied $PaletteSlug$recentNote" 'Green'
     }
 }
 
@@ -1628,18 +1843,36 @@ function Invoke-SmartVac {
         if (-not (Assert-RevertSource 'smartvac' $bakFile 'SMART VAC CLEANER')) { return }
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore SMART VAC CLEANER from backup')) {
             $pre = Save-FilePreState $pyFile $bakFile
-            Copy-Item $bakFile $pyFile -Force
-            Say "SMART VAC CLEANER: restored from backup" 'Green'
-            # W2-009: defer backup consumption until the manifest removal has
-            # committed. A process death between Copy-Item and the manifest
-            # transition now leaves bak intact and the manifest at its previous
-            # state -- the Revert is retryable, not stranded. Delete the
-            # backup inside the commit scriptblock so Restore-FilePreState on
-            # a commit failure rebuilds the bak from the in-memory prestate.
+            # SRC-005 W2-003: the commit scriptblock is NOT an atomic primitive.
+            # The old order was Remove-ManifestEntry THEN Remove-Item $bakFile --
+            # a failure deleting the backup left the target restored while the
+            # manifest entry was already gone, with no way for the rollback
+            # callback to reconstruct a removed manifest record. The backup is
+            # now RETIRED FIRST (same-volume rename to an operation-owned
+            # tombstone), then the manifest entry is removed; on a manifest
+            # failure the tombstone is renamed back, and the retire step is
+            # only truly consumed after the commit is known good.
+            # SRC-005 W2-002: the live restore copy and the retire rename run
+            # INSIDE the commit scriptblock. They used to run before the
+            # wrapper, so a failure between them left a half-restored target
+            # (or a retired backup under an unchanged manifest) with the
+            # rollback snapshot unreachable.
+            $retire = "$bakFile.wintage-retired"
             Invoke-TargetCommit 'smartvac' 'SMART VAC CLEANER' {
+                Copy-Item $bakFile $pyFile -Force
+                if (Test-Path $retire) { Remove-Item $retire -Force -ErrorAction SilentlyContinue }
+                Rename-Item $bakFile $retire
                 Remove-ManifestEntry 'smartvac'
-                Remove-Item $bakFile -Force
-            } { Restore-FilePreState $pre $pyFile $bakFile }
+                # Post-commit garbage collection: the tombstone only goes when
+                # the manifest transition itself succeeded.
+                Remove-Item $retire -Force -ErrorAction SilentlyContinue
+            } {
+                # Manifest removal failed: put the recovery tombstone back so
+                # the retry has the same authority it started with.
+                if (Test-Path $retire) { Rename-Item $retire $bakFile -ErrorAction SilentlyContinue }
+                Restore-FilePreState $pre $pyFile $bakFile
+            }
+            Say 'SMART VAC CLEANER: restored from backup' 'Green'
         }
         return
     }
@@ -1720,13 +1953,18 @@ function Invoke-SmartVac {
     # (T-187). If the UPSTREAM source changes after a Wintage touch, the backup is
     # re-based from the current source so Revert restores the new version, never
     # the obsolete one (T-189).
+    # SRC-005 W2-002: the backup re-base and the live write run INSIDE the
+    # commit scriptblock. They used to run before the wrapper, so a failure
+    # between them left a re-based (or fresh) backup plus an unthemed source
+    # while the manifest sat unchanged and the rollback snapshot was
+    # unreachable.
     $pre = Save-FilePreState $pyFile $bakFile
-    Sync-SourceBackup $pyFile $bakFile 'smartvac' 'SMART VAC CLEANER'
-    Write-Utf8 $pyFile $code
-    Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
     Invoke-TargetCommit 'smartvac' 'SMART VAC CLEANER' {
+        Sync-SourceBackup $pyFile $bakFile 'smartvac' 'SMART VAC CLEANER'
+        Write-Utf8 $pyFile $code
         Set-ManifestEntry 'smartvac' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
     } { Restore-FilePreState $pre $pyFile $bakFile }
+    Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
 }
 
 function Invoke-WildRift {
@@ -1745,14 +1983,24 @@ function Invoke-WildRift {
         if (-not (Assert-RevertSource 'wildrift' $bakFile 'WildRiftAssistant')) { return }
         if ($PSCmdlet.ShouldProcess($pyFile, 'Restore WildRiftAssistant from backup')) {
             $pre = Save-FilePreState $pyFile $bakFile
-            Copy-Item $bakFile $pyFile -Force
-            Say "WildRiftAssistant: restored from backup" 'Green'
-            # W2-009: defer backup consumption until the manifest removal has
-            # committed -- a process death at this seam is now retryable.
+            # SRC-005 W2-003: same retire-first commit protocol as SmartVac --
+            # the manifest entry is never removed before the recovery artifact
+            # is provably restorable, and nothing fallible runs after the
+            # manifest transition.
+            # SRC-005 W2-002: the live restore copy and the retire rename run
+            # INSIDE the commit scriptblock (same reason as SmartVac).
+            $retire = "$bakFile.wintage-retired"
             Invoke-TargetCommit 'wildrift' 'WildRiftAssistant' {
+                Copy-Item $bakFile $pyFile -Force
+                if (Test-Path $retire) { Remove-Item $retire -Force -ErrorAction SilentlyContinue }
+                Rename-Item $bakFile $retire
                 Remove-ManifestEntry 'wildrift'
-                Remove-Item $bakFile -Force
-            } { Restore-FilePreState $pre $pyFile $bakFile }
+                Remove-Item $retire -Force -ErrorAction SilentlyContinue
+            } {
+                if (Test-Path $retire) { Rename-Item $retire $bakFile -ErrorAction SilentlyContinue }
+                Restore-FilePreState $pre $pyFile $bakFile
+            }
+            Say 'WildRiftAssistant: restored from backup' 'Green'
         }
         return
     }
@@ -1762,8 +2010,9 @@ function Invoke-WildRift {
     # The rollback base follows the upstream source (T-189): a repaint must never
     # rebuild the live file from an obsolete pre-update backup. The backup is
     # re-based when the live file changed in non-Wintage content.
+    # SRC-005 W2-002: the backup re-base and the live write run INSIDE the
+    # commit scriptblock (same reason as SmartVac Apply).
     $pre = Save-FilePreState $pyFile $bakFile
-    Sync-SourceBackup $pyFile $bakFile 'wildrift' 'WildRiftAssistant'
     $json = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json")) | ConvertFrom-Json
     $pyTokens = "TOKENS = {`r`n"
     foreach ($p in $json.tokens.psobject.properties) {
@@ -1786,11 +2035,12 @@ function Invoke-WildRift {
     if (([regex]::Matches($code, $tokPattern)).Count -ne 1) {
         throw 'WildRiftAssistant: TOKENS block no longer matches exactly once after patching - refusing to write.'
     }
-    Write-Utf8 $pyFile $code
-    Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
     Invoke-TargetCommit 'wildrift' 'WildRiftAssistant' {
+        Sync-SourceBackup $pyFile $bakFile 'wildrift' 'WildRiftAssistant'
+        Write-Utf8 $pyFile $code
         Set-ManifestEntry 'wildrift' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
     } { Restore-FilePreState $pre $pyFile $bakFile }
+    Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
 }
 
 function Invoke-Saipenview {
@@ -1805,14 +2055,23 @@ function Invoke-Saipenview {
         if (-not (Assert-RevertSource 'saipenview' $bakFile 'SAIPENVIEW')) { return }
         if ($PSCmdlet.ShouldProcess($cssFile, 'Restore SAIPENVIEW original CSS')) {
             $pre = Save-FilePreState $cssFile $bakFile
-            Copy-Item $bakFile $cssFile -Force
-            Say "SAIPENVIEW: restored from backup" 'Green'
-            # W2-009: defer backup consumption until the manifest removal has
-            # committed -- a process death at this seam is now retryable.
+            # SRC-005 W2-003: same retire-first commit protocol as SmartVac and
+            # WildRift -- the manifest entry is never removed before the
+            # recovery artifact is provably restorable.
+            # SRC-005 W2-002: the live restore copy and the retire rename run
+            # INSIDE the commit scriptblock (same reason as SmartVac).
+            $retire = "$bakFile.wintage-retired"
             Invoke-TargetCommit 'saipenview' 'SAIPENVIEW' {
+                Copy-Item $bakFile $cssFile -Force
+                if (Test-Path $retire) { Remove-Item $retire -Force -ErrorAction SilentlyContinue }
+                Rename-Item $bakFile $retire
                 Remove-ManifestEntry 'saipenview'
-                Remove-Item $bakFile -Force
-            } { Restore-FilePreState $pre $cssFile $bakFile }
+                Remove-Item $retire -Force -ErrorAction SilentlyContinue
+            } {
+                if (Test-Path $retire) { Rename-Item $retire $bakFile -ErrorAction SilentlyContinue }
+                Restore-FilePreState $pre $cssFile $bakFile
+            }
+            Say 'SAIPENVIEW: restored from backup' 'Green'
         }
         return
     }
@@ -1926,12 +2185,16 @@ function Invoke-Saipenview {
         }
 
         $pre = Save-FilePreState $cssFile $bakFile
-        Write-Utf8 $cssFile $text
-
-        Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
+        # SRC-005 W2-002: the live recolour write runs INSIDE the commit
+        # scriptblock. It used to run before the wrapper, so a write failure
+        # left the CSS half-recoloured while the rollback snapshot sat
+        # unreachable and the manifest never changed.
         Invoke-TargetCommit 'saipenview' 'SAIPENVIEW' {
+            Write-Utf8 $cssFile $text
             Set-ManifestEntry 'saipenview' $PaletteSlug $cssFile 'n/a' (Get-PayloadVersion)
         } { Restore-FilePreState $pre $cssFile $bakFile }
+
+        Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
         if ($missing.Count) {
             # Reported, not silently dropped: a token SAIPENVIEW does not declare is a
             # gap in coverage the next person should know about.
@@ -1964,17 +2227,24 @@ function Invoke-BetterDiscord {
                             # W2-001: a recovery ledger stamped by another install is
                     # never adopted to rewrite the user's live css.
                     Assert-RecoveryProvenance $recMeta 'discord' 'BetterDiscord' | Out-Null
-                    if ($meta.mode -eq 'replaced') {
-                        if (-not (Test-Path $pristine)) { throw "BetterDiscord: pristine recovery is missing ($pristine) - refusing to delete the live CSS." }
-                        [System.IO.File]::WriteAllBytes($bdCss, [System.IO.File]::ReadAllBytes($pristine))
-                        Say 'BetterDiscord: restored the pre-existing user theme byte-for-byte' 'Green'
-                    } else {
-                        Remove-Item $bdCss -Force
-                        Say "BetterDiscord: removed $bdCss (Wintage-created, nothing pre-existed)" 'Green'
+                    if ($meta.mode -eq 'replaced' -and -not (Test-Path $pristine)) {
+                        throw "BetterDiscord: pristine recovery is missing ($pristine) - refusing to delete the live CSS."
                     }
+                    # SRC-005 W2-002: the live restore/removal runs INSIDE the
+                    # commit scriptblock. It used to run before the wrapper, so
+                    # a failure between the snapshot and the wrapper left the
+                    # css half-restored (or already deleted) with the manifest
+                    # unchanged and the rollback snapshot unreachable.
                     Invoke-TargetCommit 'discord' 'BetterDiscord' {
+                        if ($meta.mode -eq 'replaced') {
+                            [System.IO.File]::WriteAllBytes($bdCss, [System.IO.File]::ReadAllBytes($pristine))
+                        } else {
+                            Remove-Item $bdCss -Force
+                        }
                         Remove-ManifestEntry 'discord'
                     } { Restore-FilePreState $pre $bdCss $null }
+                    if ($meta.mode -eq 'replaced') { Say 'BetterDiscord: restored the pre-existing user theme byte-for-byte' 'Green' }
+                    else { Say "BetterDiscord: removed $bdCss (Wintage-created, nothing pre-existed)" 'Green' }
                     # Recovery is consumed ONLY after the manifest transition
                     # committed; a failed transition keeps it for a retry.
                     Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
@@ -2011,17 +2281,22 @@ function Invoke-BetterDiscord {
         if (-not (Test-Path $recMeta)) {
             New-Item -ItemType Directory -Force -Path $recDir | Out-Null
             $mode = if (Test-Path $bdCss) { 'replaced' } else { 'created' }
-            if ($mode -eq 'replaced') { [System.IO.File]::WriteAllBytes($pristine, [System.IO.File]::ReadAllBytes($bdCss)) }
-            Write-Utf8 $recMeta (@{ mode = $mode; target = 'discord'; created = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
+            if ($mode -eq 'replaced') { Copy-FileAtomic $bdCss $pristine }
+            # W2-004: the recovery ledger is rollback authority - written
+            # ATOMICALLY and validated as JSON before the rename.
+            Write-Utf8Atomic $recMeta (@{ mode = $mode; target = 'discord'; created = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json) -ValidateJson
             # W2-001: the ledger is authoritative - stamp it with the owning epoch.
             Write-RecoveryProvenance $recMeta 'discord'
         }
         $pre = Save-FilePreState $bdCss $null
-        Copy-Item $built $bdCss -Force
-        Say "BetterDiscord: installed theme -> $bdCss" 'Green'
+        # SRC-005 W2-002: the live copy runs INSIDE the commit scriptblock. It
+        # used to run before the wrapper, so a copy failure left a half-written
+        # css with the rollback snapshot unreachable and the manifest unchanged.
         Invoke-TargetCommit 'discord' 'BetterDiscord' {
+            Copy-Item $built $bdCss -Force
             Set-ManifestEntry 'discord' $PaletteSlug $bdCss 'n/a' (Get-PayloadVersion)
         } { Restore-FilePreState $pre $bdCss $null }
+        Say "BetterDiscord: installed theme -> $bdCss" 'Green'
     }
 }
 
@@ -2160,7 +2435,6 @@ function Invoke-Obsidian {
         $expectedNames = Get-BuiltThemeNames $builtRoot
         $failedVaults = @()
         foreach ($vault in $recorded) {
-            $preThis = Save-VaultPreState $vault
             try {
                 $themesDir = Join-Path $vault '.obsidian/themes'
                 $appearance = Join-Path $vault '.obsidian/appearance.json'
@@ -2179,10 +2453,31 @@ function Invoke-Obsidian {
                     if (Test-Path $bak) {
                         # W2-001: never consume a cssTheme snapshot from another install.
                         Assert-RecoveryProvenance $bak 'obsidian' 'Obsidian' | Out-Null
-                        $snap = Read-Utf8 $bak | ConvertFrom-Json
+                        # SRC-005 W2-006: the recovery record is a strict schema, not
+                        # "any JSON that parses". A wrong-shape record used to follow
+                        # the remove branch and DELETE a live cssTheme; now anything
+                        # that is not exactly {present|existed: bool, value: string|null}
+                        # fails closed BEFORE appearance.json or a theme dir is touched.
+                        $snap = $null
+                        try { $snap = Read-Utf8 $bak | ConvertFrom-Json } catch { throw "Obsidian: cssTheme recovery at $bak is not valid JSON - refusing to revert ($($_.Exception.Message))" }
+                        if ($null -eq $snap -or -not $snap.PSObject) { throw "Obsidian: cssTheme recovery at $bak is not a JSON object - refusing to revert." }
+                        $present = $null
+                        if ($null -ne $snap.PSObject.Properties['present']) {
+                            if ($snap.present -isnot [bool]) { throw "Obsidian: cssTheme recovery at $bak carries a non-boolean 'present' - refusing to revert." }
+                            $present = [bool]$snap.present
+                        } elseif ($null -ne $snap.PSObject.Properties['existed']) {
+                            if ($snap.existed -isnot [bool]) { throw "Obsidian: cssTheme recovery at $bak carries a non-boolean 'existed' - refusing to revert." }
+                            $present = [bool]$snap.existed
+                        } else {
+                            throw "Obsidian: cssTheme recovery at $bak carries neither 'present' nor 'existed' - refusing to revert."
+                        }
+                        $valueProp = $snap.PSObject.Properties['value']
+                        if (-not $valueProp) { throw "Obsidian: cssTheme recovery at $bak carries no 'value' field - refusing to revert." }
+                        $cssValue = $valueProp.Value
+                        if ($null -ne $cssValue -and -not ($cssValue -is [string])) { throw "Obsidian: cssTheme recovery at $bak carries a non-string 'value' - refusing to revert." }
                         if (Test-Path $appearance) {
                             $ap = (Read-Utf8 $appearance) | ConvertFrom-Json
-                            if ($snap.existed) { $ap | Add-Member -NotePropertyName cssTheme -NotePropertyValue $snap.value -Force }
+                            if ($present) { $ap | Add-Member -NotePropertyName cssTheme -NotePropertyValue $cssValue -Force }
                             else { $ap.PSObject.Properties.Remove('cssTheme') }
                             Write-Utf8 $appearance ($ap | ConvertTo-Json -Depth 10)
                         }
@@ -2191,17 +2486,33 @@ function Invoke-Obsidian {
                     Say "Obsidian: removed Wintage themes from $vault" 'Green'
                 }
             } catch {
-                # CORE-006: a failing vault restores ITS OWN pre-state immediately
-                # (rollback is not deferred to some outer boundary that never sees
-                # this mutation - Obsidian captures prestate BEFORE entering the
-                # manifest-transaction wrapper).
-                try { Restore-VaultPreState $preThis } catch { }
+                # SRC-005 W2-001: the vault set is ONE operation-level transaction.
+                # Stop at the first failure; every touched vault (including the
+                # successfully mutated earlier ones) is restored below from the
+                # pre-states captured before the first mutation. The empty-catch
+                # rollback of the old shape is gone: a failed restore is REPORTED,
+                # never silently discarded.
                 $failedVaults += "$vault ($($_.Exception.Message))"
+                break
             }
         }
         # Remove the manifest ONLY after every RECORDED vault reverted; a partial
         # revert keeps it as recovery evidence (T-189/T-190).
-        if ($failedVaults.Count) { throw "Obsidian revert INCOMPLETE for: $($failedVaults -join '; ') - manifest kept." }
+        if ($failedVaults.Count) {
+            # SRC-005 W2-001: restore EVERY recorded vault to its pre-revert state,
+            # including the ones that were already reverted, so a late failure
+            # cannot leave vault 1 reverted (recovery consumed) while vault 2
+            # failed. Rollback failures are aggregated, not swallowed.
+            $restoreErrors = @()
+            foreach ($p in $preStates) {
+                try { Restore-VaultPreState $p } catch { $restoreErrors += "$($p.vault): $($_.Exception.Message)" }
+            }
+            $detail = $failedVaults -join '; '
+            if ($restoreErrors.Count) {
+                throw "Obsidian revert INCOMPLETE for: $detail AND rollback INCOMPLETE for: $($restoreErrors -join '; ') - the manifest and every surviving recovery artifact are kept."
+            }
+            throw "Obsidian revert INCOMPLETE for: $detail - every recorded vault was restored to its exact pre-revert state; the manifest is kept."
+        }
         Invoke-TargetCommit 'obsidian' 'Obsidian' {
             Remove-ManifestEntry 'obsidian'
         } { foreach ($p in $preStates) { Restore-VaultPreState $p } }
@@ -2211,7 +2522,6 @@ function Invoke-Obsidian {
     $preStates = @($vaults | ForEach-Object { Save-VaultPreState $_ })
     $failedVaults = @()
     foreach ($vault in $vaults) {
-        $preThis = Save-VaultPreState $vault
         try {
             $themesDir = Join-Path $vault '.obsidian/themes'
             $appearance = Join-Path $vault '.obsidian/appearance.json'
@@ -2236,8 +2546,18 @@ function Invoke-Obsidian {
                     $bak = Get-VaultBackupPath $vault
                     if (-not (Test-Path $bak)) {
                         $ap0 = (Read-Utf8 $appearance) | ConvertFrom-Json
-                        $prev = if ($ap0.PSObject.Properties['cssTheme']) { $ap0.cssTheme } else { $null }
-                        Write-Utf8 $bak (@{ existed = ($null -ne $prev); value = $prev } | ConvertTo-Json -Depth 4)
+                        # SRC-005 W2-006: property PRESENCE is stored independently
+                        # of the value. The old serializer collapsed an explicitly
+                        # present `"cssTheme": null` and a genuinely absent property
+                        # into the same `existed = false`, so Revert could never put
+                        # the null back. The record is now {present, value} where
+                        # value may be null; the Revert reader validates this schema
+                        # strictly and still accepts the legacy `existed` form.
+                        $hasCssTheme = $null -ne $ap0.PSObject.Properties['cssTheme']
+                        $cssValue = if ($hasCssTheme) { $ap0.cssTheme } else { $null }
+                        # W2-004: the cssTheme snapshot is rollback authority -
+                        # written ATOMICALLY and validated as JSON before rename.
+                        Write-Utf8Atomic $bak (@{ present = $hasCssTheme; value = $cssValue } | ConvertTo-Json -Depth 4) -ValidateJson
                         # W2-001: the cssTheme snapshot is now authoritative - stamp it.
                         Write-RecoveryProvenance $bak 'obsidian'
                     }
@@ -2249,17 +2569,32 @@ function Invoke-Obsidian {
                 Say "  Reload the vault (Ctrl+R) or Settings > Appearance to see it." 'DarkGray'
             }
         } catch {
-            # CORE-006: this vault's partial mutation is rolled back NOW, so a
-            # failing vault 2 never leaves vault 1 themed without a manifest.
-            try { Restore-VaultPreState $preThis } catch { }
+            # SRC-005 W2-001: the vault set is ONE operation-level transaction.
+            # Stop at the first failure; the catch comment used to claim "a failing
+            # vault 2 never leaves vault 1 themed without a manifest" while the
+            # code restored ONLY vault 2 -- every touched vault is now restored
+            # below, and a failed restore is reported instead of swallowed.
             $failedVaults += "$vault ($($_.Exception.Message))"
+            break
         }
     }
     # The manifest is advanced ONLY after EVERY vault succeeded (T-189) and
     # records the EXACT owned vault SET (T-190) so a later Reapply compares sets,
     # not a `;`-joined fake path.
     if ($failedVaults.Count) {
-        throw "Obsidian apply INCOMPLETE for: $($failedVaults -join '; ') - manifest NOT advanced; re-run after fixing the failing vault(s)."
+        # SRC-005 W2-001: restore EVERY vault from the pre-states captured before
+        # the first mutation -- including the successfully themed earlier ones --
+        # so a late failure never leaves vault 1 themed while the manifest was
+        # never advanced. Rollback failures are aggregated, never swallowed.
+        $restoreErrors = @()
+        foreach ($p in $preStates) {
+            try { Restore-VaultPreState $p } catch { $restoreErrors += "$($p.vault): $($_.Exception.Message)" }
+        }
+        $detail = $failedVaults -join '; '
+        if ($restoreErrors.Count) {
+            throw "Obsidian apply INCOMPLETE for: $detail AND rollback INCOMPLETE for: $($restoreErrors -join '; ') - the manifest was NOT advanced; recovery evidence is preserved."
+        }
+        throw "Obsidian apply INCOMPLETE for: $detail - every touched vault was restored to its exact pre-apply state; the manifest was NOT advanced. Re-run after fixing the failing vault(s)."
     }
     Invoke-TargetCommit 'obsidian' 'Obsidian' {
         Set-ManifestEntryMulti 'obsidian' $PaletteSlug (@($vaults | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })) 'n/a' (Get-PayloadVersion)
@@ -2650,8 +2985,10 @@ function Invoke-Qbittorrent {
             $v = Get-IniKey $lines 'Preferences' $k
             $ownedIni[$k] = if ($null -ne $v) { "$v" } else { $null }
         }
-        Write-Utf8 $recMeta (@{ mode = $mode; target = 'qbittorrent'; ini = $ownedIni; created = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json)
-        Write-RecoveryProvenance $recMeta 'qbittorrent'
+            # W2-004: the recovery ledger is rollback authority - written
+            # ATOMICALLY and validated as JSON before the rename.
+            Write-Utf8Atomic $recMeta (@{ mode = $mode; target = 'qbittorrent'; ini = $ownedIni; created = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json) -ValidateJson
+            Write-RecoveryProvenance $recMeta 'qbittorrent'
         Say "qBittorrent: recorded the pre-Wintage theme selection ($mode) -> $recMeta" 'DarkGray'
     }
 

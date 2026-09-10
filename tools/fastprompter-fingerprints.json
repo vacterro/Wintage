@@ -1,0 +1,14 @@
+{
+  "note": "sha256 of each FastPrompter-imported theme pack, verified by \"node tools/import-fastprompter.js --check\" when no upstream source is available. An imported pack may only change by re-running the import (or --write-fingerprints after reviewing the diff).",
+  "packs": {
+    "fpdefault": "786e82d3af5f4ff480c877528f89b65e69259075fd380b27ff708af9d0101f38",
+    "goldenvintage": "81839d3fd90c979ac0ca6dd180621f1ba4dcc5594b31d226767ee28f51b06e57",
+    "goldendefault": "3d405d0e7ed42305b6cbaaecd8852664309448d85e91a7fe601af68d609235ad",
+    "vintagedark": "49292d826faf3910d2609a53da5378e399d37d65625466da89fd67c0e9899fe5",
+    "vintageclassic": "57c459a41c61819310ba858f7f2a998d1c705f0db4172deb425712421319fbd0",
+    "oled": "10ad78b97d9ee7836069fea0ab816301036d021706a920282da9be0824d11f21",
+    "dracula": "a04bb9b3695b05174135f5f4dae977df38849bad2a04d4256a41f5f60344a0bb",
+    "nord": "e7a33fcb2923f2f0f710a550e6c969e2cf97ee6970008209fbd285918ccff6b7",
+    "solarized": "0f05167f14cb0d59a9bdaa5841968a9ecd268503547b1326dac5cf486851b9c0"
+  }
+}

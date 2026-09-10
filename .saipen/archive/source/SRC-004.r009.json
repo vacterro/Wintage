@@ -1,0 +1,54 @@
+{
+  "clauses": {
+    "SRC-004:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001: P0 install-terminal.js owned-state snapshot cannot reconstruct the pre-Apply Windows Terminal document: presence is not encoded separately from value so explicit nulls are deleted, the legacy profiles-array container shape is not captured, and a pre-existing user scheme named Wintage is permanently removed by Revert."
+    },
+    "SRC-004:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002: P1 install-electron relocation Revert rollback is still incomplete: the root app.asar.unpacked rename is not undone, captureRevertPreState carries no root-unpacked field, and rollbackOk ignores it so the tool can still claim exact restoration."
+    },
+    "SRC-004:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003: P1 wintage.user.js excluded-route handling beyond the reload latch: no repainter suspension or quarantine when an excluded URL is detected, and the pending-theme menu row predicate is unreachable as written."
+    },
+    "SRC-004:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004: P1 tools/test-theme-switch.js stale real-source harness aborts the release gate with a ReferenceError instead of running its assertions."
+    },
+    "SRC-004:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-005: P2 targets.ps1 Get-IniKey recovery semantics discard the empty-string vs absent distinction when restoring Total Commander and qBittorrent owned INI keys."
+    },
+    "SRC-004:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-001: P1 install-windows-theme.js finalizeRevert removes the file Revert returns as the activation target, and the epochRetired branch is unreachable because nothing writes the marker."
+    },
+    "SRC-004:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-002: P1 install-obs.js readThemeSnapshot falls through a failed JSON parse into parseIni and returns a truthy empty snapshot, and the theme key is read case-sensitively while the writers are case-insensitive."
+    },
+    "SRC-004:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-003: P1 common.ps1 Get-InstallEpoch returns its own freshly generated GUID without re-reading the persisted winner and takes no lock, so concurrent first creation yields divergent epochs."
+    },
+    "SRC-004:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-004: P1 several targets mutate state before Invoke-TargetCommit: OBS snapshot-then-throw, qBittorrent Revert INI write before the pristine check, qBittorrent Apply, MPC-HC registry writes, and the generic install.ps1 path."
+    }
+  },
+  "derived_at": "2026-09-03T22:31:59Z",
+  "derived_from": "SRC-004",
+  "interpretation_revision": 9,
+  "schema_version": 1,
+  "source_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699"
+}

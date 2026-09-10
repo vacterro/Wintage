@@ -147,10 +147,10 @@
     "SRC-004:R017": {
       "actionable": true,
       "class": "requirement",
-      "disposition": "UNKNOWN",
-      "evidence": null,
-      "text": "PERF-005: P1 the installer GUI spawns one blocking child process per checked target for Apply, Revert and listing, and repeats build-desktop --check and the fuse probe per target with no cache.",
-      "verification": null,
+      "disposition": "VERIFIED",
+      "evidence": "E-859",
+      "text": "PERF-005: the installer GUI spawns one BLOCKING install.ps1 child per checked target on the WinForms thread, re-runs build-desktop --check once per target, and re-scans every Electron executable for the fuse sentinel with no unchanged-file cache. Repair: install.ps1 -Selected batch mode (one worker, one shared build verification, StrictTarget), disk fuse-verdict cache keyed path+size+mtime fail-closed, GUI one async batch worker via Start-Job+Forms.Timer.",
+      "verification": "E-862",
       "work": "T-240"
     },
     "SRC-004:R018": {

@@ -29,6 +29,46 @@ function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllTe
 
 function Write-Utf8BomLines([string]$path, $lines) { [System.IO.File]::WriteAllLines($path, [string[]]$lines, $script:Utf8WithBom) }
 
+# W2-004 (SRC-005:R008): atomic recovery-file writer. Recovery artifacts and
+# their provenance are themselves part of the rollback authority, so a crash
+# mid-write must never leave a partial authoritative file on its final name.
+# The temp is a same-directory sibling (same volume -> rename is atomic), the
+# bytes are fully flushed before the rename, and the temp is always cleaned up
+# even when validation or the rename fails. A unique temp name per writer keeps
+# concurrent runs from colliding (same rule as Write-Manifest, T-189).
+function Write-Utf8Atomic([string]$path, [string]$text, [switch]$ValidateJson) {
+    $parent = Split-Path $path -Parent
+    if (-not $parent -or -not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    $tmp = $path + '.wintage-tmp-' + [guid]::NewGuid().ToString('N')
+    try {
+        [System.IO.File]::WriteAllText($tmp, $text, $script:Utf8NoBom)
+        if ($ValidateJson) { $null = [System.IO.File]::ReadAllText($tmp, $script:Utf8NoBom) | ConvertFrom-Json }
+        Move-Item -LiteralPath $tmp -Destination $path -Force
+    } finally {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+# Atomic copy of a recovery source into its final authoritative path. The
+# destination is only replaced once the temp sibling holds the COMPLETE source
+# bytes (validated by length), so a crash before the rename keeps the prior
+# authoritative backup intact.
+function Copy-FileAtomic([string]$source, [string]$dest) {
+    if (-not (Test-Path -LiteralPath $source)) { throw "Copy-FileAtomic: source missing: $source" }
+    $parent = Split-Path $dest -Parent
+    if (-not $parent -or -not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    $tmp = $dest + '.wintage-tmp-' + [guid]::NewGuid().ToString('N')
+    try {
+        Copy-Item -LiteralPath $source -Destination $tmp -Force
+        if ((Get-Item -LiteralPath $tmp).Length -ne (Get-Item -LiteralPath $source).Length) {
+            throw "Copy-FileAtomic: temp copy is incomplete ($tmp) - refusing to promote it to the authoritative path."
+        }
+        Move-Item -LiteralPath $tmp -Destination $dest -Force
+    } finally {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 # Every palette token read used to inline the same (Read-Utf8 X | ConvertFrom-Json).tokens
 # chain; one helper (T-143).
 function Get-PaletteTokens([string]$jsonPath) { (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens }
@@ -420,13 +460,16 @@ function Get-InstallEpoch {
 
 # Stamp a recovery source with its owning install epoch. Written at the same
 # moment the recovery file itself becomes authoritative (after its temp rename).
+# W2-004: the stamp is itself rollback authority, so it is written ATOMICALLY
+# and validated as JSON before the rename -- a corrupt provenance sidecar can
+# never reach its final name.
 function Write-RecoveryProvenance([string]$sourcePath, [string]$target) {
-    Write-Utf8 ($sourcePath + '.provenance.json') (@{
+    Write-Utf8Atomic ($sourcePath + '.provenance.json') (@{
         owner = 'wintage'
         target = $target
         epoch = Get-InstallEpoch
         created = (Get-Date).ToUniversalTime().ToString('o')
-    } | ConvertTo-Json)
+    } | ConvertTo-Json) -ValidateJson
 }
 
 # Shared foreign-provenance gate (W2-001): returns $true when the recovery

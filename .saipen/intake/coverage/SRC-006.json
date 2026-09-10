@@ -1,0 +1,95 @@
+{
+  "requirements": {
+    "SRC-006:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-872",
+      "text": "CORE-001 P0: the Windows Terminal transaction has no coherent persisted ownership-state transition between 'manifest owns themed file', 'reverted but rollback-capable', and 'manifest removed/recovery consumed' - production never removes the .wintage-palette marker between the manifest commit and --finalize-recovery, the helper refuses while the marker exists, the next Apply silently reuses the previous ownership cycle's snapshot, and the absent-original-file rollback assumes a reverted file must still exist.",
+      "verification": "E-873",
+      "work": "T-242"
+    },
+    "SRC-006:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-873 (shared repair with SRC-005:R001)",
+      "text": "CORE-002 P1: the userscript theme-switch callback equates 'location.reload() returned without throwing' with 'navigation succeeded'; a cancelled beforeunload leaves the old palette painted while storage names the new one, with no pending-theme row or warning. Same finding as SRC-005:R001 - one repair covers both receipts.",
+      "verification": "E-873 (shared verification with SRC-005:R001, tools/test-theme-switch.js incl. 'real unload: no warning')",
+      "work": "T-241"
+    },
+    "SRC-006:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-872",
+      "text": "CORE-003 P2: install-terminal.js revert --dry-run exits 0 before the ownership/recovery invariant checks, so -WhatIf can positively describe an impossible Terminal Revert that the real operation immediately fails closed on.",
+      "verification": "E-873",
+      "work": "T-242"
+    },
+    "SRC-006:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "UNKNOWN",
+      "evidence": null,
+      "text": "W2-001 P0: the generic VS Code-family extension path treats recovery.json/pristine as permanent first-touch authority - a completed Revert never consumes the recovery epoch, so a later Apply skips baseline capture and a second-epoch Revert restores stale bytes over newer user state; replaced+missing-pristine and unknown modes are interpreted as Wintage-created, deleting the live destination exactly when restoration evidence is incomplete.",
+      "verification": null,
+      "work": "T-242"
+    },
+    "SRC-006:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "UNKNOWN",
+      "evidence": null,
+      "text": "W2-002 P1: -Reapply computes work from an unlocked historical manifest snapshot and the target-locked child never revalidates that snapshot, so a background/logon Reapply can resurrect a reverted target or overwrite a newer explicit palette choice (serialized execution, unserialized intent).",
+      "verification": null,
+      "work": "T-242"
+    },
+    "SRC-006:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "UNKNOWN",
+      "evidence": null,
+      "text": "W2-003 P1: the WintageInstaller.ps1 logon-task checkbox attaches CheckedChanged before initialization, so opening the GUI dispatches a real Register-ScheduledTask, and failure recovery recursively dispatches the inverse operation (a failed Register can Unregister a task that existed before the GUI started).",
+      "verification": null,
+      "work": "T-242"
+    },
+    "SRC-006:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "UNKNOWN",
+      "evidence": null,
+      "text": "PERF-001 P1: healthy Electron palette repaint performs archive-sized recovery I/O at BOTH transaction layers - the parent Save-ElectronStateSnapshot lightweight Repaint branch is dead (no call site passes -Operation Repaint) and the child repaintRelocation hashes and vault-copies the unchanged app.asar/app.asar.unpacked via captureAppDir.",
+      "verification": null,
+      "work": "T-242"
+    },
+    "SRC-006:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "22468e3 (v1.33.0, shipped as T-240/SRC-004:R017)",
+      "text": "PERF-002 P2: the GUI spawns one blocking install.ps1 child per checked target on the WinForms thread with one build-desktop --check per target. Same finding as SRC-004:R017 - shipped in v1.33.0 as T-240.",
+      "verification": "E-862 / tag v1.33.0 == 22468e3",
+      "work": "T-240"
+    },
+    "SRC-006:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "22468e3 (v1.33.0, shipped as T-240/SRC-004:R017)",
+      "text": "PERF-003 P2: repeated unchanged Electron status listings reread the whole executable for the fuse sentinel with no verdict cache. Same finding as SRC-004:R017 - shipped in v1.33.0 as T-240.",
+      "verification": "E-862 / tag v1.33.0 == 22468e3 (fusecache fixture 8/8)",
+      "work": "T-240"
+    },
+    "SRC-006:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "UNKNOWN",
+      "evidence": null,
+      "text": "PERF-004 P2: the userscript force sweep bounds ELEMENT work (FORCE_BUDGET 2500) but not root-level work - every continuation slice re-scans every live ShadowRoot for connectivity and hover stylesheets and restarts outer iteration from root zero, so R live roots cost far more than R root-level operations per lap on Web Component-heavy pages.",
+      "verification": null,
+      "work": "T-242"
+    }
+  },
+  "schema_version": 1
+}

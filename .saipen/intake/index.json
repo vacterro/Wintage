@@ -4,12 +4,12 @@
       "linked_work": null,
       "source_sha256": "e6534421f84588846c2bc3e1fa3c00cc6a78245879f3c967b9d294107181902a"
     },
-    "SRC-004": {
-      "linked_work": "T-240",
-      "source_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699"
+    "SRC-006": {
+      "linked_work": "T-242",
+      "source_sha256": "21c0bc0d8b4b335492eaadf53b786780f71ee8141aeee5cb0da54d6572a3b894"
     }
   },
-  "next_id": 5,
+  "next_id": 7,
   "schema_version": 1,
   "tombstones": {
     "SRC-001": {
@@ -37,6 +37,32 @@
       "source_sha256": "eb71f73b21c0231b78cf6a9a12c546965b094547c61f08d93a8e4ef4b15ad756",
       "status": "CLOSED",
       "unresolved": 0
+    },
+    "SRC-004": {
+      "receipt_id": "SRC-004",
+      "status": "CLOSED",
+      "closed_at": "2026-09-05T00:20:00Z",
+      "closure_event": null,
+      "linked_work": null,
+      "archive_ref": ".saipen/archive/source/SRC-004.md",
+      "source_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699",
+      "requirements": 19,
+      "actionable": 19,
+      "unresolved": 0,
+      "schema_version": 1
+    },
+    "SRC-005": {
+      "receipt_id": "SRC-005",
+      "status": "CLOSED",
+      "closed_at": "2026-09-10T04:12:00Z",
+      "closure_event": "E-882",
+      "linked_work": null,
+      "archive_ref": ".saipen/archive/source/SRC-005.md",
+      "source_sha256": "1dcd3890d40a82a69c41bfe3ca82e9b147b0e7fdc1c3f899b9d1d467aa92e87c",
+      "requirements": 17,
+      "actionable": 17,
+      "unresolved": 0,
+      "schema_version": 1
     }
   }
 }

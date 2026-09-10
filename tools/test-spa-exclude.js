@@ -230,7 +230,6 @@ function runBlock(block, initialHref) {
   check('double install: exactly one popstate listener', listeners.popstate.length, 1);
   check('double install: exactly one hashchange listener', listeners.hashchange.length, 1);
   check('double install: pushState not re-wrapped', ctx.history.pushState === pushAfterFirst, true);
-  check('double install: latch set on window', ctx.window.__wintageRouteGuard, true);
   // One transition into an excluded URL must reload ONCE, not once per layer.
   ctx.location.href = 'https://example.com/oauth/authorize';
   ctx.history.pushState({}, '', '/oauth/authorize');
@@ -240,6 +239,96 @@ function runBlock(block, initialHref) {
   ctx.location.href = 'https://example.com/settings';
   ctx.history.pushState({}, '', '/settings');
   check('double install: original pushState called once', calls.pushState - before, 1);
+}
+
+// ---- Test 8b: SRC-005 CORE-002 -- a PARTIAL install is repaired by the next
+// run, not pinned as complete. The old latch was ONE boolean committed before
+// any hook existed, so a single hostile history.pushState assignment left the
+// marker set with the hook missing forever: same-document pushState could then
+// enter an OAuth/captcha/payment route with no quarantine. The state is now
+// per-component (push/replace/listeners); reinjection retries ONLY the gaps.
+{
+  // 1. The first pushState assignment throws; the other hooks install.
+  const { ctx, listeners, calls, captured } = runBlock(block, 'https://example.com/dashboard');
+  const origPush = ctx.history.pushState;
+  Object.defineProperty(ctx.history, 'pushState', {
+    configurable: true,
+    get() { return origPush; },
+    set() { throw new Error('host lockdown'); }
+  });
+  captured.setupRouteGuard();
+  check('partial install: replaceState installed without pushState', ctx.window.__wintageRouteGuard.replace, true);
+  check('partial install: pushState NOT installed', ctx.window.__wintageRouteGuard.push, false);
+  check('partial install: listeners installed', ctx.window.__wintageRouteGuard.listeners, true);
+  check('partial install: one popstate listener', listeners.popstate.length, 1);
+  // pushState still works (unwrapped original) but is NOT guarded.
+  const unguardedReloads = calls.reload;
+  ctx.location.href = 'https://example.com/oauth/authorize';
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  check('partial install: unguarded pushState does not reload', calls.reload - unguardedReloads, 0);
+  // 2. Reinject after the lockdown is lifted: ONLY the gap is retried.
+  Object.defineProperty(ctx.history, 'pushState', {
+    configurable: true, writable: true, value: origPush
+  });
+  captured.setupRouteGuard();
+  check('reinjection: pushState now wrapped', ctx.window.__wintageRouteGuard.push, true);
+  check('reinjection: exactly one popstate listener still', listeners.popstate.length, 1);
+  check('reinjection: one hashchange listener still', listeners.hashchange.length, 1);
+  // 3. The repaired guard catches an excluded pushState and reloads exactly once.
+  ctx.location.href = 'https://example.com/oauth/authorize';
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  check('reinjection: guarded pushState into /oauth reloads once', calls.reload - unguardedReloads, 1);
+  ctx.history.pushState({}, '', '/oauth/authorize');
+  check('reinjection: latch prevents a reload storm', calls.reload - unguardedReloads, 1);
+  const origCalls = calls.pushState;
+  ctx.location.href = 'https://example.com/settings';
+  ctx.history.pushState({}, '', '/settings');
+  check('reinjection: original pushState reached exactly once', calls.pushState - origCalls, 1);
+  // 4. Idempotence survives the repair: a THIRD full run changes nothing.
+  const pushAfterRepair = ctx.history.pushState;
+  captured.setupRouteGuard();
+  check('third run: pushState not re-wrapped', ctx.history.pushState === pushAfterRepair, true);
+  check('third run: still one popstate listener', listeners.popstate.length, 1);
+}
+
+// ---- Test 8c: the same partial-failure repair for replaceState ----
+{
+  const { ctx, listeners, captured } = runBlock(block, 'https://example.com/dashboard');
+  const origReplace = ctx.history.replaceState;
+  Object.defineProperty(ctx.history, 'replaceState', {
+    configurable: true,
+    get() { return origReplace; },
+    set() { throw new Error('host lockdown'); }
+  });
+  captured.setupRouteGuard();
+  check('replaceState partial: push installed', ctx.window.__wintageRouteGuard.push, true);
+  check('replaceState partial: replace NOT installed', ctx.window.__wintageRouteGuard.replace, false);
+  Object.defineProperty(ctx.history, 'replaceState', {
+    configurable: true, writable: true, value: origReplace
+  });
+  captured.setupRouteGuard();
+  check('replaceState repair: replace now installed', ctx.window.__wintageRouteGuard.replace, true);
+  check('replaceState repair: one popstate listener', listeners.popstate.length, 1);
+}
+
+// ---- Test 8d: a listener-registration failure keeps the history hooks ----
+{
+  const { ctx, listeners, captured } = runBlock(block, 'https://example.com/dashboard');
+  // make addEventListener throw exactly once (first popstate attempt).
+  let throwOnce = true;
+  const realAdd = ctx.window.addEventListener;
+  ctx.window.addEventListener = function (name, fn) {
+    if (throwOnce) { throwOnce = false; throw new Error('host refused listener'); }
+    return realAdd.call(this, name, fn);
+  };
+  captured.setupRouteGuard();
+  check('listener failure: pushState still installed', ctx.window.__wintageRouteGuard.push, true);
+  check('listener failure: listeners NOT installed', ctx.window.__wintageRouteGuard.listeners, false);
+  check('listener failure: no popstate listener', listeners.popstate.length, 0);
+  captured.setupRouteGuard();
+  check('listener retry: listeners now installed', ctx.window.__wintageRouteGuard.listeners, true);
+  check('listener retry: exactly one popstate listener', listeners.popstate.length, 1);
+  check('listener retry: exactly one hashchange listener', listeners.hashchange.length, 1);
 }
 
 // ---- Test 9: CORE-003 -- quarantine happens BEFORE the reload request ----

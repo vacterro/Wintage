@@ -1,0 +1,29 @@
+{
+  "clauses": {
+    "SRC-005:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001: P1 wintage.user.js theme-switch reload survival equates 'location.reload() did not throw' with 'the old document will unload': a cancelled beforeunload leaves the old palette painted while GM_setValue already persisted the new one, with no pending-theme row or warning."
+    },
+    "SRC-005:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002: P1 setupRouteGuard commits the __wintageRouteGuard boolean latch before any hook installs; one transient pushState/replaceState/listener failure permanently suppresses reinjection repair, so same-document pushState can enter OAuth/captcha/payment excluded routes unguarded."
+    },
+    "SRC-005:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003: P1 targets.ps1 Restore-DirPreState returns success when Existed=true and SnapshotPath is missing, and deletes the authoritative snapshot from an unconditional finally on materialization failure, so Invoke-TargetCommit can claim exact pre-operation state after a failed rollback."
+    },
+    "SRC-005:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004: P2 import-fastprompter.js --check exits 0 printing 'no FastPrompter source available - freshness check skipped' under the exact release.ps1 invocation, so a hand-edited or stale imported theme pack passes the release freshness gate that exists to catch it."
+    }
+  },
+  "derived_at": "2026-09-05T17:24:38Z",
+  "derived_from": "SRC-005",
+  "interpretation_revision": 4,
+  "schema_version": 1,
+  "source_sha256": "1dcd3890d40a82a69c41bfe3ca82e9b147b0e7fdc1c3f899b9d1d467aa92e87c"
+}

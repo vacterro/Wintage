@@ -141,7 +141,90 @@ $ErrorActionPreference = $prevEap
 check 'W2-007: --finalize-recovery exits 0' ($finCode2 -eq 0)
 check 'W2-007: --finalize-recovery consumes the owned-field backup' (-not (Test-Path $itSettingsBak))
 
-Remove-Item $itRoot -Recurse -Force -ErrorAction SilentlyContinue
+# ---- Test 4 (SRC-002 CORE-001): the COMMITTED finalize contract ----
+# Production removes the manifest entry BEFORE finalizing and never touches
+# the palette marker itself, so the old contract (finalize only after the
+# marker vanished) described a transition no production path performed. The
+# caller that actually committed now passes --manifest-committed and the
+# helper consumes marker + recovery artifacts together.
+$itRoot2 = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-terminal-fin2-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $itRoot2 -Force | Out-Null
+$itSettings2 = Join-Path $itRoot2 'settings.json'
+[IO.File]::WriteAllText($itSettings2, $seed)
+& node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings2 --palette (Join-Path $root 'themes/goldendefault.json') | Out-Null
+check 'CORE-001: Apply wrote the marker (fixture sanity)' (Test-Path "$itSettings2.wintage-palette")
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$outFin = & node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings2 --finalize-recovery --manifest-committed 2>&1
+$finCode3 = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+check 'CORE-001: --manifest-committed finalize exits 0 while the marker is present' ($finCode3 -eq 0)
+check 'CORE-001: --manifest-committed consumes the marker' (-not (Test-Path "$itSettings2.wintage-palette"))
+check 'CORE-001: --manifest-committed consumes the backup' (-not (Test-Path "$itSettings2.wintage.bak"))
+
+# ---- Test 5 (SRC-002 CORE-001): the created-file cycle ----
+# settings.json did not exist before Apply. Revert must delete it again
+# (keeping recovery under --keep-recovery), and the committed finalize must
+# consume the created marker and the palette marker. Final state: no
+# settings.json, no recovery artifacts.
+$itRoot3 = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-terminal-fin3-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $itRoot3 -Force | Out-Null
+$itSettings3 = Join-Path $itRoot3 'settings.json'
+& node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings3 --palette (Join-Path $root 'themes/goldendefault.json') | Out-Null
+check 'CORE-001: Apply created the settings file' (Test-Path $itSettings3)
+check 'CORE-001: Apply wrote the created marker' (Test-Path "$itSettings3.wintage-created")
+check 'CORE-001: Apply wrote the palette marker' (Test-Path "$itSettings3.wintage-palette")
+& node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings3 --revert --keep-recovery | Out-Null
+check 'CORE-001: revert of a created file deletes settings.json' (-not (Test-Path $itSettings3))
+check 'CORE-001: --keep-recovery keeps the created marker' (Test-Path "$itSettings3.wintage-created")
+check 'CORE-001: --keep-recovery keeps the palette marker' (Test-Path "$itSettings3.wintage-palette")
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& node (Join-Path $root 'tools/install-terminal.js') --settings $itSettings3 --finalize-recovery --manifest-committed 2>&1 | Out-Null
+$finCode4 = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+check 'CORE-001: committed finalize of a created item exits 0' ($finCode4 -eq 0)
+check 'CORE-001: created marker consumed' (-not (Test-Path "$itSettings3.wintage-created"))
+check 'CORE-001: palette marker consumed' (-not (Test-Path "$itSettings3.wintage-palette"))
+check 'CORE-001: settings.json still absent after the full created-file cycle' (-not (Test-Path $itSettings3))
+
+# ---- Test 6 (SRC-002 CORE-001): cross-cycle preservation ----
+# The stale-snapshot data-loss bug: cycle 1 leaves its recovery artifact
+# behind, cycle 2 reuses it, and the final Revert restores cycle-1 values
+# over the user's newer choices. With the committed finalize closing every
+# cycle, cycle 2 must capture a FRESH baseline.
+$itRoot4 = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-terminal-fin4-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $itRoot4 -Force | Out-Null
+$itSettings4 = Join-Path $itRoot4 'settings.json'
+$seedA = '{"profiles":{"defaults":{"colorScheme":"Stock-A","historySize":111}},"schemes":[]}'
+[IO.File]::WriteAllText($itSettings4, $seedA)
+$helperPath = Join-Path $root 'tools/install-terminal.js'
+$gold = Join-Path $root 'themes/goldendefault.json'
+& node $helperPath --settings $itSettings4 --palette $gold | Out-Null
+& node $helperPath --settings $itSettings4 --revert --keep-recovery | Out-Null
+& node $helperPath --settings $itSettings4 --finalize-recovery --manifest-committed | Out-Null
+$seedB = '{"profiles":{"defaults":{"colorScheme":"Stock-B","historySize":222}},"schemes":[]}'
+[IO.File]::WriteAllText($itSettings4, $seedB)
+& node $helperPath --settings $itSettings4 --palette $gold | Out-Null
+& node $helperPath --settings $itSettings4 --revert --keep-recovery | Out-Null
+& node $helperPath --settings $itSettings4 --finalize-recovery --manifest-committed | Out-Null
+$final4 = (Get-Content $itSettings4 -Raw) | ConvertFrom-Json
+check 'CORE-001: cycle-2 Revert restores the cycle-2 user values (colorScheme Stock-B)' ($final4.profiles.defaults.colorScheme -eq 'Stock-B')
+check 'CORE-001: cycle-2 Revert restores the cycle-2 historySize 222' ($final4.profiles.defaults.historySize -eq 222)
+check 'CORE-001: no artifacts survive the closed cycle 2' (-not (Test-Path "$itSettings4.wintage-palette") -and -not (Test-Path "$itSettings4.wintage.bak") -and -not (Test-Path "$itSettings4.wintage-created"))
+
+# ---- Test 7 (SRC-002 CORE-001): production wiring ----
+# Static checks that targets.ps1 finalizes with --manifest-committed (the
+# old test manually deleted the marker to simulate a transition production
+# never performed) and that the manifest-commit rollback re-themes EVERY
+# reverted item, including an originally absent one.
+$src2 = Get-Content $targets -Raw
+check 'CORE-001: production finalize passes --manifest-committed' ([bool]($src2 -match '--finalize-recovery --manifest-committed'))
+check 'CORE-001: no Test-Path guard suppresses the rollback re-theme' (-not ($src2 -match 'if \(Test-Path \$settings\) \{\s*# W2-005'))
+
+Remove-Item $itRoot2 -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $itRoot3 -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $itRoot4 -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 exit $fail

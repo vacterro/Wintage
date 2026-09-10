@@ -234,5 +234,81 @@ check('the unreachable startup predicate is gone',
 check('pending state is runtime, not a startup constant', /let pendingThemeId = null;/.test(src), true);
 check('pending row offers a reload', /Apply pending theme: '/.test(src), true);
 
+// 11. SRC-005 CORE-001: a reload that RETURNS NORMALLY is not proof the old
+//     document unloaded. A cancelled beforeunload leaves this document alive
+//     with storage already on the new palette -- the split brain the throw
+//     path reports, arriving through the class the catch can never see. The
+//     switch arms a one-shot survival probe: pagehide disarms it, the timer
+//     firing on a live document reports the pending row + warning.
+{
+  const menu = [];
+  let reloads = 0;
+  let timerFired = 0;
+  const warns = [];
+  const listeners = { pagehide: [], beforeunload: [] };
+  const fakeTimers = [];
+  const ctx = {
+    document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
+    location: { reload: () => { reloads++; } },
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, IS_GOOGLE: false,
+    console: { warn: (m) => warns.push(String(m)), log: console.log, error: console.error },
+    setTimeout: (fn) => { fakeTimers.push(fn); },
+    clearTimeout: () => { },
+    addEventListener: (n, f) => { (listeners[n] || (listeners[n] = [])).push(f); },
+    removeEventListener: () => { },
+    GM_getValue: (k, d) => d,
+    GM_setValue: () => { },
+    GM_registerMenuCommand: (l, f) => menu.push([l, f])
+  };
+  vm.createContext(ctx);
+  vm.runInContext('(function(){\n' + slice + '\n}).call(this)', ctx);
+  menu.find(m => m[0] === '○ Test Palette')[1]();
+  check('surviving document: reload was requested and returned', reloads, 1);
+  check('surviving document: no row before the probe fires', menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
+  // The document is still alive when the timer fires -> exactly one row + warning.
+  fakeTimers.forEach(f => f());
+  timerFired = fakeTimers.length;
+  check('surviving document: the probe fired once', timerFired, 1);
+  const pending = menu.filter(m => m[0].startsWith('⟳ '));
+  check('surviving document: one pending row after the probe', pending.length, 1);
+  check('surviving document: row names the waiting palette', pending[0][0], '⟳ Apply pending theme: Test Palette');
+  check('surviving document: warns exactly once', warns.length, 1);
+  check('surviving document: warning names the palette', /testpal/.test(warns[0] || ''), true);
+  // Retry through the row retries the reload exactly once.
+  const before = reloads;
+  pending[0][1]();
+  check('surviving document: the row retries the reload once', reloads - before, 1);
+}
+// 12. the OTHER side of the probe: a real unload disarms it. pagehide before
+//     the timer fires -> NO pending row, NO warning -- a document that really
+//     navigated away must not be reported as stuck.
+{
+  const menu = [];
+  const warns = [];
+  const listeners = { pagehide: [], beforeunload: [] };
+  const fakeTimers = [];
+  const ctx = {
+    document: { documentElement: { style: { setProperty() { } }, setAttribute() { } } },
+    location: { reload: () => { } },
+    IS_TOP: true, IS_X: false, IS_REDDIT: false, IS_GOOGLE: false,
+    console: { warn: (m) => warns.push(String(m)), log: console.log, error: console.error },
+    setTimeout: (fn) => { fakeTimers.push(fn); },
+    clearTimeout: () => { },
+    addEventListener: (n, f) => { (listeners[n] || (listeners[n] = [])).push(f); },
+    removeEventListener: () => { },
+    GM_getValue: (k, d) => d,
+    GM_setValue: () => { },
+    GM_registerMenuCommand: (l, f) => menu.push([l, f])
+  };
+  vm.createContext(ctx);
+  vm.runInContext('(function(){\n' + slice + '\n}).call(this)', ctx);
+  menu.find(m => m[0] === '○ Test Palette')[1]();
+  // The navigation really happened: pagehide fires before the timer.
+  listeners.pagehide.forEach(f => f());
+  fakeTimers.forEach(f => f());
+  check('real unload: no pending row', menu.filter(m => m[0].startsWith('⟳ ')).length, 0);
+  check('real unload: no warning', warns.length, 0);
+}
+
 console.log(bad ? '\n' + bad + ' failure(s)' : '\ntheme-switch test PASS');
 process.exit(bad ? 1 : 0);

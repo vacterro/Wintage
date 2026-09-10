@@ -623,6 +623,32 @@ $toolSuites = @(
     # paths.json writers that could each lose the other's key while both
     # reported success.
     @{ Name = 'test-transaction-boundary.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-transaction-boundary.ps1"' },
+    # SRC-005:R009 (W2-005 windows half): Restore-WindowsPreState is a verified
+    # rollback primitive. The pre-fix helper suppressed every owned registry/file
+    # failure and accepted a successful ShellExecute as proof CurrentTheme came
+    # back, so its caller claimed exact restoration over an unchecked rollback.
+    # This gate drives the primitive against a scratch HKCU key and a temp
+    # themes dir with the activation dispatch stubbed: deletion/registry/
+    # false-activation failures must end INCOMPLETE with the resource named,
+    # and only a fully verified restore may claim exact restoration.
+    @{ Name = 'test-windows-prestate.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-windows-prestate.ps1"' },
+    # SRC-005:R008 (W2-004): recovery artifacts and their provenance are part of
+    # the rollback authority, so a crash mid-write must never leave a partial
+    # authoritative file on its final name. The gate drives Write-Utf8Atomic /
+    # Copy-FileAtomic / Write-RecoveryProvenance / Sync-SourceBackup directly:
+    # rejected or interrupted writes keep the prior authoritative content, no
+    # orphan .wintage-tmp-* survives, invalid sidecars fail closed, and a rebase
+    # takes non-owned content from the live source while keeping the OLD pristine
+    # owned tokens.
+    @{ Name = 'test-atomic-recovery.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-atomic-recovery.ps1"' },
+    # CORE-004 (SRC-005:R004): the imported-theme freshness gate must be a REAL
+    # comparison under the exact release invocation. The pre-fix --check printed
+    # "freshness check skipped" and exited 0 with no FastPrompter checkout, so a
+    # hand-edited imported pack passed the gate that advertises it cannot. The
+    # gate now verifies each imported pack against the committed sha256
+    # fingerprint set; a hand-edit, a missing pack, or a missing fingerprint
+    # file FAILS - never a skip.
+    @{ Name = 'test-import-freshness.js'; Cmd = 'node "{0}\tools\test-import-freshness.js"' },
     # PERF-002/003/004/006/007 (SRC-004): the repaint and injection lanes must be
     # bounded by the budgets they advertise. Every finding here was invisible from
     # outside -- the theme looked right and the machine just cost more -- so the

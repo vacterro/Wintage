@@ -1,0 +1,79 @@
+{
+  "clauses": {
+    "SRC-005:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001: P1 wintage.user.js theme-switch reload survival equates 'location.reload() did not throw' with 'the old document will unload': a cancelled beforeunload leaves the old palette painted while GM_setValue already persisted the new one, with no pending-theme row or warning."
+    },
+    "SRC-005:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002: P1 setupRouteGuard commits the __wintageRouteGuard boolean latch before any hook installs; one transient pushState/replaceState/listener failure permanently suppresses reinjection repair, so same-document pushState can enter OAuth/captcha/payment excluded routes unguarded."
+    },
+    "SRC-005:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003: P1 targets.ps1 Restore-DirPreState returns success when Existed=true and SnapshotPath is missing, and deletes the authoritative snapshot from an unconditional finally on materialization failure, so Invoke-TargetCommit can claim exact pre-operation state after a failed rollback."
+    },
+    "SRC-005:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004: P2 import-fastprompter.js --check exits 0 printing 'no FastPrompter source available - freshness check skipped' under the exact release.ps1 invocation, so a hand-edited or stale imported theme pack passes the release freshness gate that exists to catch it."
+    },
+    "SRC-005:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-001: P1 Invoke-Obsidian multi-vault Apply/Revert rolls back only the currently failing vault: earlier mutated vaults stay themed on a failed Apply (or keep consumed recovery on a failed Revert), the manifest never advances, and per-vault rollback errors are swallowed by empty catches."
+    },
+    "SRC-005:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-002: P1 many handlers still mutate live state before Invoke-TargetCommit despite the repaired invariant: Total Commander legacy Revert/Apply, SmartVac Revert/Apply, WildRift, SAIPENVIEW, BetterDiscord, generic extension Revert in install.ps1, the browser dispatch child path, and the Windows theme helper interval."
+    },
+    "SRC-005:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-003: P1 SmartVac, WildRift and SAIPENVIEW Revert commit blocks remove the manifest entry before the fallible backup deletion, so a failure after removal restores the target while the manifest entry is permanently gone -- scriptblock grouping is not atomicity."
+    },
+    "SRC-005:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-004: P1 recovery artifacts and provenance are written directly to final names (Write-Utf8/File WriteAllText) and later gated by Test-Path existence: a crash mid first-touch/rebase poisons the authoritative recovery state instead of failing closed."
+    },
+    "SRC-005:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-005: P1 Restore-WindowsPreState suppresses registry/file removal failures with SilentlyContinue, does not verify CurrentTheme restoration after ShellExecute, and its caller then reports exact pre-operation state unverified."
+    },
+    "SRC-005:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-006: P2 Obsidian cssTheme recovery conflates explicit JSON null with an absent property, and Revert parses recovery JSON without schema validation, so a wrong-shape payload like {} follows the false branch and deletes a live cssTheme value."
+    },
+    "SRC-005:R011": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-001: P1 Electron transaction snapshots stack whole-binary Buffers, hold the moved ASAR twice, and the parent Save-ElectronStateSnapshot lightweight repaint branch is dead because -Operation Repaint is never passed by any call site."
+    },
+    "SRC-005:R012": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-002: P1 mutation intake is unbounded in record cardinality: onMutations walks the full addedNodes tail past the 500 budget, and shim SCROLL_FIX/AD_BLOCK retain every added root with identity-only dedupe, giving triangular nested-root traversal."
+    },
+    "SRC-005:R013": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-003: P1 the light sweep lane materializes the complete not-done NodeList before the 2500 budget is consulted, and lightPending is cleared after the pass, so one isolated light request always costs two full-root selector sweeps."
+    },
+    "SRC-005:R014": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-004: P1 piercedRoots holds strong references with no removedNodes handling and the shared shadowObserver is never rebuilt after pruning, so detached shadow roots stay registered until permanent suspension."
+    }
+  },
+  "derived_at": "2026-09-05T17:24:38Z",
+  "derived_from": "SRC-005",
+  "interpretation_revision": 14,
+  "schema_version": 1,
+  "source_sha256": "1dcd3890d40a82a69c41bfe3ca82e9b147b0e7fdc1c3f899b9d1d467aa92e87c"
+}

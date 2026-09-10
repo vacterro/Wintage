@@ -16,14 +16,40 @@
     "audit/2.md": {
       "binding": "exact",
       "captured_at": "2026-09-03T21:10:21Z",
-      "closed_at": null,
+      "closed_at": "2026-09-05T00:20:00Z",
       "file_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699",
       "generation": 1,
       "layer": 2,
-      "linked_work": "T-240",
+      "linked_work": null,
       "receipt_id": "SRC-004",
       "receipt_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699",
       "size_bytes": 76529,
+      "state": "DELETED"
+    },
+    "audit/3.md": {
+      "binding": "exact",
+      "captured_at": "2026-09-05T17:24:38Z",
+      "closed_at": "2026-09-10T04:12:00Z",
+      "file_sha256": "1dcd3890d40a82a69c41bfe3ca82e9b147b0e7fdc1c3f899b9d1d467aa92e87c",
+      "generation": 1,
+      "layer": 3,
+      "linked_work": null,
+      "receipt_id": "SRC-005",
+      "receipt_sha256": "1dcd3890d40a82a69c41bfe3ca82e9b147b0e7fdc1c3f899b9d1d467aa92e87c",
+      "size_bytes": 72317,
+      "state": "DELETED"
+    },
+    "audit/4.md": {
+      "binding": "exact",
+      "captured_at": "2026-09-06T00:00:00Z",
+      "closed_at": null,
+      "file_sha256": "21c0bc0d8b4b335492eaadf53b786780f71ee8141aeee5cb0da54d6572a3b894",
+      "generation": 1,
+      "layer": 4,
+      "linked_work": "T-242",
+      "receipt_id": "SRC-006",
+      "receipt_sha256": "21c0bc0d8b4b335492eaadf53b786780f71ee8141aeee5cb0da54d6572a3b894",
+      "size_bytes": 62647,
       "state": "ACTIVE"
     }
   },

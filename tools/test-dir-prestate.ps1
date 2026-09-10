@@ -128,12 +128,20 @@ Restore-DirPreState $stillAbsent @{ Existed = $false; SnapshotPath = $null }
 check 'restore absent: no-op on a still-absent dir does not throw' ($true)
 check 'restore absent: no-op on a still-absent dir does not create it' (-not (Test-Path $stillAbsent))
 
-# ---- Test 6: Restore for Existed=true with missing SnapshotPath is a no-op ----
+# ---- Test 6 (SRC-005 CORE-003): Restore for Existed=true with a missing
+# SnapshotPath FAILS CLOSED ----
+# Pre-fix this was codified as a no-op "restore lost", which let
+# Invoke-TargetCommit print "target restored to its exact pre-operation state"
+# after a rollback that restored NOTHING. Existed=true means the snapshot IS
+# the rollback authority for a directory that was captured; when it is gone the
+# restore must throw BEFORE touching the live directory.
 $live = Join-Path $testRoot 'live'
 New-Item -ItemType Directory -Path $live -Force | Out-Null
 'survives' | Set-Content (Join-Path $live 'keep.txt')
-Restore-DirPreState $live @{ Existed = $true; SnapshotPath = 'C:\does-not-exist' }
-check 'restore lost: no-op when snapshot is missing' ($true)
+$caughtLost = $null
+try { Restore-DirPreState $live @{ Existed = $true; SnapshotPath = 'C:\does-not-exist' } } catch { $caughtLost = $_.Exception.Message }
+check 'restore lost: throws on a missing authoritative snapshot' ($null -ne $caughtLost)
+if ($caughtLost) { check 'restore lost: the message refuses an unverifiable restore' ($caughtLost -match 'refusing to restore an unverifiable') }
 check 'restore lost: live dir untouched' (Test-Path $live)
 check 'restore lost: live content untouched' (Test-Path (Join-Path $live 'keep.txt'))
 
@@ -255,6 +263,37 @@ New-Item -ItemType Directory -Path $snapConsume -Force | Out-Null
 $preConsume = Save-DirPreState $snapConsume
 Restore-DirPreState $snapConsume $preConsume
 check 'W2-002: snapshot directory removed after successful restore' (-not (Test-Path $preConsume.SnapshotPath))
+
+# ---- Test 16 (SRC-005 CORE-003): a FAILED restore preserves the authoritative
+# snapshot ----
+# Pre-fix the unconditional finally deleted the snapshot even when the swap
+# threw, turning a recoverable failure into data loss: the very bytes the
+# rollback needed were gone. Now the snapshot is consumed ONLY on a known-good
+# restore, so a materialisation failure must leave it intact and named.
+$keepDir = Join-Path $testRoot 'snap-keep'
+New-Item -ItemType Directory -Path $keepDir -Force | Out-Null
+'orig' | Set-Content (Join-Path $keepDir 'orig.txt')
+$snapKeep = Save-DirPreState $keepDir
+$snapKeepPath = $snapKeep.SnapshotPath
+check 'snapshot-preserved: snapshot exists before restore' (Test-Path $snapKeepPath)
+# Inject a failure at the materialise step: make the snapshot unreadable by
+# removing it between Save and Restore, so the swap throws in Copy-Item.
+$keepStream = $null
+try {
+    # Hold an exclusive lock on a file inside the LIVE dir so the RETIRE rename
+    # fails (the swap throws after materialise succeeded). The snapshot must
+    # survive this INCOMPLETE path.
+    $keepStream = [System.IO.File]::Open((Join-Path $keepDir 'orig.txt'), 'Open', 'Read', 'None')
+    $keepErr = $null
+    try { Restore-DirPreState $keepDir $snapKeep } catch { $keepErr = $_.Exception.Message }
+    check 'snapshot-preserved: retire failure throws INCOMPLETE' ($null -ne $keepErr -and $keepErr -match 'INCOMPLETE')
+} finally {
+    if ($keepStream) { $keepStream.Dispose() }
+}
+# The authoritative snapshot must still exist and hold the original bytes.
+check 'snapshot-preserved: snapshot survives the failed restore' (Test-Path $snapKeepPath)
+check 'snapshot-preserved: snapshot content is byte-exact' ((Get-Content (Join-Path $snapKeepPath 'orig.txt') -Raw) -replace "`r?`n", '' -eq 'orig')
+if ($snapKeepPath -and (Test-Path $snapKeepPath)) { Remove-Item $snapKeepPath -Recurse -Force -ErrorAction SilentlyContinue }
 
 Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 

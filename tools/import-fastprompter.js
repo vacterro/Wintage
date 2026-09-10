@@ -17,11 +17,16 @@
 //
 // Usage: node tools/import-fastprompter.js [--source <themes.py>] [--check]
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(ROOT, 'themes');
+// The digest set lives beside the tool that owns it, NOT in themes/ — every
+// .json there is loaded as a theme pack by theme-schema.js, and this file is
+// verification data, not a pack.
+const FINGERPRINT_FILE = path.join(__dirname, 'fastprompter-fingerprints.json');
 const DEFAULT_SOURCE = '';
 
 const arg = (name, fallback) => {
@@ -172,11 +177,86 @@ function toPack(name, raw) {
   };
 }
 
+// CORE-004 (SRC-005:R004): the release gate used to invoke `--check` with no
+// source and print "freshness check skipped" before exiting 0 -- so a
+// hand-edited or stale imported pack passed the very gate that advertises it
+// cannot. There is no bundled upstream checkout to compare against, so the
+// invariant is made locally verifiable instead: every imported pack's exact
+// import-derived content is recorded as a sha256 digest in
+// themes/fastprompter-fingerprints.json, and `--check` without `--source`
+// reproduces-and-compares each pack against that digest. A hand-edit changes
+// the digest and FAILS; a skipped comparison is no longer a possible outcome.
+const fingerprintOf = (file) => {
+  const text = fs.readFileSync(file, 'utf8');
+  return crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n'), 'utf8').digest('hex');
+};
+
+// Recompute the digest set from the CURRENT imported packs. Only legitimate
+// paths may call it: the write half of a real import (the packs were just
+// regenerated from the upstream source) or an explicit --write-fingerprints
+// operator action after reviewing the diff.
+function writeFingerprints() {
+  const packs = {};
+  for (const name of Object.keys(SLUGS)) {
+    const slug = SLUGS[name][0];
+    const file = path.join(THEME_DIR, slug + '.json');
+    if (!fs.existsSync(file)) { console.error('import-fastprompter: cannot fingerprint a missing pack: ' + slug + '.json'); return false; }
+    packs[slug] = fingerprintOf(file);
+  }
+  const doc = {
+    note: 'sha256 of each FastPrompter-imported theme pack, verified by "node tools/import-fastprompter.js --check" when no upstream source is available. An imported pack may only change by re-running the import (or --write-fingerprints after reviewing the diff).',
+    packs
+  };
+  fs.writeFileSync(FINGERPRINT_FILE, JSON.stringify(doc, null, 2) + '\n');
+  console.log('import-fastprompter: wrote fingerprints for ' + Object.keys(packs).length + ' imported pack(s) -> ' + path.relative(ROOT, FINGERPRINT_FILE));
+  return true;
+}
+
+function verifyFingerprints() {
+  if (!fs.existsSync(FINGERPRINT_FILE)) {
+    console.error('import-fastprompter: the FastPrompter source is not available and the local fingerprint file is missing (' +
+      path.relative(ROOT, FINGERPRINT_FILE) + ') - the imported packs cannot be verified.');
+    console.error('  run: node tools/import-fastprompter.js --source <fastprompter themes.py> --write-fingerprints');
+    return 1;
+  }
+  let expected;
+  try {
+    expected = JSON.parse(fs.readFileSync(FINGERPRINT_FILE, 'utf8'));
+  } catch (e) {
+    console.error('import-fastprompter: the fingerprint file is not valid JSON: ' + e.message);
+    return 1;
+  }
+  const expectedPacks = expected && expected.packs ? expected.packs : {};
+  let bad = 0, missing = 0;
+  for (const name of Object.keys(SLUGS)) {
+    const slug = SLUGS[name][0];
+    const file = path.join(THEME_DIR, slug + '.json');
+    if (!expectedPacks[slug]) { console.error('import-fastprompter: MISSING fingerprint for ' + slug + '.json'); missing++; continue; }
+    if (!fs.existsSync(file)) { console.error('import-fastprompter: MISSING imported pack ' + slug + '.json'); missing++; continue; }
+    const actual = fingerprintOf(file);
+    if (actual !== expectedPacks[slug]) {
+      console.error('import-fastprompter: DRIFT ' + slug + '.json - content no longer matches the FastPrompter import (expected ' +
+        expectedPacks[slug].slice(0, 12) + ', got ' + actual.slice(0, 12) + ')');
+      bad++;
+    }
+  }
+  if (bad || missing) {
+    console.error('\n' + (bad + missing) + ' imported pack(s) unverifiable or drifted - an imported pack must only be changed by re-running the import.');
+    return 1;
+  }
+  console.log('import-fastprompter: ' + Object.keys(SLUGS).length + ' imported pack(s) match their FastPrompter fingerprints');
+  return 0;
+}
+
 const source = arg('source', DEFAULT_SOURCE);
 if (!source || !fs.existsSync(source)) {
   if (checkOnly) {
-    console.log('import-fastprompter: no FastPrompter source available - freshness check skipped');
-    process.exit(0);
+    // No upstream checkout: verify against the committed fingerprints. A
+    // missing/unreadable fingerprint file is a FAIL, never a skip.
+    process.exit(verifyFingerprints());
+  }
+  if (process.argv.includes('--write-fingerprints')) {
+    process.exit(writeFingerprints() ? 0 : 1);
   }
   console.error('import-fastprompter: source not found: ' + source);
   console.error('  pass --source <path to fastprompter themes.py>');
@@ -214,4 +294,12 @@ for (const name of Object.keys(SLUGS)) {
 }
 
 if (stale) { console.error('\n' + stale + ' pack(s) out of date - run `node tools/import-fastprompter.js`'); process.exit(1); }
+// The fingerprints always follow a successful real import, so the committed
+// digest set can never describe a state the import no longer produces.
+if (wrote || checkOnly || process.argv.includes('--write-fingerprints')) {
+  if (!writeFingerprints()) process.exit(1);
+} else if (!fs.existsSync(FINGERPRINT_FILE)) {
+  // First import on a fresh checkout produced no drift; still seed the set.
+  if (!writeFingerprints()) process.exit(1);
+}
 console.log('import-fastprompter: ' + (wrote ? wrote + ' pack(s) written' : 'everything up to date'));

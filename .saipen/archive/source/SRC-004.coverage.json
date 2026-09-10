@@ -1,0 +1,176 @@
+{
+  "requirements": {
+    "SRC-004:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-830",
+      "text": "CORE-001: P0 install-terminal.js owned-state snapshot cannot reconstruct the pre-Apply Windows Terminal document: presence is not encoded separately from value so explicit nulls are deleted, the legacy profiles-array container shape is not captured, and a pre-existing user scheme named Wintage is permanently removed by Revert.",
+      "verification": "E-832",
+      "work": "T-234"
+    },
+    "SRC-004:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-830",
+      "text": "CORE-002: P1 install-electron relocation Revert rollback is still incomplete: the root app.asar.unpacked rename is not undone, captureRevertPreState carries no root-unpacked field, and rollbackOk ignores it so the tool can still claim exact restoration.",
+      "verification": "E-832",
+      "work": "T-234"
+    },
+    "SRC-004:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-830",
+      "text": "CORE-003: P1 wintage.user.js excluded-route handling beyond the reload latch: no repainter suspension or quarantine when an excluded URL is detected, and the pending-theme menu row predicate is unreachable as written.",
+      "verification": "E-832",
+      "work": "T-234"
+    },
+    "SRC-004:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-805",
+      "text": "CORE-004: P1 tools/test-theme-switch.js stale real-source harness aborts the release gate with a ReferenceError instead of running its assertions.",
+      "verification": "E-808",
+      "work": "T-236"
+    },
+    "SRC-004:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-839",
+      "text": "CORE-005: P2 targets.ps1 Get-IniKey recovery semantics discard the empty-string vs absent distinction when restoring Total Commander and qBittorrent owned INI keys.",
+      "verification": "E-841",
+      "work": "T-234"
+    },
+    "SRC-004:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-834",
+      "text": "W2-001: P1 install-windows-theme.js finalizeRevert removes the file Revert returns as the activation target, and the epochRetired branch is unreachable because nothing writes the marker.",
+      "verification": "E-836",
+      "work": "T-234"
+    },
+    "SRC-004:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-834",
+      "text": "W2-002: P1 install-obs.js readThemeSnapshot falls through a failed JSON parse into parseIni and returns a truthy empty snapshot, and the theme key is read case-sensitively while the writers are case-insensitive.",
+      "verification": "E-836",
+      "work": "T-234"
+    },
+    "SRC-004:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-839",
+      "text": "W2-003: P1 common.ps1 Get-InstallEpoch returns its own freshly generated GUID without re-reading the persisted winner and takes no lock, so concurrent first creation yields divergent epochs.",
+      "verification": "E-841",
+      "work": "T-234"
+    },
+    "SRC-004:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-839",
+      "text": "W2-004: P1 several targets mutate state before Invoke-TargetCommit: OBS snapshot-then-throw, qBittorrent Revert INI write before the pristine check, qBittorrent Apply, MPC-HC registry writes, and the generic install.ps1 path.",
+      "verification": "E-841",
+      "work": "T-234"
+    },
+    "SRC-004:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-839",
+      "text": "W2-005: P1 native rollback callers ignore exit codes: the node settings revert and reg import are unchecked, Invoke-TargetCommit rethrows bare in its rollback catch, and it prints exact restoration without verifying state.",
+      "verification": "E-841",
+      "work": "T-234"
+    },
+    "SRC-004:R011": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-839",
+      "text": "W2-006: P1 install.ps1 first-touch recovery creates directories, copies the pristine file and writes recovery metadata before the ShouldProcess gate, so -WhatIf mutates disk.",
+      "verification": "E-841",
+      "work": "T-234"
+    },
+    "SRC-004:R012": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-839",
+      "text": "W2-007: P2 paths.json is read-modify-written unlocked from two places, and Ask-CustomPath reports success unconditionally so a failed save still logs folder set.",
+      "verification": "E-841",
+      "work": "T-234"
+    },
+    "SRC-004:R013": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-847",
+      "text": "PERF-001: P1 Electron transaction snapshots read whole files into memory and copy the same archive twice, and the PowerShell lightweight snapshot branch is dead because -Operation Repaint is passed nowhere.",
+      "verification": "E-849",
+      "work": "T-234"
+    },
+    "SRC-004:R014": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-843",
+      "text": "PERF-002: P1 mutation intake is unbounded in node cardinality: the addedNodes loop walks the full tail past the collection budget, and the shim queues every added node before its own budget with identity-only dedupe.",
+      "verification": "E-845",
+      "work": "T-234"
+    },
+    "SRC-004:R015": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-843",
+      "text": "PERF-003: P1 the light sweep lane materializes the whole not-done NodeList before consulting the budget, and lightPending is cleared after the sweep so one isolated request always costs two sweeps.",
+      "verification": "E-845",
+      "work": "T-234"
+    },
+    "SRC-004:R016": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-843",
+      "text": "PERF-004: P1 piercedRoots holds strong references and nothing observes removedNodes or unobserves, so detached shadow roots are retained until a suspend.",
+      "verification": "E-845",
+      "work": "T-234"
+    },
+    "SRC-004:R017": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-860",
+      "text": "PERF-005: P1 the installer GUI spawns one blocking child process per checked target for Apply, Revert and listing, and repeats build-desktop --check and the fuse probe per target with no cache.",
+      "verification": "E-862",
+      "work": "T-240"
+    },
+    "SRC-004:R018": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-843",
+      "text": "PERF-006: P2 the shim WCO_FIX schedules a raw requestAnimationFrame per resize and geometrychange with no frame latch, and re-queries plus measures every control each frame.",
+      "verification": "E-845",
+      "work": "T-234"
+    },
+    "SRC-004:R019": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-843",
+      "text": "PERF-007: P2 the shim injection epoch bumps on in-page navigation and every ready/finish-load event calls inject, while only the newest CSS key is stored and nothing is ever removed.",
+      "verification": "E-845",
+      "work": "T-234"
+    }
+  },
+  "schema_version": 1
+}

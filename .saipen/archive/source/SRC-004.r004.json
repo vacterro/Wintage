@@ -1,0 +1,29 @@
+{
+  "clauses": {
+    "SRC-004:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001: P0 install-terminal.js owned-state snapshot cannot reconstruct the pre-Apply Windows Terminal document: presence is not encoded separately from value so explicit nulls are deleted, the legacy profiles-array container shape is not captured, and a pre-existing user scheme named Wintage is permanently removed by Revert."
+    },
+    "SRC-004:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002: P1 install-electron relocation Revert rollback is still incomplete: the root app.asar.unpacked rename is not undone, captureRevertPreState carries no root-unpacked field, and rollbackOk ignores it so the tool can still claim exact restoration."
+    },
+    "SRC-004:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003: P1 wintage.user.js excluded-route handling beyond the reload latch: no repainter suspension or quarantine when an excluded URL is detected, and the pending-theme menu row predicate is unreachable as written."
+    },
+    "SRC-004:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004: P1 tools/test-theme-switch.js stale real-source harness aborts the release gate with a ReferenceError instead of running its assertions."
+    }
+  },
+  "derived_at": "2026-09-03T22:31:58Z",
+  "derived_from": "SRC-004",
+  "interpretation_revision": 4,
+  "schema_version": 1,
+  "source_sha256": "6efa3d972693f536de1c32f166bc15871864bd91c886f088bad38b7a7d0f0699"
+}
