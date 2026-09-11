@@ -27,7 +27,7 @@ för de tre token som bär text — en palett som failar där nekas ändå av
 buildgrinden, så det är bättre att se det före Apply än efter.
 
 Mål är delade i två listor som nås via tangentbordet: **MY APPS** innehåller de
-portabla/source-tree-verktygen CodeNomad, SAIPENVIEW, SmartVac och WildRift;
+portabla/source-tree-verktygen CodeNomad, WorkBuddy;
 **POPULAR APPS** innehåller Windows, OBS, terminaler, editorer och den övriga
 installerade programvaran. ALL/NONE och Apply/Revert verkar på båda listorna utan
 att ändra deras gruppering.
@@ -68,10 +68,8 @@ arkivet är i bruk.
 | `claude` | Electron-shim, lappad på plats — se nedan | no — en uppdatering skapar en ny `app-<version>`-mapp |
 | `mpchc` | registry, mörkt tema + endast OSD-typografi | no — MPC-HC skriver om sina inställningar vid avslut |
 | `obsidian` | communitytema per vault, alla paletter installerade på en gång | **yes** — den bor i din vault |
-| `saipenview` | skriver om sina egna `:root`-tokenvärden i `style.css` | no — en källfil; kör igen efter en pull |
 | `discord` | CSS placerat i BetterDiscords egen temamapp | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini`-nycklar `[Colors]`; befintliga recent-file-filter använder palettens länkfärg | yes — det är din ini |
-| `smartvac`, `wildrift` | tokentabell omskriven i appens egen källkod | no — en källfil; kör igen efter en pull |
 
 ### FreeBuff-annonsborttagning
 
@@ -285,20 +283,6 @@ installation; `appearance.json` backas upp först, och `-Revert` tar bort bara
 `Wintage *`-temana och återställer ditt tidigare val — ett handgjort tema i samma
 vault rörs aldrig.
 
-### SAIPENVIEW
-
-Dess frontend deklarerar redan Wintage-tokennamnen i sin egen `:root`, så den här
-lappen skriver om **bara tokenvärdena** — aldrig en selektor, ett typsnitt, en
-rambredd eller en padding. Inget som påverkar boxmodellen ändras, så texten kan
-inte flytta sig. Det är avsiktligt: det tidigare tillvägagångssättet lade hela
-webbläsarstilmallen ovanpå, och `wintage.css` är skriven för godtyckliga webbsidor
-— universella selektorer som tvingar fram typsnittet, storleksstegen, 2px-ramar
-och kontrollhöjder. På en app som redan har sin egen layout flyttar det allt.
-
-Verifierat genom att maskera varje hex och diffa mot backupen: strukturellt
-identiska, bara färgliteralerna skiljer. `--link` rapporteras som inte deklarerad
-där (dess markdown-länkar läser `--accentTeal`, vilket detta ställer in) i stället
-för att injiceras — att lägga till en variabel som appen aldrig läser vore dödvikt.
 
 ### MPC-HC (K-Lite)
 

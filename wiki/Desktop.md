@@ -23,10 +23,10 @@ preview, and all twenty-one colour tokens as editable swatches. Editing any swat
 forks the palette into **Custom**. A live WCAG panel shows contrast for the three
 text-bearing tokens before Apply.
 
-Targets are split into two keyboard-reachable lists: **MY APPS** (portable/source-tree
-CodeNomad, SAIPENVIEW, SmartVac, WildRift) and **POPULAR APPS** (Windows, OBS,
-terminals, editors and other installed software). ALL/NONE and Apply/Revert operate
-across both lists without changing their grouping.
+Targets are split into two keyboard-reachable lists: **MY APPS** (CodeNomad,
+WorkBuddy) and **POPULAR APPS** (Windows, OBS, terminals, editors and other
+installed software). ALL/NONE and Apply/Revert operate across both lists without
+changing their grouping.
 
 ## What each target can actually be themed
 
@@ -39,15 +39,15 @@ across both lists without changing their grouping.
 | `obs` | OBS 30.2+ `.ovt` variant + active `user.ini` theme ID | yes |
 | `qbittorrent` | unpacked Qt UI theme (`config.json` + `stylesheet.qss`) + the two `qBittorrent.ini` theme keys | yes |
 | `antigravity`, `vscode` | colour-theme extension in the extensions folder | **yes** |
-| `freebuff`, `antigravity-app`, `codenomad` | Electron shim (relocation) | no — re-run the installer |
+| `freebuff`, `antigravity-app`, `codenomad`, `workbuddy`, `zcode` | Electron shim (relocation) | no — re-run the installer |
 | `claude` | Electron shim, patched in place | no — an update makes a new folder |
 | `mpchc` | registry, dark theme + OSD typography only | no — MPC-HC rewrites settings on exit |
 | `qbittorrent`/`obs`/`mpchc` fonts | the themes NAME `Verdana_m1` (the no-antialias face); the installer never installs or removes fonts | n/a — install the face once by hand |
 | `obsidian` | community theme per vault, all palettes installed at once | **yes** |
-| `saipenview` | rewrites its own `:root` token values in `style.css` | no — a source file; re-run after a pull |
-| `discord` | CSS dropped into BetterDiscord's own theme folder | yes |
+| `notepadplusplus` | XML theme dropped into themes folder | yes |
+| `cinema4d` | scheme folder dropped into schemes directory | yes |
+| `discord` | CSS dropped into BetterDiscord's own theme folder; plugins tab manages BetterDiscord add-ons | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` keys | yes |
-| `smartvac`, `wildrift` | token table rewritten in the app's own source | no — a source file; re-run after a pull |
 
 ## Electron apps
 

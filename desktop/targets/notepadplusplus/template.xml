@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Wintage — Windows 95 Theme for Notepad++ (${label}) -->
+<NotepadPlus>
+    <LexerStyles>
+        <LexerType name="xml" desc="XML" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="TAG" styleID="1" fgColor="${linkHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="TAGUNKNOWN" styleID="2" fgColor="${dangerHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTE" styleID="3" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTEUNKNOWN" styleID="4" fgColor="${dangerHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="5" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="DOUBLESTRING" styleID="6" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="SINGLESTRING" styleID="7" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="OTHER" styleID="8" fgColor="${textSecondaryHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMMENT" styleID="9" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="ENTITY" styleID="10" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+        <LexerType name="html" desc="HTML" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="TAG" styleID="1" fgColor="${linkHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="TAGUNKNOWN" styleID="2" fgColor="${dangerHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTE" styleID="3" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTEUNKNOWN" styleID="4" fgColor="${dangerHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="5" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="DOUBLESTRING" styleID="6" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="SINGLESTRING" styleID="7" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="OTHER" styleID="8" fgColor="${textSecondaryHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMMENT" styleID="9" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="ENTITY" styleID="10" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+        <LexerType name="javascript" desc="JavaScript" ext="">
+            <WordsStyle name="DEFAULT" styleID="11" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="INSTRUCTION WORD" styleID="5" fgColor="${linkHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="TYPE WORD" styleID="16" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="4" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING" styleID="6" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="CHARACTER" styleID="7" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="OPERATOR" styleID="10" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMMENT" styleID="1" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="COMMENT LINE" styleID="2" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="COMMENT DOC" styleID="3" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+        </LexerType>
+        <LexerType name="json" desc="JSON" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="NUMBER" styleID="1" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING" styleID="2" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING_UNCLOSED" styleID="3" fgColor="${dangerHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="PROPERTYNAME" styleID="4" fgColor="${linkHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="ESCAPESEQUENCE" styleID="5" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="LINECOMMENT" styleID="6" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="BLOCKCOMMENT" styleID="7" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="OPERATOR" styleID="8" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="URI" styleID="9" fgColor="${linkHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMPACTIRI" styleID="10" fgColor="${linkHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="KEYWORD" styleID="11" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="LDKEYWORD" styleID="12" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ERROR" styleID="13" fgColor="${dangerTextHex}" bgColor="${surfaceHex}" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+        <LexerType name="python" desc="Python" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="COMMENT LINE" styleID="1" fgColor="${textMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="2" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING" styleID="3" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="CHARACTER" styleID="4" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="KEYWORDS" styleID="5" fgColor="${linkHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="TRIPLE" styleID="6" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="TRIPLEDOUBLE" styleID="7" fgColor="${accentTealHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="CLASSNAME" styleID="8" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="DEFNAME" styleID="9" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="OPERATOR" styleID="10" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="IDENTIFIER" styleID="11" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="DECORATOR" styleID="15" fgColor="${warningHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+    </LexerStyles>
+    <GlobalStyles>
+        <WidgetStyle name="Default Style" styleID="32" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+        <WidgetStyle name="Indent guideline style" styleID="37" fgColor="${borderMutedHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+        <WidgetStyle name="Brace highlight style" styleID="34" fgColor="${linkHex}" bgColor="${surfaceRaisedHex}" fontName="" fontStyle="1" fontSize="10" />
+        <WidgetStyle name="Bad brace colour" styleID="35" fgColor="${dangerHex}" bgColor="${backgroundSoftHex}" fontName="" fontStyle="0" fontSize="" />
+        <WidgetStyle name="Current line background colour" styleID="0" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Selected text colour" styleID="0" bgColor="${selectionHex}" fgColor="${textPrimaryHex}" />
+        <WidgetStyle name="Multi-selected text color" styleID="0" bgColor="${selectionHex}" />
+        <WidgetStyle name="Caret colour" styleID="0" fgColor="${linkHex}" />
+        <WidgetStyle name="Multi-edit carets color" styleID="0" fgColor="${borderHighlightHex}" />
+        <WidgetStyle name="Edge colour" styleID="0" fgColor="${borderMutedHex}" />
+        <WidgetStyle name="Line number margin" styleID="33" fgColor="${textMutedHex}" bgColor="${surfaceHex}" fontName="" fontStyle="0" fontSize="" />
+        <WidgetStyle name="Bookmark margin" styleID="0" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Change History margin" styleID="0" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Change History modified" styleID="0" fgColor="${warningHex}" bgColor="${warningHex}" />
+        <WidgetStyle name="Change History revert modified" styleID="0" fgColor="${successHex}" bgColor="${successHex}" />
+        <WidgetStyle name="Change History revert origin" styleID="0" fgColor="${linkHex}" bgColor="${linkHex}" />
+        <WidgetStyle name="Change History saved" styleID="0" fgColor="${successHex}" bgColor="${successHex}" />
+        <WidgetStyle name="Fold" styleID="0" fgColor="${textMutedHex}" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Fold active" styleID="0" fgColor="${linkHex}" />
+        <WidgetStyle name="Fold margin" styleID="0" fgColor="${textMutedHex}" bgColor="${surfaceHex}" />
+        <WidgetStyle name="White space symbol" styleID="0" fgColor="${borderMutedHex}" />
+        <WidgetStyle name="Smart Highlighting" styleID="29" bgColor="${surfaceAltHex}" />
+        <WidgetStyle name="Find Mark Style" styleID="31" bgColor="${accentTealDeepHex}" />
+        <WidgetStyle name="Find status: Not found" styleID="0" fgColor="${dangerHex}" />
+        <WidgetStyle name="Find status: Message" styleID="0" fgColor="${linkHex}" />
+        <WidgetStyle name="Find status: Search end reached" styleID="0" fgColor="${successHex}" />
+        <WidgetStyle name="Mark Style 1" styleID="25" bgColor="${accentTealHex}" />
+        <WidgetStyle name="Mark Style 2" styleID="24" bgColor="${warningHex}" />
+        <WidgetStyle name="Mark Style 3" styleID="23" bgColor="${linkHex}" />
+        <WidgetStyle name="Mark Style 4" styleID="22" bgColor="${surfaceRaisedHex}" />
+        <WidgetStyle name="Mark Style 5" styleID="21" bgColor="${successHex}" />
+        <WidgetStyle name="Incremental highlight all" styleID="28" bgColor="${surfaceAltHex}" />
+        <WidgetStyle name="Tags match highlighting" styleID="27" bgColor="${surfaceAltHex}" />
+        <WidgetStyle name="Tags attribute" styleID="26" bgColor="${linkHex}" />
+        <WidgetStyle name="Active tab focused indicator" styleID="0" fgColor="${linkHex}" />
+        <WidgetStyle name="Active tab unfocused indicator" styleID="0" fgColor="${borderHighlightHex}" />
+        <WidgetStyle name="Active tab text" styleID="0" fgColor="${textPrimaryHex}" />
+        <WidgetStyle name="Inactive tabs" styleID="0" fgColor="${textMutedHex}" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Tab color 1" styleID="0" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Tab color 2" styleID="0" bgColor="${surfaceRaisedHex}" />
+        <WidgetStyle name="Tab color 3" styleID="0" bgColor="${surfaceAltHex}" />
+        <WidgetStyle name="Tab color 4" styleID="0" bgColor="${compareBackHex}" />
+        <WidgetStyle name="Tab color 5" styleID="0" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Tab color dark mode 1" styleID="0" bgColor="${surfaceHex}" />
+        <WidgetStyle name="Tab color dark mode 2" styleID="0" bgColor="${surfaceRaisedHex}" />
+        <WidgetStyle name="Tab color dark mode 3" styleID="0" bgColor="${surfaceAltHex}" />
+        <WidgetStyle name="Tab color dark mode 4" styleID="0" bgColor="${compareBackHex}" />
+        <WidgetStyle name="Tab color dark mode 5" styleID="0" bgColor="${surfaceHex}" />
+        <WidgetStyle name="URL hovered" styleID="0" fgColor="${linkHex}" />
+        <WidgetStyle name="Document map" styleID="0" fgColor="${borderHighlightHex}" bgColor="${backgroundSoftHex}" />
+        <WidgetStyle name="EOL custom color" styleID="0" fgColor="${borderMutedHex}" />
+        <WidgetStyle name="Non-printing characters custom color" styleID="0" fgColor="${borderMutedHex}" />
+        <WidgetStyle name="Global override" styleID="0" fgColor="${textPrimaryHex}" bgColor="${backgroundSoftHex}" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+    </GlobalStyles>
+</NotepadPlus>

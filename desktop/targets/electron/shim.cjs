@@ -551,126 +551,6 @@ const SCROLL_INTENT_FIX = `(() => {
   return "scroll intent fix installed";
 })()`;
 
-// ─── ADS DIE AT THE LAYER THAT CANNOT GO STALE ──────────────────────────────
-// patch-freebuff-ads.js cuts FreeBuff's ads out of the renderer bundle and the
-// orchestrator byte-for-byte. That is the primary layer, and it is exactly as
-// durable as the strings it matches. A future FreeBuff release can rename every
-// minified identifier, move the ad component, or renumber the API paths -- and
-// the byte patch needs new strings after the first such release.
-//
-// This block is the layer that does NOT depend on any of that. It rides inside
-// the shim and intercepts the two things the application cannot rename without
-// breaking its own ad network:
-//
-//   1. the network calls. The renderer talks to the ad server over fetch/XHR to
-//      URLs that contain /api/ad/. Any request whose URL matches that path is
-//      turned into a rejection before it leaves the page, so the ad network is
-//      unreachable even if a future bundle wires the call sites back up.
-//   2. the painted card. Any element whose class contains `sponsored-ad` is
-//      hidden (display:none) as soon as it appears, forever, so even a build
-//      that renders ads with brand-new identifiers shows nothing.
-//
-// The block is harmless in non-FreeBuff apps: the URL pattern is unique to
-// FreeBuff's ad network and the class does not exist elsewhere. It never
-// touches requests that do not match, so no legitimate traffic is affected.
-const AD_BLOCK = `(() => {
-  if (window.__wintageAdBlock) return "already running";
-  window.__wintageAdBlock = true;
-
-  // Backslashes are DOUBLED, and that is load-bearing: this payload is a template
-  // literal in the shim, so a single \/ collapses to / and a single \b to a
-  // backspace character before the renderer ever sees the text. Written singly,
-  // the emitted line was "const AD_PATH = //api/ad/(...)" -- a comment -- and the
-  // payload died at parse with "Script failed to execute". It never ran once, on
-  // any launch, while the status file reported the failure to nobody.
-  // tools/test-shim-payloads.js now interpolates and parses this one too.
-  const AD_PATH = /\\/api\\/ad\\/(slot|impression|click)\\b/;
-  const AD_CLASS = /sponsored-ad/i;
-
-  const rf = window.fetch && window.fetch.bind(window);
-  if (rf) {
-    window.fetch = function (input, init) {
-      let url = "";
-      try { url = typeof input === "string" ? input : (input && input.url) || ""; } catch (e) { }
-      if (AD_PATH.test(url)) return Promise.reject(new TypeError("blocked by wintage"));
-      return rf(input, init);
-    };
-  }
-
-  const rxo = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (method, url) {
-    if (AD_PATH.test(String(url))) {
-      this.__wintageBlocked = true;
-      setTimeout(() => { try { this.abort(); } catch (e) { } }, 0);
-    }
-    return rxo.apply(this, arguments);
-  };
-  const rxs = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send = function () {
-    if (this.__wintageBlocked) return;
-    return rxs.apply(this, arguments);
-  };
-
-  const hideAds = root => {
-    if (root.nodeType === 1 && root.matches('[class*="sponsored-ad"]')) {
-      root.__wintageAdHidden = true;
-      root.style.setProperty("display", "none", "important");
-    }
-    for (const el of root.querySelectorAll('[class*="sponsored-ad"]')) {
-      if (el.__wintageAdHidden) continue;
-      el.__wintageAdHidden = true;
-      el.style.setProperty("display", "none", "important");
-    }
-  };
-  hideAds(document);
-  let queued = false;
-  // PERF-002 (SRC-004): the same overlapping-root shape SCROLL_FIX had. Every
-  // added element was retained until the frame, and then hideAds(root) ran a
-  // descendant query FOR EACH retained root -- so a parent and its children in
-  // one batch each queried the same subtree. Measured on the pre-fix payload:
-  // 1,000 nested added roots -> 499,500 descendant visits in ONE frame. Identity
-  // dedupe cannot see that, because a parent and a child are different objects.
-  const MAX_AD_ROOTS = 64;
-  let added = [];
-  let addedOverflow = false;
-  const queueAdRoot = node => {
-    if (!node || node.nodeType !== 1) return;
-    for (const root of added) {
-      if (root === node) return;
-      // An already-queued ancestor's query covers this node's subtree.
-      if (root.contains && root.contains(node)) return;
-    }
-    // This node subsumes queued descendants; drop them instead of querying the
-    // same subtree twice.
-    if (node.contains) added = added.filter(root => !node.contains(root));
-    if (added.length >= MAX_AD_ROOTS) { addedOverflow = true; return; }
-    added.push(node);
-  };
-  new MutationObserver(records => {
-    for (const r of records) {
-      for (const node of r.addedNodes) queueAdRoot(node);
-    }
-    if (queued || (!added.length && !addedOverflow)) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      // Overflow is ONE document-wide pass, which is a strict superset of every
-      // root that was dropped -- bounded work instead of one query per node.
-      if (addedOverflow) {
-        addedOverflow = false;
-        added = [];
-        hideAds(document);
-        return;
-      }
-      const batch = added;
-      added = [];
-      for (const root of batch) hideAds(root);
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true });
-
-  return "ad block installed";
-})()`;
-
 // ─── THEME SWITCH RE-ASSERT ─────────────────────────────────────────────────
 // FreeBuff 0.0.55 ships a real theme system (Pierre dark/light, stored under
 // localStorage "freebuff:theme", resolved against prefers-color-scheme in
@@ -953,9 +833,6 @@ if (css) {
           .then(r => stamp('scrollintent: ' + r))
           .catch(err => stamp('scrollintent FAILED: ' + (err && err.message)));
         if (IS_FREEBUFF) {
-          wc.executeJavaScript(AD_BLOCK, true)
-            .then(r => stamp('adblock: ' + r))
-            .catch(err => stamp('adblock FAILED: ' + (err && err.message)));
           wc.executeJavaScript(THEME_REASSERT_FIX, true)
             .then(r => stamp('themereassert: ' + r))
             .catch(err => stamp('themereassert FAILED: ' + (err && err.message)));

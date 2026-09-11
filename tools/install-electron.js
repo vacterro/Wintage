@@ -780,6 +780,20 @@ function captureAppDir() {
   snap['app.asar.unpacked'] = snapshotPath(movedUnpacked);
   return snap;
 }
+// SRC-006:R007: a palette-only repaint of a healthy themed-relocated target can
+// change ONLY the four small owned sidecars; it never touches the moved archive
+// or the unpacked tree. captureAppDir() additionally reads the archive (size +
+// SHA-256), which costs archive-sized I/O for bytes a repaint cannot mutate.
+// The repaint rollback therefore snapshots the MUTATION SET only; the full
+// archive-safe snapshot stays on the install / update-repair / revert paths.
+// (Fuse-drift repair is separately epoch-backed up inside the defuse itself.)
+function captureRepaintSet() {
+  const snap = {};
+  for (const f of ['package.json', 'shim.cjs', 'wintage.css', 'wintage-status.txt']) {
+    snap[f] = snapshotPath(path.join(appDir, f));
+  }
+  return snap;
+}
 function appDirByteIdentical(dir, snap) {
   for (const f of Object.keys(snap)) {
     // describePath reads size + streamed digest; it never materialises a file.
@@ -1097,7 +1111,8 @@ function repaintRelocation() {
   // CORE-008: repair fuse drift before repainting; keep the epoch backup.
   ensureDefusedForRepaint(resolveExe());
   // T-191 P0#5: transactional repaint of the owned app/ files.
-  const preApp = captureAppDir();
+  // SRC-006:R007: mutation-set snapshot only -- never archive-sized I/O here.
+  const preApp = captureRepaintSet();
   try {
     pkg.wintagePalette = palette;
     fs.writeFileSync(pkgPath(), JSON.stringify(pkg, null, 2) + '\n');

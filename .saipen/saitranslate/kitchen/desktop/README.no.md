@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Temaliste med fargebrikker, målene som er funnet på denne maskinen, en live Win95-forhåndsvisning og alle tjueen fargetokener som redigerbare swatches. Å redigere en swatch gafler paletten til **Custom** i stedet for å endre et utlevert tema under deg. Panelet til høyre viser live WCAG-kontrast for de tre tokenene som bærer tekst — en palett som feiler der blir uansett avvist av byggeporten, så det er bedre å se det før Apply enn etter.
 
-Målene er delt i to lister som nås med tastatur: **MY APPS** inneholder de bærbare/kilde-tre-verktøyene CodeNomad, SAIPENVIEW, SmartVac og WildRift; **POPULAR APPS** inneholder Windows, OBS, terminaler, editorer og den andre installerte programvaren. ALL/NONE og Apply/Revert virker på begge listene uten å endre grupperingen.
+Målene er delt i to lister som nås med tastatur: **MY APPS** inneholder de bærbare/kilde-tre-verktøyene CodeNomad, WorkBuddy; **POPULAR APPS** inneholder Windows, OBS, terminaler, editorer og den andre installerte programvaren. ALL/NONE og Apply/Revert virker på begge listene uten å endre grupperingen.
 
 Vinduet bærer paletten den er i ferd med å installere. Det er den raskeste forhåndsvisningen som finnes, og det holder verktøyet ærlig: en palett som gjør dette vinduet uleselig, er synlig uleselig.
 
@@ -46,10 +46,8 @@ Apply delegerer til `install.ps1`. Det er nøyaktig én kodebane som installerer
 | `claude` | Electron-shim, patchet på plass — se nedenfor | nei — en oppdatering lager en ny `app-<versjon>`-mappe |
 | `mpchc` | register, mørkt tema + OSD-typografi kun | nei — MPC-HC skriver om innstillingene sine ved avslutning |
 | `obsidian` | fellesskapstema per hvelv, alle paletter installert samtidig | **ja** — det ligger i hvelvet ditt |
-| `saipenview` | skriver om sine egne `:root`-tokenverdier i `style.css` | nei — en kildefil; kjør på nytt etter en pull |
 | `discord` | CSS sluppet inn i BetterDiscords egen temamappe | ja |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]`-nøkler; eksisterende nylige-fil-filtre bruker palettens lenkefarge | ja — det er din ini |
-| `smartvac`, `wildrift` | token-tabellen skrevet om i appens egen kilde | nei — en kildefil; kjør på nytt etter en pull |
 
 ### FreeBuff-annonsefjerning
 
@@ -138,11 +136,6 @@ Den andre halvdelen av dette var et mye stillere problem. Claudes `BrowserWindow
 
 Et fellesskapstema skrives inn i hvert hvelvs `.obsidian/themes/` — alle seksten paletter samtidig, nøyaktig som VS Code-målet, så du bytter mellom dem i **Settings → Appearance** uten å kjøre noe på nytt. Malen ble utledet fra det håndlagde `VintageWin95`-temaet som allerede var i hvelvet, hver farge erstattet av tokenet den tilsvarte. `-Palette <slug>` setter hvilken som er aktiv ved installasjon; `appearance.json` sikkerhetskopieres først, og `-Revert` fjerner bare `Wintage *`-temaene og gjenoppretter ditt forrige valg — et håndlaget tema i samme hvelv røres aldri.
 
-### SAIPENVIEW
-
-Frontenden erklærer allerede Wintage-tokennavnene i sin egen `:root`, så denne patchen skriver om **bare tokenverdiene** — aldri en selektor, en font, en bordbredde eller en padding. Ingenting som påvirker boksen modell endres, så teksten kan ikke flytte seg. Det er bevisst: den tidligere tilnærmingen la hele nettleserens stilark oppå, og `wintage.css` er skrevet for vilkårlige nettsider — universelle selektorer som tvinger font, størrelsesstige, 2px-border og kontrollhøyder. På en app som allerede har sitt eget oppsett, flytter det alt.
-
-Verifisert ved å maske hver hex og diff mot sikkerhetskopien: strukturelt identisk, bare fargeliteraler skiller seg. `--link` rapporteres som ikke deklarert der (markdown-lenkene leser `--accentTeal`, som dette setter) i stedet for injisert — å legge til en variabel appen aldri leser, ville vært dødvekt.
 
 ### MPC-HC (K-Lite)
 

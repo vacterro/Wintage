@@ -1,0 +1,13 @@
+{
+  "receipt_id": "SRC-006",
+  "status": "CLOSED",
+  "closed_at": "2026-09-11T02:35:00Z",
+  "closure_event": "E-902",
+  "linked_work": "T-242",
+  "archive_ref": ".saipen/archive/source/SRC-006.md",
+  "source_sha256": "21c0bc0d8b4b335492eaadf53b786780f71ee8141aeee5cb0da54d6572a3b894",
+  "requirements": 10,
+  "actionable": 10,
+  "unresolved": 0,
+  "schema_version": 1
+}

@@ -79,8 +79,31 @@
     --scrollbar_border: ${borderDark};
 }
 
-QWidget {
-    font-family: Verdana_m1, Verdana;
+*,
+QWidget,
+QLabel,
+QPushButton,
+QToolButton,
+QMenu,
+QMenuBar,
+QHeaderView,
+QListView,
+QTreeView,
+QTableView,
+QTabBar,
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QComboBox,
+QDockWidget,
+QStatusBar,
+QGroupBox,
+QSpinBox,
+QDoubleSpinBox,
+QCheckBox,
+QRadioButton,
+QToolTip {
+    font-family: Verdana_m1, "MS Sans Serif", Verdana;
     font-size: 12px;
 }
 

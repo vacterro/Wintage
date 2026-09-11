@@ -107,6 +107,8 @@ function Get-TargetCurrentPath([string]$key) {
         'conhost'   { if (Test-Path $CONHOST_KEY) { $CONHOST_KEY } else { $null }; break }
         'obs'       { if (Test-Path $OBS_CONFIG) { $OBS_CONFIG } else { $null }; break }
         'qbittorrent' { if (Test-Path $QBT_INI) { $QBT_INI } else { $null }; break }
+        'notepadplusplus' { $nppDir = Get-NotepadPlusPlusPath; if ($nppDir -and (Test-Path $nppDir)) { $nppDir } else { $null }; break }
+        'cinema4d'        { $c4dDir = Get-Cinema4DPath; if ($c4dDir -and (Test-Path $c4dDir)) { $c4dDir } else { $null }; break }
         'discord'   { $css = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (Test-Path $css) { $css } else { $null }; break }
         # W2-004: Total Commander health re-resolves through the SAME resolver
         # Apply uses (RedirectSection included), but the manifest-recorded
@@ -115,9 +117,6 @@ function Get-TargetCurrentPath([string]$key) {
         'totalcmd'  { $m = Read-ManifestQuiet; $ini = $null; if ($m -and $m.ContainsKey('totalcmd') -and $m['totalcmd'].path -and (Test-Path $m['totalcmd'].path)) { $ini = $m['totalcmd'].path } else { $ini = Resolve-TotalCmdIni 1 }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
         'totalcmd2' { $m = Read-ManifestQuiet; $ini = $null; if ($m -and $m.ContainsKey('totalcmd2') -and $m['totalcmd2'].path -and (Test-Path $m['totalcmd2'].path)) { $ini = $m['totalcmd2'].path } else { $ini = Resolve-TotalCmdIni 2 }; if ($ini -and (Test-Path $ini)) { $ini } else { $null }; break }
         'obsidian'  { $null; break }   # handled specially by Test-TargetNeedsReapply (recorded SET, never a joined fake path)
-        'saipenview' { $css = if ($SaipenviewPath) { Join-Path $SaipenviewPath 'saipenview\ui\static\style.css' } else { $null }; if ($css -and (Test-Path $css)) { $css } else { $null }; break }
-        'smartvac'  { $py = if ($SmartVacPath) { Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py' } else { $null }; if ($py -and (Test-Path $py)) { $py } else { $null }; break }
-        'wildrift'  { $py = if ($WildRiftPath) { Join-Path $WildRiftPath 'theme.py' } else { $null }; if ($py -and (Test-Path $py)) { $py } else { $null }; break }
         default {
             if ($ELECTRON.ContainsKey($key)) {
                 $e = $ELECTRON[$key]
@@ -534,6 +533,25 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                 $qPath = Get-IniKey $qLines 'Preferences' 'General\CustomUIThemePath'
                 if (-not (Test-QbtThemePath $qPath $qCfg)) { $reasons += "qbittorrent CustomUIThemePath points elsewhere ($qPath)" }
             }
+            'notepadplusplus' {
+                $nppDir = Get-NotepadPlusPlusPath
+                $nppTheme = if ($nppDir) { Join-Path $nppDir 'themes\Wintage.xml' } else { $null }
+                $nppMarker = if ($nppDir) { Join-Path $nppDir 'themes\.wintage-npp-palette' } else { $null }
+                if (-not $nppTheme -or -not (Test-Path $nppTheme)) { $reasons += 'notepadplusplus theme xml missing' }
+                if (-not $nppMarker -or -not (Test-Path $nppMarker)) { $reasons += 'notepadplusplus marker missing' }
+                else { $mv = (Read-Utf8 $nppMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "notepadplusplus marker mismatch ($mv)" } }
+            }
+            'cinema4d' {
+                $c4dDir = Get-Cinema4DPath
+                $c4dSchemes = if ($c4dDir) { Get-Cinema4DSchemesDir $c4dDir } else { $null }
+                $c4dCol = if ($c4dSchemes) { Join-Path $c4dSchemes 'Wintage\wintage.col' } else { $null }
+                $c4dRes = if ($c4dSchemes) { Join-Path $c4dSchemes 'Wintage\wintage.res' } else { $null }
+                $c4dMarker = if ($c4dSchemes) { Join-Path $c4dSchemes 'Wintage\.wintage-c4d-palette' } else { $null }
+                if (-not $c4dCol -or -not (Test-Path $c4dCol)) { $reasons += 'cinema4d col missing' }
+                if (-not $c4dRes -or -not (Test-Path $c4dRes)) { $reasons += 'cinema4d res missing' }
+                if (-not $c4dMarker -or -not (Test-Path $c4dMarker)) { $reasons += 'cinema4d marker missing' }
+                else { $mv = (Read-Utf8 $c4dMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "cinema4d marker mismatch ($mv)" } }
+            }
             'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" }
                 # A console profile whose screen-buffer height fell at/below its
                 # window height has ZERO scrollback and no scrollbar. conhost
@@ -556,14 +574,6 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
             # Invoke-MpcHc owns), not just one cheap marker.
             'mpchc'     { $props = Get-ItemProperty $MPC_KEY -ErrorAction SilentlyContinue; if ($props) { if ($props.MPCTheme -ne 1) { $reasons += 'mpc MPCTheme not themed' }; if ($props.ModernThemeMode -ne 2) { $reasons += 'mpc ModernThemeMode not themed' }; $wantFace = Get-WintageFontFace; if ($props.OSDFont -ne $wantFace) { $reasons += "mpc OSD font is '$($props.OSDFont)' not '$wantFace'" }; if ($props.OSDSize -ne 16) { $reasons += 'mpc OSD size not themed' }; if ($props.OSDTransparency -ne 0) { $reasons += 'mpc OSD transparency not themed' }; if ($props.OSDBorder -ne 1) { $reasons += 'mpc OSD border not themed' }; if ($props.TitleBarTextStyle -ne 1) { $reasons += 'mpc title bar text style not themed' } } else { $reasons += 'mpc settings key unreadable' } }
             'discord'   { $bdCss = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (-not (Test-Path $bdCss)) { $reasons += 'betterdiscord css missing' } elseif ($palTokens -and -not ((Read-Utf8 $bdCss) -match [regex]::Escape($palTokens.background))) { $reasons += 'betterdiscord css does not match the recorded palette' } }
-            # CORE-012: $currentPath IS the resolved CSS file (see
-            # Get-TargetCurrentPath); the old $cssFile variable is not defined in
-            # this scope and the Read-Utf8 of a null path THREW instead of
-            # returning an unhealthy verdict. An unreadable CSS file is an
-            # explicit health reason, never an uncaught exception.
-            'saipenview' { $svBak = if ($currentPath) { $currentPath + '.bak' } else { $null }; if (-not $svBak -or -not (Test-Path $svBak)) { $reasons += 'saipenview backup missing (never themed)' } elseif ($palTokens) { try { if (-not ((Read-Utf8 $currentPath) -match [regex]::Escape($palTokens.background))) { $reasons += 'saipenview css does not carry the recorded palette' } } catch { $reasons += 'saipenview css unreadable: ' + $_.Exception.Message } } }
-            'smartvac'  { $py = if ($SmartVacPath) { Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py' } else { $null }; if (-not $py -or -not (Test-Path $py)) { $reasons += 'smartvac file missing' } elseif (-not (Test-Path ($py + '.bak'))) { $reasons += 'smartvac backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $py) -match [regex]::Escape($palTokens.background))) { $reasons += 'smartvac owned tokens do not match the recorded palette' } }
-            'wildrift'  { $py = if ($WildRiftPath) { Join-Path $WildRiftPath 'theme.py' } else { $null }; if (-not $py -or -not (Test-Path $py)) { $reasons += 'wildrift file missing' } elseif (-not (Test-Path ($py + '.bak'))) { $reasons += 'wildrift backup missing (never themed)' } elseif ($palTokens -and -not ((Read-Utf8 $py) -match [regex]::Escape($palTokens.background))) { $reasons += 'wildrift owned tokens do not match the recorded palette' } }
         }
     }
     [pscustomobject]@{ Needs = ($reasons.Count -gt 0); Reasons = ($reasons -join '; '); Path = $currentPath }
@@ -711,7 +721,7 @@ function Restore-TotalCmdOwned([string]$ini, [string]$iniBak, [switch]$Keep) {
 }
 
 # ─── Source-tree backup provenance (T-189) ───────────────────────────────────
-# SmartVac/WildRift keep a pristine backup of the file as it was when Wintage
+# Source targets keep a pristine backup of the file as it was when Wintage
 # first touched it. If the UPSTREAM source changes after that (a new version of
 # the app's own file, unrelated to Wintage), the rollback base must follow: the
 # obsolete backup can never be the authority again, and repaint must not rebuild
@@ -719,10 +729,10 @@ function Restore-TotalCmdOwned([string]$ini, [string]$iniBak, [switch]$Keep) {
 # with the Wintage-owned regions normalised out - a difference means upstream
 # changed, so the backup is refreshed from the current pre-patch live file.
 function Test-SourceProvenanceChanged([string]$liveText, [string]$backupText, [string]$kind) {
-    $liveNorm = if ($kind -eq 'smartvac') { [regex]::Replace($liveText, '(?m)^WIN95_\w+\s*=\s*''[^'']*''', 'WIN95_X =') }
-                else { [regex]::Replace($liveText, '(?s)TOKENS\s*=\s*\{.*?\}', 'TOKENS = {}') }
-    $backupNorm = if ($kind -eq 'smartvac') { [regex]::Replace($backupText, '(?m)^WIN95_\w+\s*=\s*''[^'']*''', 'WIN95_X =') }
-                  else { [regex]::Replace($backupText, '(?s)TOKENS\s*=\s*\{.*?\}', 'TOKENS = {}') }
+    $liveNorm = if ($kind -eq 'tokens') { [regex]::Replace($liveText, '(?s)TOKENS\s*=\s*\{.*?\}', 'TOKENS = {}') }
+                else { [regex]::Replace($liveText, '(?m)^WIN95_\w+\s*=\s*''[^'']*''', 'WIN95_X =') }
+    $backupNorm = if ($kind -eq 'tokens') { [regex]::Replace($backupText, '(?s)TOKENS\s*=\s*\{.*?\}', 'TOKENS = {}') }
+                  else { [regex]::Replace($backupText, '(?m)^WIN95_\w+\s*=\s*''[^'']*''', 'WIN95_X =') }
     return ($liveNorm -ne $backupNorm)
 }
 
@@ -753,7 +763,7 @@ function Sync-SourceBackup([string]$liveFile, [string]$bakFile, [string]$kind, [
     # unrelated function) must NEVER become the "pristine" backup wholesale -
     # that would make Revert restore Wintage colours instead of the stock source.
     $newPristine = $live
-    if ($kind -eq 'smartvac') {
+    if ($kind -ne 'tokens') {
         foreach ($anchor in $script:SV_ANCHOR_NAMES) {
             $oldM = [regex]::Match($bak, "(?m)^$anchor\s*=\s*'([^']*)'")
             $newM = [regex]::Match($newPristine, "(?m)^$anchor\s*=\s*'([^']*)'")
@@ -1825,385 +1835,6 @@ function Invoke-TotalCmd {
     }
 }
 
-function Invoke-SmartVac {
-    param([switch]$DoRevert, [string]$PaletteSlug)
-    Assert-SafeProjectPath $SmartVacPath 'SMART VAC CLEANER'
-    if (-not (Test-Path $SmartVacPath)) { Assert-TargetResolvable 'SMART VAC CLEANER' $false; return }
-
-    $pyFile = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py'
-    $bakFile = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py.bak'
-    # W2-010: a missing live file is a recovery barrier ONLY for Apply (the
-    # source we read does not exist). Revert's recovery source is the backup,
-    # and a missing live is exactly the case Revert must repair -- so the
-    # gate is split: Apply refuses, Revert proceeds to Assert-RevertSource
-    # which validates the backup and its provenance.
-    if (-not $DoRevert -and -not (Test-Path $pyFile)) { Assert-TargetResolvable 'SMART VAC CLEANER' $false; return }
-
-    if ($DoRevert) {
-        if (-not (Assert-RevertSource 'smartvac' $bakFile 'SMART VAC CLEANER')) { return }
-        if ($PSCmdlet.ShouldProcess($pyFile, 'Restore SMART VAC CLEANER from backup')) {
-            $pre = Save-FilePreState $pyFile $bakFile
-            # SRC-005 W2-003: the commit scriptblock is NOT an atomic primitive.
-            # The old order was Remove-ManifestEntry THEN Remove-Item $bakFile --
-            # a failure deleting the backup left the target restored while the
-            # manifest entry was already gone, with no way for the rollback
-            # callback to reconstruct a removed manifest record. The backup is
-            # now RETIRED FIRST (same-volume rename to an operation-owned
-            # tombstone), then the manifest entry is removed; on a manifest
-            # failure the tombstone is renamed back, and the retire step is
-            # only truly consumed after the commit is known good.
-            # SRC-005 W2-002: the live restore copy and the retire rename run
-            # INSIDE the commit scriptblock. They used to run before the
-            # wrapper, so a failure between them left a half-restored target
-            # (or a retired backup under an unchanged manifest) with the
-            # rollback snapshot unreachable.
-            $retire = "$bakFile.wintage-retired"
-            Invoke-TargetCommit 'smartvac' 'SMART VAC CLEANER' {
-                Copy-Item $bakFile $pyFile -Force
-                if (Test-Path $retire) { Remove-Item $retire -Force -ErrorAction SilentlyContinue }
-                Rename-Item $bakFile $retire
-                Remove-ManifestEntry 'smartvac'
-                # Post-commit garbage collection: the tombstone only goes when
-                # the manifest transition itself succeeded.
-                Remove-Item $retire -Force -ErrorAction SilentlyContinue
-            } {
-                # Manifest removal failed: put the recovery tombstone back so
-                # the retry has the same authority it started with.
-                if (Test-Path $retire) { Rename-Item $retire $bakFile -ErrorAction SilentlyContinue }
-                Restore-FilePreState $pre $pyFile $bakFile
-            }
-            Say 'SMART VAC CLEANER: restored from backup' 'Green'
-        }
-        return
-    }
-
-    if (-not $PSCmdlet.ShouldProcess($pyFile, "Apply $PaletteSlug theme")) { return }
-    
-    $json = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json")) | ConvertFrom-Json
-    $t = $json.tokens
-    $code = Read-Utf8 $pyFile
-    
-    # Every anchor must be matched exactly once before anything is written. A
-    # regex that matches nothing would otherwise produce a byte-identical file,
-    # be reported as "installed" and advance the manifest -- a no-op patch sold
-    # as an install. Requiring exactly one hit per anchor also proves the
-    # non-colour shape of each assignment survived (T-187).
-    $anchors = [ordered]@{
-        'WIN95_BG'           = '(?m)^WIN95_BG\s*=\s*''[^'']+'''
-        'WIN95_BG_SOFT'      = '(?m)^WIN95_BG_SOFT\s*=\s*''[^'']+'''
-        'WIN95_SURFACE_RAISED' = '(?m)^WIN95_SURFACE_RAISED\s*=\s*''[^'']+'''
-        'WIN95_SURFACE_ALT'  = '(?m)^WIN95_SURFACE_ALT\s*=\s*''[^'']+'''
-        'WIN95_BEVEL_HI'     = '(?m)^WIN95_BEVEL_HI\s*=\s*''[^'']+'''
-        'WIN95_BEVEL_SH'     = '(?m)^WIN95_BEVEL_SH\s*=\s*''[^'']+'''
-        'WIN95_TEXT'         = '(?m)^WIN95_TEXT\s*=\s*''[^'']+'''
-        'WIN95_TEXT_DIM'     = '(?m)^WIN95_TEXT_DIM\s*=\s*''[^'']+'''
-        'WIN95_TEXT_MUTED'   = '(?m)^WIN95_TEXT_MUTED\s*=\s*''[^'']+'''
-        'WIN95_GOLD'         = '(?m)^WIN95_GOLD\s*=\s*''[^'']+'''
-        'WIN95_GOLD_DIM'     = '(?m)^WIN95_GOLD_DIM\s*=\s*''[^'']+'''
-        'WIN95_ACCENT'       = '(?m)^WIN95_ACCENT\s*=\s*''[^'']+'''
-        'WIN95_DANGER'       = '(?m)^WIN95_DANGER\s*=\s*''[^'']+'''
-        'WIN95_SUCCESS'      = '(?m)^WIN95_SUCCESS\s*=\s*''[^'']+'''
-        'WIN95_BUTTON'       = '(?m)^WIN95_BUTTON\s*=\s*''[^'']+'''
-        'WIN95_BUTTON_HOVER' = '(?m)^WIN95_BUTTON_HOVER\s*=\s*''[^'']+'''
-        'WIN95_ENTRY'        = '(?m)^WIN95_ENTRY\s*=\s*''[^'']+'''
-    }
-    $values = [ordered]@{
-        'WIN95_BG'           = $t.background
-        'WIN95_BG_SOFT'      = $t.backgroundSoft
-        'WIN95_SURFACE_RAISED' = $t.surfaceRaised
-        'WIN95_SURFACE_ALT'  = $t.surfaceAlt
-        'WIN95_BEVEL_HI'     = $t.bevelLight
-        'WIN95_BEVEL_SH'     = $t.borderDark
-        'WIN95_TEXT'         = $t.textPrimary
-        'WIN95_TEXT_DIM'     = $t.textSecondary
-        'WIN95_TEXT_MUTED'   = $t.textMuted
-        'WIN95_GOLD'         = $t.textPrimary
-        'WIN95_GOLD_DIM'     = $t.textSecondary
-        'WIN95_ACCENT'       = $t.accentTeal
-        'WIN95_DANGER'       = $t.danger
-        'WIN95_SUCCESS'      = $t.success
-        'WIN95_BUTTON'       = $t.surfaceRaised
-        'WIN95_BUTTON_HOVER' = $t.surfaceAlt
-        'WIN95_ENTRY'        = $t.background
-    }
-    $appliedHexes = @{}
-    foreach ($anchor in $anchors.Keys) {
-        $count = ([regex]::Matches($code, $anchors[$anchor])).Count
-        if ($count -ne 1) {
-            throw "SMART VAC CLEANER: anchor $anchor matched $count time(s) (expected exactly 1) - the source file shape has changed; refusing to patch and leaving the manifest untouched."
-        }
-        $replacement = "$anchor = '$($values[$anchor])'"
-        $code = [regex]::Replace($code, $anchors[$anchor], $replacement)
-        $appliedHexes[$values[$anchor]] = $true
-    }
-    # Verify the output really carries the intended palette before writing.
-    if ($appliedHexes.Count -lt 2) { throw 'SMART VAC CLEANER: internal error - the patched output was not verified to contain the palette block.' }
-    if (-not ($appliedHexes.Keys | Where-Object { $code.Contains($_) })) {
-        throw 'SMART VAC CLEANER: patched output does not contain the intended palette values - refusing to write.'
-    }
-    # And re-verify the shape survived the patch (each anchor still exactly once).
-    foreach ($anchor in $anchors.Keys) {
-        $count = ([regex]::Matches($code, $anchors[$anchor])).Count
-        if ($count -ne 1) {
-            throw "SMART VAC CLEANER: anchor $anchor no longer matches exactly once after patching - source shape corrupted; refusing to write."
-        }
-    }
-
-    # The pre-Wintage backup is taken ONCE and never overwritten by a repaint
-    # (T-187). If the UPSTREAM source changes after a Wintage touch, the backup is
-    # re-based from the current source so Revert restores the new version, never
-    # the obsolete one (T-189).
-    # SRC-005 W2-002: the backup re-base and the live write run INSIDE the
-    # commit scriptblock. They used to run before the wrapper, so a failure
-    # between them left a re-based (or fresh) backup plus an unthemed source
-    # while the manifest sat unchanged and the rollback snapshot was
-    # unreachable.
-    $pre = Save-FilePreState $pyFile $bakFile
-    Invoke-TargetCommit 'smartvac' 'SMART VAC CLEANER' {
-        Sync-SourceBackup $pyFile $bakFile 'smartvac' 'SMART VAC CLEANER'
-        Write-Utf8 $pyFile $code
-        Set-ManifestEntry 'smartvac' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
-    } { Restore-FilePreState $pre $pyFile $bakFile }
-    Say "SMART VAC CLEANER: installed theme -> $pyFile" 'Green'
-}
-
-function Invoke-WildRift {
-    param([switch]$DoRevert, [string]$PaletteSlug)
-    Assert-SafeProjectPath $WildRiftPath 'WildRiftAssistant'
-    if (-not (Test-Path $WildRiftPath)) { Assert-TargetResolvable 'WildRiftAssistant' $false; return }
-
-    $pyFile = Join-Path $WildRiftPath 'theme.py'
-    $bakFile = Join-Path $WildRiftPath 'theme.py.bak'
-    # W2-010: see Invoke-SmartVac -- the live-file gate is split: Apply
-    # refuses, Revert proceeds to Assert-RevertSource which validates the
-    # backup and its provenance.
-    if (-not $DoRevert -and -not (Test-Path $pyFile)) { Assert-TargetResolvable 'WildRiftAssistant' $false; return }
-
-    if ($DoRevert) {
-        if (-not (Assert-RevertSource 'wildrift' $bakFile 'WildRiftAssistant')) { return }
-        if ($PSCmdlet.ShouldProcess($pyFile, 'Restore WildRiftAssistant from backup')) {
-            $pre = Save-FilePreState $pyFile $bakFile
-            # SRC-005 W2-003: same retire-first commit protocol as SmartVac --
-            # the manifest entry is never removed before the recovery artifact
-            # is provably restorable, and nothing fallible runs after the
-            # manifest transition.
-            # SRC-005 W2-002: the live restore copy and the retire rename run
-            # INSIDE the commit scriptblock (same reason as SmartVac).
-            $retire = "$bakFile.wintage-retired"
-            Invoke-TargetCommit 'wildrift' 'WildRiftAssistant' {
-                Copy-Item $bakFile $pyFile -Force
-                if (Test-Path $retire) { Remove-Item $retire -Force -ErrorAction SilentlyContinue }
-                Rename-Item $bakFile $retire
-                Remove-ManifestEntry 'wildrift'
-                Remove-Item $retire -Force -ErrorAction SilentlyContinue
-            } {
-                if (Test-Path $retire) { Rename-Item $retire $bakFile -ErrorAction SilentlyContinue }
-                Restore-FilePreState $pre $pyFile $bakFile
-            }
-            Say 'WildRiftAssistant: restored from backup' 'Green'
-        }
-        return
-    }
-
-    if (-not $PSCmdlet.ShouldProcess($pyFile, "Apply $PaletteSlug theme")) { return }
-    
-    # The rollback base follows the upstream source (T-189): a repaint must never
-    # rebuild the live file from an obsolete pre-update backup. The backup is
-    # re-based when the live file changed in non-Wintage content.
-    # SRC-005 W2-002: the backup re-base and the live write run INSIDE the
-    # commit scriptblock (same reason as SmartVac Apply).
-    $pre = Save-FilePreState $pyFile $bakFile
-    $json = (Read-Utf8 (Join-Path $root "themes/$PaletteSlug.json")) | ConvertFrom-Json
-    $pyTokens = "TOKENS = {`r`n"
-    foreach ($p in $json.tokens.psobject.properties) {
-        $pyTokens += "    `"$($p.Name)`": `"$($p.Value)`",`r`n"
-    }
-    $pyTokens += "}"
-    $code = Read-Utf8 $pyFile
-    # The TOKENS block must exist exactly once. Zero matches means the source has
-    # no such block (a different theme.py) and a silent no-op write would look
-    # like a successful install; more than one is a shape this patch never wrote.
-    $tokPattern = '(?s)TOKENS\s*=\s*\{.*?\}'
-    $tokCount = ([regex]::Matches($code, $tokPattern)).Count
-    if ($tokCount -ne 1) {
-        throw "WildRiftAssistant: TOKENS block matched $tokCount time(s) (expected exactly 1) - the source file shape has changed; refusing to patch and leaving the manifest untouched."
-    }
-    $code = [regex]::Replace($code, $tokPattern, $pyTokens)
-    if (-not $code.Contains('"' + $json.tokens.background + '"') -or -not $code.Contains('"' + $json.tokens.textPrimary + '"')) {
-        throw 'WildRiftAssistant: patched output does not contain the intended palette tokens - refusing to write.'
-    }
-    if (([regex]::Matches($code, $tokPattern)).Count -ne 1) {
-        throw 'WildRiftAssistant: TOKENS block no longer matches exactly once after patching - refusing to write.'
-    }
-    Invoke-TargetCommit 'wildrift' 'WildRiftAssistant' {
-        Sync-SourceBackup $pyFile $bakFile 'wildrift' 'WildRiftAssistant'
-        Write-Utf8 $pyFile $code
-        Set-ManifestEntry 'wildrift' $PaletteSlug $pyFile 'n/a' (Get-PayloadVersion)
-    } { Restore-FilePreState $pre $pyFile $bakFile }
-    Say "WildRiftAssistant: installed theme -> $pyFile" 'Green'
-}
-
-function Invoke-Saipenview {
-    param([switch]$DoRevert, [string]$PaletteSlug)
-    Assert-SafeProjectPath $SaipenviewPath 'SAIPENVIEW'
-    if (-not (Test-Path $SaipenviewPath)) { Assert-TargetResolvable 'SAIPENVIEW' $false; return }
-    
-    $cssFile = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css'
-    $bakFile = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'
-    
-    if ($DoRevert) {
-        if (-not (Assert-RevertSource 'saipenview' $bakFile 'SAIPENVIEW')) { return }
-        if ($PSCmdlet.ShouldProcess($cssFile, 'Restore SAIPENVIEW original CSS')) {
-            $pre = Save-FilePreState $cssFile $bakFile
-            # SRC-005 W2-003: same retire-first commit protocol as SmartVac and
-            # WildRift -- the manifest entry is never removed before the
-            # recovery artifact is provably restorable.
-            # SRC-005 W2-002: the live restore copy and the retire rename run
-            # INSIDE the commit scriptblock (same reason as SmartVac).
-            $retire = "$bakFile.wintage-retired"
-            Invoke-TargetCommit 'saipenview' 'SAIPENVIEW' {
-                Copy-Item $bakFile $cssFile -Force
-                if (Test-Path $retire) { Remove-Item $retire -Force -ErrorAction SilentlyContinue }
-                Rename-Item $bakFile $retire
-                Remove-ManifestEntry 'saipenview'
-                Remove-Item $retire -Force -ErrorAction SilentlyContinue
-            } {
-                if (Test-Path $retire) { Rename-Item $retire $bakFile -ErrorAction SilentlyContinue }
-                Restore-FilePreState $pre $cssFile $bakFile
-            }
-            Say 'SAIPENVIEW: restored from backup' 'Green'
-        }
-        return
-    }
-    
-    if (-not (Test-Path $cssFile)) { Assert-TargetResolvable 'SAIPENVIEW' $false; return }
-    
-    if ($PSCmdlet.ShouldProcess($cssFile, "Recolour :root tokens to $PaletteSlug")) {
-        # ─── THE BACKUP GOES STALE, AND A STALE BACKUP IS A TIME MACHINE ─────
-        # Everything below recolours from $bakFile, never from the live file, so
-        # a half-applied run cannot compound. That is right -- but only while the
-        # backup is the SAME stylesheet as the live file, differing in colours.
-        #
-        # It stops being that the moment SAIPENVIEW ships new CSS. The backup is
-        # taken once and never refreshed, so every later run rewrote style.css to
-        # `<old snapshot> + new colours`, silently deleting whatever rules had
-        # landed since -- the --dangerText token, the .conf-list collapse rule,
-        # the whole Agent Panel block, the .bmac-btn rule. SAIPENVIEW logged it
-        # three times as CSS that "regenerates itself" to a byte-identical file
-        # matching no commit in its history (its T-135/T-137). It matched no
-        # commit because it was assembled here.
-        #
-        # So: compare the SHAPE of the two files -- everything except the colour
-        # values this patch is allowed to change -- and re-take the backup when
-        # they differ. The old one is kept beside it rather than dropped, since
-        # it is the only copy of a pre-theme file if the user ever had one.
-        if (Test-Path $bakFile) {
-            if ((Get-CssShape (Read-Utf8 $bakFile)) -ne (Get-CssShape (Read-Utf8 $cssFile))) {
-                Copy-Item $bakFile "$bakFile.stale" -Force
-                # T-192 P1#18: REBASE, never a wholesale copy. The live CSS may
-                # already carry Wintage palette values (theme still applied while
-                # SAIPENVIEW/upstream added unrelated selectors). Copying it
-                # wholesale into the pristine authority would make Revert restore
-                # Wintage colours. The new pristine = current non-owned CSS with
-                # every Wintage-owned --token VALUE taken from the OLD pristine.
-                $oldPristine = Read-Utf8 $bakFile
-                $live = Read-Utf8 $cssFile
-                $newPristine = Rebase-CssTokens $live $oldPristine
-                Write-Utf8 $bakFile $newPristine
-                Write-RecoveryProvenance $bakFile 'saipenview'
-                Say "SAIPENVIEW: style.css has changed since the backup was taken - backup rebased (previous kept as style.css.bak.stale)" 'DarkYellow'
-            }
-        } else {
-            Copy-Item $cssFile $bakFile -Force
-            Write-RecoveryProvenance $bakFile 'saipenview'
-        }
-
-        # Do NOT append the browser stylesheet here. That was the previous approach and
-        # it is why the text moved: wintage.css is written for arbitrary web pages, so it
-        # carries universal selectors that force font-family, the 10/12/14/16 size ladder,
-        # 2px border widths and control min-heights. Dropped on top of SAIPENVIEW's own
-        # CSS it rewrites the box model of every element, and the layout shifts.
-        #
-        # SAIPENVIEW already declares the Wintage token names in its own :root, so the
-        # correct patch is to rewrite the token VALUES and nothing else -- no selector,
-        # no font, no padding, no border width. Colours change, geometry cannot.
-        $jsonPath = Join-Path $root "themes\$PaletteSlug.json"
-        if (-not (Test-Path $jsonPath)) { throw "SAIPENVIEW: theme file not found ($PaletteSlug.json)" }
-        $t = Get-PaletteTokens $jsonPath
-
-        # Always recolour from the pristine backup, never from the current file: patching
-        # an already-patched file is fine here (the regex is idempotent) but starting from
-        # the original keeps a half-applied run from compounding.
-        # Read and write as UTF-8 WITHOUT a BOM, explicitly. PowerShell 5.1's
-        # Get-Content -Raw falls back to the ANSI codepage when a file has no BOM, so
-        # style.css's em-dashes came back as three cp1251 characters each and were
-        # written out as that mojibake -- and Set-Content -Encoding UTF8 adds a BOM on
-        # top, which then shows up as a stray glyph before `:root`. Caught by diffing
-        # the patched file against the backup: 30-odd comment lines had changed that
-        # this patch has no business touching.
-        $text = Read-Utf8 $bakFile
-        $applied = @(); $missing = @()
-        foreach ($k in $t.PSObject.Properties.Name) {
-            $pattern = "(--$k\s*:\s*)#[0-9A-Fa-f]{6}"
-            if ($text -cmatch $pattern) {
-                $text = [regex]::Replace($text, $pattern, "`${1}$($t.$k)")
-                $applied += $k
-            } else { $missing += $k }
-        }
-
-        # ─── ONE RED CANNOT DO BOTH JOBS ────────────────────────────────────
-        # SAIPENVIEW spends --danger two ways: as a FILL (.phase-BLOCKED, the error
-        # badge) where a dark red is right and the label on top is light, and as
-        # TEXT (.conf-badge.fail, .blocker, toast-error) where the same dark red on
-        # a dark surface measures 1.9:1 and is simply unreadable -- reported as the
-        # FAIL badges being illegible. Lightening --danger does not fix it, it moves
-        # the problem: the fills then wash out under their own light labels.
-        #
-        # So the split is made here, by PROPERTY rather than by selector. `color:`
-        # and `border-color:` are the roles that must be legible against a backdrop;
-        # `background:` is the one that must not be. That rule needs no list of
-        # selectors to maintain and keeps working when SAIPENVIEW adds rules of its
-        # own -- and it stays inside this patch's one law, that colours may change
-        # and geometry may not. Not a single selector, width or padding is touched.
-        #
-        # --dangerText is declared right after --danger rather than edited into
-        # SAIPENVIEW's source, so style.css.bak stays a byte-exact original and
-        # -Revert still restores the file the user actually had.
-        if ($t.dangerText) {
-            $text = [regex]::Replace($text, "(--danger\s*:\s*#[0-9A-Fa-f]{6}\s*;)", "`${1} --dangerText:$($t.dangerText);")
-            $text = [regex]::Replace($text, "(?<=(?:^|[;{]\s*|\s)color\s*:\s*)var\(--danger\)", "var(--dangerText)")
-            $text = [regex]::Replace($text, "(?<=border-color\s*:\s*)var\(--danger\)", "var(--dangerText)")
-            $applied += 'dangerText'
-            $missing = @($missing | Where-Object { $_ -ne 'dangerText' })
-        }
-
-        # Zero tokens recoloured would be a no-op wearing an install's clothes:
-        # same bytes on disk, "installed" in the log, manifest advanced. Fail
-        # BEFORE any write so a doomed run mutates nothing (T-191 P0#1).
-        if ($applied.Count -eq 0) {
-            throw 'SAIPENVIEW: no --token declarations matched in style.css - refusing to write an unchanged file as an install; check that the CSS is the one this theme expects.'
-        }
-
-        $pre = Save-FilePreState $cssFile $bakFile
-        # SRC-005 W2-002: the live recolour write runs INSIDE the commit
-        # scriptblock. It used to run before the wrapper, so a write failure
-        # left the CSS half-recoloured while the rollback snapshot sat
-        # unreachable and the manifest never changed.
-        Invoke-TargetCommit 'saipenview' 'SAIPENVIEW' {
-            Write-Utf8 $cssFile $text
-            Set-ManifestEntry 'saipenview' $PaletteSlug $cssFile 'n/a' (Get-PayloadVersion)
-        } { Restore-FilePreState $pre $cssFile $bakFile }
-
-        Say "SAIPENVIEW: recoloured $($applied.Count) tokens to $PaletteSlug - colours only, layout untouched" 'Green'
-        if ($missing.Count) {
-            # Reported, not silently dropped: a token SAIPENVIEW does not declare is a
-            # gap in coverage the next person should know about.
-            Say "  not declared in SAIPENVIEW's :root, left alone: $($missing -join ', ')" 'DarkGray'
-        }
-        Say "  Reload the SAIPENVIEW window to see it." 'DarkGray'
-    }
-}
-
 function Invoke-BetterDiscord {
     param([switch]$DoRevert, [string]$PaletteSlug)
     $bdDir = Join-Path $env:APPDATA 'BetterDiscord/themes'
@@ -2887,7 +2518,11 @@ function Invoke-Qbittorrent {
     # rewriting the INI back over it.
     $qbtRunning = if ($env:WINTAGE_TEST_ALLOW_RUNNING_QBT) { $null } else { Get-Process qbittorrent -ErrorAction SilentlyContinue }
     if ($qbtRunning) {
-        throw 'qBittorrent: close qBittorrent and run this again - it rewrites qBittorrent.ini on exit and would discard the theme selection.'
+        if ($WhatIfPreference) {
+            Say 'qBittorrent: process is running (must be closed for real install)' 'Yellow'
+        } else {
+            throw 'qBittorrent: close qBittorrent and run this again - it rewrites qBittorrent.ini on exit and would discard the theme selection.'
+        }
     }
 
     $cfgFile = Join-Path $QBT_THEME_DIR 'config.json'
@@ -3031,5 +2666,210 @@ function Invoke-Qbittorrent {
     Say '  NOT reachable: qBittorrent draws its own toolbar/tray icons from its resource' 'Yellow'
     Say '  bundle, so those keep their stock colours - the palette, the transfer-list state' 'Yellow'
     Say '  colours, the log colours and the Win95 bevel geometry are what this target owns.' 'Yellow'
+}
+
+# ─── TARGET: Notepad++ ──────────────────────────────────────────────────────
+function Get-NotepadPlusPlusPath {
+    if ($NotepadPlusPlusPath -and (Test-Path $NotepadPlusPlusPath)) { return $NotepadPlusPlusPath }
+    if ($pathsJson -and $pathsJson.notepadplusplus -and (Test-Path $pathsJson.notepadplusplus)) { return $pathsJson.notepadplusplus }
+    $appDataNpp = Join-Path $env:APPDATA 'Notepad++'
+    if (Test-Path $appDataNpp) { return $appDataNpp }
+    $progFilesNpp = "${env:ProgramFiles}\Notepad++"
+    if (Test-Path $progFilesNpp) { return $progFilesNpp }
+    return $null
+}
+
+function Invoke-NotepadPlusPlus {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+
+    $nppConfigDir = Get-NotepadPlusPlusPath
+    if (-not $nppConfigDir) { Assert-TargetResolvable 'Notepad++' $false; return }
+
+    $nppThemesDir = Join-Path $nppConfigDir 'themes'
+    $targetTheme = Join-Path $nppThemesDir 'Wintage.xml'
+    $markerFile = Join-Path $nppThemesDir '.wintage-npp-palette'
+
+    $recDir = Join-Path $WintageAppData 'recovery\notepadplusplus'
+    $recMeta = Join-Path $recDir 'recovery.json'
+
+    if ($DoRevert) {
+        if (-not (Assert-RevertSource 'notepadplusplus' $recMeta 'Notepad++')) { return }
+        if (-not $PSCmdlet.ShouldProcess($targetTheme, 'Remove Wintage Notepad++ theme')) { return }
+
+        $preTheme = Save-FilePreState $targetTheme $null
+        $preMarker = Save-FilePreState $markerFile $null
+
+        Invoke-TargetCommit 'notepadplusplus' 'Notepad++' {
+            if (Test-Path $targetTheme) { Remove-Item $targetTheme -Force }
+            if (Test-Path $markerFile) { Remove-Item $markerFile -Force }
+            if (Test-Path $nppThemesDir) {
+                Get-ChildItem $nppThemesDir -Filter 'Wintage-*.xml' -ErrorAction SilentlyContinue | Remove-Item -Force
+            }
+            Say 'Notepad++: removed Wintage theme.' 'Green'
+            Remove-ManifestEntry 'notepadplusplus'
+        } {
+            Restore-FilePreState $preTheme $targetTheme $null
+            Restore-FilePreState $preMarker $markerFile $null
+        }
+        Remove-Item ($recMeta + '.provenance.json') -Force -ErrorAction SilentlyContinue
+        Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+        return
+    }
+
+    $built = Join-Path $out "notepadplusplus/$PaletteSlug"
+    $builtTheme = Join-Path $built 'Wintage.xml'
+    if (-not (Test-Path $builtTheme)) {
+        throw "Notepad++: built output missing for '$PaletteSlug' ($built). Run 'node tools/build-desktop.js'."
+    }
+
+    if (-not $PSCmdlet.ShouldProcess($targetTheme, "Install Wintage ($PaletteSlug) theme")) { return }
+
+    $preTheme = Save-FilePreState $targetTheme $null
+    $preMarker = Save-FilePreState $markerFile $null
+
+    Invoke-TargetCommit 'notepadplusplus' 'Notepad++' {
+        if (-not (Test-Path $nppThemesDir)) {
+            New-Item -ItemType Directory -Force -Path $nppThemesDir | Out-Null
+        }
+        Copy-Item $builtTheme $targetTheme -Force
+        $allPacks = Get-ChildItem (Join-Path $out 'notepadplusplus') -Directory -ErrorAction SilentlyContinue
+        foreach ($p in $allPacks) {
+            $srcFile = Join-Path $p.FullName 'Wintage.xml'
+            if (Test-Path $srcFile) {
+                Copy-Item $srcFile (Join-Path $nppThemesDir "Wintage-$($p.Name).xml") -Force
+            }
+        }
+        Write-Utf8 $markerFile $PaletteSlug
+        Set-ManifestEntry 'notepadplusplus' $PaletteSlug $nppConfigDir 'n/a' (Get-PayloadVersion)
+        Say "Notepad++: installed Wintage ($PaletteSlug) theme -> $targetTheme" 'Green'
+    } {
+        Restore-FilePreState $preTheme $targetTheme $null
+        Restore-FilePreState $preMarker $markerFile $null
+    }
+
+    if (-not (Test-Path $recMeta)) {
+        New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+        $meta = [ordered]@{ target = 'notepadplusplus'; schema = 1; epoch = (Get-InstallEpoch); date = (Get-Date).ToUniversalTime().ToString('o') }
+        Write-Utf8 $recMeta (($meta | ConvertTo-Json) + "
+")
+    }
+
+    Say '  In Notepad++: Settings -> Style Configurator -> Select theme: Wintage' 'DarkGray'
+    Say '  Undo: .\install.ps1 -Target notepadplusplus -Revert' 'DarkGray'
+}
+
+# ─── TARGET: Cinema 4D ──────────────────────────────────────────────────────
+function Get-Cinema4DPath {
+    if ($Cinema4DPath -and (Test-Path $Cinema4DPath)) { return $Cinema4DPath }
+    if ($pathsJson -and $pathsJson.cinema4d -and (Test-Path $pathsJson.cinema4d)) { return $pathsJson.cinema4d }
+    $candidates = @(
+        'C:\Program Files\Maxon Cinema 4D 2024',
+        'C:\Program Files\Maxon Cinema 4D 2025',
+        'C:\Program Files\Maxon Cinema 4D 2026',
+        'C:\Program Files\Maxon Cinema 4D R25',
+        'C:\Program Files\Maxon Cinema 4D R21'
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) { return $c }
+    }
+    $found = Get-ChildItem 'C:\Program Files' -Directory -Filter 'Maxon Cinema 4D*' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | Select-Object -First 1
+    if ($found) { return $found.FullName }
+    return $null
+}
+
+function Get-Cinema4DSchemesDir([string]$c4dRoot) {
+    if (-not $c4dRoot) { return $null }
+    $p1 = Join-Path $c4dRoot 'resource\modules\c4d_base\schemes'
+    if (Test-Path $p1) { return $p1 }
+    $p2 = Join-Path $c4dRoot 'resource\modules\c4dplugin\schemes'
+    if (Test-Path $p2) { return $p2 }
+    return $null
+}
+
+function Invoke-Cinema4D {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+
+    $c4dRoot = Get-Cinema4DPath
+    if (-not $c4dRoot) { Assert-TargetResolvable 'Cinema 4D' $false; return }
+
+    $schemesDir = Get-Cinema4DSchemesDir $c4dRoot
+    if (-not $schemesDir) {
+        Say "Cinema 4D: schemes directory not found under $c4dRoot" 'Yellow'
+        Assert-TargetResolvable 'Cinema 4D' $false
+        return
+    }
+
+    $wintageSchemeDir = Join-Path $schemesDir 'Wintage'
+    $colFile = Join-Path $wintageSchemeDir 'wintage.col'
+    $resFile = Join-Path $wintageSchemeDir 'wintage.res'
+    $markerFile = Join-Path $wintageSchemeDir '.wintage-c4d-palette'
+
+    $recDir = Join-Path $WintageAppData 'recovery\cinema4d'
+    $recMeta = Join-Path $recDir 'recovery.json'
+
+    if ($DoRevert) {
+        if (-not (Assert-RevertSource 'cinema4d' $recMeta 'Cinema 4D')) { return }
+        if (-not $PSCmdlet.ShouldProcess($wintageSchemeDir, 'Remove Wintage scheme from Cinema 4D')) { return }
+
+        $preDir = Save-DirPreState $wintageSchemeDir
+
+        Invoke-TargetCommit 'cinema4d' 'Cinema 4D' {
+            if (Test-Path $wintageSchemeDir) {
+                Remove-Item $wintageSchemeDir -Recurse -Force
+            }
+            Say "Cinema 4D: removed Wintage scheme from $schemesDir" 'Green'
+            Remove-ManifestEntry 'cinema4d'
+        } {
+            Restore-DirPreState $wintageSchemeDir $preDir
+        }
+        Remove-Item ($recMeta + '.provenance.json') -Force -ErrorAction SilentlyContinue
+        Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+        return
+    }
+
+    $built = Join-Path $out "cinema4d/$PaletteSlug"
+    $builtCol = Join-Path $built 'wintage.col'
+    $builtRes = Join-Path $built 'wintage.res'
+    if (-not (Test-Path $builtCol) -or -not (Test-Path $builtRes)) {
+        throw "Cinema 4D: built output missing for '$PaletteSlug' ($built). Run 'node tools/build-desktop.js'."
+    }
+
+    if (-not $PSCmdlet.ShouldProcess($wintageSchemeDir, "Install Wintage ($PaletteSlug) scheme")) { return }
+
+    $preDir = Save-DirPreState $wintageSchemeDir
+
+    Invoke-TargetCommit 'cinema4d' 'Cinema 4D' {
+        if (-not (Test-Path $wintageSchemeDir)) {
+            New-Item -ItemType Directory -Force -Path $wintageSchemeDir | Out-Null
+        }
+        Copy-Item $builtCol $colFile -Force
+        Copy-Item $builtRes $resFile -Force
+
+        # Copy bitmaps from Dark scheme so icons and widgets render
+        $darkSchemeDir = Join-Path $schemesDir 'Dark'
+        if (Test-Path $darkSchemeDir) {
+            Get-ChildItem $darkSchemeDir -Include '*.tif', '*.png' -ErrorAction SilentlyContinue | ForEach-Object {
+                $dest = Join-Path $wintageSchemeDir $_.Name
+                if (-not (Test-Path $dest)) { Copy-Item $_.FullName $dest -Force }
+            }
+        }
+
+        Write-Utf8 $markerFile $PaletteSlug
+        Set-ManifestEntry 'cinema4d' $PaletteSlug $c4dRoot 'n/a' (Get-PayloadVersion)
+        Say "Cinema 4D: installed Wintage ($PaletteSlug) scheme -> $wintageSchemeDir" 'Green'
+    } {
+        Restore-DirPreState $wintageSchemeDir $preDir
+    }
+
+    if (-not (Test-Path $recMeta)) {
+        New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+        $meta = [ordered]@{ target = 'cinema4d'; schema = 1; epoch = (Get-InstallEpoch); date = (Get-Date).ToUniversalTime().ToString('o') }
+        Write-Utf8 $recMeta (($meta | ConvertTo-Json) + "
+")
+    }
+
+    Say '  In Cinema 4D: Edit -> Preferences -> Interface -> Scheme: Wintage' 'DarkGray'
+    Say '  Undo: .\install.ps1 -Target cinema4d -Revert' 'DarkGray'
 }
 

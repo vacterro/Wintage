@@ -28,7 +28,7 @@ kapısı tarafından reddedilir, o yüzden Apply'dan önce görmek sonradan
 görmekten iyidir.
 
 Hedefler klavyeyle erişilebilen iki listeye bölünmüştür: **MY APPS** taşınabilir/
-kaynak ağacı CodeNomad, SAIPENVIEW, SmartVac ve WildRift araçlarını içerir;
+kaynak ağacı CodeNomad, WorkBuddy araçlarını içerir;
 **POPULAR APPS** Windows, OBS, terminaller, editörler ve diğer kurulu yazılımları
 içerir. ALL/NONE ve Apply/Revert, gruplamayı değiştirmeden iki listede de çalışır.
 
@@ -66,10 +66,8 @@ yeniden boyamak çalışırken mümkündür; ilk kurulum değildir, çünkü ar�
 | `claude` | Electron shim, yerinde yamalanır — aşağıya bakın | hayır — bir güncelleme yeni bir `app-<version>` klasörü yapar |
 | `mpchc` | kayıt defteri, yalnızca koyu tema + OSD tipografisi | hayır — MPC-HC çıkışta ayarlarını yeniden yazar |
 | `obsidian` | kasa başına topluluk teması, tüm paletler aynı anda kurulur | **evet** — kasabınızda yaşar |
-| `saipenview` | `style.css` içindeki kendi `:root` belirteç değerlerini yeniden yazar | hayır — bir kaynak dosya; pull sonrası yeniden çalıştırın |
 | `discord` | CSS, BetterDiscord'un kendi tema klasörüne bırakılır | evet |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` anahtarları; mevcut son dosya filtreleri palet bağlantı rengini kullanır | evet — sizin ini'niz |
-| `smartvac`, `wildrift` | belirteç tablosu uygulamanın kendi kaynağında yeniden yazılır | hayır — bir kaynak dosya; pull sonrası yeniden çalıştırın |
 
 ### FreeBuff reklam kaldırma
 
@@ -284,22 +282,6 @@ olacağını ayarlar; `appearance.json` önce yedeklenir ve `-Revert` yalnızca
 `Wintage *` temalarını kaldırır ve önceki seçiminizi geri yükler — aynı kasada
 elle yapılmış bir temaya asla dokunulmaz.
 
-### SAIPENVIEW
-
-Ön ucu, Wintage belirteç adlarını kendi `:root` içinde zaten bildirir, bu yüzden
-bu yama **yalnızca belirteç değerlerini** yeniden yazar — asla bir seçici, bir
-yazı tipi, bir kenarlık genişliği veya bir dolgu. Kutu modelini etkileyen hiçbir
-şey değişmez, bu yüzden metin kayamaz. Bu bilinçlidir: önceki yaklaşım tüm tarayıcı
-stil sayfasını üste ekliyordu ve `wintage.css`, rastgele web sayfaları için
-yazılmıştır — yazı tipini, boyut merdivenini, 2px kenarlıkları ve denetim
-yüksekliklerini zorlayan evrensel seçiciler. Kendi düzenine sahip bir uygulamada
-bu her şeyi oynatır.
-
-Her hex'in maskelenmesi ve yedekle karşılaştırılmasıyla doğrulandı: yapısal olarak
-aynı, yalnızca renk değişmezleri farklı. `--link` orada bildirilmediği için
-enjekte edilmek yerine bildirilmez (onun markdown bağlantıları `--accentTeal` okur,
-ki bu bunu ayarlar) — uygulamanın asla okumadığı bir değişken eklemek ölü ağırlık
-olurdu.
 
 ### MPC-HC (K-Lite)
 

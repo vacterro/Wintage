@@ -30,37 +30,37 @@
     "SRC-006:R004": {
       "actionable": true,
       "class": "requirement",
-      "disposition": "UNKNOWN",
-      "evidence": null,
+      "disposition": "VERIFIED",
+      "evidence": "E-895",
       "text": "W2-001 P0: the generic VS Code-family extension path treats recovery.json/pristine as permanent first-touch authority - a completed Revert never consumes the recovery epoch, so a later Apply skips baseline capture and a second-epoch Revert restores stale bytes over newer user state; replaced+missing-pristine and unknown modes are interpreted as Wintage-created, deleting the live destination exactly when restoration evidence is incomplete.",
-      "verification": null,
+      "verification": "E-895; re-run on the current tree 2026-09-11: tools/test-vscode-recovery.ps1 54 PASS / 0 FAIL - fixtures A created, B replaced byte-exact restore, C two independent Apply/Revert epochs, D unknown mode fail-closed, E malformed/wrong-shape fail-closed, F wrong target fail-closed, G replaced+missing pristine fail-closed, H manifest-commit failure restores both target and active recovery epoch (rollback+retry), I empty pristine is a valid empty directory, J structural tombstone-read guard; red control: stale pristine-after-retirement copy 13 FAIL vs green copy 0 FAIL. Finalized from UNKNOWN in the SRC-006:R004 finalize pass (E-895).",
       "work": "T-242"
     },
     "SRC-006:R005": {
       "actionable": true,
       "class": "requirement",
-      "disposition": "UNKNOWN",
-      "evidence": null,
+      "disposition": "VERIFIED",
+      "evidence": "E-896",
       "text": "W2-002 P1: -Reapply computes work from an unlocked historical manifest snapshot and the target-locked child never revalidates that snapshot, so a background/logon Reapply can resurrect a reverted target or overwrite a newer explicit palette choice (serialized execution, unserialized intent).",
-      "verification": null,
+      "verification": "E-900; tools/test-reapply-intent.ps1 71 assertions / 0 FAIL across 11 fixtures: current-intent real repair (byte-inequality + palette content proof), entry-removed stale skip via dedicated exit 3 with zero target/recovery/manifest mutation, palette-B preserved, corrupt manifest nonzero-and-not-3 fail-closed, low-level parked-lock race, sibling independence with a deliberately damaged sibling, structured parent reporting (APPLIED/SKIPPED/FAILED, a skip is never reported as re-applied), quiet mode (no false failure, failures observable), -NotepadPlusPlusPath/-Cinema4DPath forwarding proven against decoy paths, REAL install.ps1 -Revert race via the WINTAGE_TEST_REAPPLY_PARENT_SEAM, REAL explicit dracula Apply race via the seam. Red controls proven: A child revalidation disabled 8 FAIL, B blind parent reporting restored 4 FAIL, C no-op sibling child 2 FAIL. Full tests/Run-Tests.ps1 ALL TESTS PASSED 2026-09-11.",
       "work": "T-242"
     },
     "SRC-006:R006": {
       "actionable": true,
       "class": "requirement",
-      "disposition": "UNKNOWN",
-      "evidence": null,
+      "disposition": "VERIFIED",
+      "evidence": "E-897",
       "text": "W2-003 P1: the WintageInstaller.ps1 logon-task checkbox attaches CheckedChanged before initialization, so opening the GUI dispatches a real Register-ScheduledTask, and failure recovery recursively dispatches the inverse operation (a failed Register can Unregister a task that existed before the GUI started).",
-      "verification": null,
+      "verification": "E-897; tools/test-logon-task-gui.ps1 19 PASS / 0 FAIL on the merged tree 2026-09-11: AST-extracts the real Invoke-LogonTaskToggle + Add_CheckedChanged handler from the shipped WintageInstaller.ps1 and drives them through a REAL WinForms.CheckBox - startup query runs BEFORE handler attach, suppressed programmatic assignment dispatches nothing, user check dispatches exactly one -RegisterLogonTask, failed register/unregister roll the checkbox back visually under suppression and issue exactly ONE child command total (never the inverse). Red control vs git HEAD: the pre-fix bare flip re-enters the handler on a failing Register and recurses Register/Unregister child dispatches until StackOverflowException, and the pre-fix init-after-attach ordering is flagged by the structural check.",
       "work": "T-242"
     },
     "SRC-006:R007": {
       "actionable": true,
       "class": "requirement",
-      "disposition": "UNKNOWN",
-      "evidence": null,
+      "disposition": "VERIFIED",
+      "evidence": "E-898",
       "text": "PERF-001 P1: healthy Electron palette repaint performs archive-sized recovery I/O at BOTH transaction layers - the parent Save-ElectronStateSnapshot lightweight Repaint branch is dead (no call site passes -Operation Repaint) and the child repaintRelocation hashes and vault-copies the unchanged app.asar/app.asar.unpacked via captureAppDir.",
-      "verification": null,
+      "verification": "E-898; tools/test-electron-repaint.ps1 22 PASS / 0 FAIL with the NODE_OPTIONS fs-read probe (test-electron-repaint-probe.cjs) against a 4 MiB-padded archive fixture: healthy relocated repaint performs ZERO reads of the moved archive and ZERO unpacked-tree reads; in-place repaint stays under 64 KiB (bounded .bak header read for the shim require path); injected repaint failure restores package.json/shim.cjs/wintage.css byte-exactly; parent manifest-commit failure restores the pre-repaint palette with the moved archive intact and the manifest unchanged; PS revert restores the stock archive byte-exactly; parent snapshot class now follows Get-ElectronStatus state-machine truth (-Operation Repaint only for themed-relocated/themed-inplace). Red control: pre-fix copy whose repaintRelocation calls captureAppDir -> ZERO-archive-reads FAIL.",
       "work": "T-242"
     },
     "SRC-006:R008": {
@@ -84,10 +84,10 @@
     "SRC-006:R010": {
       "actionable": true,
       "class": "requirement",
-      "disposition": "UNKNOWN",
-      "evidence": null,
+      "disposition": "VERIFIED",
+      "evidence": "E-899",
       "text": "PERF-004 P2: the userscript force sweep bounds ELEMENT work (FORCE_BUDGET 2500) but not root-level work - every continuation slice re-scans every live ShadowRoot for connectivity and hover stylesheets and restarts outer iteration from root zero, so R live roots cost far more than R root-level operations per lap on Web Component-heavy pages.",
-      "verification": null,
+      "verification": "E-899; tools/test-force-root-budget.js ALL PASS (14 checks) driving the REAL sliced runSweeper in a vm sandbox with 2000 instrumented fake roots and tiny budgets (40 nodes / 6 roots per slice): no slice exceeds the FORCE_ROOT_BUDGET bound on prune-touches, first-serve hover strips, or walker creations; service windows per root are contiguous (monotonic cursor); every root is fully served (no starvation); detached roots are pruned lazily as visited and never leak in forceRootCursors; the lap ends with all traversal state dropped and the next lap starts cleanly; document is represented exactly once; the workset is built in exactly one place. Red control: git HEAD userscript -> 5 FAIL (per-slice O(R) root work).",
       "work": "T-242"
     }
   },

@@ -25,7 +25,7 @@ text — a palette that FAILs there is refused by the build gate anyway, so it i
 better to see it before Apply than after.
 
 Targets are split into two keyboard-reachable lists: **MY APPS** contains the
-portable/source-tree CodeNomad, SAIPENVIEW, SmartVac and WildRift tools; **POPULAR
+portable/source-tree CodeNomad, WorkBuddy tools; **POPULAR
 APPS** contains Windows, OBS, terminals, editors and the other installed software.
 ALL/NONE and Apply/Revert operate across both lists without changing their grouping.
 
@@ -66,10 +66,8 @@ in use.
 | `claude` | Electron shim, patched in place — see below | no — an update makes a new `app-<version>` folder |
 | `mpchc` | registry, dark theme + OSD typography only | no — MPC-HC rewrites its settings on exit |
 | `obsidian` | community theme per vault, all palettes installed at once | **yes** — it lives in your vault |
-| `saipenview` | rewrites its own `:root` token values in `style.css` | no — a source file; re-run after a pull |
 | `discord` | CSS dropped into BetterDiscord's own theme folder | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` keys; existing recent-file filters use the palette link colour | yes — it is your ini |
-| `smartvac`, `wildrift` | token table rewritten in the app's own source | no — a source file; re-run after a pull |
 
 ### FreeBuff ad removal
 
@@ -331,20 +329,6 @@ token it equalled. `-Palette <slug>` sets which one is active on install;
 themes and restores your previous choice — a hand-made theme in the same vault is
 never touched.
 
-### SAIPENVIEW
-
-Its frontend already declares the Wintage token names in its own `:root`, so this
-patch rewrites **only the token values** — never a selector, a font, a border width
-or a padding. Nothing that affects the box model changes, so the text cannot shift.
-That is deliberate: the earlier approach appended the whole browser stylesheet on
-top, and `wintage.css` is written for arbitrary web pages — universal selectors
-forcing the font, the size ladder, 2px borders and control heights. On an app that
-already has its own layout, that moves everything.
-
-Verified by masking every hex and diffing against the backup: structurally
-identical, only colour literals differ. `--link` is reported as not declared there
-(its markdown links read `--accentTeal`, which this does set) rather than injected —
-adding a variable the app never reads would be dead weight.
 
 ### MPC-HC (K-Lite)
 

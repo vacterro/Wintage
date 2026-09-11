@@ -1,3 +1,3 @@
-done: v1.31.0 shipped (eebcacb + tag v1.31.0, remote verified); 5 tickets closed (T-228, T-235, T-236, T-237, T-239); SAIOPS unlocked and two validator defects repaired in the shared install; validator 2 problems -> 1.
-remaining: T-234 executes SRC-004 (19 findings enumerated, 18 still live incl. CORE-001 P0 install-terminal snapshot data loss and the unfinished halves of CORE-002/CORE-003); T-238 resolves the duplicated saitranslate kitchen; T-065 stays blocked on an authenticated session.
-awaiting: nothing from the user; convergence cannot close while T-234/T-238 are workable, so stages J-M (sub sync, fresh EE, fresh QQ, --gate converge) must not run yet.
+done: v1.34.0 shipped (b4dc74e + tag v1.34.0, remote verified); T-241 closed (SRC-005 all 17 findings terminal, receipt CLOSED E-882, audit/3.md consumed).
+remaining: T-242 is the sole DOING P0 owner; execute SRC-006:R004 generic VS Code-family recovery epoch fail-closed validation + consumption only. T-243 honestly records the E-890/E-891 post-v1.34.0 working-tree WIP; v1.35.0 is unshipped, untagged, with no commit or remote claim. T-238 resolves the duplicated saitranslate kitchen; T-065 stays blocked; audit/5.md stays uncaptured.
+awaiting: nothing from the user; resume SRC-006:R004 in BUILD.

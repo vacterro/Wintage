@@ -17,12 +17,16 @@
   },
   "source_kind": "external_audit",
   "source_sha256": "21c0bc0d8b4b335492eaadf53b786780f71ee8141aeee5cb0da54d6572a3b894",
-  "status": "ACTIVE",
+  "status": "CLOSED",
   "transport": {
     "inbox_layer": "audit/4.md",
     "newline_normalization": "none",
     "producer_run_id": "acb-mtnj6jw7-991b125e5bed45fb85d4",
     "source_encoding": "utf-8",
     "transport_transform": "none"
-  }
+  },
+  "closed_at": "2026-09-11T02:35:00Z",
+  "reread_at": "2026-09-11T02:35:00Z",
+  "storage_status": "ARCHIVED",
+  "archive_ref": ".saipen/archive/source/SRC-006.md"
 }

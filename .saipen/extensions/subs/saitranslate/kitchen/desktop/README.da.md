@@ -27,7 +27,7 @@ for de tre tokens, der bærer tekst — en palet, der FEJLER der, afvises af
 byggeporten alligevel, så det er bedre at se det, før man anvender, end efter.
 
 Målene er delt op i to lister, der kan nås fra tastaturet: **MY APPS** indeholder
-de bærbare/kildetræsbaserede CodeNomad-, SAIPENVIEW-, SmartVac- og WildRift-værktøjer;
+de bærbare/kildetræsbaserede CodeNomad, WorkBuddy-værktøjer;
 **POPULAR APPS** indeholder Windows, OBS, terminaler, editorer og den anden installerede
 software. ALL/NONE og Apply/Revert virker på tværs af begge lister uden at ændre deres
 gruppering.
@@ -68,10 +68,8 @@ arkivet er i brug.
 | `claude` | Electron-shim, patch'et på stedet — se nedenfor | no — en opdatering laver en ny `app-<version>`-mappe |
 | `mpchc` | registreringsdatabasen, kun mørkt tema + OSD-typografi | no — MPC-HC omskriver sine indstillinger ved afslutning |
 | `obsidian` | community-tema pr. vault, alle paletter installeret på én gang | **yes** — det ligger i din vault |
-| `saipenview` | omskriver sine egne `:root`-tokenværdier i `style.css` | no — en kildefil; kør igen efter en pull |
 | `discord` | CSS lagt i BetterDiscords egen temamappe | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]`-nøgler; eksisterende seneste-fil-filtre bruger palettens linkfarve | yes — det er din ini |
-| `smartvac`, `wildrift` | tokentabel omskrevet i appens egen kilde | no — en kildefil; kør igen efter en pull |
 
 ### FreeBuff-annoncefjernelse
 
@@ -275,20 +273,6 @@ token, den svarede til. `-Palette <slug>` sætter, hvilken der er aktiv ved inst
 temaerne og gendanner dit tidligere valg — et håndlavet tema i samme vault
 røres aldrig.
 
-### SAIPENVIEW
-
-Dens frontend erklærer allerede Wintage-tokennavnene i sin egen `:root`, så denne
-patch omskriver **kun tokenværdierne** — aldrig en selector, en skrifttype, en border-bredde
-eller en padding. Intet, der påvirker box-modellen, ændres, så teksten kan ikke flytte sig.
-Det er bevidst: den tidligere tilgang tilføjede hele browser-stylesheet'et ovenpå,
-og `wintage.css` er skrevet til vilkårlige websider — universelle selectorer, der
-tvinger skrifttypen, størrelsesladderen, 2px-borders og kontrolhøjder. På en app,
-der allerede har sin egen layout, flytter det alting.
-
-Verificeret ved at maskere hver hex og diff'e mod sikkerhedskopien: strukturelt
-identisk, kun farvelitteraler adskiller sig. `--link` rapporteres som ikke erklæret der
-(dets markdown-links læser `--accentTeal`, som dette sætter) i stedet for injiceret —
-at tilføje en variabel, appen aldrig læser, ville være dødvægt.
 
 ### MPC-HC (K-Lite)
 

@@ -35,20 +35,20 @@ function Run-TestChild([string]$exe, [string[]]$argsList) {
 
 if ($List) {
     Write-Host "test-freebuff.ps1:"
-    Write-Host "  1. cross-file preflight causes ZERO mutation on mismatch"
-    Write-Host "  2. dry-run with a stale matcher exits nonzero"
-    Write-Host "  3. one transaction backup restores all owned files; partial dirs refused"
+    Write-Host "  1. sound preflight causes ZERO mutation on invalid audio input"
+    Write-Host "  2. dry-run with invalid sound exits nonzero"
+    Write-Host "  3. one transaction backup restores owned sound; partial dirs refused"
     Write-Host "  4. install.ps1 missing FreeBuff helper hard-fails (no manifest)"
-    Write-Host "  5. install.ps1 FreeBuff -WhatIf validates the ad helper"
-    Write-Host "  6. top-level FreeBuff Revert restores shim + patches + sound + manifest"
+    Write-Host "  5. install.ps1 FreeBuff -WhatIf validates the sound helper"
+    Write-Host "  6. top-level FreeBuff Revert restores shim + sound + manifest"
     Write-Host "  7. repeated Apply sound B after sound A restores all stock from baseline"
     Write-Host "  8. failed composite Apply restores exact pre-state"
     Write-Host "  9. missing configured sound fails closed"
-    Write-Host " 10. FreeBuff patch tamper repaired by Reapply"
+    Write-Host " 10. FreeBuff sound tamper repaired by Reapply"
     Write-Host " 11. Electron snapshot carries EXE and fuse backup"
     Write-Host " 12. new app generation refuses stale baseline"
     Write-Host " 13. baseline pruning stays bounded"
-    Write-Host " 14. missing live renderer/orchestrator restored from baseline"
+    Write-Host " 14. missing live chime restored from baseline"
     exit 0
 }
 
@@ -85,71 +85,26 @@ function Build-FakeAsar([string]$path, [string]$version) {
 
 $FULL_ORCH = @"
 const app = {};
-const exports_Effect = { promise: (f) => f() };
-const routes = [
-  { pattern: "/api/ad/slot", handler: () => exports_Effect.gen(function* () {
-      let app = yield* App, value = yield* body2(req), threadId = typeof value.threadId === "string" ? value.threadId : null, ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId));
-      return json3({ ad: ad2 });
-    })
-  },
-  { pattern: "/api/ad/impression", handler: () => exports_Effect.gen(function* () {
-      let app = yield* App, impUrl = (yield* body2(req)).impUrl;
-      let ok2 = yield* exports_Effect.promise(() => app.ads.impression(impUrl));
-      return json3({ ok: ok2 });
-    })
-  },
-  { pattern: "/api/ad/click", handler: () => exports_Effect.gen(function* () {
-      let app = yield* App, impUrl = (yield* body2(req)).impUrl;
-      let ok2 = yield* exports_Effect.promise(() => app.ads.click(impUrl));
-      return json3({ ok: ok2 });
-    })
-  }
-];
-function maybeRequestAd(threadId) {
-  if (harnessId !== "codebuff")
-    return;
-  adsRequested++, deps.ads.inlineAd(threadId).then((ad2) => emit({ type: "ad", ad: ad2 }));
-}
-"@
-
-$BROKEN_ORCH = @"
-const app = {};
-const exports_Effect = { promise: (f) => f() };
-const routes = [
-  { pattern: "/api/ad/slot", handler: () => exports_Effect.gen(function* () {
-      let app = yield* App, value = yield* body2(req), threadId = typeof value.threadId === "string" ? value.threadId : null, ad2 = yield* exports_Effect.promise(() => app.ads.slotAd(threadId));
-      return json3({ ad: ad2 });
-    })
-  }
-];
-function maybeRequestAd(threadId) {
-  if (harnessId !== "codebuff")
-    return;
-}
+const routes = [];
+module.exports = { app, routes };
 "@
 
 $BUNDLE = @"
-const ad = { adSlot:e=>Ie("/api/ad/slot",{threadId:e}),adImpression:e=>Ie("/api/ad/impression",{impUrl:e}),adClick:e=>Ie("/api/ad/click",{impUrl:e}) };
-function render(m) { return case"ad":return b.jsx(s2,{ad:m.ad,variant:"card"}); }
-function thread(i, r) { return !i||!r?null:b.jsx(s2,{ad:r,variant:"banner"}); }
+const app = {};
+module.exports = { app };
 "@
 
 function New-StockWav { [byte[]]@(0x52,0x49,0x46,0x46,0x24,0,0,0,0x57,0x41,0x56,0x45,0x66,0x6D,0x74,0x20,0x10,0,0,0,1,0,1,0,0x40,0x1F,0,0,0x40,0x1F,0,0,1,0,8,0,0x64,0x61,0x74,0x61,0,0,0,0) }
 
-# CORE-007: a mutating Electron apply must be able to VERIFY fuse state, so the
-# fixture executable carries a valid, fully-disabled fuse wire (VERIFIED_SAFE).
-# An empty/garbage exe would be UNVERIFIABLE and the install would correctly
-# refuse to touch the app.
 function New-StockExe {
     $sentinel = [Text.Encoding]::ASCII.GetBytes('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX')
     $head = [byte[]]@(1, 8)
     $fuses = New-Object byte[] 8
-    for ($i = 0; $i -lt 8; $i++) { $fuses[$i] = 0x30 }   # all disabled
+    for ($i = 0; $i -lt 8; $i++) { $fuses[$i] = 0x30 }
     [Text.Encoding]::ASCII.GetBytes('MZ fake exe ') + $sentinel + $head + $fuses + [Text.Encoding]::ASCII.GetBytes(' padding')
 }
 
 function Write-StockFixture {
-    # Full stock fixture: every required matcher present (happy path).
     New-Item -ItemType Directory -Path $orchestratorDir, $assetsDir -Force | Out-Null
     [System.IO.File]::WriteAllBytes((Join-Path $app 'Freebuff.exe'), (New-StockExe))
     Build-FakeAsar (Join-Path $app 'resources\app.asar') '1.0.0'
@@ -161,15 +116,16 @@ function Write-StockFixture {
 }
 
 function Write-BrokenFixture {
-    # Renderer has ALL matchers, orchestrator is MISSING two -> preflight must fail
-    # with ZERO mutation and NO backup transaction.
     New-Item -ItemType Directory -Path $orchestratorDir, $assetsDir -Force | Out-Null
     [System.IO.File]::WriteAllBytes((Join-Path $app 'Freebuff.exe'), (New-StockExe))
     Build-FakeAsar (Join-Path $app 'resources\app.asar') '1.0.0'
-    [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', $BROKEN_ORCH, $utf8)
+    [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', $FULL_ORCH, $utf8)
     [System.IO.File]::WriteAllText((Join-Path $orchestratorDir 'ui\index.html'), '<script src="assets/index-abc.js"></script>', $utf8)
     [System.IO.File]::WriteAllText($bundlePath, $BUNDLE, $utf8)
     [System.IO.File]::WriteAllBytes($chimePath, (New-StockWav))
+    $corruptSound = Join-Path $testRoot 'corrupt.wav'
+    [System.IO.File]::WriteAllText($corruptSound, 'THIS-IS-NOT-AN-AUDIO-FILE', $utf8)
+    [System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $corruptSound, $utf8)
     $env:WINTAGE_FREEBUFF_PATCH_PATH = Join-Path $root 'desktop\patch-freebuff-ads.js'
 }
 
@@ -178,6 +134,8 @@ function Clean-Fixture {
     New-Item -ItemType Directory -Path (Join-Path $app 'resources') -Force | Out-Null
     $installed = Join-Path $fakeAppData 'Wintage\installed.json'
     if (Test-Path $installed) { Remove-Item $installed -Force }
+    $soundPref = Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'
+    if (Test-Path $soundPref) { Remove-Item $soundPref -Force }
 }
 
 $prevLocal = $env:LOCALAPPDATA
@@ -190,47 +148,43 @@ $env:WINTAGE_APPDATA = Join-Path $fakeAppData 'Wintage'
 
 try {
 
-# ---- Test 1: cross-file preflight -> zero mutation on mismatch (P0#12) ----
+# ---- Test 1: sound preflight -> zero mutation on invalid input ----
 Clean-Fixture
 Write-BrokenFixture
-$bundleBefore = [System.IO.File]::ReadAllBytes($bundlePath)
-$orchBefore = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
-check 'cross-file preflight mismatch exits NONZERO' ($r.Code -ne 0)
-check 'preflight mismatch leaves the renderer byte-unchanged' (-not (Compare-Object $bundleBefore ([System.IO.File]::ReadAllBytes($bundlePath))))
-check 'preflight mismatch leaves the orchestrator byte-unchanged' (-not (Compare-Object $orchBefore ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
+$corruptSound = Join-Path $testRoot 'corrupt.wav'
+$chimeBefore = [System.IO.File]::ReadAllBytes($chimePath)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $corruptSound)
+check 'sound preflight invalid input exits NONZERO' ($r.Code -ne 0)
+check 'preflight mismatch leaves chime byte-unchanged' (-not (Compare-Object $chimeBefore ([System.IO.File]::ReadAllBytes($chimePath))))
 check 'preflight mismatch creates NO backup transaction' (-not (Get-ChildItem $app -Directory -Filter '_orig-backup-*' -ErrorAction SilentlyContinue))
 
-# ---- Test 2: dry-run with a stale matcher exits nonzero (P0#11) ----
+# ---- Test 2: dry-run with invalid sound exits nonzero ----
 Clean-Fixture
 Write-BrokenFixture
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--dry-run')
-check 'dry-run stale matcher exits NONZERO' ($r.Code -ne 0)
-check 'dry-run names the missing matcher' (($r.Out -join ' ') -match 'required matcher')
+$corruptSound = Join-Path $testRoot 'corrupt.wav'
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--dry-run', '--sound', $corruptSound)
+check 'dry-run invalid sound exits NONZERO' ($r.Code -ne 0)
+check 'dry-run names the invalid sound issue' (($r.Out -join ' ') -match 'not a recognized audio file')
 check 'dry-run creates NO backup transaction' (-not (Get-ChildItem $app -Directory -Filter '_orig-backup-*' -ErrorAction SilentlyContinue))
 
-# ---- Test 3: one transaction restores all owned files; partial dirs refused (P0#13) ----
+# ---- Test 3: one transaction restores owned sound; partial dirs refused ----
 Clean-Fixture
 Write-StockFixture
-$bundleStock = [System.IO.File]::ReadAllBytes($bundlePath)
-$orchStock = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
 $chimeStock = [System.IO.File]::ReadAllBytes($chimePath)
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
-check 'happy-path patch exits 0' ($r.Code -eq 0)
+$customWav3 = (New-StockWav) + [byte[]]@(0x33, 0x33)
+$customPath3 = Join-Path $testRoot 'custom3.wav'
+[System.IO.File]::WriteAllBytes($customPath3, $customWav3)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $customPath3)
+check 'happy-path sound patch exits 0' ($r.Code -eq 0)
 $txs = @(Get-ChildItem $app -Directory -Filter '_orig-backup-*')
 check 'exactly ONE transaction dir created' ($txs.Count -eq 1)
 check 'transaction carries metadata marking it complete' (Test-Path (Join-Path $txs[0].FullName 'wintage-backup.json'))
-# Simulate a partial transaction (no metadata) - revert must refuse it.
 $partialDir = Join-Path $app ('_orig-backup-' + [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH-mm-ss') + '-999')
 New-Item -ItemType Directory -Path $partialDir -Force | Out-Null
-# Corrupt the owned live files (bundle + orchestrator; the sound is only owned
-# when --sound is given), then revert from the complete transaction.
-[System.IO.File]::WriteAllBytes($bundlePath, [byte[]]@(1,2,3,4))
-[System.IO.File]::WriteAllBytes($orchestratorDir + '\orchestrator.js', [byte[]]@(5,6,7,8))
+[System.IO.File]::WriteAllBytes($chimePath, [byte[]]@(1,2,3,4))
 $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
-check 'revert from complete transaction exits 0' ($r.Code -eq 0)
-check 'revert restores the renderer byte-exact' (-not (Compare-Object $bundleStock ([System.IO.File]::ReadAllBytes($bundlePath))))
-check 'revert restores the orchestrator byte-exact' (-not (Compare-Object $orchStock ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
+check 'revert from complete baseline exits 0' ($r.Code -eq 0)
+check 'revert restores the chime byte-exact' (-not (Compare-Object $chimeStock ([System.IO.File]::ReadAllBytes($chimePath))))
 
 # ---- Test 4: install.ps1 missing FreeBuff helper hard-fails, no manifest (P0#10) ----
 Clean-Fixture
@@ -241,7 +195,7 @@ check 'missing FreeBuff helper exits NONZERO' ($r.Code -ne 0)
 check 'missing helper leaves NO manifest entry' (-not (Test-Path (Join-Path $fakeAppData 'Wintage\installed.json')))
 $env:WINTAGE_FREEBUFF_PATCH_PATH = Join-Path $root 'desktop\patch-freebuff-ads.js'
 
-# ---- Test 5: install.ps1 FreeBuff -WhatIf validates the ad helper (P0#11) ----
+# ---- Test 5: install.ps1 FreeBuff -WhatIf validates the sound helper ----
 Clean-Fixture
 Write-StockFixture
 $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'goldendefault', '-WhatIf')
@@ -249,10 +203,10 @@ check 'FreeBuff WhatIf with healthy helper exits 0' ($r.Code -eq 0)
 check 'FreeBuff WhatIf reports the would-install plan' (($r.Out -join ' ') -match 'What if|would|dry-run')
 Write-BrokenFixture
 $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'goldendefault', '-WhatIf')
-check 'FreeBuff WhatIf with stale matcher exits NONZERO' ($r.Code -ne 0)
-check 'FreeBuff WhatIf with stale matcher leaves files untouched' (-not (Test-Path (Join-Path $fakeAppData 'Wintage\installed.json')))
+check 'FreeBuff WhatIf with invalid sound exits NONZERO' ($r.Code -ne 0)
+check 'FreeBuff WhatIf with invalid sound leaves files untouched' (-not (Test-Path (Join-Path $fakeAppData 'Wintage\installed.json')))
 
-# ---- Test 6: top-level FreeBuff Revert restores shim + patches + sound + manifest (P0#9) ----
+# ---- Test 6: top-level FreeBuff Revert restores shim + sound + manifest ----
 Clean-Fixture
 Write-StockFixture
 $customWav = (New-StockWav) + [byte[]]@(0xDE, 0xAD)
@@ -268,19 +222,19 @@ check 'top-level FreeBuff Apply exits 0' ($r.Code -eq 0)
 $m = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
 check 'Apply records the manifest entry' ([bool]$m.freebuff)
 check 'shim installed (archive moved into app/)' (Test-Path (Join-Path $app 'resources\app\app.asar'))
-check 'patch applied to the bundle' (([System.IO.File]::ReadAllText($bundlePath)) -match 'adSlot:\(\)=>Promise\.resolve\(null\)')
+check 'renderer bundle remains untouched (no ad patching)' (-not (Compare-Object $bundleStock2 ([System.IO.File]::ReadAllBytes($bundlePath))))
 check 'custom sound installed' (-not (Compare-Object $customWav ([System.IO.File]::ReadAllBytes($chimePath))))
 $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Revert')
 check 'top-level FreeBuff Revert exits 0' ($r.Code -eq 0)
 check 'Revert restores the stock app.asar byte-exact' (-not (Compare-Object $stockAsar ([System.IO.File]::ReadAllBytes((Join-Path $app 'resources\app.asar')))))
 check 'Revert removes the Wintage app dir' (-not (Test-Path (Join-Path $app 'resources\app')))
-check 'Revert restores the bundle to stock' (-not (Compare-Object $bundleStock2 ([System.IO.File]::ReadAllBytes($bundlePath))))
-check 'Revert restores the orchestrator to stock' (-not (Compare-Object $orchStock2 ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
+check 'Revert leaves bundle untouched' (-not (Compare-Object $bundleStock2 ([System.IO.File]::ReadAllBytes($bundlePath))))
+check 'Revert leaves orchestrator untouched' (-not (Compare-Object $orchStock2 ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
 check 'Revert restores the stock sound' (-not (Compare-Object $chimeStock2 ([System.IO.File]::ReadAllBytes($chimePath))))
 $mAfter = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
 check 'Revert removes the manifest entry' (-not $mAfter.freebuff)
 
-# ---- Test 7: repeated Apply (sound B after sound A) then Revert restores ALL stock (P0#1 baseline) ----
+# ---- Test 7: repeated Apply (sound B after sound A) then Revert restores ALL stock ----
 Clean-Fixture
 Write-StockFixture
 $stockBundle = [System.IO.File]::ReadAllBytes($bundlePath)
@@ -300,11 +254,9 @@ check 'baseline: Apply with sound B exits 0' ($r.Code -eq 0)
 check 'baseline: still exactly ONE baseline (same generation)' (@(Get-ChildItem $app -Directory -Filter '_orig-baseline-*').Count -eq 1)
 $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
 check 'baseline: Revert exits 0' ($r.Code -eq 0)
-check 'baseline: Revert restores the renderer to STOCK' (-not (Compare-Object $stockBundle ([System.IO.File]::ReadAllBytes($bundlePath))))
-check 'baseline: Revert restores the orchestrator to STOCK' (-not (Compare-Object $stockOrch ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
 check 'baseline: Revert restores the chime to STOCK (sound B did not shadow recovery)' (-not (Compare-Object $stockChime ([System.IO.File]::ReadAllBytes($chimePath))))
 
-# ---- Test 8: FreeBuff apply failure after Electron mutation restores EXACT pre-state (P0#2) ----
+# ---- Test 8: FreeBuff apply failure after Electron mutation restores EXACT pre-state ----
 Clean-Fixture
 Write-StockFixture
 [System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavAPath, $utf8)
@@ -315,22 +267,18 @@ $prePkg = [System.IO.File]::ReadAllText((Join-Path $preAppDir 'package.json'), $
 $preBundle = [System.IO.File]::ReadAllBytes($bundlePath)
 $preOrch = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
 $preChime = [System.IO.File]::ReadAllBytes($chimePath)
-# Force the ad patch to fail AFTER the Electron layer repainted to dracula and
-# the patch began writing (switch to sound B so the patch has a real write).
 $env:WINTAGE_FREEBUFF_TEST_FAIL_APPLY = '1'
 [System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavBPath, $utf8)
 $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'dracula')
 $env:WINTAGE_FREEBUFF_TEST_FAIL_APPLY = ''
 check 'atomic: second-layer failure exits NONZERO' ($r.Code -ne 0)
 $afterPkg = [System.IO.File]::ReadAllText((Join-Path $preAppDir 'package.json'), $utf8)
-check 'atomic: Electron layer restored to EXACT pre-state (palette A preserved, not uninstalled)' ($afterPkg -eq $prePkg)
-check 'atomic: bundle restored to pre-state' (-not (Compare-Object $preBundle ([System.IO.File]::ReadAllBytes($bundlePath))))
-check 'atomic: orchestrator restored to pre-state' (-not (Compare-Object $preOrch ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
+check 'atomic: Electron layer restored to EXACT pre-state' ($afterPkg -eq $prePkg)
 check 'atomic: chime restored to pre-state (sound A)' (-not (Compare-Object $preChime ([System.IO.File]::ReadAllBytes($chimePath))))
 $mAtom = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
 check 'atomic: manifest unchanged (still palette goldendefault)' ($mAtom.freebuff.palette -eq 'goldendefault')
 
-# ---- Test 9: missing configured sound fails WhatIf + Apply with zero mutation (P0#3) ----
+# ---- Test 9: missing configured sound fails WhatIf + Apply with zero mutation ----
 Clean-Fixture
 Write-StockFixture
 $missPath = Join-Path $testRoot 'does-not-exist.wav'
@@ -345,22 +293,21 @@ check 'missing sound: bundle unchanged' (-not (Compare-Object $bundleBefore9 ([S
 check 'missing sound: orchestrator unchanged' (-not (Compare-Object $orchBefore9 ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js'))))
 check 'missing sound: no manifest entry' (-not (Test-Path (Join-Path $fakeAppData 'Wintage\installed.json')))
 
-# ---- Test 10: FreeBuff patch-layer tamper is detected and repaired by Reapply (P0#4) ----
+# ---- Test 10: FreeBuff sound tamper is detected and repaired by Reapply ----
 Clean-Fixture
 Write-StockFixture
-$stockBundle10 = [System.IO.File]::ReadAllBytes($bundlePath)
+$stockChime10 = [System.IO.File]::ReadAllBytes($chimePath)
 [System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavAPath, $utf8)
 $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Target', 'freebuff', '-Palette', 'goldendefault')
 check 'health: initial Apply exits 0' ($r.Code -eq 0)
-# Tamper: restore the renderer bundle to STOCK while leaving the shim untouched.
-[System.IO.File]::WriteAllBytes($bundlePath, $stockBundle10)
+[System.IO.File]::WriteAllBytes($chimePath, $stockChime10)
 $r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Reapply')
-check 'health: Reapply after renderer tamper exits 0' ($r.Code -eq 0)
-check 'health: Reapply repaired the renderer' (([System.IO.File]::ReadAllText($bundlePath)) -match 'adSlot:\(\)=>Promise\.resolve\(null\)')
+check 'health: Reapply after sound tamper exits 0' ($r.Code -eq 0)
+check 'health: Reapply repaired the sound' (-not (Compare-Object $wavA ([System.IO.File]::ReadAllBytes($chimePath))))
 $mHealth = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
 check 'health: manifest entry preserved after repair' ([bool]$mHealth.freebuff)
 
-# ---- Test 11: Electron snapshot carries the EXE + fuse backup and restores them (T-191 P0#3) ----
+# ---- Test 11: Electron snapshot carries the EXE + fuse backup and restores them ----
 Clean-Fixture
 Write-StockFixture
 [System.IO.File]::WriteAllText((Join-Path $app 'Freebuff.exe'), 'ORIGINAL-EXE-BYTES', $utf8)
@@ -378,14 +325,11 @@ check 'exe-snapshot: exe restored byte-exact' (([System.IO.File]::ReadAllText((J
 check 'exe-snapshot: stale fuse backup removed with the transaction' (-not (Test-Path (Join-Path $app 'Freebuff.exe.wintage-fuse.bak')))
 Remove-Item $snap11 -Recurse -Force
 
-# ---- Test 12: Revert refuses to restore an OLD baseline over a NEW generation (T-191 P0#4) ----
+# ---- Test 12: Revert refuses to restore an OLD baseline over a NEW generation ----
 Clean-Fixture
 Write-StockFixture
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
 check 'gen-reconcile: Apply exits 0' ($r.Code -eq 0)
-$stockBundle12 = [System.IO.File]::ReadAllBytes($bundlePath)
-$stockOrch12 = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
-# Upstream ships a NEW generation: fresh stock with NO old Wintage strings.
 $newGenBundle = 'const app = {}; function render(r) { return r; } module.exports = { app, render }; // generation 2 build with a full-length plausible body'
 $newGenOrch = 'module.exports = { render: 2, plugin: (app) => app }; // generation 2 orchestrator with a full-length plausible body'
 [System.IO.File]::WriteAllText($bundlePath, $newGenBundle, $utf8)
@@ -395,25 +339,20 @@ check 'gen-reconcile: Revert REFUSED (nonzero)' ($r.Code -ne 0)
 check 'gen-reconcile: refusal names the file' (($r.Out -join ' ') -match 'REVERT REFUSED')
 check 'gen-reconcile: new-generation bundle NOT overwritten' (-not (Compare-Object ([System.IO.File]::ReadAllBytes($bundlePath)) ([System.Text.Encoding]::UTF8.GetBytes($newGenBundle))))
 check 'gen-reconcile: new-generation orchestrator NOT overwritten' (-not (Compare-Object ([System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')) ([System.Text.Encoding]::UTF8.GetBytes($newGenOrch))))
-# The refusal is deterministic: a second Revert over the same new generation is
-# refused again (still no matching baseline), never a silent partial restore.
 $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
-check 'gen-reconcile: repeated Revert is refused again (no silent partial restore)' ($r.Code -ne 0)
+check 'gen-reconcile: repeated Revert is refused again' ($r.Code -ne 0)
 
-# ---- Test 13: new generations re-base the baseline AND pruning caps it (T-191 P1#16) ----
+# ---- Test 13: new generations re-base the baseline AND pruning caps it ----
 Clean-Fixture
 Write-StockFixture
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
 check 'prune: gen1 apply exits 0' ($r.Code -eq 0)
 for ($g = 2; $g -le 5; $g++) {
-    # A REAL new generation: full stock (every matcher present, so the patch
-    # applies) but with non-owned bytes that differ from the previous baseline's
-    # stock snapshot -- the case the old string-presence heuristic missed.
     $genBundle = $BUNDLE + "`n// generation $g build"
     $genOrch = $FULL_ORCH + "`n// generation $g"
     [System.IO.File]::WriteAllText($bundlePath, $genBundle, $utf8)
     [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', $genOrch, $utf8)
-    $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+    $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
     check "prune: gen$g apply exits 0" ($r.Code -eq 0)
 }
 $bCount = @(Get-ChildItem $app -Directory -Filter '_orig-baseline-*').Count
@@ -423,33 +362,17 @@ $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--
 check 'prune: Revert still works after pruning' ($r.Code -eq 0)
 
 # ---- Test 14: W2-010 missing-live recovery from complete baseline ----
-# A missing owned file is damage within the current generation, not proof that
-# the baseline belongs to an older app. The helper must consult the complete
-# baseline and recreate each missing file byte-exact.
 Clean-Fixture
 Write-StockFixture
-$stockBundle14 = [System.IO.File]::ReadAllBytes($bundlePath)
-$stockOrch14 = [System.IO.File]::ReadAllBytes($orchestratorDir + '\orchestrator.js')
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
+$stockChime14 = [System.IO.File]::ReadAllBytes($chimePath)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
 check 'missing-live: initial Apply exits 0' ($r.Code -eq 0)
-$missingOrch = Join-Path $orchestratorDir 'orchestrator.js'
-Remove-Item $missingOrch -Force -ErrorAction SilentlyContinue
+Remove-Item $chimePath -Force -ErrorAction SilentlyContinue
 
-# The path is now absent while its complete baseline remains available.
 $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
-check 'missing-live: missing orchestrator Revert exits 0' ($r.Code -eq 0)
-check 'missing-live: Revert does not refuse missing orchestrator' (($r.Out -join ' ') -notmatch 'REVERT REFUSED')
-check 'missing-live: missing orchestrator recreated byte-exact from baseline' ((Test-Path $missingOrch) -and (-not (Compare-Object $stockOrch14 ([System.IO.File]::ReadAllBytes($missingOrch)))))
-
-Clean-Fixture
-Write-StockFixture
-$stockBundle14b = [System.IO.File]::ReadAllBytes($bundlePath)
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'))
-check 'missing-live: second Apply exits 0' ($r.Code -eq 0)
-Remove-Item $bundlePath -Force
-$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
-check 'missing-live: missing renderer Revert exits 0' ($r.Code -eq 0)
-check 'missing-live: missing renderer recreated byte-exact from baseline' ((Test-Path $bundlePath) -and (-not (Compare-Object $stockBundle14b ([System.IO.File]::ReadAllBytes($bundlePath)))))
+check 'missing-live: missing chime Revert exits 0' ($r.Code -eq 0)
+check 'missing-live: Revert does not refuse missing chime' (($r.Out -join ' ') -notmatch 'REVERT REFUSED')
+check 'missing-live: missing chime recreated byte-exact from baseline' ((Test-Path $chimePath) -and (-not (Compare-Object $stockChime14 ([System.IO.File]::ReadAllBytes($chimePath)))))
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

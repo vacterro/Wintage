@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Elenco temi con chip colore, i target trovati su questa macchina, un'anteprima Win95 dal vivo, e tutti i ventuno token colore come campioni modificabili. Modificare un qualsiasi campione fa un fork della palette in **Custom** invece di cambiare un tema distribuito sotto i tuoi piedi. Il pannello a destra mostra in tempo reale il contrasto WCAG dei tre token che portano testo — una palette che FAIL lì viene comunque rifiutata dal build gate, quindi è meglio vederlo prima di Apply che dopo.
 
-I target sono divisi in due liste raggiungibili da tastiera: **MY APPS** contiene gli strumenti portatili/albero-sorgente CodeNomad, SAIPENVIEW, SmartVac e WildRift; **POPULAR APPS** contiene Windows, OBS, terminali, editor e l'altro software installato. ALL/NONE e Apply/Revert operano su entrambe le liste senza cambiarne il raggruppamento.
+I target sono divisi in due liste raggiungibili da tastiera: **MY APPS** contiene gli strumenti portatili/albero-sorgente CodeNomad, WorkBuddy; **POPULAR APPS** contiene Windows, OBS, terminali, editor e l'altro software installato. ALL/NONE e Apply/Revert operano su entrambe le liste senza cambiarne il raggruppamento.
 
 La finestra indossa la palette che sta per installare. È l'anteprima più veloce disponibile, e mantiene lo strumento onesto: una palette che rende questa finestra illeggibile è visibilmente illeggibile.
 
@@ -46,10 +46,8 @@ Apply delega a `install.ps1`. C'è esattamente un percorso di codice che install
 | `claude` | shim Electron, patchato sul posto — vedi sotto | no — un aggiornamento crea una nuova cartella `app-<version>` |
 | `mpchc` | registro, solo tema scuro + tipografia OSD | no — MPC-HC riscrive le sue impostazioni alla chiusura |
 | `obsidian` | tema di comunità per vault, tutte le palette installate in una volta | **sì** — vive nel tuo vault |
-| `saipenview` | riscrive i suoi stessi valori token `:root` in `style.css` | no — un file sorgente; rilancia dopo un pull |
 | `discord` | CSS depositato nella cartella temi propria di BetterDiscord | sì |
 | `totalcmd`, `totalcmd2` | chiavi `[Colors]` di `wincmd.ini`; i filtri file recenti esistenti usano il colore link della palette | sì — è la tua ini |
-| `smartvac`, `wildrift` | tabella token riscritta nel codice sorgente proprio dell'app | no — un file sorgente; rilancia dopo un pull |
 
 ### Rimozione pubblicità FreeBuff
 
@@ -138,11 +136,6 @@ La seconda metà era un problema molto più silenzioso. Il `BrowserWindow` di Cl
 
 Un tema di comunità viene scritto nel `.obsidian/themes/` di ogni vault — tutte le sedici palette in una volta, esattamente come il target VS Code, così passi da una all'altra in **Settings → Appearance** senza rilanciare nulla. Il template è stato derivato dal tema fatto a mano `VintageWin95` già presente nel vault, ogni colore sostituito dal token a cui corrispondeva. `-Palette <slug>` imposta quale è attiva all'installazione; `appearance.json` viene salvato prima, e `-Revert` rimuove solo i temi `Wintage *` e ripristina la tua scelta precedente — un tema fatto a mano nello stesso vault non viene mai toccato.
 
-### SAIPENVIEW
-
-Il suo frontend dichiara già i nomi token di Wintage nel suo stesso `:root`, quindi questa patch riscrive **solo i valori dei token** — mai un selettore, un font, una larghezza di bordo o un padding. Nulla che riguardi il box model cambia, quindi il testo non può spostarsi. È deliberato: l'approccio precedente aggiungeva sopra l'intero foglio di stile del browser, e `wintage.css` è scritto per pagine web arbitrarie — selettori universali che impongono font, scala di dimensioni, bordi di 2px e altezze dei controlli. Su un'app che ha già il proprio layout, quello sposta tutto.
-
-Verificato mascherando ogni hex e facendo diff contro il backup: strutturalmente identico, differiscono solo i letterali di colore. `--link` viene segnalato come non dichiarato lì (i suoi link markdown leggono `--accentTeal`, che questo imposta) invece di essere iniettato — aggiungere una variabile che l'app non legge mai sarebbe peso morto.
 
 ### MPC-HC (K-Lite)
 

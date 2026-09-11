@@ -27,8 +27,7 @@ kolme teksti kandva tookeni jaoks — palett, mis seal FAIL on, lükkab ehitusv�
 nagunii tagasi, nii et parem on seda näha enne RAKENDA klõpsu kui pärast.
 
 Sihtmärgid on jaotatud kahte klaviatuuriga ligipääsetavasse loendisse:
-**MINU RAKENDUSED** sisaldab kaasaskantavaid/allikapuust pärinevaid CodeNomad,
-SAIPENVIEW, SmartVac ja WildRift tööriistu; **POPULAARSED RAKENDUSED** sisaldab
+**MINU RAKENDUSED** sisaldab kaasaskantavaid/allikapuust pärinevaid CodeNomad, WorkBuddy tööriistu; **POPULAARSED RAKENDUSED** sisaldab
 Windowsi, OBS-i, terminale, redaktoreid ja muud paigaldatud tarkvara.
 KÕIK/MITTE ÜHTEGI ning RAKENDA/TASTA toimivad mõlema loendi peale ilma nende
 rühmitust muutmata.
@@ -69,10 +68,8 @@ arhiiv on kasutuses.
 | `claude` | Electroni shim, plaasterdatud paigas — vaata allpool | no — uuendus loob uue `app-<version>` kausta |
 | `mpchc` | registrisse, ainult tume teema + OSD tüpograafia | no — MPC-HC kirjutab oma seaded väljudes üle |
 | `obsidian` | kogukonna teema iga vault-i jaoks, kõik paletid paigaldatud korraga | **yes** — elab sinu vault-is |
-| `saipenview` | kirjutab oma `:root` tookeni väärtused `style.css`-is üle | no — allikafail; käivita uuesti pärast pulli |
 | `discord` | CSS visatud BetterDiscordi enda teemakausta | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` võtmed; olemasolevad hiljutiste failide filtrid kasutavad paleti lingivärvi | yes — see on sinu ini |
-| `smartvac`, `wildrift` | tookenitabel ümber kirjutatud rakenduse enda allikasse | no — allikafail; käivita uuesti pärast pulli |
 
 ### FreeBuffi reklaamide eemaldamine
 
@@ -294,22 +291,6 @@ milline on paigaldusel aktiivne; `appearance.json` varundatakse enne ning
 `-Revert` eemaldab ainult `Wintage *` teemad ja taastab sinu eelmise valiku —
 sama vault-i käsitsi tehtud teemat ei puudutata kunagi.
 
-### SAIPENVIEW
-
-Selle frontend deklareerib Wintage tookeninimed juba oma `:root`-is, nii et see
-plaaster kirjutab ümber **ainult tookeni väärtused** — mitte kunagi selektorit,
-fonti, piirilaiust ega paddingut. Miski, mis mõjutab kastimudelit, ei muutu,
-nii et tekst ei saa nihkuda. See on tahtlik: varasem lähenemine pani terve
-brauseri stiililehe peale, ja `wintage.css` on kirjutatud suvaliste veebilehtede
-jaoks — universaalsed selektorid, mis sunnivad fonti, suurusteredelit, 2px piire
-ja juhtelementide kõrgusi. Rakendusel, millel on juba oma paigutus, liigutab see
-kõike.
-
-Kinnitatud nii, et iga hex maskiti ja varukoopiaga diffiti: struktuurilt
-identne, erinevad ainult värviliteraalid. `--link` teatatakse seal
-deklareerimata (selle markdown lingid loevad `--accentTeal`, mida see küll
-määrab), mitte ei süstita — muutuja lisamine, mida rakendus kunagi ei loe,
-oleks surnud koorem.
 
 ### MPC-HC (K-Lite)
 

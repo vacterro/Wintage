@@ -27,8 +27,7 @@ drie tokens die tekst dragen — een palet dat daar FAIL krijgt, wordt door de
 buildgate toch geweigerd, dus het is beter om het vóór Apply te zien dan erna.
 
 Targets zijn verdeeld over twee lijsten die met het toetsenbord bereikbaar zijn:
-**MY APPS** bevat de draagbare/source-tree CodeNomad, SAIPENVIEW, SmartVac en
-WildRift-tools; **POPULAR APPS** bevat Windows, OBS, terminals, editors en de
+**MY APPS** bevat de draagbare/source-tree CodeNomad, WorkBuddy-tools; **POPULAR APPS** bevat Windows, OBS, terminals, editors en de
 overige geïnstalleerde software. ALL/NONE en Apply/Revert werken op beide lijsten
 zonder hun groepering te veranderen.
 
@@ -68,10 +67,8 @@ omdat het archief dan in gebruik is.
 | `claude` | Electron-shim, ter plaatse gepatcht — zie hieronder | no — een update maakt een nieuwe map `app-<version>` |
 | `mpchc` | registry, donker thema + alleen OSD-typografie | no — MPC-HC herschrijft zijn instellingen bij afsluiten |
 | `obsidian` | community-thema per vault, alle paletten tegelijk geïnstalleerd | **yes** — hij leeft in je vault |
-| `saipenview` | herschrijft zijn eigen `:root`-tokenwaarden in `style.css` | no — een bronbestand; na een pull opnieuw draaien |
 | `discord` | CSS in BetterDiscord's eigen themamap geplaatst | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini`-sleutels `[Colors]`; bestaande recent-file-filters gebruiken de paletlinkkleur | yes — het is jouw ini |
-| `smartvac`, `wildrift` | tokenschema herschreven in de eigen bron van de app | no — een bronbestand; na een pull opnieuw draaien |
 
 ### FreeBuff-advertentieverwijdering
 
@@ -294,22 +291,6 @@ welke bij installatie actief is; `appearance.json` wordt eerst geback-upt, en
 `-Revert` verwijdert alleen de `Wintage *`-thema's en herstelt je vorige keuze —
 een handgemaakt thema in dezelfde vault wordt nooit aangeraakt.
 
-### SAIPENVIEW
-
-Zijn frontend declareert de Wintage-tokennamen al in zijn eigen `:root`, dus deze
-patch herschrijft **alleen de tokenwaarden** — nooit een selector, een font, een
-randbreedte of een padding. Niets dat het box-model beïnvloedt verandert, dus de
-tekst kan niet verschuiven. Dat is bewust: de eerdere aanpak plakte de volledige
-browser-stylesheet er bovenop, en `wintage.css` is geschreven voor willekeurige
-webpagina's — universele selectors die het font, de maat-ladder, 2px-randen en
-bedieningshoogtes afdwingen. Op een app die al zijn eigen layout heeft, verplaatst
-dat alles.
-
-Geverifieerd door elk hex te maskeren en tegen de back-up te diffen: structureel
-identiek, alleen kleurliterals verschillen. `--link` wordt gerapporteerd als niet
-daar gedeclareerd (zijn markdown-links lezen `--accentTeal`, wat dit wel instelt)
-in plaats van geïnjecteerd — een variabele toevoegen die de app nooit leest zou
-dood gewicht zijn.
 
 ### MPC-HC (K-Lite)
 

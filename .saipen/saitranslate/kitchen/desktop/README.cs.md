@@ -26,7 +26,7 @@ které nesou text — paleta, která tam selže, je stejně odmítnuta build br�
 takže je lepší to vidět před Apply než po něm.
 
 Cíle jsou rozděleny do dvou seznamů dosažitelných klávesnicí: **MY APPS** obsahuje
-přenosné/zdrojové nástroje CodeNomad, SAIPENVIEW, SmartVac a WildRift; **POPULAR
+přenosné/zdrojové nástroje CodeNomad, WorkBuddy; **POPULAR
 APPS** obsahuje Windows, OBS, terminály, editory a další nainstalovaný software.
 ALL/NONE a Apply/Revert fungují na obou seznamech, aniž by měnily jejich seskupení.
 
@@ -65,10 +65,8 @@ už je zatemněná, funguje za běhu; první instalace ne, protože archiv je po
 | `claude` | Electron shim, záplatován na místě — viz níže | ne — aktualizace vytvoří novou složku `app-<version>` |
 | `mpchc` | registr, jen tmavý motiv + typografie OSD | ne — MPC-HC při ukončení přepíše svá nastavení |
 | `obsidian` | komunitní motiv pro každý trezor, všechny palety najednou | **ano** — žije ve vašem trezoru |
-| `saipenview` | přepisuje své vlastní hodnoty tokenů `:root` v `style.css` | ne — zdrojový soubor; po pull spusťte znovu |
 | `discord` | CSS vloženo do vlastní složky motivů BetterDiscord | ano |
 | `totalcmd`, `totalcmd2` | klíče `wincmd.ini` `[Colors]`; existující filtry posledních souborů používají barvu odkazu palety | ano — je to váš ini |
-| `smartvac`, `wildrift` | tabulka tokenů přepsána ve vlastním zdroji aplikace | ne — zdrojový soubor; po pull spusťte znovu |
 
 ### Odstranění reklam ve FreeBuff
 
@@ -278,20 +276,6 @@ instalaci aktivní; `appearance.json` je nejprve zálohován a `-Revert` odstran
 jen motivy `Wintage *` a obnoví vaši předchozí volbu — ručně vytvořeného motivu ve
 stejném trezoru se nikdy nedotkne.
 
-### SAIPENVIEW
-
-Jeho frontend už deklaruje názvy tokenů Wintage ve vlastním `:root`, takže tato
-záplata přepisuje **jen hodnoty tokenů** — nikdy selektor, písmo, šířku rámečku
-nebo padding. Nic, co ovlivňuje box model, se nemění, takže se text nemůže
-posunout. To je záměr: dřívější přístup přidával celý prohlížečový stylsheet
-navrch a `wintage.css` je psán pro libovolné webové stránky — univerzální
-selektory vynucující písmo, žebřík velikostí, 2px rámečky a výšky ovládacích
-prvků. Na aplikaci, která už má vlastní rozložení, to posune všechno.
-
-Ověřeno maskováním každého hexu a porovnáním proti záloze: strukturálně identické,
-liší se jen barevné literály. `--link` je hlášen jako tam nedeklarovaný (jeho
-markdown odkazy čtou `--accentTeal`, které tohle nastavuje), místo aby byl
-injektován — přidávat proměnnou, kterou aplikace nikdy nečte, by byla mrtvá váha.
 
 ### MPC-HC (K-Lite)
 

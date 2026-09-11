@@ -1,32 +1,13 @@
 # Recovery-consumption ordering regression suite (T-206 / W2-009 / SRC-005 W2-003).
 #
-# Wintage-owned source files (SmartVac, WildRift, SAIPENVIEW) Revert by
-# copying a per-target `<file>.bak` backup back over the themed file and
-# then consuming the backup. The audit caught that the original code deleted
-# the backup BEFORE the manifest removal committed -- a process kill at that
-# seam strands `manifest says installed + no recovery`, a permanent
-# fail-closed state the user cannot recover from. The first fix deferred the
-# deletion INTO the commit scriptblock; SRC-005 W2-003 hardened that into a
-# retire-first protocol, because a scriptblock is NOT an atomic primitive:
-# the backup is RENAMED to a `<file>.wintage-retired` tombstone BEFORE
-# Invoke-TargetCommit, the manifest entry is removed inside the commit, the
-# tombstone is deleted only after the manifest transition succeeded
-# (post-commit GC), and a failed commit renames the tombstone back so the
-# retry keeps its recovery authority. Restore-FilePreState (in-memory
-# prestate) remains the safety net for the live file on a commit failure.
+# Revert operations must remove the manifest entry INSIDE Invoke-TargetCommit,
+# and rollback callbacks must restore the captured pre-state if the manifest
+# commit fails.
 #
 # This test enforces:
-#   1. The structural invariant -- for each of the three Revert call sites
-#      (Invoke-SmartVac, Invoke-WildRift, Invoke-Saipenview), no code line
-#      between `Copy-Item $bakFile` and `Invoke-TargetCommit` deletes the
-#      backup (`Remove-Item $bakFile`), and the retire-first rename to the
-#      tombstone is present. Full-line PowerShell comments are stripped
-#      before matching, so a comment naming the old defect cannot satisfy
-#      or trip the assertion.
-#   2. The commit scriptblock removes the manifest entry and performs the
-#      post-commit tombstone GC (`Remove-Item $retire`), NOT a backup
-#      deletion.
-#   3. The behavioural round-trip -- Save-FilePreState captures live+bak
+#   1. Revert handlers (Notepad++, Cinema 4D) use Invoke-TargetCommit to remove
+#      their manifest entry and pair it with a pre-state rollback callback.
+#   2. The behavioural round-trip -- Save-FilePreState captures live+bak
 #      bytes, and Restore-FilePreState reconstructs both exactly after a
 #      failed commit.
 #
@@ -57,13 +38,10 @@ function Remove-CommentLines([string]$text) {
 }
 
 if ($List) {
-    Write-Host "test-recovery-consumption.ps1 (6 tests):"
-    Write-Host "  1. SmartVac Revert: retire-first rename, no backup deletion, before Invoke-TargetCommit"
-    Write-Host "  2. WildRift Revert: retire-first rename, no backup deletion, before Invoke-TargetCommit"
-    Write-Host "  3. SAIPENVIEW Revert: retire-first rename, no backup deletion, before Invoke-TargetCommit"
-    Write-Host "  4. SmartVac commit scriptblock: Remove-ManifestEntry + post-commit tombstone GC"
-    Write-Host "  5. Restore-FilePreState byte-exact round-trip after a failed commit"
-    Write-Host "  6. WildRift + SAIPENVIEW commit scriptblocks: post-commit tombstone GC"
+    Write-Host "test-recovery-consumption.ps1 (3 tests):"
+    Write-Host "  1. Notepad++ Revert: Invoke-TargetCommit manifest removal + rollback"
+    Write-Host "  2. Cinema 4D Revert: Invoke-TargetCommit manifest removal + rollback"
+    Write-Host "  3. Restore-FilePreState byte-exact round-trip after a failed commit"
     exit 0
 }
 
@@ -121,7 +99,8 @@ function Get-RevertBlock([string]$text, [string]$funcName) {
     if ($fidx -lt 0) { return $null }
     $ridx = $text.IndexOf('if ($DoRevert) {', $fidx)
     if ($ridx -lt 0) { return $null }
-    $aidx = $text.IndexOf('if (-not $PSCmdlet.ShouldProcess', $ridx)
+    $aidx = $text.IndexOf("`n    `$built =", $ridx)
+    if ($aidx -lt 0) { $aidx = $text.IndexOf('if (-not $PSCmdlet.ShouldProcess', $ridx) }
     if ($aidx -lt 0) { return $null }
     return $text.Substring($ridx, $aidx - $ridx)
 }
@@ -131,27 +110,17 @@ function Extract-CommitScriptblock([string]$block) {
     return (Extract-ScriptblockFrom $block ($block.IndexOf('{', $tIdx)))
 }
 
-foreach ($fn in @('Invoke-SmartVac', 'Invoke-WildRift', 'Invoke-Saipenview')) {
-    # The live target variable differs per handler (pyFile vs cssFile).
-    $liveVar = if ($fn -eq 'Invoke-Saipenview') { 'cssFile' } else { 'pyFile' }
+foreach ($fn in @('Invoke-NotepadPlusPlus', 'Invoke-Cinema4D')) {
     $rb = Get-RevertBlock $src $fn
     $revert = Remove-CommentLines $rb
     $commit = Extract-CommitScriptblock $revert
     $rollback = Extract-RollbackScriptblock $revert
     check "${fn}: revert branch has a commit scriptblock" ($null -ne $commit)
     if ($commit) {
-        # (a) W2-002: live mutation + retire rename are INSIDE the commit block.
-        check "${fn}: W2-002 live mutation (Copy-Item bak->live) is inside the commit scriptblock" ($commit -match "Copy-Item\s+\`$bakFile\s+\`$$liveVar")
-        check "${fn}: W2-002 retire-first rename is inside the commit scriptblock" ($commit -match 'Rename-Item\s+\$bakFile\s+\$retire')
-        # (b) W2-003: manifest removal + post-commit tombstone GC, never bak deletion.
-        $manifestKey = $fn -replace '^Invoke-', ''
-        $manifestKey = $manifestKey.Substring(0, 1).ToLower() + $manifestKey.Substring(1)
+        $manifestKey = ($fn -replace '^Invoke-', '').ToLower()
         check "${fn}: commit scriptblock removes the manifest entry" ($commit -match "Remove-ManifestEntry\s+'$manifestKey'")
-        check "${fn}: commit scriptblock does post-commit tombstone GC (Remove-Item \$retire)" ($commit -match 'Remove-Item\s+\$retire')
-        check "${fn}: commit scriptblock never deletes the backup itself" (-not ($commit -match 'Remove-Item\s+\$bakFile'))
     }
-    # (c) rollback callback restores the tombstone on manifest-commit failure.
-    check "${fn}: rollback callback restores the tombstone (Rename-Item \$retire \$bakFile)" ($null -ne $rollback -and $rollback -match 'Rename-Item\s+\$retire\s+\$bakFile')
+    check "${fn}: rollback callback restores the pre-state" ($null -ne $rollback -and ($rollback -match 'Restore-FilePreState' -or $rollback -match 'Restore-DirPreState'))
 }
 
 # ---- Test 5: behavioural round-trip ----

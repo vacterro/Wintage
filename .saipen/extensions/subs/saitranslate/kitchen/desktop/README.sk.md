@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Zoznam tém s farebnými vzorkami, ciele nájdené na tomto počítači, živý Win95-náhľad a všetkých dvadsaťjeden farebných tokenov ako upraviteľné swatche. Úprava ktoréhokoľvek swatchu rozvetví paletu na **Custom** namiesto zmeny vydanej témy popod vás. Panel vpravo zobrazuje živý WCAG-kontrast pre tri tokeny nesúce text — paletu, ktorá tam zlyhá, build brána aj tak odmietne, takže je lepšie ju vidieť pred Apply ako po ňom.
 
-Ciele sú rozdelené do dvoch zoznamov dosiahnuteľných klávesnicou: **MY APPS** obsahuje prenosné/zdrojové nástroje CodeNomad, SAIPENVIEW, SmartVac a WildRift; **POPULAR APPS** obsahuje Windows, OBS, terminály, editory a ďalší nainštalovaný softvér. ALL/NONE a Apply/Revert fungujú na oboch zoznamoch bez zmeny ich zoskupenia.
+Ciele sú rozdelené do dvoch zoznamov dosiahnuteľných klávesnicou: **MY APPS** obsahuje prenosné/zdrojové nástroje CodeNomad, WorkBuddy; **POPULAR APPS** obsahuje Windows, OBS, terminály, editory a ďalší nainštalovaný softvér. ALL/NONE a Apply/Revert fungujú na oboch zoznamoch bez zmeny ich zoskupenia.
 
 Okno nosí paletu, ktorú sa chystá nainštalovať. To je najrýchlejší dostupný náhľad a udržiava nástroj čestný: paleta, ktorá robí toto okno nečitateľným, je viditeľne nečitateľná.
 
@@ -46,10 +46,8 @@ Apply deleguje na `install.ps1`. Existuje presne jedna cesta kódu, ktorá inšt
 | `claude` | Electron shim, opravený na mieste — pozri nižšie | nie — aktualizácia vytvorí nový priečinok `app-<verzia>` |
 | `mpchc` | register, tmavá téma + typografia OSD len | nie — MPC-HC prepíše svoje nastavenia pri ukončení |
 | `obsidian` | komunitná téma na trezor, všetky palety nainštalované naraz | **áno** — žije vo vašom trezore |
-| `saipenview` | prepisuje vlastné hodnoty tokenov `:root` v `style.css` | nie — zdrojový súbor; znova spustite po pulle |
 | `discord` | CSS vložené do vlastného priečinka tém BetterDiscord | áno |
 | `totalcmd`, `totalcmd2` | kľúče `wincmd.ini` `[Colors]`; existujúce filtre nedávnych súborov používajú farbu odkazu palety | áno — je to váš ini |
-| `smartvac`, `wildrift` | tabuľka tokenov prepísaná vo vlastnom zdroji aplikácie | nie — zdrojový súbor; znova spustite po pulle |
 
 ### Odstránenie reklám FreeBuff
 
@@ -138,11 +136,6 @@ Druhá polovica tohto bola oveľa tichší problém. `BrowserWindow` Claude rend
 
 Komunitná téma sa zapíše do `.obsidian/themes/` každého trezora — všetkých šestnásť paliet naraz, presne ako cieľ VS Code, takže medzi nimi prepínate v **Settings → Appearance** bez opätovného spúšťania čohokoľvek. Šablóna bola odvodená z ručne vyrobenej témy `VintageWin95`, ktorá už bola v trezore, každá farba nahradená tokenom, ktorému sa rovnala. `-Palette <slug>` nastaví, ktorá je aktívna pri inštalácii; `appearance.json` sa najprv zálohuje a `-Revert` odstráni iba témy `Wintage *` a obnoví vašu predchádzajúcu voľbu — ručne vyrobená téma v rovnakom trezore sa nikdy nedotkne.
 
-### SAIPENVIEW
-
-Jeho frontend už deklaruje názvy tokenov Wintage vo svojom vlastnom `:root`, takže tento patch prepisuje **iba hodnoty tokenov** — nikdy selektor, písmo, šírku orámovania alebo padding. Nič, čo ovplyvňuje box model, sa nemení, takže text sa nemôže posunúť. To je zámerné: predchádzajúci prístup pripájal celý prehliadačový štýlový list navrch a `wintage.css` je napísaný pre ľubovoľné webové stránky — univerzálne selektory, ktoré vynucujú písmo, stupnicu veľkostí, 2px orámovania a výšky ovládacích prvkov. Na aplikácii, ktorá už má svoj vlastný layout, to posunie všetko.
-
-Overené maskovaním každého hex a diffom proti zálohe: štrukturálne identické, líšia sa iba farebné literály. `--link` je hlásený ako nedeklarovaný tam (jeho markdown odkazy čítajú `--accentTeal`, ktoré toto nastavuje) namiesto vstreknutia — pridanie premennej, ktorú aplikácia nikdy nečíta, by bola mŕtva váha.
 
 ### MPC-HC (K-Lite)
 

@@ -491,9 +491,9 @@ function Invoke-PathsRace([string]$label, [bool]$cliFirst) {
     [System.IO.File]::WriteAllText($guiChild, (@(
         'param($dir, $goFile)',
         '$ErrorActionPreference = ''Stop''',
-        '$PATH_TARGETS = @(''saipenview'', ''smartvac'', ''wildrift'')',
+        '$PATH_TARGETS = @(''customtarget'')',
         '$script:pathsFile = Join-Path $dir ''paths.json''',
-        '$script:customPaths = @{ ''smartvac'' = ''C:\sv-from-gui'' }',
+        '$script:customPaths = @{ ''customtarget'' = ''C:\sv-from-gui'' }',
         '$env:WINTAGE_TEST_PATHS_WRITE_DELAY_MS = ''400''',
         $saveFn,
         'Set-Content -LiteralPath (Join-Path $dir ''ready-gui'') -Value ''r''',
@@ -531,7 +531,7 @@ foreach ($order in @($true, $false)) {
     check "w2007 $label`: both writers exited 0" ($res.Exits -eq '0,0')
     check "w2007 $label`: the file is valid JSON" ($null -ne $res.Parsed)
     check "w2007 $label`: the CLI-owned key survived" ($res.Parsed -and $res.Parsed.portable -eq 'C:\pb-from-cli')
-    check "w2007 $label`: the GUI-owned key survived" ($res.Parsed -and $res.Parsed.smartvac -eq 'C:\sv-from-gui')
+    check "w2007 $label`: the GUI-owned key survived" ($res.Parsed -and $res.Parsed.customtarget -eq 'C:\sv-from-gui')
     check "w2007 $label`: the pre-existing foreign key survived" ($res.Parsed -and $res.Parsed.codenomad -eq 'C:\cn')
 }
 
@@ -552,17 +552,17 @@ $askChild = Join-Path $askDir 'ask.ps1'
 [System.IO.File]::WriteAllText($askChild, (@(
     'param($pathsFile, $picked)',
     '$ErrorActionPreference = ''Stop''',
-    '$PATH_TARGETS = @(''saipenview'', ''smartvac'', ''wildrift'')',
-    '$PATH_DEFAULTS = @{ ''smartvac'' = ''C:\'' }',
+    '$PATH_TARGETS = @(''customtarget'')',
+    '$PATH_DEFAULTS = @{ ''customtarget'' = ''C:\'' }',
     '$script:pathsFile = $pathsFile',
     '$script:customPaths = @{}',
     '$env:WINTAGE_TEST_PICKED_PATH = $picked',
     'function Say-Log($m) { Write-Host $m }',
     $saveFn,
     $askStubbed,
-    '$result = Ask-CustomPath ''smartvac''',
+    '$result = Ask-CustomPath ''customtarget''',
     'Write-Host ("RESULT=" + [bool]$result)',
-    'Write-Host ("REMEMBERED=" + [bool]$script:customPaths.ContainsKey(''smartvac''))',
+    'Write-Host ("REMEMBERED=" + [bool]$script:customPaths.ContainsKey(''customtarget''))',
     'exit 0'
 ) -join "`n"), $utf8)
 $r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $askChild, (Join-Path $blocker 'paths.json'), 'C:\picked-folder')

@@ -55,6 +55,15 @@ if (Test-Path $script:LangPrefFile) {
     $saved = (Read-Utf8 $script:LangPrefFile).Trim()
     if ($saved -and (Test-Path (Join-Path $script:LocalesDir "$saved.json"))) { $script:SavedLocale = $saved }
 }
+else {
+    try {
+        $sysLang = [System.Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName.ToLower()
+        if ($sysLang -and (Test-Path (Join-Path $script:LocalesDir "$sysLang.json"))) {
+            $script:SavedLocale = $sysLang
+        }
+    }
+    catch {}
+}
 Load-I18n $script:SavedLocale
 
 # Available locale codes: 'en' first (the fallback face), then the rest sorted.

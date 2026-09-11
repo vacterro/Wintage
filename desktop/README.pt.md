@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Lista de temas com chips de cor, os alvos encontrados nesta máquina, uma pré-visualização Win95 em direto e todos os vinte e um tokens de cor como amostras editáveis. Editar qualquer amostra bifurca a paleta para **Custom** em vez de alterar um tema distribuído por baixo de si. O painel à direita mostra contraste WCAG em direto para os três tokens que transportam texto — uma paleta que falha aí é recusada pelo gate de build de qualquer forma, por isso é melhor vê-la antes do Apply do que depois.
 
-Os alvos estão divididos em duas listas acessíveis por teclado: **MY APPS** contém as ferramentas portáteis/de árvore de código CodeNomad, SAIPENVIEW, SmartVac e WildRift; **POPULAR APPS** contém Windows, OBS, terminais, editores e o outro software instalado. ALL/NONE e Apply/Revert operam em ambas as listas sem alterar o seu agrupamento.
+Os alvos estão divididos em duas listas acessíveis por teclado: **MY APPS** contém as ferramentas portáteis/de árvore de código CodeNomad, WorkBuddy; **POPULAR APPS** contém Windows, OBS, terminais, editores e o outro software instalado. ALL/NONE e Apply/Revert operam em ambas as listas sem alterar o seu agrupamento.
 
 A janela usa a paleta que está prestes a instalar. Essa é a pré-visualização mais rápida disponível, e mantém a ferramenta honesta: uma paleta que torna esta janela ilegível é visivelmente ilegível.
 
@@ -46,10 +46,8 @@ Apply delega para `install.ps1`. Há exatamente um caminho de código que instal
 | `claude` | shim Electron, corrigido no lugar — ver abaixo | não — uma atualização cria uma nova pasta `app-<version>` |
 | `mpchc` | registo, tema escuro + tipografia do OSD apenas | não — o MPC-HC reescreve as suas definições ao sair |
 | `obsidian` | tema comunitário por cofre, todas as paletas instaladas de uma vez | **sim** — vive no seu cofre |
-| `saipenview` | reescreve os seus próprios valores de token `:root` no `style.css` | não — um ficheiro de código; re-execute após um pull |
 | `discord` | CSS colocado na própria pasta de temas do BetterDiscord | sim |
 | `totalcmd`, `totalcmd2` | chaves `[Colors]` do `wincmd.ini`; filtros de ficheiros recentes existentes usam a cor de link da paleta | sim — é o seu ini |
-| `smartvac`, `wildrift` | tabela de tokens reescrita no próprio código da aplicação | não — um ficheiro de código; re-execute após um pull |
 
 ### Remoção de anúncios do FreeBuff
 
@@ -138,11 +136,6 @@ A segunda metade disto foi um problema muito mais silencioso. O `BrowserWindow` 
 
 Um tema comunitário é escrito no `.obsidian/themes/` de cada cofre — todas as dezasseis paletas de uma vez, exatamente como o alvo VS Code, para que alterne entre elas em **Settings → Appearance** sem re-executar nada. O template foi derivado do tema `VintageWin95` feito à mão que já estava no cofre, cada cor substituída pelo token a que equivalia. `-Palette <slug>` define qual está ativo na instalação; `appearance.json` é copiado primeiro, e `-Revert` remove apenas os temas `Wintage *` e restaura a sua escolha anterior — um tema feito à mão no mesmo cofre nunca é tocado.
 
-### SAIPENVIEW
-
-O seu frontend já declara os nomes de token do Wintage no seu próprio `:root`, por isso este patch reescreve **apenas os valores de token** — nunca um seletor, uma fonte, uma largura de borda ou um padding. Nada que afete o box model muda, por isso o texto não pode deslocar-se. Isso é deliberado: a abordagem anterior anexava toda a folha de estilos do navegador por cima, e o `wintage.css` é escrito para páginas web arbitrárias — seletores universais que forçam a fonte, a escada de tamanhos, bordas de 2px e alturas de controlo. Numa aplicação que já tem o seu próprio layout, isso move tudo.
-
-Verificado mascarando cada hex e comparando com o backup: estruturalmente idêntico, apenas literais de cor diferem. `--link` é reportado como não declarado lá (os seus links markdown leem `--accentTeal`, que isto define) em vez de injetado — adicionar uma variável que a aplicação nunca lê seria peso morto.
 
 ### MPC-HC (K-Lite)
 

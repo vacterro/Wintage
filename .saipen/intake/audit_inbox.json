@@ -42,7 +42,7 @@
     "audit/4.md": {
       "binding": "exact",
       "captured_at": "2026-09-06T00:00:00Z",
-      "closed_at": null,
+      "closed_at": "2026-09-11T02:35:00Z",
       "file_sha256": "21c0bc0d8b4b335492eaadf53b786780f71ee8141aeee5cb0da54d6572a3b894",
       "generation": 1,
       "layer": 4,
@@ -50,7 +50,7 @@
       "receipt_id": "SRC-006",
       "receipt_sha256": "21c0bc0d8b4b335492eaadf53b786780f71ee8141aeee5cb0da54d6572a3b894",
       "size_bytes": 62647,
-      "state": "ACTIVE"
+      "state": "DELETED"
     }
   },
   "schema_version": 1

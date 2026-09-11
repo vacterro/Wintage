@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Listă de teme cu mostre de culoare, țintele găsite pe această mașină, o previzualizare Win95 live și toate cele douăzeci și unu de tokenuri de culoare ca mostre editabile. Editarea oricărei mostre duce paleta în **Custom** în loc să schimbe o temă livrată pe sub tine. Panoul din dreapta arată contrastul WCAG live pentru cele trei tokenuri care poartă text — o paletă care FAIL-ează acolo este oricum refuzată de poarta de build, deci e mai bine să o vezi înainte de Apply decât după.
 
-Țintele sunt împărțite în două liste accesibile de la tastatură: **MY APPS** conține instrumentele portabile/source-tree CodeNomad, SAIPENVIEW, SmartVac și WildRift; **POPULAR APPS** conține Windows, OBS, terminale, editoare și restul software-ului instalat. ALL/NONE și Apply/Revert operează pe ambele liste fără să le schimbe gruparea.
+Țintele sunt împărțite în două liste accesibile de la tastatură: **MY APPS** conține instrumentele portabile/source-tree CodeNomad, WorkBuddy; **POPULAR APPS** conține Windows, OBS, terminale, editoare și restul software-ului instalat. ALL/NONE și Apply/Revert operează pe ambele liste fără să le schimbe gruparea.
 
 Fereastra poartă paleta pe care urmează să o instaleze. Asta este cea mai rapidă previzualizare disponibilă și ține instrumentul onest: o paletă care face această fereastră ilizibilă este vizibil ilizibilă.
 
@@ -46,10 +46,8 @@ Apply apelează în exterior `install.ps1`. Există exact o cale de cod care ins
 | `claude` | shim Electron, patch-uit pe loc — vezi mai jos | nu — o actualizare face un dosar nou `app-<version>` |
 | `mpchc` | registry, doar temă întunecată + tipografie OSD | nu — MPC-HC își rescrie setările la ieșire |
 | `obsidian` | temă de comunitate per vault, toate paletele instalate deodată | **da** — trăiește în vault-ul tău |
-| `saipenview` | rescrie propriile valori de token `:root` în `style.css` | nu — un fișier sursă; re-rulează după un pull |
 | `discord` | CSS aruncat în propriul dosar de teme al BetterDiscord | da |
 | `totalcmd`, `totalcmd2` | chei `wincmd.ini` `[Colors]`; filtrele existente de fișiere recente folosesc culoarea linkului din paletă | da — e ini-ul tău |
-| `smartvac`, `wildrift` | tabelul de tokenuri rescris în sursa proprie a aplicației | nu — un fișier sursă; re-rulează după un pull |
 
 ### Eliminarea reclamelor FreeBuff
 
@@ -138,11 +136,6 @@ A doua jumătate a fost o problemă mult mai tăcută. `BrowserWindow` al lui Cl
 
 O temă de comunitate este scrisă în `.obsidian/themes/` a fiecărui vault — toate cele șaisprezece palete deodată, exact ca ținta VS Code, deci comuți între ele în **Settings → Appearance** fără să re-rulеzi nimic. Șablonul a fost derivat din tema făcută manual `VintageWin95` deja prezentă în vault, fiecare culoare înlocuită cu tokenul căruia îi corespundea. `-Palette <slug>` setează care este activă la instalare; `appearance.json` este salvat întâi, iar `-Revert` elimină doar temele `Wintage *` și restaurează alegerea ta anterioară — o temă făcută manual în același vault nu este atinsă niciodată.
 
-### SAIPENVIEW
-
-Frontend-ul său declară deja numele de token Wintage în propriul `:root`, deci acest patch rescrie **doar valorile tokenurilor** — niciodată un selector, un font, o lățime de border sau un padding. Nimic din ce afectează box model-ul nu se schimbă, deci textul nu se poate deplasa. Asta este deliberat: abordarea anterioară adăuga întregul stylesheet de browser deasupra, iar `wintage.css` este scris pentru pagini web arbitrare — selectori universali care forțează fontul, scara de dimensiuni, borderuri de 2px și înălțimi de control. Pe o aplicație care are deja propriul layout, asta mută totul.
-
-Verificat prin mascarea fiecărui hex și difing împotriva backup-ului: structural identic, doar literalii de culoare diferă. `--link` este raportat ca nedeclarat acolo (linkurile sale markdown citesc `--accentTeal`, pe care acesta îl setează) în loc să fie injectat — adăugarea unei variabile pe care aplicația nu o citește niciodată ar fi greutate moartă.
 
 ### MPC-HC (K-Lite)
 

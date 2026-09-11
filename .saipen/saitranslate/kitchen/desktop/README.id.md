@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Daftar tema dengan chip warna, target yang ditemukan di mesin ini, pratinjau Win95 langsung, dan semua dua puluh satu token warna sebagai swatch yang dapat diedit. Mengedit swatch mana pun memfokuskan palet menjadi **Custom** alih-alih mengubah tema bawaan di bawah Anda. Panel di kanan menampilkan kontras WCAG langsung untuk tiga token yang membawa teks — palet yang FAIL di sana ditolak oleh gerbang build pula, jadi lebih baik melihatnya sebelum Apply daripada sesudahnya.
 
-Target dipisah menjadi dua daftar yang dapat diakses keyboard: **MY APPS** berisi alat portabel/sumber-pohon CodeNomad, SAIPENVIEW, SmartVac dan WildRift; **POPULAR APPS** berisi Windows, OBS, terminal, editor, dan perangkat lunak terpasang lainnya. ALL/NONE dan Apply/Revert beroperasi di kedua daftar tanpa mengubah pengelompokannya.
+Target dipisah menjadi dua daftar yang dapat diakses keyboard: **MY APPS** berisi alat portabel/sumber-pohon CodeNomad, WorkBuddy; **POPULAR APPS** berisi Windows, OBS, terminal, editor, dan perangkat lunak terpasang lainnya. ALL/NONE dan Apply/Revert beroperasi di kedua daftar tanpa mengubah pengelompokannya.
 
 Jendela memakai palet yang akan dipasangnya. Itu pratinjau tercepat yang tersedia, dan itu menjaga alat tetap jujur: palet yang membuat jendela ini tak terbaca terlihat jelas tak terbaca.
 
@@ -46,10 +46,8 @@ Apply memanggil `install.ps1`. Hanya ada satu jalur kode yang memasang tema, seh
 | `claude` | shim Electron, ditambal di tempat — lihat di bawah | tidak — pembaruan membuat folder `app-<version>` baru |
 | `mpchc` | registri, hanya tema gelap + tipografi OSD | tidak — MPC-HC menulis ulang pengaturannya saat keluar |
 | `obsidian` | tema komunitas per vault, semua palet terpasang sekaligus | **ya** — ia tinggal di vault Anda |
-| `saipenview` | menulis ulang nilai token `:root` sendiri di `style.css` | tidak — file sumber; jalankan ulang setelah pull |
 | `discord` | CSS dilempar ke folder tema BetterDiscord sendiri | ya |
 | `totalcmd`, `totalcmd2` | kunci `wincmd.ini` `[Colors]`; filter file-terbaru yang ada memakai warna tautan palet | ya — ini ini Anda |
-| `smartvac`, `wildrift` | tabel token ditulis ulang di sumber aplikasi sendiri | tidak — file sumber; jalankan ulang setelah pull |
 
 ### Penghapusan iklan FreeBuff
 
@@ -138,11 +136,6 @@ Bagian kedua ini masalah yang jauh lebih senyap. `BrowserWindow` Claude merender
 
 Tema komunitas ditulis ke `.obsidian/themes/` setiap vault — keenam belas palet sekaligus, persis seperti target VS Code, jadi Anda beralih di antara mereka di **Settings → Appearance** tanpa menjalankan ulang apa pun. Template diturunkan dari tema buatan tangan `VintageWin95` yang sudah ada di vault, setiap warna diganti dengan token yang sebanding. `-Palette <slug>` menentukan mana yang aktif saat pemasangan; `appearance.json` di-backup dulu, dan `-Revert` hanya menghapus tema `Wintage *` dan memulihkan pilihan Anda sebelumnya — tema buatan tangan di vault yang sama tidak pernah disentuh.
 
-### SAIPENVIEW
-
-Frontend-nya sudah mendeklarasikan nama token Wintage di `:root`-nya sendiri, jadi tambalan ini menulis ulang **hanya nilai token** — tidak pernah selektor, font, lebar batas, atau padding. Tidak ada yang memengaruhi box model yang berubah, jadi teks tidak bisa bergeser. Itu disengaja: pendekatan sebelumnya menambahkan seluruh stylesheet peramban di atas, dan `wintage.css` ditulis untuk halaman web arbitrer — selektor universal memaksa font, tangga ukuran, batas 2px, dan tinggi kontrol. Pada aplikasi yang sudah memiliki tata letaknya sendiri, itu memindahkan segalanya.
-
-Diverifikasi dengan menopengi setiap hex dan mem-diff terhadap backup: identik secara struktural, hanya literal warna yang berbeda. `--link` dilaporkan tidak dideklarasikan di sana (tautan markdown-nya membaca `--accentTeal`, yang ini set) alih-alih disuntikkan — menambahkan variabel yang tidak pernah dibaca aplikasi hanya akan menjadi beban mati.
 
 ### MPC-HC (K-Lite)
 

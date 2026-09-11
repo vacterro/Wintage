@@ -27,7 +27,7 @@ trzech tokenów niosących tekst — paleta, która tam nie przechodzi, i tak zo
 odrzucona przez bramkę builda, więc lepiej zobaczyć to przed Apply niż po.
 
 Targety są podzielone na dwie osiągalne z klawiatury listy: **MY APPS** zawiera
-przenośne/drzewo-źródłowe narzędzia CodeNomad, SAIPENVIEW, SmartVac i WildRift;
+przenośne/drzewo-źródłowe narzędzia CodeNomad, WorkBuddy;
 **POPULAR APPS** zawiera Windows, OBS, terminale, edytory i inne zainstalowane
 oprogramowanie. ALL/NONE i Apply/Revert działają na obu listach bez zmiany ich
 grupowania.
@@ -68,10 +68,8 @@ nie, bo archiwum jest w użyciu.
 | `claude` | shim Electrona, łatany na miejscu — patrz poniżej | no — aktualizacja tworzy nowy folder `app-<version>` |
 | `mpchc` | rejestr, ciemny motyw + tylko typografia OSD | no — MPC-HC nadpisuje swoje ustawienia przy zamykaniu |
 | `obsidian` | motyw społeczności per vault, wszystkie palety zainstalowane naraz | **yes** — żyje w twoim vault |
-| `saipenview` | nadpisuje własne wartości tokenów `:root` w `style.css` | no — plik źródłowy; uruchom ponownie po pull |
 | `discord` | CSS wrzucony do własnego folderu motywów BetterDiscord | yes |
 | `totalcmd`, `totalcmd2` | klucze `wincmd.ini` `[Colors]`; istniejące filtry ostatnich plików używają koloru linku palety | yes — to twój ini |
-| `smartvac`, `wildrift` | tabela tokenów nadpisana we własnym źródle aplikacji | no — plik źródłowy; uruchom ponownie po pull |
 
 ### Usuwanie reklam FreeBuff
 
@@ -290,22 +288,6 @@ kopiowany zapasowo, a `-Revert` usuwa tylko motywy `Wintage *` i przywraca twoje
 poprzednie wybory — ręcznie zrobiony motyw w tym samym vaultcie nigdy nie jest
 dotykany.
 
-### SAIPENVIEW
-
-Jego frontend deklaruje nazwy tokenów Wintage już we własnym `:root`, więc ta
-łatka nadpisuje **tylko wartości tokenów** — nigdy selektora, fontu, szerokości
-ramki ani paddingu. Nic, co wpływa na model pudełkowy, się nie zmienia, więc tekst
-nie może się przesunąć. To zamierzone: wcześniejsze podejście doklejało cały arkusz
-stylów przeglądarki na wierzch, a `wintage.css` jest pisany pod dowolne strony
-internetowe — uniwersalne selektory wymuszające font, drabinkę rozmiarów, ramki
-2px i wysokości kontrolek. Na aplikacji, która ma już własny layout, to przesuwa
-wszystko.
-
-Zweryfikowane przez zamaskowanie każdego hexu i zdiffowanie z kopią zapasową:
-strukturalnie identyczne, różnią się tylko literały kolorów. `--link` jest
-raportowany jako niezadeklarowany tam (jego linki markdown czytają `--accentTeal`,
-co to ustawia) zamiast być wstrzyknięty — dodawanie zmiennej, której aplikacja
-nigdy nie czyta, byłoby martwym balastem.
 
 ### MPC-HC (K-Lite)
 

@@ -263,27 +263,21 @@ foreach ($script in $moduleFiles) {
 Write-Host "
 --- Testing -WhatIf Isolation ---" -ForegroundColor Cyan
 $whatIfRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-whatif-" + [guid]::NewGuid().ToString('N'))
-$smartVac = Join-Path $whatIfRoot 'smartvac'
-$wildRift = Join-Path $whatIfRoot 'wildrift'
+$nppDir = Join-Path $whatIfRoot 'npp'
+$c4dDir = Join-Path $whatIfRoot 'c4d'
 try {
-    New-Item -ItemType Directory -Path $smartVac, $wildRift -Force | Out-Null
-    $smartFile = Join-Path $smartVac '_SMART_VAC_CLEANER.py'
-    $wildFile = Join-Path $wildRift 'theme.py'
-    $smartOriginal = "WIN95_BG = '#010203'`n"
-    $wildOriginal = "TOKENS = {`n    `"keep`": `"#010203`",`n}`n"
-    [System.IO.File]::WriteAllText($smartFile, $smartOriginal, (New-Object System.Text.UTF8Encoding($false)))
-    [System.IO.File]::WriteAllText($wildFile, $wildOriginal, (New-Object System.Text.UTF8Encoding($false)))
+    New-Item -ItemType Directory -Path $nppDir -Force | Out-Null
+    $c4dSchemes = Join-Path $c4dDir 'resource\modules\c4d_base\schemes'
+    New-Item -ItemType Directory -Path $c4dSchemes -Force | Out-Null
 
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\desktop\install.ps1" -Target smartvac -SmartVacPath $smartVac -WhatIf *> $null
-    $smartExit = $LASTEXITCODE
-    & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\desktop\install.ps1" -Target wildrift -WildRiftPath $wildRift -WhatIf *> $null
-    $wildExit = $LASTEXITCODE
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\desktop\install.ps1" -Target notepadplusplus -NotepadPlusPlusPath $nppDir -WhatIf *> $null
+    $nppExit = $LASTEXITCODE
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\desktop\install.ps1" -Target cinema4d -Cinema4DPath $c4dDir -WhatIf *> $null
+    $c4dExit = $LASTEXITCODE
 
-    Assert-True ($smartExit -eq 0 -and $wildExit -eq 0) '-WhatIf fixture commands exit successfully'
-    Assert-True ([System.IO.File]::ReadAllText($smartFile) -eq $smartOriginal) 'SMART VAC CLEANER -WhatIf leaves source byte-exact'
-    Assert-True (-not (Test-Path "$smartFile.bak")) 'SMART VAC CLEANER -WhatIf creates no backup'
-    Assert-True ([System.IO.File]::ReadAllText($wildFile) -eq $wildOriginal) 'WildRiftAssistant -WhatIf leaves source byte-exact'
-    Assert-True (-not (Test-Path "$wildFile.bak")) 'WildRiftAssistant -WhatIf creates no backup'
+    Assert-True ($nppExit -eq 0 -and $c4dExit -eq 0) '-WhatIf fixture commands exit successfully'
+    Assert-True (-not (Test-Path (Join-Path $nppDir 'themes\Wintage.xml'))) 'Notepad++ -WhatIf creates no files'
+    Assert-True (-not (Test-Path (Join-Path $c4dSchemes 'Wintage'))) 'Cinema 4D -WhatIf creates no files'
 } finally {
     if (Test-Path $whatIfRoot) { Remove-Item $whatIfRoot -Recurse -Force }
 }
@@ -516,17 +510,17 @@ $pathsFixture = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-paths-" + 
 try {
     New-Item -ItemType Directory -Path $pathsFixture -Force | Out-Null
     $pathsFixtureFile = Join-Path $pathsFixture 'paths.json'
-    $pathsFixtureSmartVac = Join-Path $pathsFixture 'smartvac-checkout'
-    New-Item -ItemType Directory -Path $pathsFixtureSmartVac -Force | Out-Null
-    $seedJson = '{"codenomad":"C:\\cn","workbuddy":"C:\\wb","portable":"C:\\pb","smartvac":"C:\\stale","wildrift":"C:\\gone"}'
+    $pathsFixtureCustom = Join-Path $pathsFixture 'custom-checkout'
+    New-Item -ItemType Directory -Path $pathsFixtureCustom -Force | Out-Null
+    $seedJson = '{"codenomad":"C:\\cn","workbuddy":"C:\\wb","portable":"C:\\pb","customapp":"C:\\stale","goneapp":"C:\\gone"}'
     [System.IO.File]::WriteAllText($pathsFixtureFile, $seedJson, (New-Object System.Text.UTF8Encoding($false)))
 
     $fnEnd2 = $guiSource.IndexOf("`n}", $saveStart)
     $fnText = if ($saveStart -ge 0 -and $fnEnd2 -gt $saveStart) { $guiSource.Substring($saveStart, $fnEnd2 - $saveStart + 2) } else { '' }
     $harnessLines = @(
-        "`$PATH_TARGETS = @('saipenview', 'smartvac', 'wildrift')",
+        "`$PATH_TARGETS = @('customapp', 'goneapp')",
         "`$script:pathsFile = '$pathsFixtureFile'",
-        "`$script:customPaths = @{ 'smartvac' = '$pathsFixtureSmartVac' }",
+        "`$script:customPaths = @{ 'customapp' = '$pathsFixtureCustom' }",
         $fnText,
         'if (-not (Save-CustomPaths)) { exit 3 }'
     )
@@ -542,8 +536,8 @@ try {
     Assert-True ($savedPaths.codenomad -eq 'C:\cn') 'GUI save preserves the CLI-owned codenomad path'
     Assert-True ($savedPaths.workbuddy -eq 'C:\wb') 'GUI save preserves the CLI-owned workbuddy path'
     Assert-True ($savedPaths.portable -eq 'C:\pb') 'GUI save preserves the CLI-owned portable-browser root'
-    Assert-True ($savedPaths.smartvac -eq $pathsFixtureSmartVac) 'GUI save writes its own key from live state'
-    Assert-True ($savedPaths.PSObject.Properties.Name -notcontains 'wildrift') 'GUI save still drops one of its own keys whose folder is gone'
+    Assert-True ($savedPaths.customapp -eq $pathsFixtureCustom) 'GUI save writes its own key from live state'
+    Assert-True ($savedPaths.PSObject.Properties.Name -notcontains 'goneapp') 'GUI save still drops one of its own keys whose folder is gone'
 } finally {
     if (Test-Path $pathsFixture) { Remove-Item $pathsFixture -Recurse -Force }
 }
@@ -661,7 +655,54 @@ $toolSuites = @(
     # recovery is now a durable on-disk vault plus size+digest identity. Builds
     # 16/64/256 MiB fixtures and measures the child's own peak RSS, then proves
     # every failure seam still restores those large files byte-exactly.
-    @{ Name = 'test-perf-recovery.js'; Cmd = 'node "{0}\tools\test-perf-recovery.js"' }
+    @{ Name = 'test-perf-recovery.js'; Cmd = 'node "{0}\tools\test-perf-recovery.js"' },
+    # SRC-006:R004: the generic VS Code-family recovery epoch must fail closed on
+    # corrupt/incomplete authority and, in replaced mode, restore the pre-Wintage
+    # tree BYTE-EXACTLY from the retired tombstone (the retirement rename moves
+    # pristine with the epoch). Also pins: two-cycle baselines stay independent,
+    # a failed manifest transition after retirement restores BOTH the destination
+    # and the epoch (retry stays possible), and an empty pristine is a legitimate
+    # user state that restores to an empty directory.
+    @{ Name = 'test-vscode-recovery.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-vscode-recovery.ps1"' },
+    # SRC-006:R005: the Reapply child must re-validate the manifest intent its
+    # parent planned from UNDER the target lock, and skip with ZERO mutation
+    # when a concurrent Revert or palette change won the plan->lock race. The
+    # race fixture parks the child on a held target lock (deterministic seam,
+    # no sleeps) and completes the Revert while it waits.
+    @{ Name = 'test-reapply-intent.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-reapply-intent.ps1"' },
+    # SRC-006:R006: the GUI logon-task checkbox must not mutate the scheduled
+    # task as a side effect of opening the installer, and a failed task command
+    # must never dispatch the INVERSE command. The gate AST-extracts the real
+    # handler and toggle from WintageInstaller.ps1 and drives them through a
+    # real WinForms.CheckBox (authentic event wiring, no desktop automation).
+    @{ Name = 'test-logon-task-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-logon-task-gui.ps1"' },
+    # Batch-timer crash-dialog gate: the Add_Tick delegate is re-bound against
+    # the SCRIPT scope when the pump invokes it, so a tick written against
+    # Start-BatchJob's function locals reads them as null and dies with
+    # "You cannot call a method on a null-valued expression" on every 250ms
+    # tick (the user-visible JIT dialog). The gate AST-extracts the REAL
+    # Start-BatchJob, drives it through a real Forms.Timer on a real message
+    # pump with ThreadException hooked, proves null output lines and a throwing
+    # completion handler are contained, and -RedControl re-proves the gate red
+    # against the pre-fix committed GUI.
+    @{ Name = 'test-batch-timer-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-batch-timer-gui.ps1"' },
+    # SRC-006:R007: a palette repaint of an already-themed Electron app must not
+    # pay archive-sized I/O at either transaction layer. The gate instruments the
+    # real tool through a NODE_OPTIONS preload that logs every byte read and
+    # proves ZERO full-archive reads on healthy relocated repaints (<64KiB in
+    # in-place mode, where a bounded .bak header read is legitimate), plus
+    # sidecar-exact rollback on injected failure and an intact moved archive
+    # after a parent manifest-commit failure.
+    @{ Name = 'test-electron-repaint.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-electron-repaint.ps1"' },
+    # SRC-006:R010: force-sweep continuation slices must bound ROOT-level work
+    # (registry pruning, hover-sheet strips, workset construction, iteration,
+    # completion detection) as well as element work. The gate slices the REAL
+    # runSweeper into a sandbox with 2000 instrumented fake roots and tiny
+    # budgets: no slice may serve more roots than the root budget, the cursor
+    # must advance monotonically, every root must eventually be served,
+    # detached roots must vanish, and the lap must end with all traversal
+    # state dropped.
+    @{ Name = 'test-force-root-budget.js'; Cmd = 'node "{0}\tools\test-force-root-budget.js"' }
 )
 foreach ($s in $toolSuites) {
     $invokeLine = ($s.Cmd -f $root)

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.35.0] - 2026-09-11
+
+- Audit repair & feature convergence (T-242/T-243): SRC-006 audit layer executed with all 10 findings terminal VERIFIED; SRC-006 closed and archived.
+- BetterDiscord plugin support in Wintage Installer:
+  - New dedicated tab for BetterDiscord plugins with live discovery, description panel, install, and uninstall capabilities.
+  - Added GoodEmoji plugin: transforms negative, crying, sad, and toxic emojis into cheerful, funny, and neutral ones across chat, reactions, and tooltips (75+ replacement rules including innuendos, feces, crosses, and weapons).
+  - Added RemoveStickers plugin: completely removes sticker rendering from Discord to eliminate clutter.
+  - Tab navigation overhaul: replaced native Windows SysTabControl32 with pure Win95 flat tab buttons and panels, eliminating unskinnable OS visual-styles white frames and borders.
+  - Themed language ComboBox: owner-drawn with FlatStyle to strictly obey Golden Default tokens without white-background bleed.
+- Targets & tooling:
+  - Added ZCode support to installer targets.
+  - Added Notepad++ and Cinema 4D templates and targets.
+  - Fixed installer batch timer null safety and completion handler wrapping.
+  - Added force-sweep root budget and persistent traversal cursors (SRC-006:R010).
+  - Bounded Electron repaint I/O proportional to mutation sets (SRC-006:R007).
+  - Added logon-task checkbox init/reentrancy guard (SRC-006:R006).
+  - Reapply intent revalidation under target lock (SRC-006:R005).
+  - VS Code-family recovery epoch with pristine tombstone restore (SRC-006:R004).
+
 ## [1.34.0] - 2026-09-10
 
 - Audit repair: the external audit inbox layer audit/3.md (SRC-005, 17 findings) is executed as T-241. All 17 findings are terminal VERIFIED with evidence; SRC-005 is closed and archived (E-882).

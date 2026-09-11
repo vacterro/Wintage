@@ -48,5 +48,22 @@
   "HelpRevert": "  .\\install.ps1 -Target freebuff -Revert            undo one",
   "FbSoundOn": "FB SOUND: ON",
   "LanguageLabel": "Language",
-  "StatusHint": "Pick a theme, tick the targets, press APPLY. Editing any colour forks it into Custom."
+  "StatusHint": "Pick a theme, tick the targets, press APPLY. Editing any colour forks it into Custom.",
+  "TabThemes": "Themes & Apps",
+  "TabBetterDiscord": "BetterDiscord Plugins",
+  "BdPlugins": "BETTERDISCORD PLUGINS",
+  "BdInstallSelected": "APPLY / INSTALL",
+  "BdUninstallSelected": "UNINSTALL",
+  "BdOpenFolder": "PLUGINS FOLDER",
+  "BdRefresh": "REFRESH",
+  "BdAvailablePlugins": "AVAILABLE PLUGINS",
+  "BdPluginInfo": "PLUGIN INFO",
+  "BdLog": "LOG",
+  "BdInstalled": "Installed",
+  "BdAvailable": "Available",
+  "BdStatusReady": "BetterDiscord plugins path: {0} (Ready)",
+  "BdStatusNotFound": "BetterDiscord plugins directory not found: {0}",
+  "BdStatusRefreshed": "BetterDiscord plugins status refreshed.",
+  "BdGoodEmojiDesc": "GoodEmoji v1.0.0 (Wintage)\r\n\r\nReplaces crying, sad, and toxic emojis with joyful and funny ones:\r\n  - sob -> joy\r\n  - cry -> smile\r\n  - pleading -> sunglasses\r\n  - skull -> slight_smile\r\n  - wilted_rose -> rose\r\n  - clown -> thumbsup\r\n  - sad/frown -> smiley/grin\r\n  - broken_heart -> heart\r\n  - middle_finger -> peace\r\n\r\nDynamically monitors messages, reactions, and Twemoji assets via MutationObserver.",
+  "BdRemoveStickersDesc": "RemoveStickers v1.0.0 (Wintage)\r\n\r\nCompletely disables and removes stickers in Discord:\r\n  - Hides sticker renderings in chat messages\r\n  - Hides the sticker picker button from the input bar\r\n  - Hides stickers from autocomplete suggestions\r\n  - Automatically collapses empty sticker-only message rows\r\n\r\nUses zero-latency CSS injection via BdApi.DOM.addStyle and an active DOM cleaner."
 }

@@ -444,6 +444,49 @@ function buildQbittorrent(packs) {
   }
 }
 
+// ─── TARGET: Notepad++ ───────────────────────────────────────────────────────
+// Notepad++ stores XML themes in %APPDATA%\Notepad++\themes\<ThemeName>.xml.
+// Colors in template.xml use hex without '#', font is Verdana_m1.
+function buildNotepadPlusPlus(packs) {
+  const template = fs.readFileSync(path.join(DESKTOP, 'targets', 'notepadplusplus', 'template.xml'), 'utf8');
+  for (const pack of packs) {
+    const context = { label: pack.label, __file: 'notepadplusplus/template.xml' };
+    for (const [name, value] of Object.entries(pack.tokens)) {
+      context[name + 'Hex'] = value.slice(1).toUpperCase();
+    }
+    const xml = fill(template, pack.tokens, context);
+    const left = /\$\{/.exec(xml);
+    if (left) throw new Error('unresolved placeholder in notepadplusplus ' + pack.slug + ' near: ' + xml.slice(left.index, left.index + 60));
+    emit(path.join(OUT, 'notepadplusplus', pack.slug, 'Wintage.xml'), xml);
+  }
+}
+
+// ─── TARGET: Cinema 4D ──────────────────────────────────────────────────────
+// Cinema 4D (R21-2024+) uses .col and .res scheme files in
+// resource/modules/c4d_base/schemes/<SchemeName>/ (or schemes/<SchemeName>/).
+// Colors are comma-separated RGB triples.
+function buildCinema4D(packs) {
+  const colTemplate = fs.readFileSync(path.join(DESKTOP, 'targets', 'cinema4d', 'template.col'), 'utf8');
+  const resTemplate = fs.readFileSync(path.join(DESKTOP, 'targets', 'cinema4d', 'template.res'), 'utf8');
+  const rgbComma = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',');
+  for (const pack of packs) {
+    const context = { label: pack.label, __file: 'cinema4d/template.col' };
+    for (const [name, value] of Object.entries(pack.tokens)) {
+      context[name + 'Rgb'] = rgbComma(value);
+      context[name + 'Hex'] = value.slice(1).toUpperCase();
+    }
+    const col = fill(colTemplate, pack.tokens, context);
+    const leftCol = /\$\{/.exec(col);
+    if (leftCol) throw new Error('unresolved placeholder in cinema4d ' + pack.slug + ' col near: ' + col.slice(leftCol.index, leftCol.index + 60));
+    emit(path.join(OUT, 'cinema4d', pack.slug, 'wintage.col'), col);
+
+    const res = fill(resTemplate, pack.tokens, { label: pack.label, __file: 'cinema4d/template.res' });
+    const leftRes = /\$\{/.exec(res);
+    if (leftRes) throw new Error('unresolved placeholder in cinema4d ' + pack.slug + ' res near: ' + res.slice(leftRes.index, leftRes.index + 60));
+    emit(path.join(OUT, 'cinema4d', pack.slug, 'wintage.res'), res);
+  }
+}
+
 // Renaming or removing a palette used to leave its output behind forever: the
 // emit() path only ever writes, so desktop/out/<target>/nomadcode survived the
 // rename to codenomad and would have been installed as a ghost theme. Prune any
@@ -451,7 +494,7 @@ function buildQbittorrent(packs) {
 // reflects themes/ exactly.
 function prune(packs) {
   const live = new Set(packs.map(p => p.slug));
-  for (const target of ['electron', 'browser', 'obsidian', 'obs', 'betterdiscord', 'windows', 'qbittorrent']) {
+  for (const target of ['electron', 'browser', 'obsidian', 'obs', 'betterdiscord', 'windows', 'qbittorrent', 'notepadplusplus', 'cinema4d']) {
     const dir = path.join(OUT, target);
     if (!fs.existsSync(dir)) continue;
     for (const slug of fs.readdirSync(dir)) {
@@ -473,6 +516,8 @@ buildObs(packs);
 buildBetterDiscord(packs);
 buildWindows(packs);
 buildQbittorrent(packs);
+buildNotepadPlusPlus(packs);
+buildCinema4D(packs);
 prune(packs);
 
 if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }

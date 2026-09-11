@@ -1,7 +1,7 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.34.0
+// @version      1.35.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -208,7 +208,7 @@
   const IS_X = /(^|\.)(x\.com|twitter\.com)$/.test(HOST);
   const IS_REDDIT = /(^|\.)(reddit\.com|redd\.it)$/.test(HOST);
   const IS_GOOGLE = /(^|\.)google\.[a-z.]+$/.test(HOST);
-  const HIGH_CHURN_HOST = /(^|\.)(chatgpt\.com|chat\.openai\.com|claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
+  const HIGH_CHURN_HOST = IS_X || /(^|\.)(chatgpt\.com|chat\.openai\.com|claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
   const CSS_ONLY_MODE = HIGH_CHURN_HOST;
 
   // ─── UI.md TOKENS — THE COMPLETE PALETTE, NOTHING OUTSIDE IT ────────────────
@@ -616,7 +616,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.34.0';
+  const W95_VERSION = '1.35.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -1274,7 +1274,9 @@ hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important;
  html[data-w95-x="1"] [data-testid="primaryColumn"], html[data-w95-x="1"] [data-testid="sidebarColumn"],
  html[data-w95-x="1"] [data-testid="DMDrawer"], html[data-w95-x="1"] [data-testid="tweetDetail"],
  html[data-w95-x="1"] [data-testid="sheetDialog"], html[data-w95-x="1"] [role="dialog"],
- html[data-w95-x="1"] [role="menu"], html[data-w95-x="1"] [role="listbox"] {
+ html[data-w95-x="1"] [role="menu"], html[data-w95-x="1"] [role="listbox"],
+ html[data-w95-x="1"] [role="region"], html[data-w95-x="1"] section[role="region"],
+ html[data-w95-x="1"] [aria-label*="Settings" i], html[data-w95-x="1"] [aria-label*="Seaded" i] {
    background-color: ${T.backgroundSoft} !important; background-image: none !important; color: ${T.textPrimary} !important;
  }
  html[data-w95-x="1"] [data-testid="primaryColumn"], html[data-w95-x="1"] [data-testid="sidebarColumn"],
@@ -1282,14 +1284,18 @@ hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important;
  html[data-w95-x="1"] [role="dialog"], html[data-w95-x="1"] [role="menu"], html[data-w95-x="1"] [role="listbox"] {
    background-color: ${T.surface} !important; ${B_OUTER}
  }
- html[data-w95-x="1"] [data-testid="tweet"], html[data-w95-x="1"] [data-testid="cellInnerDiv"] > div {
+ html[data-w95-x="1"] [data-testid="tweet"], html[data-w95-x="1"] [data-testid="cellInnerDiv"] > div,
+ html[data-w95-x="1"] [data-testid="cellInnerDiv"], html[data-w95-x="1"] [data-testid="UserCell"] {
    background-color: ${T.surface} !important; color: ${T.textPrimary} !important; border-color: ${T.borderMuted} !important;
  }
  html[data-w95-x="1"] [data-testid="tweetText"], html[data-w95-x="1"] [data-testid="User-Name"],
  html[data-w95-x="1"] [data-testid="UserDescription"] { color: ${T.textPrimary} !important; }
- html[data-w95-x="1"] [data-testid="SearchBox_Search_Input"], html[data-w95-x="1"] [contenteditable="true"] {
+ html[data-w95-x="1"] [data-testid="SearchBox_Search_Input"], html[data-w95-x="1"] [contenteditable="true"],
+ html[data-w95-x="1"] input, html[data-w95-x="1"] textarea, html[data-w95-x="1"] select {
    background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK}
-  }
+ }
+ html[data-w95-x="1"] a { color: ${T.link} !important; }
+ html[data-w95-x="1"] svg { fill: currentColor !important; }
 
   html[data-w95-reddit="1"] {
     --color-neutral-content: ${T.textPrimary} !important;
@@ -1437,7 +1443,7 @@ tp-yt-app-header { border-bottom: 2px solid ${T.surfaceRaised} !important; }
    nav columns turned into floating 4px-shadow "windows". v29 never touches
    opacity/z-index/visibility; it only recolors. If the site hides it, it stays hidden. */
 dialog, [popover],
-tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-navigation-drawer,
+tp-yt-iron-dropdown, ytcp-menu, ytcp-paper-tooltip, ytcp-navigation-drawer,
 [role="menu"], [role="listbox"], [role="tooltip"], [role="dialog"], [role="alertdialog"],
 [data-radix-popper-content-wrapper] > *, [data-radix-portal] > *, [data-floating-ui-portal] > *,
 .quick-input-widget, .context-view {
@@ -1446,6 +1452,49 @@ tp-yt-iron-dropdown, ytd-popup-container, ytcp-menu, ytcp-paper-tooltip, ytcp-na
      it gets the full Win95 window edge instead of the old flat 1px outline. */
   background-color: ${T.surfaceRaised} !important; background-image: none !important;
   ${B_OUTER}
+}
+ytd-popup-container {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+ytd-popup-container tp-yt-iron-dropdown,
+ytd-popup-container ytd-multi-page-menu-renderer,
+ytd-popup-container ytd-menu-popup-renderer,
+ytd-popup-container ytd-simple-menu-header-renderer,
+ytd-multi-page-menu-renderer, ytd-menu-popup-renderer {
+  background-color: ${T.surfaceRaised} !important;
+  background-image: none !important;
+  ${B_OUTER}
+}
+ytcp-bar-chart, .ytcp-bar-chart, [class*="bar-chart" i], [class*="comparison-bar" i], ytcp-table-cell-compare-period {
+  background-color: transparent !important;
+}
+ytcp-bar-chart .bar, .bar.ytcp-bar-chart, [class*="bar-chart" i] .bar,
+[class*="comparison-bar" i] .bar, [class*="bar-container" i] .bar,
+ytcp-bar-chart .primary-bar, ytcp-bar-chart .bar-fill,
+rect.bar, rect.ytcp-bar-chart, .comparison-bar {
+  background-color: ${T.link} !important;
+  fill: ${T.link} !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+ytcp-bar-chart .previous, ytcp-bar-chart .secondary-bar,
+.bar.ytcp-bar-chart.previous-period, [class*="bar-chart" i] .previous,
+rect.bar.previous-period {
+  background-color: ${T.textMuted} !important;
+  fill: ${T.textMuted} !important;
+  opacity: 0.7 !important;
+  visibility: visible !important;
+}
+.card, [class~="card" i], [class*="card-" i], [class*="-card" i], [class*="__card" i],
+.panel, [class~="panel" i], [class*="panel-" i], [class*="-panel" i], [class*="__panel" i],
+[class*="content-box" i], [class*="content-block" i], [class*="info-box" i], [class*="detail-box" i], [class*="data-box" i],
+[class*="profile-box" i], [class*="profile-content" i], [class*="user-profile" i],
+[class*="subscription" i]:not(a):not(button) {
+  background-color: ${T.surface} !important;
+  color: ${T.textPrimary} !important;
 }
 [class*="menu" i]:not(a):not(button):not([class*="item" i]):not([class*="icon" i]),
 [class*="dropdown" i]:not(a):not(button), [class*="popup" i], [class*="tooltip" i],
@@ -1870,7 +1919,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     return c ? ICONISH.test(c) : false;
   }
 
-  const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape, [class*="screen-pause" i], [class*="player-screen" i], [class*="video-screen" i], [class*="vjs-text-track" i], [class*="inset-0" i], [class*="stretched-link" i], [class*="cover-link" i]';
+  const JS_SKIP_SELECTOR = '#movie_player, .html5-video-player, ytd-player, ytd-thumbnail, yt-img-shadow, ytd-avatar-shape, yt-avatar-shape, #avatar, #author-thumbnail, ytd-logo, yt-icon, yt-icon-shape, ytcp-bar-chart, .ytcp-bar-chart, [class*="bar-chart" i], [class*="comparison-bar" i], [class*="trend-cell" i], ytcp-table-cell-compare-period, [class*="screen-pause" i], [class*="player-screen" i], [class*="video-screen" i], [class*="vjs-text-track" i], [class*="inset-0" i], [class*="stretched-link" i], [class*="cover-link" i]';
   const SHADOW_SKIP_TAGS = new Set(['YTD-LOGO', 'YT-ICON', 'YT-ICON-SHAPE', 'YT-IMG-SHADOW', 'YTD-AVATAR-SHAPE', 'YT-AVATAR-SHAPE', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
   const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR|TEMPLATE|NOSCRIPT|AUDIO|SOURCE|TRACK|OPTION|OPTGROUP)$/i;
 
@@ -2550,6 +2599,11 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     // was already injected into them.
     try { piercedRoots.clear(); } catch (e) { }
     try { forceRootCursors.clear(); } catch (e) { }
+    // SRC-006:R010: the lap workset is the same class of retention (a live
+    // array of roots nothing will ever drain once the lane is dead).
+    forceLapWorkset = null;
+    forceLapIndex = 0;
+    forceLapRemaining = 0;
     // PERF-003 (SRC-004): the light registry is the same class of retention --
     // a Set of elements that nothing will ever drain once the lane is dead.
     try { lightDirty.clear(); } catch (e) { }
@@ -2799,9 +2853,21 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // rotations. The scheduler is now adaptive: when nothing changes, it backs
   // off instead of ticking forever in the background like a stubborn appliance.
   const FORCE_BUDGET = 2500;
+  // SRC-006:R010: element work is not the only per-slice cost. Root-LEVEL work
+  // (disconnected-root pruning, hover-sheet processing, workset construction,
+  // iteration from root zero, the completion scan) used to run over ALL
+  // pierced roots on EVERY force continuation slice, so with many ShadowRoots
+  // a tiny element budget still paid O(R) per slice. Root work gets its own
+  // hard per-slice bound: at most FORCE_ROOT_BUDGET roots are served per
+  // slice, and a lap keeps a persistent ordered workset + cursor so
+  // continuation slices resume where the previous one stopped.
+  const FORCE_ROOT_BUDGET = 64;
   const LIGHT_MAX_NODES = FORCE_BUDGET;
   const forceRootCursors = new Map();
   let forceLapActive = false;
+  let forceLapWorkset = null;   // ordered roots of the CURRENT lap (document once, then a registry snapshot)
+  let forceLapIndex = 0;        // cursor into forceLapWorkset; advances monotonically within a lap
+  let forceLapRemaining = 0;    // roots not yet done/dropped in this lap; O(1) completion detection
 
   let forcePassesOwed = 0;
   let lightPending = false;
@@ -2933,27 +2999,14 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   function runSweeper(force) {
     if (repainterSuspended) return;
     const sweepStarted = performance.now();
-    piercedRoots.forEach(root => { try { if (!root.host || !root.host.isConnected) { piercedRoots.delete(root); forceRootCursors.delete(root); } } catch (e) { } });
     const scanStyles = force || stylesDirty;
-    if (scanStyles) {
-      stylesDirty = false;
-      stripHoverSheets(document);
-      piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
-    }
-    const searchRoots = [document, ...piercedRoots];
     const w = [];
-    // PERF-002 (SRC-002): one global FORCE_BUDGET across every search root per
-    // tick, decremented while traversing. An incremental TreeWalker (or
-    // NodeIterator) is used so we never materialise the full matching
-    // NodeList for huge documents or shadow roots, and the budget yields at
-    // the exact node where it runs out. Per-root cursors persist across
-    // continuation sweeps; a new full lap starts a fresh state.
-    const budget = FORCE_BUDGET;
-    let remaining = budget;
-    let incomplete = false;
-    const docCursors = forceRootCursors;
-    const freshLap = force && !forceLapActive;
     if (!force) {
+      if (stylesDirty) {
+        stylesDirty = false;
+        stripHoverSheets(document);
+        piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
+      }
       // PERF-003 (SRC-004): the light lane drains its OWN bounded registry and
       // never touches the root list. The old form ran
       // `root.querySelectorAll('*:not([data-w95-done])')` for EVERY search root,
@@ -2965,6 +3018,8 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       // wherever they live, so shadow roots are covered without a per-root
       // query. An overflow was already promoted to the force lane at
       // registration time.
+      let remaining = LIGHT_MAX_NODES;
+      let incomplete = false;
       for (const el of lightDirty) {
         if (remaining <= 0) { incomplete = true; break; }
         lightDirty.delete(el);
@@ -2972,51 +3027,102 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         try { process(el, false, w); } catch (e) { }
         remaining--;
       }
-    } else {
-      for (const root of searchRoots) {
-        if (remaining <= 0) { incomplete = true; break; }
-        let state = docCursors.get(root);
-        if (!state) {
-          // PERF-002: TreeWalker.NodeFilter.SHOW_ELEMENT only. No full
-          // querySelectorAll materialisation. The walker advances one node at
-          // a time and is GC'd when its root detaches; never retain a static
-          // NodeList.
-          const walker = (root.createTreeWalker ? root.createTreeWalker(root, 0x1 /* SHOW_ELEMENT */, null) : null);
-          state = { walker, total: 0 };
-          docCursors.set(root, state);
-        } else if (state.done) {
+      flushWrites(w);
+      // Sweep-work accounting feeds the mutation-work suspension guard.
+      addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
+      if (incomplete && !repainterSuspended && !document.hidden) {
+        requestLightSweep();
+      }
+      return;
+    }
+    // ---- FORCE LANE (SRC-006:R010) ----
+    // A lap owns an ordered workset built ONCE from the registry (document
+    // first, represented exactly once). Continuation slices resume at
+    // forceLapIndex instead of reconstructing `[document, ...piercedRoots]`
+    // and walking from root zero; detached roots are dropped lazily AS
+    // VISITED, never via a registry-wide scan per slice; hover-sheet work is
+    // folded into first-serve per root; completion is the O(1) remaining
+    // counter, not a full-rootCollection scan. Roots pierced DURING a lap
+    // join the next lap's workset.
+    if (!forceLapActive || !forceLapWorkset) {
+      forceLapWorkset = [document, ...piercedRoots];
+      forceLapIndex = 0;
+      forceLapRemaining = forceLapWorkset.length;
+      forceLapActive = true;
+      stylesDirty = false;
+      // Cursors from an earlier lap are garbage once the workset is rebuilt.
+      forceRootCursors.clear();
+    }
+    let remaining = FORCE_BUDGET;
+    let rootsServed = 0;
+    while (forceLapIndex < forceLapWorkset.length && remaining > 0) {
+      if (rootsServed >= FORCE_ROOT_BUDGET) break;
+      const root = forceLapWorkset[forceLapIndex];
+      if (root !== document) {
+        let detached = false;
+        try { detached = !root.host || !root.host.isConnected; } catch (e) { detached = true; }
+        if (detached) {
+          // SRC-006:R010: lazy prune-as-visited. Detached roots never leak in
+          // forceRootCursors past this point (and a lap end clears the rest).
+          try { piercedRoots.delete(root); forceRootCursors.delete(root); } catch (e) { }
+          forceLapRemaining--;
+          forceLapIndex++;
           continue;
         }
-        try {
-          // Walk incrementally until the global budget is exhausted, then
-          // resume on the next slice from this exact walker.
-          while (remaining > 0) {
-            const node = state.walker ? state.walker.nextNode() : null;
-            if (!node) { state.done = true; break; }
-            process(node, true, w);
-            state.total++;
-            remaining--;
-          }
-          if (!state.done) { incomplete = true; }
-        } catch (e) { incomplete = true; }
       }
+      let state = forceRootCursors.get(root);
+      if (!state) {
+        // PERF-002: TreeWalker.NodeFilter.SHOW_ELEMENT only. No full
+        // querySelectorAll materialisation. The walker advances one node at
+        // a time and is GC'd when its root detaches; never retain a static
+        // NodeList.
+        const walker = (root.createTreeWalker ? root.createTreeWalker(root, 0x1 /* SHOW_ELEMENT */, null) : null);
+        state = { walker, total: 0, done: false };
+        forceRootCursors.set(root, state);
+        // Hover-sheet work is incremental too: one strip per root per lap,
+        // paid when the root is first SERVED -- not a registry-wide forEach
+        // on every continuation slice.
+        if (scanStyles) { try { stripHoverSheets(root); } catch (e) { } }
+      }
+      try {
+        // Walk incrementally until the element budget is exhausted, then
+        // resume on the next slice from this exact walker.
+        while (remaining > 0) {
+          const node = state.walker ? state.walker.nextNode() : null;
+          if (!node) { state.done = true; break; }
+          process(node, true, w);
+          state.total++;
+          remaining--;
+        }
+      } catch (e) { state.done = true; }
+      if (state.done) {
+        forceLapRemaining--;
+        forceLapIndex++;
+      } else {
+        // Element budget exhausted mid-root: stay on this root so the next
+        // slice resumes from the same walker (cursor never moves backwards).
+        break;
+      }
+      rootsServed++;
     }
     flushWrites(w);
+    // Sweep-work accounting feeds the mutation-work suspension guard; every
+    // slice must report its own duration regardless of which lane ran.
     addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
+    const lapComplete = forceLapRemaining <= 0 && forceLapIndex >= forceLapWorkset.length;
     if (force && forceLapActive) {
-      if ([document, ...piercedRoots].some(root => {
-        const state = docCursors.get(root);
-        return !state || !state.done;
-      })) incomplete = true;
-      if (incomplete && !repainterSuspended && !document.hidden) {
+      if (lapComplete) {
+        // Lap done: drop ALL traversal state so neither cursors nor a dead
+        // workset outlive the lap.
+        forceRootCursors.clear();
+        forceLapWorkset = null;
+        forceLapIndex = 0;
+        forceLapRemaining = 0;
+        forceLapActive = false;
+      } else if (!repainterSuspended && !document.hidden) {
         forcePassesOwed = Math.max(forcePassesOwed, 1);
         scheduleSweep(MIN_SWEEP_GAP);
-      } else {
-        docCursors.clear();
-        forceLapActive = false;
       }
-    } else if (!force && incomplete && !repainterSuspended && !document.hidden) {
-      requestLightSweep();
     }
   }
 

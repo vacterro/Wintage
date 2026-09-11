@@ -18,7 +18,7 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'saipenview', 'smartvac', 'wildrift', 'all')]
+    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'zcode', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d', 'all')]
     [string]$Target,
     # PERF-005 (T-240): batch mode for the GUI. A comma-separated selected set
     # (e.g. -Selected "vscode,obs") that feeds the SAME $names dispatcher below
@@ -33,16 +33,21 @@ param(
     [switch]$Force,
     [string]$CodeNomadPath,
     [string]$WorkBuddyPath,
+    [string]$ZCodePath,
     [string]$TotalCmdIni,
     [string]$TotalCmd2Ini,
     [string]$PortableBrowserRoot,
     [string]$BrowserStageRoot = (Join-Path $env:LOCALAPPDATA 'Wintage\browser-theme'),
     [string]$BrowserCatalog,
     [switch]$NoBrowserLaunch,
-    [string]$SaipenviewPath,
-    [string]$SmartVacPath,
-    [string]$WildRiftPath,
+    [string]$Cinema4DPath,
+    [string]$NotepadPlusPlusPath,
     [switch]$Reapply,
+    # SRC-006:R005: internal Reapply-only parameter. The parent passes the
+    # intent fingerprint of the manifest entry it planned from; the child
+    # re-validates it under the target lock and skips with ZERO mutation when
+    # the live entry no longer matches. Never set it by hand.
+    [string]$ExpectedIntent,
     [switch]$Status,
     [switch]$Quiet,
     [switch]$RegisterLogonTask,
@@ -65,7 +70,7 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 
 # PowerShell 5.1 writes a BOM with `Set-Content -Encoding UTF8`, and `Get-Content`
 # falls back to the ANSI codepage on a file that has none. Both halves have already
-# bitten this project once: SAIPENVIEW's stylesheet came back with 30 mojibaked
+# bitten this project once: a target's stylesheet came back with 30 mojibaked
 # em-dashes and a stray glyph before `:root` (E-159). The same pair of calls was
 # still writing five other targets, including Obsidian's appearance.json -- and a
 # BOM there is not cosmetic, because JSON.parse throws on it. Found one already on
@@ -158,6 +163,11 @@ $ELECTRON = @{
         Resources = (Get-WorkBuddyResources)
         Note      = 'Electron, portable. Pass -WorkBuddyPath if it lives somewhere else.'
     }
+    zcode           = @{
+        Name      = 'ZCode'
+        Resources = (Get-ZCodeResources)
+        Note      = 'Electron. Pass -ZCodePath if it lives somewhere else.'
+    }
 }
 
 # ---- MPC-HC (K-Lite) ----
@@ -217,17 +227,35 @@ $node = if ($env:WINTAGE_TEST_NO_NODE) { $null } else { Get-Command node -ErrorA
 # The GUI and (since W2-004) the CLI both write remembered paths there; the CLI
 # consults the same file so a path entered once is available to every install.ps1
 # invocation without repeating it.
-if (-not $SaipenviewPath -and $pathsJson.ContainsKey('saipenview')) { $SaipenviewPath = $pathsJson['saipenview'] }
-if (-not $SmartVacPath -and $pathsJson.ContainsKey('smartvac')) { $SmartVacPath = $pathsJson['smartvac'] }
-if (-not $WildRiftPath -and $pathsJson.ContainsKey('wildrift')) { $WildRiftPath = $pathsJson['wildrift'] }
 if (-not $CodeNomadPath -and $pathsJson.ContainsKey('codenomad')) { $CodeNomadPath = $pathsJson['codenomad'] }
 if (-not $WorkBuddyPath -and $pathsJson.ContainsKey('workbuddy')) { $WorkBuddyPath = $pathsJson['workbuddy'] }
+if (-not $ZCodePath -and $pathsJson.ContainsKey('zcode')) { $ZCodePath = $pathsJson['zcode'] }
 if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $PortableBrowserRoot = $pathsJson['portable'] }
+if (-not $Cinema4DPath -and $pathsJson.ContainsKey('cinema4d')) { $Cinema4DPath = $pathsJson['cinema4d'] }
+if (-not $NotepadPlusPlusPath -and $pathsJson.ContainsKey('notepadplusplus')) { $NotepadPlusPlusPath = $pathsJson['notepadplusplus'] }
 
 # PERF-005 (T-240): batch-mode guards, BEFORE any mode branch (-Reapply/-Status
 # exit before the dispatcher, so a conflict rejected only there would never fire).
 if ($Target -and $Selected) { throw '-Target and -Selected are mutually exclusive - pass exactly one of them.' }
 if ($Selected -and ($Reapply -or $Status -or $RegisterLogonTask -or $UnregisterLogonTask)) { throw '-Selected runs a batch Apply/Revert - it cannot be combined with -Reapply, -Status or logon-task switches.' }
+
+# SRC-006:R005: a Reapply child reports its outcome through a DEDICATED EXIT
+# CODE, never through prose the parent would have to parse:
+#   0                    = the target was processed normally (mutated for real,
+#                          or -WhatIf-validated)
+#   $REAPPLY_STALE_EXIT  = the live manifest entry no longer matches the intent
+#                          the parent planned from; the child skipped with ZERO
+#                          target, recovery, and manifest mutation
+#   anything else        = failure
+# The parent maps 3 to STALE_SKIPPED, which is a SUCCESS for the overall
+# -Reapply operation: dropping a stale plan is exactly what the child should
+# do. Only real failures make the run exit nonzero.
+$REAPPLY_STALE_EXIT = 3
+# The mapping above is only unambiguous for the shape the parent dispatches:
+# ONE explicit target per -ExpectedIntent child.
+if ($ExpectedIntent -and (-not $Target -or $Target -eq 'all' -or $Selected)) {
+    throw '-ExpectedIntent is internal to -Reapply and requires exactly one explicit -Target.'
+}
 
 # ---- Reapply mode: read manifest, probe TARGET health, re-apply unhealthy targets ----
 # The decision is target health, not just the Wintage payload version (T-189):
@@ -245,22 +273,26 @@ if ($Reapply) {
     }
     if ($manifest.Count -eq 0) { Say 'Nothing to do -- the manifest is empty (no targets have been installed).' 'Green'; exit 0 }
     # plannedWork = a target needs re-apply (decided by health probe).
-    # mutatedWork  = a child was actually invoked for real (not -WhatIf).
-    # The two are deliberately separate: under -WhatIf the child MUST run its own
-    # preflight so a broken helper surfaces as a nonzero exit, and the "all up to
-    # date" message must never be printed merely because ShouldProcess suppressed
-    # a mutation (T-189).
+    # appliedTargets / staleTargets / failedTargets = the OUTCOME each child
+    # reported through its exit code (see $REAPPLY_STALE_EXIT), booked here.
+    # The old single $mutatedWork flag conflated "a child ran" with "the target
+    # was mutated", which is how a stale skip used to surface as a green
+    # "re-applied successfully". The two are deliberately separate from
+    # -WhatIf: under -WhatIf the child MUST run its own preflight so a broken
+    # helper surfaces as a nonzero exit, and the "all up to date" message must
+    # never be printed merely because ShouldProcess suppressed a mutation
+    # (T-189).
     $plannedWork = $false
-    $mutatedWork = $false
+    $appliedTargets = @()
+    $staleTargets = @()
     $failedTargets = @()
     $passArgs = @{}
     if ($CodeNomadPath) { $passArgs['-CodeNomadPath'] = $CodeNomadPath }
     if ($WorkBuddyPath) { $passArgs['-WorkBuddyPath'] = $WorkBuddyPath }
     if ($TotalCmdIni)  { $passArgs['-TotalCmdIni'] = $TotalCmdIni }
     if ($TotalCmd2Ini) { $passArgs['-TotalCmd2Ini'] = $TotalCmd2Ini }
-    if ($SaipenviewPath) { $passArgs['-SaipenviewPath'] = $SaipenviewPath }
-    if ($SmartVacPath) { $passArgs['-SmartVacPath'] = $SmartVacPath }
-    if ($WildRiftPath) { $passArgs['-WildRiftPath'] = $WildRiftPath }
+    if ($Cinema4DPath) { $passArgs['-Cinema4DPath'] = $Cinema4DPath }
+    if ($NotepadPlusPlusPath) { $passArgs['-NotepadPlusPlusPath'] = $NotepadPlusPlusPath }
     if ($Force) { $passArgs['-Force'] = $Force }
     if ($PortableBrowserRoot) { $passArgs['-PortableBrowserRoot'] = $PortableBrowserRoot }
     if ($BrowserStageRoot) { $passArgs['-BrowserStageRoot'] = $BrowserStageRoot }
@@ -276,8 +308,13 @@ if ($Reapply) {
         }
         $plannedWork = $true
         $action = "Re-apply $key @ $($data.palette) ($($health.Reasons))"
+        # SRC-006:R005: the child re-validates THIS manifest intent under the
+        # target lock before mutating anything, so a Revert or palette change
+        # that wins the plan->lock race makes the child skip instead of blindly
+        # resurrecting a stale snapshot.
         $callArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
-            '-Target', $key, '-Palette', $data.palette)
+            '-Target', $key, '-Palette', $data.palette,
+            '-ExpectedIntent', (Get-ReapplyIntentToken $data))
         foreach ($pk in $passArgs.Keys) { $callArgs += $pk; $callArgs += $passArgs[$pk] }
         # A browsers RE-APPLY must never reopen the browser: the theme loads from a
         # stable stage path that is already registered in the profile, so a repaint
@@ -292,8 +329,25 @@ if ($Reapply) {
         } elseif (-not $PSCmdlet.ShouldProcess("$key ($($data.palette))", $action)) {
             continue
         } else {
-            $mutatedWork = $true
             if (-not $Quiet) { Say "$key`: re-applying $($data.palette) - $($health.Reasons)" 'Cyan' }
+        }
+        # TEST-ONLY synchronization seam (SRC-006:R005). Inert unless
+        # WINTAGE_TEST_REAPPLY_PARENT_SEAM is set exactly as '<target>|<dir>'.
+        # After planning a real child dispatch the parent writes '<dir>\planned'
+        # and waits (bounded) for '<dir>\resume' BEFORE spawning the child, so a
+        # race fixture can run a REAL competing Apply/Revert inside the
+        # plan->child window and still finish deterministically. Never set
+        # outside tests.
+        if ($env:WINTAGE_TEST_REAPPLY_PARENT_SEAM -and -not $WhatIfPreference) {
+            $seamParts = @($env:WINTAGE_TEST_REAPPLY_PARENT_SEAM -split '\|', 2)
+            if ($seamParts.Count -eq 2 -and $seamParts[0] -eq $key) {
+                Set-Content -LiteralPath (Join-Path $seamParts[1] 'planned') -Value $key
+                $seamDeadline = [DateTime]::UtcNow.AddSeconds(120)
+                while (-not (Test-Path (Join-Path $seamParts[1] 'resume'))) {
+                    if ([DateTime]::UtcNow -gt $seamDeadline) { throw "test seam: the resume signal never arrived for $key" }
+                    Start-Sleep -Milliseconds 50
+                }
+            }
         }
         # A failing child can emit native stderr (a node stack trace, a reg
         # error). Under EAP=Stop the 2>&1 merge turns each line into a
@@ -306,7 +360,21 @@ if ($Reapply) {
         $childCode = $LASTEXITCODE
         $ErrorActionPreference = $prevEap
         if ($childCode -eq 0) {
-            if (-not $Quiet) { Say "$key`: re-applied successfully." 'Green' }
+            $appliedTargets += $key
+            if ($WhatIfPreference) {
+                if (-not $Quiet) { Say "$key`: would re-apply $($data.palette) - the child's own preflight validated the plan (-WhatIf dry-run)." 'Cyan' }
+            } else {
+                if (-not $Quiet) { Say "$key`: re-applied successfully." 'Green' }
+            }
+        }
+        elseif ($childCode -eq $REAPPLY_STALE_EXIT) {
+            # SRC-006:R005: the child's intent revalidation lost the plan->lock
+            # race - a Revert or a palette change owns the target now. Skipping
+            # IS the correct outcome (the run still exits 0), the stale plan is
+            # dropped, and nothing was mutated: this is never reported as, or
+            # counted as, a re-apply.
+            $staleTargets += $key
+            if (-not $Quiet) { Say "$key`: SKIPPED - the manifest intent changed after this Reapply was planned (a Revert or palette change won the race); the stale plan was dropped, nothing was mutated." 'Yellow' }
         }
         else {
             # Failures are NEVER suppressed by -Quiet: a silent reapply loop that
@@ -318,8 +386,11 @@ if ($Reapply) {
     }
     if (-not $plannedWork) {
         if (-not $Quiet) { Say 'Nothing to do -- all recorded targets are up to date.' 'Green' }
-    } elseif (-not $mutatedWork -and -not $failedTargets.Count) {
+    } elseif ($WhatIfPreference -and -not $failedTargets.Count) {
         if (-not $Quiet) { Say 'Reapply planned: no real mutation happened (-WhatIf dry-run complete).' 'Cyan' }
+    }
+    if ($staleTargets.Count -and -not $Quiet) {
+        Say "Skipped $($staleTargets.Count) target(s) whose manifest intent changed since planning ($($staleTargets -join ', ')) - they were NOT re-applied." 'Yellow'
     }
     if ($failedTargets.Count) {
         Say "Reapply incomplete: $($failedTargets.Count) target(s) failed ($($failedTargets -join ', '))." 'Red'
@@ -500,25 +571,6 @@ if (-not $Target -and -not $Selected) {
 
     Say ""
 
-    $svCss = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css'
-    $svBak = Join-Path $SaipenviewPath 'saipenview\ui\static\style.css.bak'
-    $sv = if (Test-Path $SaipenviewPath) {
-        if (Test-Path $svBak) { 'themed' } else { 'found, not themed' }
-    } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'saipenview', 'SAIPENVIEW', $sv, '-')
-
-    $smBak = Join-Path $SmartVacPath '_SMART_VAC_CLEANER.py.bak'
-    $sm = if (Test-Path $SmartVacPath) {
-        if (Test-Path $smBak) { 'themed' } else { 'found, not themed' }
-    } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'smartvac', 'SMART VAC CLEANER', $sm, '-')
-
-    $wrBak = Join-Path $WildRiftPath 'theme.py.bak'
-    $wr = if (Test-Path $WildRiftPath) {
-        if (Test-Path $wrBak) { 'themed' } else { 'found, not themed' }
-    } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'wildrift', 'WildRiftAssistant', $wr, '-')
-
     $bdDir = Join-Path $env:APPDATA 'BetterDiscord/themes'
     $bdCss = Join-Path $bdDir 'wintage.theme.css'
     $bd = if (Test-Path $bdDir) {
@@ -548,6 +600,19 @@ if (-not $Target -and -not $Selected) {
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obsidian', ('Obsidian (' + $obsVaults.Count + ' vault(s))'), $obs, 'all (pick in Appearance)')
 
+    $nppConfigDir = Join-Path $env:APPDATA 'Notepad++'
+    $npp = if (Test-Path $nppConfigDir) {
+        if (Test-Path (Join-Path $nppConfigDir 'themes\Wintage.xml')) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'notepadplusplus', 'Notepad++', $npp, '-')
+
+    $c4dPath = Get-Cinema4DPath
+    $c4d = if ($c4dPath) {
+        $c4dSchemes = Get-Cinema4DSchemesDir $c4dPath
+        if ($c4dSchemes -and (Test-Path (Join-Path $c4dSchemes 'Wintage\wintage.col'))) { 'themed' } else { 'found, not themed' }
+    } else { 'not installed' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'cinema4d', 'Cinema 4D', $c4d, '-')
+
     Say ((T 'PalettesLabel') + " $palettes") 'DarkGray'
     Say (T 'HelpOneApp') 'Cyan'
     Say (T 'HelpAll') 'Cyan'
@@ -563,7 +628,7 @@ if (-not $Target -and -not $Selected) {
 # accepted unverified/stale generated output). For `-Target all` the check is NOT
 # global (T-190): each build-consuming target verifies its own prerequisites at
 # dispatch, absent ones SKIP, and unrelated native/source-tree targets execute.
-$BUILD_CONSUMING = @($TARGETS.Keys) + @($ELECTRON.Keys) + @('windows', 'browsers', 'obs', 'discord', 'obsidian', 'qbittorrent')
+$BUILD_CONSUMING = @($TARGETS.Keys) + @($ELECTRON.Keys) + @('windows', 'browsers', 'obs', 'discord', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d')
 
 # For an EXPLICIT build-consuming target the global check still applies: the user
 # asked for exactly this target, so an unverifiable build aborts before dispatch.
@@ -593,7 +658,7 @@ if ($Target -eq 'all' -and $node) {
 # this list silently dropped five targets: codenomad, discord, totalcmd, totalcmd2
 # and obsidian were all reachable individually but were skipped by `-Target all`,
 # so "everything" quietly meant nine of fourteen.
-$SIMPLE = @('windows', 'browsers', 'mpchc', 'terminal', 'conhost', 'obs', 'saipenview', 'smartvac', 'wildrift', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent')
+$SIMPLE = @('windows', 'browsers', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d')
 
 # And this is the guard that stops it happening a third time: the parameter's own
 # ValidateSet is the definition of what a user may ask for, so anything in it that
@@ -643,6 +708,9 @@ if ($selectedList.Count -and $node) {
 $script:StrictTarget = ($Target -and $Target -ne 'all') -or $selectedList.Count -gt 0
 
 $dispatchFailures = @()
+# SRC-006:R005: targets this child declined because the live manifest entry no
+# longer matched the planned -ExpectedIntent. Zero mutation happened for each.
+$staleSkips = @()
 
 function Save-FreeBuffPatchState([string]$resources) {
     $orchestrator = Join-Path $resources 'orchestrator\orchestrator.js'
@@ -687,7 +755,24 @@ foreach ($name in $names) {
         # P0#1: validate the manifest BEFORE any real mutation. A corrupt
         # installed.json must abort with ZERO target changes, not mutate the
         # target and then fail the manifest commit.
-        $null = Read-Manifest
+        $manifestAtLock = Read-Manifest
+
+        # SRC-006:R005: intent revalidation. Between the Reapply parent's
+        # snapshot and THIS lock acquisition, a Revert or an explicit palette
+        # change may have won the race. Serialization protects the mutation,
+        # not the intent, so a stale or missing entry means ZERO target
+        # mutation, ZERO recovery mutation, ZERO manifest mutation: the child
+        # reports the skip and exits successfully. A corrupt manifest still
+        # fails closed through Read-Manifest above.
+        if ($ExpectedIntent) {
+            $entryAtLock = if ($manifestAtLock.ContainsKey($name)) { $manifestAtLock[$name] } else { $null }
+            $intentAtLock = Get-ReapplyIntentToken $entryAtLock
+            if ($intentAtLock -ne $ExpectedIntent) {
+                if (-not $Quiet) { Say "$name`: stale Reapply intent skipped - the manifest entry changed after this Reapply was planned (a Revert or palette change won the race); nothing was mutated." 'Yellow' }
+                $staleSkips += $name
+                continue
+            }
+        }
 
     # T-190: for `-Target all` (and PERF-005 -Selected batches), a PRESENT
     # build-consuming target needs a verifiable current build; absent
@@ -745,13 +830,12 @@ foreach ($name in $names) {
     if ($name -eq 'conhost') { Invoke-Conhost -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'obs') { Invoke-Obs -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'qbittorrent') { Invoke-Qbittorrent -DoRevert:$Revert -PaletteSlug $Palette; continue }
-    if ($name -eq 'saipenview') { Invoke-Saipenview -DoRevert:$Revert -PaletteSlug $Palette; continue }
-    if ($name -eq 'smartvac') { Invoke-SmartVac -DoRevert:$Revert -PaletteSlug $Palette; continue }
-    if ($name -eq 'wildrift') { Invoke-WildRift -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'discord') { Invoke-BetterDiscord -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd') { Invoke-TotalCmd -Index 1 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd2') { Invoke-TotalCmd -Index 2 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'obsidian') { Invoke-Obsidian -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'notepadplusplus') { Invoke-NotepadPlusPlus -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    if ($name -eq 'cinema4d') { Invoke-Cinema4D -DoRevert:$Revert -PaletteSlug $Palette; continue }
 
                 # ---- Electron targets ----
     if ($ELECTRON.ContainsKey($name)) {
@@ -842,9 +926,21 @@ foreach ($name in $names) {
                 if ($LASTEXITCODE -ne 0) { throw "FreeBuff: ad/sound patch dry-run FAILED ($LASTEXITCODE) - nothing was changed." }
             }
             # T-192 P2/B: snapshot the EXACT owned pre-state for EVERY Electron
-            # target (not just FreeBuff) so a failed manifest commit rolls the app
-            # back instead of leaving it themed with an old manifest.
-            $elSnap = Save-ElectronStateSnapshot $name
+            # target (not just FreeBuff) so a failed manifest commit rolls the
+            # app back instead of leaving it themed with an old manifest.
+            # SRC-006:R007: the snapshot class follows the state machine truth
+            # from Get-ElectronStatus, never a re-inferred layout. A palette
+            # repaint of a HEALTHY themed target (themed-relocated /
+            # themed-inplace) can only mutate small sidecars, so it takes the
+            # lightweight -Operation Repaint snapshot; stock, updated-*,
+            # ambiguous repair paths and Revert keep the full archive-safe
+            # pre-state.
+            $elSnapOperation = 'Apply'
+            $elStatus = Get-ElectronStatus $name
+            if ($elStatus -and $elStatus.state -in @('themed-relocated', 'themed-inplace')) {
+                $elSnapOperation = 'Repaint'
+            }
+            $elSnap = Save-ElectronStateSnapshot $name -Operation $elSnapOperation
             & node $nodeArgs --palette $Palette
             if ($LASTEXITCODE -ne 0) {
                 # W2-003: the parent owns an independent snapshot precisely so
@@ -890,6 +986,7 @@ foreach ($name in $names) {
             # a later run without the flag resolves the same installation.
             if ($name -eq 'codenomad' -and $CodeNomadPath) { Save-PathPreference 'codenomad' $CodeNomadPath }
             if ($name -eq 'workbuddy' -and $WorkBuddyPath) { Save-PathPreference 'workbuddy' $WorkBuddyPath }
+            if ($name -eq 'zcode' -and $ZCodePath) { Save-PathPreference 'zcode' $ZCodePath }
             Say "  Recorded in $ManifestPath" 'DarkGray'
         }
         continue
@@ -918,35 +1015,66 @@ foreach ($name in $names) {
         if (Test-Path $dest) {
             if ($PSCmdlet.ShouldProcess($dest, 'Restore the previous Wintage install')) {
                 $preDest = Save-DirPreState $dest
-                # CORE-004: without persistent recovery, the destination pathname
-                # alone is NEVER ownership proof. Three states are distinguished:
-                # recovery present  -> normal recovery-based revert;
-                # no recovery + no manifest -> only an independently verifiable
-                #   legacy Wintage extension may be removed; anything else is
-                #   user data and is left untouched;
-                # manifest present but recovery missing -> FAIL CLOSED, directory
-                #   and ledger both preserved as recovery evidence.
                 if (Test-Path $recoveryMeta) {
-                    $meta = Read-Utf8 $recoveryMeta | ConvertFrom-Json
-                    if ($meta.mode -eq 'replaced' -and (Test-Path $pristineDir)) {
-                        # SRC-005 W2-002: the live directory swap runs INSIDE the
-                        # commit scriptblock. It used to run before the wrapper,
-                        # so a failure between the snapshot and the wrapper left
-                        # the destination half-swapped with the rollback
-                        # snapshot unreachable and the manifest unchanged.
-                        Invoke-TargetCommit $name $t.Name {
-                            Remove-Item $dest -Recurse -Force
-                            New-Item -ItemType Directory -Force -Path $dest | Out-Null
-                            Copy-Item (Join-Path $pristineDir '*') $dest -Recurse -Force
-                            Remove-ManifestEntry $name
-                        } { Restore-DirPreState $dest $preDest }
-                        Say "$($t.Name): restored the pre-Wintage directory from $pristineDir" 'Green'
+                    $metaRaw = Read-Utf8 $recoveryMeta
+                    try { $meta = $metaRaw | ConvertFrom-Json } catch { throw "$($t.Name): recovery metadata at $recoveryMeta is not valid JSON - refusing to modify the live destination, manifest, or recovery evidence. Fix or delete $recoveryMeta by hand after a backup." }
+                    if ($null -eq $meta -or $meta -is [System.Array] -or $meta -is [string] -or $meta -is [int] -or $meta -is [bool]) { throw "$($t.Name): recovery metadata at $recoveryMeta is not a JSON object (got $($meta.GetType().Name)) - refusing to modify the live destination, manifest, or recovery evidence." }
+                    if ($null -eq $meta.mode -or $null -eq $meta.target) { throw "$($t.Name): recovery metadata at $recoveryMeta is missing required fields (mode and target are required). Found mode='$($meta.mode)' target='$($meta.target)' - refusing to modify the live destination, manifest, or recovery evidence." }
+                    if ($meta.target -ne $name) { throw "$($t.Name): recovery target mismatch at $recoveryMeta (expected '$name', found '$($meta.target)') - refusing to modify the live destination, manifest, or recovery evidence. The recovery file may belong to a different target." }
+                    if ($meta.mode -notin @('created', 'replaced')) { throw "$($t.Name): unknown recovery mode '$($meta.mode)' at $recoveryMeta (expected 'created' or 'replaced') - refusing to modify the live destination, manifest, or recovery evidence. Fix the mode or delete the recovery by hand after a backup." }
+                        if ($meta.mode -eq 'replaced') {
+                        if (-not (Test-Path $pristineDir)) { throw "$($t.Name): recovery mode is 'replaced' but the pristine snapshot is missing at $pristineDir - refusing to modify the live destination, manifest, or recovery evidence. Restore the pristine or delete the recovery by hand after a backup." }
+                        $recoveryTombstone = $recoveryDir + '.wintage-retired-' + [guid]::NewGuid().ToString('N')
+                        $retiredRecovery = $false
+                        try { Move-Item -LiteralPath $recoveryDir -Destination $recoveryTombstone -Force; $retiredRecovery = $true } catch { throw "$($t.Name): recovery epoch retirement failed (cannot rename $recoveryDir) - recovery evidence preserved and no live mutation attempted: $($_.Exception.Message)" }
+                        # SRC-006:R004: the retirement rename moved the WHOLE epoch,
+                        # pristine included, so the active $pristineDir no longer
+                        # exists. Every recovery read after this point must go
+                        # through the tombstone.
+                        $retiredPristine = Join-Path $recoveryTombstone 'pristine'
+                        try {
+                            Invoke-TargetCommit $name $t.Name {
+                                Remove-Item $dest -Recurse -Force
+                                New-Item -ItemType Directory -Force -Path $dest | Out-Null
+                                # A legitimately empty original directory is a valid
+                                # user state, so an empty pristine restores to an
+                                # empty directory instead of erroring on the glob.
+                                if (@(Get-ChildItem -LiteralPath $retiredPristine -Force).Count) {
+                                    Copy-Item (Join-Path $retiredPristine '*') $dest -Recurse -Force
+                                }
+                                Remove-ManifestEntry $name
+                            } { Restore-DirPreState $dest $preDest }
+                            Say "$($t.Name): restored the pre-Wintage directory from $retiredPristine" 'Green'
+                            if (Test-Path -LiteralPath $recoveryTombstone) { Remove-Item -LiteralPath $recoveryTombstone -Recurse -Force -ErrorAction SilentlyContinue }
+                        } catch {
+                            $commitErr = $_
+                            try { Restore-DirPreState $dest $preDest } catch { }
+                            if ($retiredRecovery -and (Test-Path -LiteralPath $recoveryTombstone) -and -not (Test-Path -LiteralPath $recoveryDir)) {
+                                try { Move-Item -LiteralPath $recoveryTombstone -Destination $recoveryDir -Force } catch {
+                                    throw "$($t.Name): revert FAILED ($($commitErr.Exception.Message)) AND the retired epoch could not be restored to $recoveryDir - it is preserved at $recoveryTombstone for a manual retry."
+                                }
+                            }
+                            throw $commitErr
+                        }
                     } else {
-                        Invoke-TargetCommit $name $t.Name {
-                            Remove-Item $dest -Recurse -Force
-                            Remove-ManifestEntry $name
-                        } { Restore-DirPreState $dest $preDest }
-                        Say "$($t.Name): removed $dest (Wintage-created, nothing pre-existed to restore)" 'Green'
+                        $recoveryTombstone = $recoveryDir + '.wintage-retired-' + [guid]::NewGuid().ToString('N')
+                        $retiredRecovery = $false
+                        try { Move-Item -LiteralPath $recoveryDir -Destination $recoveryTombstone -Force; $retiredRecovery = $true } catch { throw "$($t.Name): recovery epoch retirement failed (cannot rename $recoveryDir) - recovery evidence preserved and no live mutation attempted: $($_.Exception.Message)" }
+                        try {
+                            Invoke-TargetCommit $name $t.Name {
+                                Remove-Item $dest -Recurse -Force
+                                Remove-ManifestEntry $name
+                            } { Restore-DirPreState $dest $preDest }
+                            Say "$($t.Name): removed $dest (Wintage-created, nothing pre-existed to restore)" 'Green'
+                            if (Test-Path -LiteralPath $recoveryTombstone) { Remove-Item -LiteralPath $recoveryTombstone -Recurse -Force -ErrorAction SilentlyContinue }
+                        } catch {
+                            $commitErr = $_
+                            try { Restore-DirPreState $dest $preDest } catch { }
+                            if ($retiredRecovery -and (Test-Path -LiteralPath $recoveryTombstone) -and -not (Test-Path -LiteralPath $recoveryDir)) {
+                                try { Move-Item -LiteralPath $recoveryTombstone -Destination $recoveryDir -Force } catch { }
+                            }
+                            throw $commitErr
+                        }
                     }
                 } else {
                     $m = Read-Manifest
@@ -1050,3 +1178,11 @@ if ($dispatchFailures.Count) {
     exit 1
 }
 
+# SRC-006:R005 child outcome contract: an -ExpectedIntent-gated child whose run
+# ended in pure stale skips (nothing failed, nothing mutated) reports that
+# through the dedicated exit code the -Reapply parent maps to STALE_SKIPPED.
+# The guard at the top of the script guarantees one explicit target per child,
+# so this code has exactly one meaning.
+if ($ExpectedIntent -and $staleSkips.Count) { exit $REAPPLY_STALE_EXIT }
+
+exit 0

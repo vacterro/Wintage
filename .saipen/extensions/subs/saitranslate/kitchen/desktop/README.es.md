@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Lista de temas con chips de color, los objetivos encontrados en esta máquina, una vista previa Win95 en vivo, y los veintiún tokens de color como muestras editables. Editar cualquier muestra bifurca la paleta en **Custom** en lugar de cambiar un tema distribuido por debajo de ti. El panel de la derecha muestra en vivo el contraste WCAG de los tres tokens que llevan texto — una paleta que FAIL ahí la rechaza igualmente el build gate, así que es mejor verlo antes de Apply que después.
 
-Los objetivos se dividen en dos listas accesibles por teclado: **MY APPS** contiene las herramientas portátiles/árbol-fuente CodeNomad, SAIPENVIEW, SmartVac y WildRift; **POPULAR APPS** contiene Windows, OBS, terminales, editores y el otro software instalado. ALL/NONE y Apply/Revert operan sobre ambas listas sin cambiar su agrupación.
+Los objetivos se dividen en dos listas accesibles por teclado: **MY APPS** contiene las herramientas portátiles/árbol-fuente CodeNomad, WorkBuddy; **POPULAR APPS** contiene Windows, OBS, terminales, editores y el otro software instalado. ALL/NONE y Apply/Revert operan sobre ambas listas sin cambiar su agrupación.
 
 La ventana lleva la paleta que está a punto de instalar. Es la vista previa más rápida disponible, y mantiene la herramienta honesta: una paleta que vuelve ilegible esta ventana es visiblemente ilegible.
 
@@ -46,10 +46,8 @@ Apply delega en `install.ps1`. Hay exactamente una ruta de código que instala u
 | `claude` | shim de Electron, parcheado en el lugar — ver abajo | no — una actualización crea una carpeta `app-<version>` nueva |
 | `mpchc` | registro, solo tema oscuro + tipografía OSD | no — MPC-HC reescribe sus ajustes al salir |
 | `obsidian` | tema de comunidad por vault, todas las paletas instaladas a la vez | **sí** — vive en tu vault |
-| `saipenview` | reescribe sus propios valores de token `:root` en `style.css` | no — un archivo fuente; re-ejecutar tras un pull |
 | `discord` | CSS depositado en la propia carpeta de temas de BetterDiscord | sí |
 | `totalcmd`, `totalcmd2` | claves `[Colors]` de `wincmd.ini`; los filtros de archivos recientes existentes usan el color de enlace de la paleta | sí — es tu ini |
-| `smartvac`, `wildrift` | tabla de tokens reescrita en el propio código fuente de la app | no — un archivo fuente; re-ejecutar tras un pull |
 
 ### Eliminación de anuncios de FreeBuff
 
@@ -138,11 +136,6 @@ La segunda mitad fue un problema mucho más silencioso. El `BrowserWindow` de Cl
 
 Se escribe un tema de comunidad en el `.obsidian/themes/` de cada vault — las dieciséis paletas a la vez, exactamente como el objetivo de VS Code, así que cambias entre ellas en **Settings → Appearance** sin re-ejecutar nada. La plantilla se derivó del tema hecho a mano `VintageWin95` ya presente en el vault, cada color reemplazado por el token al que equivalía. `-Palette <slug>` fija cuál está activa en la instalación; `appearance.json` se respalda primero, y `-Revert` elimina solo los temas `Wintage *` y restaura tu elección anterior — un tema hecho a mano en el mismo vault nunca se toca.
 
-### SAIPENVIEW
-
-Su frontend ya declara los nombres de tokens de Wintage en su propio `:root`, así que este parche reescribe **solo los valores de tokens** — nunca un selector, una fuente, un ancho de borde o un padding. Nada que afecte al box model cambia, así que el texto no puede desplazarse. Eso es deliberado: el enfoque anterior anexaba toda la hoja de estilo del navegador encima, y `wintage.css` está escrita para páginas web arbitrarias — selectores universales que fuerzan la fuente, la escala de tamaños, bordes de 2px y alturas de controles. En una app que ya tiene su propio layout, eso mueve todo.
-
-Verificado enmascarando cada hex y comparando con el respaldo: estructuralmente idéntico, solo difieren los literales de color. `--link` se informa como no declarado allí (sus enlaces markdown leen `--accentTeal`, que esto sí define) en lugar de inyectarse — añadir una variable que la app nunca lee sería peso muerto.
 
 ### MPC-HC (K-Lite)
 

@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Themenliste mit Farbchips, die auf dieser Maschine gefundenen Ziele, eine Live-Win95-Vorschau und alle einundzwanzig Farbtokens als editierbare Swatches. Das Bearbeiten eines Swatch forkt die Palette in **Custom**, statt unter dir eine ausgelieferte Theme zu ändern. Das Panel rechts zeigt live WCAG-Kontrast für die drei Tokens, die Text tragen — eine Palette, die dort FAILt, lehnt das Build-Gate ohnehin ab, also ist es besser, das vor Apply zu sehen als danach.
 
-Ziele sind in zwei tastaturerreichbare Listen geteilt: **MY APPS** enthält die portablen/Quellbaum-Tools CodeNomad, SAIPENVIEW, SmartVac und WildRift; **POPULAR APPS** enthält Windows, OBS, Terminals, Editoren und die andere installierte Software. ALL/NONE und Apply/Revert arbeiten über beide Listen, ohne deren Gruppierung zu ändern.
+Ziele sind in zwei tastaturerreichbare Listen geteilt: **MY APPS** enthält die portablen/Quellbaum-Tools CodeNomad, WorkBuddy; **POPULAR APPS** enthält Windows, OBS, Terminals, Editoren und die andere installierte Software. ALL/NONE und Apply/Revert arbeiten über beide Listen, ohne deren Gruppierung zu ändern.
 
 Das Fenster trägt die Palette, die es gleich installieren will. Das ist die schnellste verfügbare Vorschau, und es hält das Werkzeug ehrlich: eine Palette, die dieses Fenster unlesbar macht, ist sichtbar unlesbar.
 
@@ -46,10 +46,8 @@ Apply ruft `install.ps1` auf. Es gibt genau einen Codepfad, der ein Theme instal
 | `claude` | Electron-Shim, vor Ort gepatcht — siehe unten | nein — ein Update erzeugt einen neuen `app-<version>`-Ordner |
 | `mpchc` | Registry, nur dunkle Theme + OSD-Typografie | nein — MPC-HC überschreibt seine Einstellungen beim Beenden |
 | `obsidian` | Community-Theme pro Vault, alle Paletten auf einmal installiert | **ja** — sie lebt in deinem Vault |
-| `saipenview` | schreibt seine eigenen `:root`-Tokenwerte in `style.css` um | nein — eine Quelldatei; nach einem Pull erneut ausführen |
 | `discord` | CSS in den eigenen Theme-Ordner von BetterDiscord eingefügt | ja |
 | `totalcmd`, `totalcmd2` | `wincmd.ini`-`[Colors]`-Schlüssel; vorhandene Recent-File-Filter nutzen die Paletten-Linkfarbe | ja — es ist deine ini |
-| `smartvac`, `wildrift` | Tokentabelle im eigenen Quellcode der App umgeschrieben | nein — eine Quelldatei; nach einem Pull erneut ausführen |
 
 ### FreeBuff-Werbeentfernung
 
@@ -138,11 +136,6 @@ Die zweite Hälfte davon war ein viel leiseres Problem. Claudes `BrowserWindow` 
 
 Eine Community-Theme wird in jedes Vault-Verzeichnis `.obsidian/themes/` geschrieben — alle sechzehn Paletten auf einmal, genau wie beim VS-Code-Ziel, also wechselst du zwischen ihnen in **Settings → Appearance**, ohne etwas erneut auszuführen. Die Vorlage wurde von der handgefertigten `VintageWin95`-Theme abgeleitet, die schon im Vault war, jede Farbe durch den Token ersetzt, dem sie entsprach. `-Palette <slug>` setzt, welche bei der Installation aktiv ist; `appearance.json` wird zuerst gesichert, und `-Revert` entfernt nur die `Wintage *`-Themes und stellt deine frühere Wahl wieder her — eine handgefertigte Theme im selben Vault wird nie angefasst.
 
-### SAIPENVIEW
-
-Sein Frontend deklariert die Wintage-Tokennamen bereits in seinem eigenen `:root`, also schreibt dieser Patch **nur die Tokenwerte** um — nie einen Selektor, ein Font, eine Rahmenbreite oder ein Padding. Nichts, was das Box-Model betrifft, ändert sich, also kann der Text nicht verrutschen. Das ist beabsichtigt: der frühere Ansatz hängte das ganze Browser-Stylesheet oben an, und `wintage.css` ist für beliebige Webseiten geschrieben — universelle Selektoren, die Font, Größenleiter, 2px-Rahmen und Steuerelementhöhen erzwingen. Auf einer App, die bereits ein eigenes Layout hat, verschiebt das alles.
-
-Verifiziert durch Maskieren jedes Hex und Diff gegen das Backup: strukturell identisch, nur Farbliterale unterscheiden sich. `--link` wird dort als nicht deklariert gemeldet (seine Markdown-Links lesen `--accentTeal`, das dieser Patch setzt), statt injiziert — eine Variable hinzuzufügen, die die App nie liest, wäre totes Gewicht.
 
 ### MPC-HC (K-Lite)
 

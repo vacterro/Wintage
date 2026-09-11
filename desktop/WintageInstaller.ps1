@@ -162,7 +162,7 @@ $FONTB = New-Object Drawing.Font('Verdana', 8.25, [Drawing.FontStyle]::Bold, [Dr
 # ---- FORM ----
 $form = New-Object Windows.Forms.Form
 $form.Text = (T 'WintageInstallerTitle')
-$form.Size = New-Object Drawing.Size(880, 620)
+$form.Size = New-Object Drawing.Size(880, 660)
 $form.FormBorderStyle = 'FixedSingle'
 $form.MaximizeBox = $false
 $form.StartPosition = 'CenterScreen'
@@ -170,8 +170,75 @@ $form.Font = $FONT
 $form.AutoScroll = $true
 $work = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 if ($form.Width -gt $work.Width -or $form.Height -gt $work.Height) {
-    $form.Size = New-Object Drawing.Size ([Math]::Min(880, $work.Width)), ([Math]::Min(620, $work.Height))
+    $form.Size = New-Object Drawing.Size ([Math]::Min(880, $work.Width)), ([Math]::Min(660, $work.Height))
 }
+
+# ---- TABS & PANELS ----
+$script:activeTab = 'themes'
+
+$btnTabThemes = New-Object Windows.Forms.Button
+$btnTabThemes.Location = '12,8'
+$btnTabThemes.Size = '140,24'
+$btnTabThemes.FlatStyle = [Windows.Forms.FlatStyle]::Flat
+$btnTabThemes.FlatAppearance.BorderSize = 2
+$btnTabThemes.Font = $FONTB
+$btnTabThemes.Text = (T 'TabThemes')
+
+$btnTabBetterDiscord = New-Object Windows.Forms.Button
+$btnTabBetterDiscord.Location = '158,8'
+$btnTabBetterDiscord.Size = '180,24'
+$btnTabBetterDiscord.FlatStyle = [Windows.Forms.FlatStyle]::Flat
+$btnTabBetterDiscord.FlatAppearance.BorderSize = 2
+$btnTabBetterDiscord.Font = $FONT
+$btnTabBetterDiscord.Text = (T 'TabBetterDiscord')
+
+$pnlThemes = New-Object Windows.Forms.Panel
+$pnlThemes.Location = '0,36'
+$pnlThemes.Size = '864,550'
+$pnlThemes.BorderStyle = [Windows.Forms.BorderStyle]::None
+
+$pnlBetterDiscord = New-Object Windows.Forms.Panel
+$pnlBetterDiscord.Location = '0,36'
+$pnlBetterDiscord.Size = '864,550'
+$pnlBetterDiscord.BorderStyle = [Windows.Forms.BorderStyle]::None
+$pnlBetterDiscord.Visible = $false
+
+function Update-TabButtons {
+    $t = Get-ActiveTokens
+    if (-not $t) { return }
+    if ($script:activeTab -eq 'themes') {
+        $btnTabThemes.BackColor = C $t.surfaceRaised
+        $btnTabThemes.ForeColor = C $t.textPrimary
+        $btnTabThemes.FlatAppearance.BorderColor = C $t.borderHighlight
+        $btnTabThemes.Font = $FONTB
+
+        $btnTabBetterDiscord.BackColor = C $t.background
+        $btnTabBetterDiscord.ForeColor = C $t.textSecondary
+        $btnTabBetterDiscord.FlatAppearance.BorderColor = C $t.borderDark
+        $btnTabBetterDiscord.Font = $FONT
+    } else {
+        $btnTabBetterDiscord.BackColor = C $t.surfaceRaised
+        $btnTabBetterDiscord.ForeColor = C $t.textPrimary
+        $btnTabBetterDiscord.FlatAppearance.BorderColor = C $t.borderHighlight
+        $btnTabBetterDiscord.Font = $FONTB
+
+        $btnTabThemes.BackColor = C $t.background
+        $btnTabThemes.ForeColor = C $t.textSecondary
+        $btnTabThemes.FlatAppearance.BorderColor = C $t.borderDark
+        $btnTabThemes.Font = $FONT
+    }
+}
+
+function Set-ActiveTab([string]$tab) {
+    $script:activeTab = $tab
+    $isThemes = ($tab -eq 'themes')
+    $pnlThemes.Visible = $isThemes
+    $pnlBetterDiscord.Visible = (-not $isThemes)
+    Update-TabButtons
+}
+
+$btnTabThemes.Add_Click({ Set-ActiveTab 'themes' })
+$btnTabBetterDiscord.Add_Click({ Set-ActiveTab 'bd' })
 
 # Theme list ------------------------------------------------------------------
 $lblThemes = New-Object Windows.Forms.Label
@@ -187,7 +254,7 @@ $lstThemes.IntegralHeight = $false
 # Personal source/portable apps are a different maintenance surface from common
 # installed software. Two real lists keep that distinction visible and keyboard-
 # reachable; fake separator rows inside one checklist would be selectable noise.
-$MY_APP_KEYS = @('codenomad', 'workbuddy', 'saipenview', 'smartvac', 'wildrift')
+$MY_APP_KEYS = @('codenomad', 'workbuddy')
 $lblMyApps = New-Object Windows.Forms.Label
 $lblMyApps.Text = (T 'MyApps'); $lblMyApps.Location = '12,248'; $lblMyApps.Size = '200,16'; $lblMyApps.Font = $FONTB
 $clbMyApps = New-Object Windows.Forms.CheckedListBox
@@ -202,29 +269,14 @@ $clbPopularApps.BorderStyle = 'FixedSingle'; $clbPopularApps.CheckOnClick = $tru
 $TARGET_LISTS = @($clbMyApps, $clbPopularApps)
 
 # ---- REMEMBERED FOLDERS FOR THE SOURCE-TREE TARGETS ----
-# Three targets patch a source file in a checkout, so only the user knows where it
-# is. Asking was correct; asking EVERY TIME was not -- the answer does not change
-# between runs, and re-picking the same folder to tick the same box is the kind of
-# friction that makes someone stop using the installer.
-#
 # Stored under %APPDATA%, deliberately NOT beside the script: the repo is a git
 # checkout that gets pulled, moved and re-cloned, and a per-machine preference has
 # no business in it (nor in .gitignore, where it would be one more thing to
 # remember). A remembered folder that no longer exists is dropped on load rather
 # than trusted, so a moved checkout asks once more instead of silently patching
 # nothing.
-#
-# Right-click a target to change its folder -- that is the whole escape hatch, and
-# it is why the dialog no longer opens on tick.
-# Defaults seed the folder dialog when a target has no remembered path. They are
-# derived from the environment, never a personal-machine literal: these three are
-# dev tools that live anywhere, so the dialog opens at the user's home folder.
-$PATH_TARGETS = @('saipenview', 'smartvac', 'wildrift')
-$PATH_DEFAULTS = @{
-    'saipenview' = $env:USERPROFILE
-    'smartvac'   = $env:USERPROFILE
-    'wildrift'   = $env:USERPROFILE
-}
+$PATH_TARGETS = @()
+$PATH_DEFAULTS = @{}
 $script:pathsFile = Join-Path $env:APPDATA 'Wintage\paths.json'
 $script:customPaths = @{}
 
@@ -427,19 +479,53 @@ $chkLogonTask.Text = (T 'LogonTask')
 $chkLogonTask.Location = '640,436'; $chkLogonTask.Size = '212,20'
 $chkLogonTask.Font = $FONT
 $chkLogonTask.FlatStyle = 'Flat'
-$chkLogonTask.Add_CheckedChanged({
+# SRC-006:R006: UI state assignment and user intent are separate concerns.
+# This guard makes every PROGRAMATIC Checked assignment (startup init, failure
+# rollback) invisible to the handler; only a real user click may dispatch a
+# task command. It must be initialized before the handler below is attached.
+$script:suppressLogonTaskEvent = $false
+# SRC-006:R006: initialize the checkbox from the REAL task state BEFORE the
+# event handler exists. The old order (handler attached at construction, the
+# state assignment hundreds of lines later at startup) made the assignment
+# itself fire CheckedChanged, so merely OPENING the GUI re-Registered an
+# existing logon task as a background side effect.
+$existingTask = Get-ScheduledTask -TaskName 'Wintage Reapply at Logon' -ErrorAction SilentlyContinue
+if ($existingTask) {
+    $script:suppressLogonTaskEvent = $true
+    $chkLogonTask.Checked = $true
+    $script:suppressLogonTaskEvent = $false
+}
+# The toggle logic lives in one function so the regression suite can drive it
+# deterministically (stubbed child invoker, no WinForms message pump).
+function Invoke-LogonTaskToggle {
+    param([bool]$Wanted)
     $taskArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $here 'install.ps1'))
-    if ($chkLogonTask.Checked) {
+    if ($Wanted) {
         $taskArgs += '-RegisterLogonTask'
     } else {
         $taskArgs += '-UnregisterLogonTask'
     }
     $child = Invoke-ChildPowerShell $taskArgs
-    foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+    if ($child -and $child.Output) {
+        foreach ($line in @($child.Output)) { if ($null -ne $line) { Say-Log "$line" } }
+    }
     if ($child.ExitCode -ne 0) {
         Say-Log "logon task: FAILED (exit $($child.ExitCode))"
-        $chkLogonTask.Checked = -not $chkLogonTask.Checked
+        # SRC-006:R006: roll the checkbox back VISUALLY, under suppression.
+        # The old code flipped Checked bare, which re-entered this handler and
+        # dispatched the INVERSE task command -- a failed Register issued a
+        # real Unregister that could delete a task the user already had.
+        $script:suppressLogonTaskEvent = $true
+        try { $chkLogonTask.Checked = -not $chkLogonTask.Checked } finally { $script:suppressLogonTaskEvent = $false }
+        return $false
     }
+    return $true
+}
+$chkLogonTask.Add_CheckedChanged({
+    # SRC-006:R006: programmatic state changes must never reach the task
+    # commands; suppressed means some other code path owns this assignment.
+    if ($script:suppressLogonTaskEvent) { return }
+    Invoke-LogonTaskToggle ([bool]$chkLogonTask.Checked) | Out-Null
 })
 
 # ---- FREEBUFF COMPLETION SOUND ----
@@ -740,29 +826,306 @@ $log.Multiline = $true; $log.ScrollBars = 'Vertical'; $log.ReadOnly = $true
 $log.BorderStyle = 'FixedSingle'
 
 $status = New-Object Windows.Forms.Label
-$status.Location = '12,546'; $status.Size = '840,26'
+$status.Location = '12,590'; $status.Size = '840,24'
+
+# ---- BETTERDISCORD TAB CONTROLS ----
+$lblBdTitle = New-Object Windows.Forms.Label
+$lblBdTitle.Text = (T 'BdPlugins'); $lblBdTitle.Location = '12,10'; $lblBdTitle.Size = '400,18'; $lblBdTitle.Font = $FONTB
+
+$lblBdStatus = New-Object Windows.Forms.Label
+$lblBdStatus.Location = '12,32'; $lblBdStatus.Size = '820,18'; $lblBdStatus.Font = $FONT
+
+$lblBdList = New-Object Windows.Forms.Label
+$lblBdList.Text = 'AVAILABLE PLUGINS'; $lblBdList.Location = '12,56'; $lblBdList.Size = '360,16'; $lblBdList.Font = $FONTB
+
+$clbBdPlugins = New-Object Windows.Forms.CheckedListBox
+$clbBdPlugins.Location = '12,74'; $clbBdPlugins.Size = '360,226'; $clbBdPlugins.Font = $FONT
+$clbBdPlugins.BorderStyle = 'FixedSingle'; $clbBdPlugins.CheckOnClick = $true; $clbBdPlugins.IntegralHeight = $false
+
+$btnBdSelectAll = New-Object Windows.Forms.Button
+$btnBdSelectAll.Text = (T 'SelectAll'); $btnBdSelectAll.Location = '12,306'; $btnBdSelectAll.Size = '96,24'; $btnBdSelectAll.Font = $FONT
+$btnBdSelectAll.FlatStyle = 'Flat'; $btnBdSelectAll.FlatAppearance.BorderSize = 0
+
+$btnBdSelectNone = New-Object Windows.Forms.Button
+$btnBdSelectNone.Text = (T 'SelectNone'); $btnBdSelectNone.Location = '116,306'; $btnBdSelectNone.Size = '96,24'; $btnBdSelectNone.Font = $FONT
+$btnBdSelectNone.FlatStyle = 'Flat'; $btnBdSelectNone.FlatAppearance.BorderSize = 0
+
+$lblBdDetails = New-Object Windows.Forms.Label
+$lblBdDetails.Text = 'PLUGIN INFO'; $lblBdDetails.Location = '388,56'; $lblBdDetails.Size = '446,16'; $lblBdDetails.Font = $FONTB
+
+$txtBdDetails = New-Object Windows.Forms.TextBox
+$txtBdDetails.Location = '388,74'; $txtBdDetails.Size = '446,256'; $txtBdDetails.Font = $FONT
+$txtBdDetails.Multiline = $true; $txtBdDetails.ReadOnly = $true; $txtBdDetails.ScrollBars = 'Vertical'
+$txtBdDetails.BorderStyle = 'FixedSingle'
+
+$btnBdApply = New-Object Windows.Forms.Button
+$btnBdApply.Text = (T 'BdInstallSelected'); $btnBdApply.Location = '12,338'; $btnBdApply.Size = '180,30'; $btnBdApply.Font = $FONTB
+$btnBdApply.FlatStyle = 'Flat'; $btnBdApply.FlatAppearance.BorderSize = 0
+
+$btnBdUninstall = New-Object Windows.Forms.Button
+$btnBdUninstall.Text = (T 'BdUninstallSelected'); $btnBdUninstall.Location = '198,338'; $btnBdUninstall.Size = '140,30'; $btnBdUninstall.Font = $FONT
+$btnBdUninstall.FlatStyle = 'Flat'; $btnBdUninstall.FlatAppearance.BorderSize = 0
+
+$btnBdOpenFolder = New-Object Windows.Forms.Button
+$btnBdOpenFolder.Text = (T 'BdOpenFolder'); $btnBdOpenFolder.Location = '388,338'; $btnBdOpenFolder.Size = '180,30'; $btnBdOpenFolder.Font = $FONT
+$btnBdOpenFolder.FlatStyle = 'Flat'; $btnBdOpenFolder.FlatAppearance.BorderSize = 0
+
+$btnBdRefresh = New-Object Windows.Forms.Button
+$btnBdRefresh.Text = (T 'BdRefresh'); $btnBdRefresh.Location = '576,338'; $btnBdRefresh.Size = '130,30'; $btnBdRefresh.Font = $FONT
+$btnBdRefresh.FlatStyle = 'Flat'; $btnBdRefresh.FlatAppearance.BorderSize = 0
+
+$lblBdLog = New-Object Windows.Forms.Label
+$lblBdLog.Text = 'LOG'; $lblBdLog.Location = '12,376'; $lblBdLog.Size = '200,16'; $lblBdLog.Font = $FONTB
+
+$txtBdLog = New-Object Windows.Forms.TextBox
+$txtBdLog.Location = '12,394'; $txtBdLog.Size = '822,136'; $txtBdLog.Font = $FONT
+$txtBdLog.Multiline = $true; $txtBdLog.ReadOnly = $true; $txtBdLog.ScrollBars = 'Vertical'
+$txtBdLog.BorderStyle = 'FixedSingle'
+
+$script:bdPluginsSourceDir = Join-Path $root 'desktop\targets\betterdiscord\plugins'
+$script:bdPluginsInstallDir = Join-Path $env:APPDATA 'BetterDiscord\plugins'
+$script:bdPluginsJsonPath = Join-Path $env:APPDATA 'BetterDiscord\data\stable\plugins.json'
+
+function Say-BdLog([string]$msg) {
+    if (-not $txtBdLog) { return }
+    $line = (Get-Date -Format 'HH:mm:ss') + ' ' + $msg
+    if ($txtBdLog.Text) { $txtBdLog.AppendText([Environment]::NewLine + $line) }
+    else { $txtBdLog.Text = $line }
+    $txtBdLog.SelectionStart = $txtBdLog.Text.Length
+    $txtBdLog.ScrollToCaret()
+}
+
+function Get-BdPluginDescription([string]$pluginName) {
+    switch ($pluginName) {
+        'GoodEmoji' { return (T 'BdGoodEmojiDesc') }
+        'RemoveStickers' { return (T 'BdRemoveStickersDesc') }
+        default { return "Plugin: $pluginName" }
+    }
+}
+
+function Load-BdPlugins {
+    $selectedName = $null
+    if ($clbBdPlugins.SelectedIndex -ge 0) {
+        $selectedName = ($clbBdPlugins.Items[$clbBdPlugins.SelectedIndex] -split '\s+')[0]
+    }
+
+    $clbBdPlugins.Items.Clear()
+    $installed = @{}
+    if (Test-Path $script:bdPluginsInstallDir) {
+        Get-ChildItem $script:bdPluginsInstallDir -Filter '*.plugin.js' -ErrorAction SilentlyContinue | ForEach-Object {
+            $pluginName = $_.BaseName -replace '\.plugin$', ''
+            $installed[$pluginName] = $_.FullName
+        }
+    }
+
+    $sourceFiles = @()
+    if (Test-Path $script:bdPluginsSourceDir) {
+        $sourceFiles = @(Get-ChildItem $script:bdPluginsSourceDir -Filter '*.plugin.js' -ErrorAction SilentlyContinue)
+    }
+
+    $tagInst = T 'BdInstalled'
+    $tagAvail = T 'BdAvailable'
+    $selectIdx = -1
+    foreach ($f in $sourceFiles) {
+        $name = $f.BaseName -replace '\.plugin$', ''
+        $isInst = $installed.ContainsKey($name)
+        $label = if ($isInst) { "$name ($tagInst)" } else { "$name ($tagAvail)" }
+        [void]$clbBdPlugins.Items.Add($label)
+        $idx = $clbBdPlugins.Items.Count - 1
+        if ($isInst) {
+            $clbBdPlugins.SetItemChecked($idx, $true)
+        }
+        if ($selectedName -and $name -eq $selectedName) {
+            $selectIdx = $idx
+        }
+    }
+
+    if ($selectIdx -ge 0) {
+        $clbBdPlugins.SelectedIndex = $selectIdx
+    } elseif ($clbBdPlugins.Items.Count -gt 0) {
+        $clbBdPlugins.SelectedIndex = 0
+    }
+
+    $bdExists = Test-Path $script:bdPluginsInstallDir
+    if ($bdExists) {
+        $lblBdStatus.Text = [string]::Format((T 'BdStatusReady'), $script:bdPluginsInstallDir)
+    } else {
+        $lblBdStatus.Text = [string]::Format((T 'BdStatusNotFound'), $script:bdPluginsInstallDir)
+    }
+
+    if ($clbBdPlugins.SelectedIndex -ge 0) {
+        $activeName = ($clbBdPlugins.Items[$clbBdPlugins.SelectedIndex] -split '\s+')[0]
+        $txtBdDetails.Text = Get-BdPluginDescription $activeName
+    } else {
+        $txtBdDetails.Text = ''
+    }
+}
+
+$clbBdPlugins.Add_SelectedIndexChanged({
+    $idx = $clbBdPlugins.SelectedIndex
+    if ($idx -lt 0) { return }
+    $pluginName = ($clbBdPlugins.Items[$idx] -split '\s+')[0]
+    $txtBdDetails.Text = Get-BdPluginDescription $pluginName
+})
+
+$btnBdSelectAll.Add_Click({
+    for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) { $clbBdPlugins.SetItemChecked($i, $true) }
+})
+
+$btnBdSelectNone.Add_Click({
+    for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) { $clbBdPlugins.SetItemChecked($i, $false) }
+})
+
+$btnBdApply.Add_Click({
+    try {
+        if (-not (Test-Path $script:bdPluginsInstallDir)) {
+            New-Item -ItemType Directory -Force -Path $script:bdPluginsInstallDir | Out-Null
+        }
+
+        $pluginsJsonData = $null
+        if (Test-Path $script:bdPluginsJsonPath) {
+            try { $pluginsJsonData = (Read-Utf8 $script:bdPluginsJsonPath) | ConvertFrom-Json } catch { }
+        }
+        if (-not $pluginsJsonData) { $pluginsJsonData = [pscustomobject]@{} }
+
+        for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) {
+            $itemText = $clbBdPlugins.Items[$i]
+            $pluginName = ($itemText -split '\s+')[0]
+            $isChecked = $clbBdPlugins.GetItemChecked($i)
+            $srcFile = Join-Path $script:bdPluginsSourceDir "$pluginName.plugin.js"
+            $destFile = Join-Path $script:bdPluginsInstallDir "$pluginName.plugin.js"
+
+            if ($isChecked) {
+                if (Test-Path $srcFile) {
+                    Copy-Item $srcFile $destFile -Force
+                    $pluginsJsonData | Add-Member -NotePropertyName $pluginName -NotePropertyValue $true -Force
+                    Say-BdLog "Installed: $pluginName -> $destFile (Enabled in BetterDiscord)"
+                }
+            } else {
+                if (Test-Path $destFile) {
+                    Remove-Item $destFile -Force -ErrorAction SilentlyContinue
+                    $pluginsJsonData | Add-Member -NotePropertyName $pluginName -NotePropertyValue $false -Force
+                    Say-BdLog "Removed: $pluginName from $destFile"
+                }
+            }
+        }
+
+        if (Test-Path (Split-Path $script:bdPluginsJsonPath -Parent)) {
+            $jsonStr = $pluginsJsonData | ConvertTo-Json
+            [System.IO.File]::WriteAllText($script:bdPluginsJsonPath, $jsonStr, (New-Object System.Text.UTF8Encoding $false))
+        }
+
+        Load-BdPlugins
+        Say-BdLog "BetterDiscord plugins applied successfully."
+        $status.Text = "BetterDiscord plugins updated."
+    } catch {
+        Say-BdLog ("FAILED to apply plugins: " + $_.Exception.Message)
+        $status.Text = "Failed to apply plugins - see log."
+    }
+})
+
+$btnBdUninstall.Add_Click({
+    try {
+        for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) {
+            $itemText = $clbBdPlugins.Items[$i]
+            $pluginName = ($itemText -split '\s+')[0]
+            $destFile = Join-Path $script:bdPluginsInstallDir "$pluginName.plugin.js"
+            if (Test-Path $destFile) {
+                Remove-Item $destFile -Force -ErrorAction SilentlyContinue
+                Say-BdLog "Uninstalled: $pluginName"
+            }
+        }
+        if (Test-Path $script:bdPluginsJsonPath) {
+            try {
+                $pluginsJsonData = (Read-Utf8 $script:bdPluginsJsonPath) | ConvertFrom-Json
+                $pluginsJsonData | Add-Member -NotePropertyName 'GoodEmoji' -NotePropertyValue $false -Force
+                $pluginsJsonData | Add-Member -NotePropertyName 'RemoveStickers' -NotePropertyValue $false -Force
+                $jsonStr = $pluginsJsonData | ConvertTo-Json
+                [System.IO.File]::WriteAllText($script:bdPluginsJsonPath, $jsonStr, (New-Object System.Text.UTF8Encoding $false))
+            } catch { }
+        }
+        Load-BdPlugins
+        Say-BdLog "All Wintage BetterDiscord plugins uninstalled."
+        $status.Text = "BetterDiscord plugins uninstalled."
+    } catch {
+        Say-BdLog ("FAILED to uninstall plugins: " + $_.Exception.Message)
+    }
+})
+
+$btnBdOpenFolder.Add_Click({
+    if (Test-Path $script:bdPluginsInstallDir) {
+        [System.Diagnostics.Process]::Start('explorer.exe', $script:bdPluginsInstallDir) | Out-Null
+    } else {
+        Say-BdLog "BetterDiscord folder does not exist yet ($script:bdPluginsInstallDir)"
+    }
+})
+
+$btnBdRefresh.Add_Click({
+    Load-BdPlugins
+    Say-BdLog (T 'BdStatusRefreshed')
+})
 
 # ---- LANGUAGE ----
 # English by default (i18n.ps1), the machine's saved pick preselected. A switch
 # re-strings every translatable control live -- no relaunch, no second code path.
 $lblLanguage = New-Object Windows.Forms.Label
-$lblLanguage.Text = (T 'LanguageLabel'); $lblLanguage.Location = '640,10'; $lblLanguage.Size = '64,16'; $lblLanguage.Font = $FONTB
+$lblLanguage.Text = (T 'LanguageLabel'); $lblLanguage.Location = '630,12'; $lblLanguage.Size = '78,16'; $lblLanguage.Font = $FONTB
 $cmbLanguage = New-Object Windows.Forms.ComboBox
-$cmbLanguage.Location = '706,7'; $cmbLanguage.Size = '146,21'
-$cmbLanguage.DropDownStyle = 'DropDownList'
+$cmbLanguage.Location = '712,9'; $cmbLanguage.Size = '140,21'
+$cmbLanguage.DropDownStyle = [Windows.Forms.ComboBoxStyle]::DropDownList
+$cmbLanguage.FlatStyle = [Windows.Forms.FlatStyle]::Flat
+$cmbLanguage.DrawMode = [Windows.Forms.DrawMode]::OwnerDrawFixed
+$cmbLanguage.ItemHeight = 16
 foreach ($l in (Get-I18nLocales)) { [void]$cmbLanguage.Items.Add($l) }
 $script:currentLocale = if ($cmbLanguage.Items -contains $script:SavedLocale) { $script:SavedLocale } else { 'en' }
 $cmbLanguage.SelectedItem = $script:currentLocale
 
+$cmbLanguage.Add_DrawItem({
+    param($s, $e)
+    if ($e.Index -lt 0) { return }
+    $t = Get-ActiveTokens
+    if (-not $t) { return }
+    $g = $e.Graphics
+    $isSel = ($e.State -band [Windows.Forms.DrawItemState]::Selected) -ne 0
+    $bgCol = if ($isSel) { C $t.surfaceRaised } else { C $t.compareBack }
+    $textCol = C $t.textPrimary
+    $bBrush = New-Object Drawing.SolidBrush $bgCol
+    $tBrush = New-Object Drawing.SolidBrush $textCol
+    try {
+        $g.FillRectangle($bBrush, $e.Bounds)
+        $text = $cmbLanguage.Items[$e.Index]
+        $g.DrawString($text, $FONT, $tBrush, $e.Bounds.Left + 2, $e.Bounds.Top + 1)
+        if ($isSel) {
+            $pen = New-Object Drawing.Pen (C $t.borderHighlight)
+            $g.DrawRectangle($pen, $e.Bounds.Left, $e.Bounds.Top, $e.Bounds.Width - 1, $e.Bounds.Height - 1)
+            $pen.Dispose()
+        }
+    } finally {
+        $bBrush.Dispose(); $tBrush.Dispose()
+    }
+})
+
 function Update-GuiStrings {
     $form.Text = (T 'WintageInstallerTitle')
+    $btnTabThemes.Text = (T 'TabThemes')
+    $btnTabBetterDiscord.Text = (T 'TabBetterDiscord')
     $lblThemes.Text = (T 'Palettes'); $lblMyApps.Text = (T 'MyApps'); $lblPopularApps.Text = (T 'PopularApps')
     $lblPreview.Text = (T 'Preview'); $lblTokens.Text = (T 'Tokens'); $lblLanguage.Text = (T 'LanguageLabel')
     $btnSelectAll.Text = (T 'SelectAll'); $btnSelectNone.Text = (T 'SelectNone')
     $btnApply.Text = (T 'Apply'); $btnSave.Text = (T 'Save'); $btnDelCustom.Text = (T 'DelCustom'); $btnRevert.Text = (T 'Revert')
     $chkLogonTask.Text = (T 'LogonTask'); $btnFbSoundCopy.Text = (T 'FbSoundCopy')
     $status.Text = (T 'StatusHint')
+    $lblBdTitle.Text = (T 'BdPlugins')
+    $lblBdList.Text = (T 'BdAvailablePlugins')
+    $lblBdDetails.Text = (T 'BdPluginInfo')
+    $lblBdLog.Text = (T 'BdLog')
+    $btnBdApply.Text = (T 'BdInstallSelected')
+    $btnBdUninstall.Text = (T 'BdUninstallSelected')
+    $btnBdOpenFolder.Text = (T 'BdOpenFolder')
+    $btnBdRefresh.Text = (T 'BdRefresh')
+    $btnBdSelectAll.Text = (T 'SelectAll'); $btnBdSelectNone.Text = (T 'SelectNone')
     Update-FbSoundButton
+    Load-BdPlugins
 }
 
 $cmbLanguage.Add_SelectedIndexChanged({
@@ -771,8 +1134,13 @@ $cmbLanguage.Add_SelectedIndexChanged({
     Update-GuiStrings
 })
 
-$form.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
-        $lblTokens, $swatchPanel, $lblInfo, $lblLanguage, $cmbLanguage, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $chkLogonTask, $btnFbSound, $btnFbSoundCopy, $log, $status))
+$pnlThemes.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
+        $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $chkLogonTask, $btnFbSound, $btnFbSoundCopy, $log))
+
+$pnlBetterDiscord.Controls.AddRange(@($lblBdTitle, $lblBdStatus, $lblBdList, $clbBdPlugins, $btnBdSelectAll, $btnBdSelectNone, $lblBdDetails, $txtBdDetails,
+        $btnBdApply, $btnBdUninstall, $btnBdOpenFolder, $btnBdRefresh, $lblBdLog, $txtBdLog))
+
+$form.Controls.AddRange(@($btnTabThemes, $btnTabBetterDiscord, $lblLanguage, $cmbLanguage, $pnlThemes, $pnlBetterDiscord, $status))
 $lstThemes.TabIndex = 0; $clbMyApps.TabIndex = 1; $clbPopularApps.TabIndex = 2
 $btnSelectAll.TabIndex = 3; $btnSelectNone.TabIndex = 4; $btnApply.TabIndex = 5
 $btnSave.TabIndex = 6; $btnDelCustom.TabIndex = 7; $btnRevert.TabIndex = 8; $btnFbSound.TabIndex = 9; $btnFbSoundCopy.TabIndex = 10; $log.TabIndex = 11
@@ -1057,7 +1425,14 @@ function Update-Info {
 }
 
 # ---- ACTIONS ----
-function Say-Log($msg) { $log.AppendText($msg + "`r`n"); $log.SelectionStart = $log.TextLength; $log.ScrollToCaret() }
+function Say-Log($msg) {
+    if ($null -eq $msg) { return }
+    if ($log -and -not $log.IsDisposed) {
+        $log.AppendText("$msg`r`n")
+        $log.SelectionStart = $log.TextLength
+        $log.ScrollToCaret()
+    }
+}
 
 # Run a child powershell and return { Output; ExitCode } WITHOUT letting EAP=Stop
 # turn the child's stderr into a terminating error mid-loop (the PS 5.1
@@ -1079,7 +1454,9 @@ function Invoke-NodeTool([string[]]$argsList) {
     $out = & node @argsList 2>&1
     $code = $LASTEXITCODE
     $ErrorActionPreference = $prev
-    foreach ($line in @($out)) { Say-Log ($line.ToString()) }
+    if ($out) {
+        foreach ($line in @($out)) { if ($null -ne $line) { Say-Log "$line" } }
+    }
     $code
 }
 
@@ -1104,19 +1481,43 @@ function Start-BatchJob([string[]]$argsList, [scriptblock]$onDone) {
     } -ArgumentList (, $argsList)
     $timer = New-Object Windows.Forms.Timer
     $timer.Interval = 250
+    # PS SCOPING (the batch-worker crash dialog): a scriptblock attached via
+    # Add_Tick is invoked by the message pump as a bare delegate, re-bound
+    # against the SCRIPT scope -- this function's locals are NOT visible
+    # there. The pre-fix tick read $finished/$job/$timer as null and died on
+    # "$timer.Stop()" with "You cannot call a method on a null-valued
+    # expression" on every 250ms tick. All tick state therefore lives in ONE
+    # script-scope holder; the Apply/Revert buttons are disabled for the
+    # whole batch, so two live batches never race over it.
+    $script:batchState = @{ Job = $job; Timer = $timer; Done = $false; OnDone = $onDone }
     $timer.Add_Tick({
-        if ($job.State -eq 'Running') { return }
-        $timer.Stop()
-        $timer.Dispose()
+        $st = $script:batchState
+        if ($null -eq $st -or $st.Done) { return }
+        if ($st.Job -and $st.Job.State -eq 'Running') { return }
+        $st.Done = $true
+        $st.Timer.Stop()
+        $st.Timer.Dispose()
         try {
-            $result = Receive-Job $job
+            $result = Receive-Job $st.Job
+            if ($result -is [array]) {
+                $customObj = $result | Where-Object { $_ -and ($_.PSObject.Properties['Output']) } | Select-Object -Last 1
+                if ($customObj) { $result = $customObj }
+                else { $result = [pscustomobject]@{ Output = @($result); ExitCode = 0 } }
+            }
+            if (-not $result) {
+                $result = [pscustomobject]@{ Output = @(); ExitCode = 1 }
+            }
         } catch {
             Say-Log ('BATCH FAILED: ' + $_.Exception.Message)
             $result = [pscustomobject]@{ Output = @(); ExitCode = 1 }
         } finally {
-            Remove-Job $job -Force -ErrorAction SilentlyContinue
+            if ($st.Job) { Remove-Job $st.Job -Force -ErrorAction SilentlyContinue }
         }
-        & $onDone $result
+        try {
+            & $st.OnDone $result
+        } catch {
+            Say-Log ('BATCH COMPLETION HANDLER FAILED: ' + $_.Exception.Message)
+        }
     })
     $timer.Start()
     Say-Log 'batch worker started - the window stays responsive while it runs.'
@@ -1128,9 +1529,8 @@ function Get-BatchArgs([string[]]$keys, [string]$slug, [switch]$isRevert) {
     $argsList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here 'install.ps1'), "-Selected", ($keys -join ','))
     if (-not $isRevert) { $argsList += @("-Palette", $slug) }
     else { $argsList += "-Revert" }
-    if ($keys -contains 'saipenview' -and $script:customPaths.ContainsKey('saipenview')) { $argsList += @("-SaipenviewPath", $script:customPaths['saipenview']) }
-    if ($keys -contains 'smartvac' -and $script:customPaths.ContainsKey('smartvac')) { $argsList += @("-SmartVacPath", $script:customPaths['smartvac']) }
-    if ($keys -contains 'wildrift' -and $script:customPaths.ContainsKey('wildrift')) { $argsList += @("-WildRiftPath", $script:customPaths['wildrift']) }
+    if ($keys -contains 'notepadplusplus' -and $script:customPaths.ContainsKey('notepadplusplus')) { $argsList += @("-NotepadPlusPlusPath", $script:customPaths['notepadplusplus']) }
+    if ($keys -contains 'cinema4d' -and $script:customPaths.ContainsKey('cinema4d')) { $argsList += @("-Cinema4DPath", $script:customPaths['cinema4d']) }
     $argsList
 }
 
@@ -1139,8 +1539,10 @@ function Get-BatchArgs([string[]]$keys, [string]$slug, [switch]$isRevert) {
 # summary. Returns the de-duplicated key list.
 function Get-BatchFailures($result) {
     $failed = @()
+    if (-not $result -or -not $result.Output) { return $failed }
     foreach ($line in @($result.Output)) {
-        $s = $line.ToString()
+        if ($null -eq $line) { continue }
+        $s = "$line"
         $m = [regex]::Match($s, '^(\S+)\s*:\s*FAILED')
         if ($m.Success) { $failed += $m.Groups[1].Value }
         $m2 = [regex]::Match($s, 'failed \((.*?)\)\.?\s*$')
@@ -1230,9 +1632,11 @@ $btnApply.Add_Click({
             Start-BatchJob (Get-BatchArgs $keys $slug) {
                 param($child)
                 try {
-                    foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+                    if ($child -and $child.Output) {
+                        foreach ($line in @($child.Output)) { if ($null -ne $line) { Say-Log "$line" } }
+                    }
                     $failed = @(Get-BatchFailures $child)
-                    if ($child.ExitCode -ne 0 -and -not $failed.Count) { $failed = @($keys) }
+                    if ($child -and $child.ExitCode -ne 0 -and -not $failed.Count) { $failed = @($keys) }
                     Load-Targets
                     Update-FbButtonsVisibility
                     if ($failed.Count) {
@@ -1278,9 +1682,11 @@ $btnRevert.Add_Click({
             Start-BatchJob (Get-BatchArgs $keys '' -isRevert) {
                 param($child)
                 try {
-                    foreach ($line in $child.Output) { Say-Log ($line.ToString()) }
+                    if ($child -and $child.Output) {
+                        foreach ($line in @($child.Output)) { if ($null -ne $line) { Say-Log "$line" } }
+                    }
                     $failed = @(Get-BatchFailures $child)
-                    if ($child.ExitCode -ne 0 -and -not $failed.Count) { $failed = @($keys) }
+                    if ($child -and $child.ExitCode -ne 0 -and -not $failed.Count) { $failed = @($keys) }
                     Load-Targets
                     if ($failed.Count) {
                         $status.Text = "Revert incomplete: $($failed.Count) target(s) failed ($($failed -join ', ')). See the log."
@@ -1325,21 +1731,33 @@ function Skin-Self {
     if (-not $t) { return }
     $form.BackColor = C $t.background
     $form.ForeColor = C $t.textPrimary
-    foreach ($c in @($lblThemes, $lblMyApps, $lblPopularApps, $lblPreview, $lblTokens, $lblInfo, $status)) {
+
+    $pnlThemes.BackColor = C $t.background
+    $pnlThemes.ForeColor = C $t.textPrimary
+    $pnlBetterDiscord.BackColor = C $t.background
+    $pnlBetterDiscord.ForeColor = C $t.textPrimary
+
+    Update-TabButtons
+
+    foreach ($c in @($lblThemes, $lblMyApps, $lblPopularApps, $lblPreview, $lblTokens, $lblInfo, $lblLanguage, $status,
+                    $chkLogonTask, $lblBdTitle, $lblBdStatus, $lblBdList, $lblBdDetails, $lblBdLog)) {
         $c.BackColor = C $t.background; $c.ForeColor = C $t.textPrimary
     }
-    foreach ($c in @($lstThemes, $clbMyApps, $clbPopularApps, $log)) {
+    foreach ($c in @($lstThemes, $clbMyApps, $clbPopularApps, $log, $cmbLanguage, $clbBdPlugins, $txtBdDetails, $txtBdLog)) {
         $c.BackColor = C $t.compareBack; $c.ForeColor = C $t.textPrimary
     }
-    foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnSelectAll, $btnSelectNone)) {
+    foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnSelectAll, $btnSelectNone,
+                    $btnBdApply, $btnBdUninstall, $btnBdOpenFolder, $btnBdRefresh, $btnBdSelectAll, $btnBdSelectNone)) {
         $b.BackColor = C $t.surfaceRaised; $b.ForeColor = C $t.textPrimary
         $b.FlatAppearance.BorderColor = C $t.borderHighlight
         $b.FlatAppearance.BorderSize = 2
     }
     $swatchPanel.BackColor = C $t.backgroundSoft
+    $cmbLanguage.Invalidate()
 }
 
 Load-Targets
+Load-BdPlugins
 Update-FbButtonsVisibility
 # The startup palette also owns the first row. Selecting Golden Default while
 # leaving Dark Golden above it looked like a stale default even though Apply used
@@ -1355,17 +1773,17 @@ Skin-Self
 $lstThemes.Add_SelectedIndexChanged({ Skin-Self })
 Update-GuiStrings
 
-# The folder is asked for once and remembered, so the way to CHANGE it has to be
-# discoverable somewhere. A tooltip rather than a longer label: the label is 200px
-# wide with the preview panel right beside it, and a clipped hint is no hint.
-$tip = New-Object Windows.Forms.ToolTip
-$tip.SetToolTip($clbMyApps, "Right-click saipenview / smartvac / wildrift to change its folder." + [Environment]::NewLine + "Asked once, then remembered in $($script:pathsFile).")
+if ($PATH_TARGETS.Count -gt 0) {
+    $tip = New-Object Windows.Forms.ToolTip
+    $tip.SetToolTip($clbMyApps, "Right-click a target to change its folder." + [Environment]::NewLine + "Asked once, then remembered in $($script:pathsFile).")
+}
 
 # A preview's temp PCM WAV is deleted on teardown; closing the window is the
 # last teardown of the session, so sweep it there too.
 $form.Add_FormClosed({ Stop-FbSoundPreview })
 
-$existing = Get-ScheduledTask -TaskName 'Wintage Reapply at Logon' -ErrorAction SilentlyContinue
-if ($existing) { $chkLogonTask.Checked = $true }
+# SRC-006:R006: the checkbox state was already initialized from the real task
+# state BEFORE its event handler was attached (see the checkbox construction);
+# assigning it here instead would re-introduce the open-the-GUI-registers bug.
 
 [void]$form.ShowDialog()

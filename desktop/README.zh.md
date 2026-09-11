@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 带颜色色块的主题列表、这台机器上找到的目标、实时 Win95 预览，以及全部 21 个可编辑色板形式的颜色令牌。编辑任何色板都会把调色板分叉为 **Custom**，而不是在你背后改动已发布主题。右侧面板实时显示三个承载文本令牌的 WCAG 对比度 — 在那里 FAIL 的调色板反正也会被构建门禁拒绝，所以在 Apply 之前而不是之后看到它更好。
 
-目标被分成两个键盘可到达的列表：**MY APPS** 包含便携式/源码树的 CodeNomad、SAIPENVIEW、SmartVac 和 WildRift 工具；**POPULAR APPS** 包含 Windows、OBS、终端、编辑器和其他已安装软件。ALL/NONE 和 Apply/Revert 在保持分组不变的前提下跨两个列表操作。
+目标被分成两个键盘可到达的列表：**MY APPS** 包含便携式/源码树的 CodeNomad, WorkBuddy 工具；**POPULAR APPS** 包含 Windows、OBS、终端、编辑器和其他已安装软件。ALL/NONE 和 Apply/Revert 在保持分组不变的前提下跨两个列表操作。
 
 窗口穿着它即将安装的调色板。那是最快的预览，也让工具保持诚实：一个让此窗口不可读的调色板，会肉眼可见地不可读。
 
@@ -46,10 +46,8 @@ Apply 会向外调用 `install.ps1`。安装主题的代码路径只有一条，
 | `claude` | Electron shim，就地修补 — 见下文 | no — 更新会生成新的 `app-<version>` 文件夹 |
 | `mpchc` | 注册表，仅深色主题 + OSD 排版 | no — MPC-HC 退出时会重写其设置 |
 | `obsidian` | 每个 vault 的社区主题，一次安装所有调色板 | **yes** — 它存在于你的 vault 中 |
-| `saipenview` | 在 `style.css` 中重写自己的 `:root` 令牌值 | no — 源码文件；pull 后重新运行 |
 | `discord` | 将 CSS 放入 BetterDiscord 自己的主题文件夹 | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` 的 `[Colors]` 键；现有的最近文件过滤器使用调色板链接色 | yes — 那是你的 ini |
-| `smartvac`, `wildrift` | 在应用自己的源码中重写令牌表 | no — 源码文件；pull 后重新运行 |
 
 ### FreeBuff 广告移除
 
@@ -138,11 +136,6 @@ node ..\tools\electron-fuses.js "<path to the app's exe>"
 
 社区主题被写入每个 vault 的 `.obsidian/themes/` — 全部十六个调色板一次写入，与 VS Code 目标完全一样，因此你可以在 **Settings → Appearance** 中切换而无需重新运行任何东西。模板源自 vault 中已有的手工 `VintageWin95` 主题，每个颜色都被替换为它等于的令牌。`-Palette <slug>` 设置安装时哪个处于活动状态；`appearance.json` 首先被备份，`-Revert` 只移除 `Wintage *` 主题并恢复你之前的选择 — 同一 vault 中的手工主题永远不会被触碰。
 
-### SAIPENVIEW
-
-它的前端已经在自己的 `:root` 中声明了 Wintage 令牌名，所以此补丁只重写**令牌值** — 绝不动选择器、字体、边框宽度或内边距。任何影响盒模型的东西都不会改变，因此文本不会移位。这是有意的：早期做法把整个浏览器样式表叠加上去，而 `wintage.css` 是为任意网页编写的 — 通用选择器强制字体、字号阶梯、2px 边框和控制高度。在一个已经有自己布局的应用上，那会移动一切。
-
-通过屏蔽每个十六进制值并与备份做 diff 来验证：结构上相同，只有颜色字面量不同。`--link` 被报告为在那里未声明（它的 markdown 链接读取 `--accentTeal`，而这确实会设置它），因此不注入 — 添加一个应用从不读取的变量只会是死重。
 
 ### MPC-HC (K-Lite)
 

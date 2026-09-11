@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Liste de thèmes avec pastilles de couleur, les cibles trouvées sur cette machine, un aperçu Win95 en direct, et les vingt-et-un tokens de couleur comme nuanciers modifiables. Modifier un nuancier fork la palette en **Custom** plutôt que de changer un thème livré sous vos pieds. Le panneau de droite affiche en direct le contraste WCAG des trois tokens qui portent du texte — une palette qui FAIL à cet endroit est de toute façon refusée par le build gate, donc il vaut mieux la voir avant Apply qu'après.
 
-Les cibles sont réparties en deux listes accessibles au clavier : **MY APPS** contient les outils portables/arbre-source CodeNomad, SAIPENVIEW, SmartVac et WildRift ; **POPULAR APPS** contient Windows, OBS, terminaux, éditeurs et l'autre logiciel installé. ALL/NONE et Apply/Revert agissent sur les deux listes sans changer leur regroupement.
+Les cibles sont réparties en deux listes accessibles au clavier : **MY APPS** contient les outils portables/arbre-source CodeNomad, WorkBuddy ; **POPULAR APPS** contient Windows, OBS, terminaux, éditeurs et l'autre logiciel installé. ALL/NONE et Apply/Revert agissent sur les deux listes sans changer leur regroupement.
 
 La fenêtre porte la palette qu'elle s'apprête à installer. C'est l'aperçu le plus rapide disponible, et cela garde l'outil honnête : une palette qui rend cette fenêtre illisible est visiblement illisible.
 
@@ -46,10 +46,8 @@ Apply délègue à `install.ps1`. Il y a exactement un chemin de code qui instal
 | `claude` | shim Electron, patché sur place — voir ci-dessous | non — une mise à jour crée un nouveau dossier `app-<version>` |
 | `mpchc` | registre, thème sombre + typographie OSD uniquement | non — MPC-HC réécrit ses paramètres à la fermeture |
 | `obsidian` | thème communautaire par vault, toutes les palettes installées d'un coup | **oui** — il vit dans votre vault |
-| `saipenview` | réécrit ses propres valeurs de tokens `:root` dans `style.css` | non — un fichier source ; à relancer après un pull |
 | `discord` | CSS déposé dans le propre dossier de thèmes de BetterDiscord | oui |
 | `totalcmd`, `totalcmd2` | clés `[Colors]` de `wincmd.ini` ; les filtres de fichiers récents existants utilisent la couleur de lien de la palette | oui — c'est votre ini |
-| `smartvac`, `wildrift` | table de tokens réécrite dans le propre source de l'app | non — un fichier source ; à relancer après un pull |
 
 ### Suppression des pubs FreeBuff
 
@@ -138,11 +136,6 @@ La seconde moitié était un problème bien plus silencieux. Le `BrowserWindow` 
 
 Un thème communautaire est écrit dans `.obsidian/themes/` de chaque vault — les seize palettes d'un coup, exactement comme la cible VS Code, donc vous basculez entre elles dans **Settings → Appearance** sans rien relancer. Le modèle a été dérivé du thème fait main `VintageWin95` déjà présent dans le vault, chaque couleur remplacée par le token auquel elle correspondait. `-Palette <slug>` définit laquelle est active à l'installation ; `appearance.json` est sauvegardé d'abord, et `-Revert` ne retire que les thèmes `Wintage *` et restaure votre choix précédent — un thème fait main dans le même vault n'est jamais touché.
 
-### SAIPENVIEW
-
-Son frontend déclare déjà les noms de tokens Wintage dans son propre `:root`, donc ce patch réécrit **seulement les valeurs de tokens** — jamais un sélecteur, une police, une largeur de bordure ou un padding. Rien qui affecte le box model ne change, donc le texte ne peut pas se décaler. C'est délibéré : l'approche antérieure ajoutait toute la feuille de style du navigateur par-dessus, et `wintage.css` est écrite pour des pages web arbitraires — des sélecteurs universels forçant la police, l'échelle de tailles, les bordures de 2px et les hauteurs de contrôles. Sur une app qui a déjà sa propre mise en page, cela déplace tout.
-
-Vérifié en masquant chaque hex et en comparant à la sauvegarde : structurellement identique, seuls les littéraux de couleur diffèrent. `--link` est signalé comme non déclaré là-bas (ses liens markdown lisent `--accentTeal`, que ceci définit) plutôt qu'injecté — ajouter une variable que l'app ne lit jamais serait du poids mort.
 
 ### MPC-HC (K-Lite)
 

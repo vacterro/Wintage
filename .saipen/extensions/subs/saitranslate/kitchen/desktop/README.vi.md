@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Danh sách theme kèm chip màu, các target tìm thấy trên máy này, một preview Win95 trực tiếp, và toàn bộ hai mươi mốt token màu dưới dạng swatch chỉnh sửa được. Sửa bất kỳ swatch nào sẽ fork palette thành **Custom** thay vì đổi theme phát hành ngầm dưới tay bạn. Panel bên phải hiển thị tương phản WCAG trực tiếp cho ba token mang chữ — một palette FAIL ở đó đã bị cổng build từ chối, nên thấy nó trước Apply còn hơn sau.
 
-Target được chia thành hai danh sách truy cập được bằng bàn phím: **MY APPS** chứa các công cụ CodeNomad, SAIPENVIEW, SmartVac và WildRift dạng portable/source-tree; **POPULAR APPS** chứa Windows, OBS, terminal, editor và phần mềm đã cài khác. ALL/NONE và Apply/Revert hoạt động trên cả hai danh sách mà không đổi cách phân nhóm.
+Target được chia thành hai danh sách truy cập được bằng bàn phím: **MY APPS** chứa các công cụ CodeNomad, WorkBuddy dạng portable/source-tree; **POPULAR APPS** chứa Windows, OBS, terminal, editor và phần mềm đã cài khác. ALL/NONE và Apply/Revert hoạt động trên cả hai danh sách mà không đổi cách phân nhóm.
 
 Cửa sổ mặc chính palette mà nó sắp cài. Đó là preview nhanh nhất có được, và giữ công cụ trung thực: một palette làm cửa sổ này khó đọc thì trông khó đọc một cách thấy rõ.
 
@@ -46,10 +46,8 @@ Apply gọi ra ngoài `install.ps1`. Chỉ có đúng một đường code cài 
 | `claude` | shim Electron, vá ngay tại chỗ — xem bên dưới | không — bản cập nhật tạo thư mục `app-<version>` mới |
 | `mpchc` | registry, chỉ theme tối + kiểu chữ OSD | không — MPC-HC tự ghi lại cài đặt khi thoát |
 | `obsidian` | theme cộng đồng mỗi vault, cài mọi palette cùng lúc | **có** — nó nằm trong vault của bạn |
-| `saipenview` | ghi lại giá trị token `:root` của chính nó trong `style.css` | không — file nguồn; chạy lại sau pull |
 | `discord` | CSS thả vào thư mục theme riêng của BetterDiscord | có |
 | `totalcmd`, `totalcmd2` | khoá `[Colors]` trong `wincmd.ini`; bộ lọc file gần đây hiện có dùng màu link của palette | có — nó là ini của bạn |
-| `smartvac`, `wildrift` | bảng token ghi lại trong nguồn của chính app | không — file nguồn; chạy lại sau pull |
 
 ### Gỡ quảng cáo FreeBuff
 
@@ -138,11 +136,6 @@ Nửa sau của vấn đề này êm hơn nhiều. `BrowserWindow` của Claude 
 
 Một theme cộng đồng được ghi vào `.obsidian/themes/` của mọi vault — toàn bộ mười sáu palette cùng lúc, giống hệt target VS Code, nên bạn chuyển giữa chúng trong **Settings → Appearance** mà không cần chạy lại gì. Template được suy ra từ theme `VintageWin95` làm tay đã có trong vault, mỗi màu được thay bằng token mà nó tương đương. `-Palette <slug>` đặt cái nào hoạt động khi cài; `appearance.json` được sao lưu trước, và `-Revert` chỉ gỡ các theme `Wintage *` và khôi phục lựa chọn trước của bạn — một theme làm tay trong cùng vault không bao giờ bị đụng.
 
-### SAIPENVIEW
-
-Frontend của nó đã khai báo tên token Wintage trong `:root` của chính nó, nên patch này chỉ ghi lại **giá trị token** — không bao giờ selector, font, độ rộng viền hay padding. Không gì ảnh hưởng box model thay đổi, nên chữ không thể xê dịch. Đó là chủ đích: cách tiếp cận trước đây chồng toàn bộ stylesheet trình duyệt lên trên, và `wintage.css` được viết cho trang web bất kỳ — selector phổ quát ép font, thang kích thước, viền 2px và chiều cao điều khiển. Trên một app đã có layout riêng, điều đó làm xê dịch mọi thứ.
-
-Được kiểm chứng bằng cách che mọi hex và diff với bản sao lưu: giống hệt về cấu trúc, chỉ khác các literal màu. `--link` được báo là không khai báo ở đó (link markdown của nó đọc `--accentTeal`, cái mà file này có đặt) thay vì bị chèn — thêm một biến app không bao giờ đọc là trọng lượng chết.
 
 ### MPC-HC (K-Lite)
 

@@ -26,7 +26,7 @@ kolmelle tekstiä kantavalle tokenille — paletti, joka epäonnistuu siinä, hy
 rakennusportissa muutenkin, joten se on parempi nähdä ennen Applya kuin sen jälkeen.
 
 Kohteet on jaettu kahteen näppäimistöllä tavoitettavaan luetteloon: **MY APPS** sisältää
-kannettavat/source-puun CodeNomad-, SAIPENVIEW-, SmartVac- ja WildRift-työkalut; **POPULAR
+kannettavat/source-puun CodeNomad, WorkBuddy-työkalut; **POPULAR
 APPS** sisältää Windowsin, OBS:n, terminaalit, editorit ja muun asennetun ohjelmiston.
 ALL/NONE ja Apply/Revert toimivat molempien luetteloiden yli muuttamatta niiden ryhmittelyä.
 
@@ -66,10 +66,8 @@ arkisto on käytössä.
 | `claude` | Electron-shim, paikattu paikan päällä — katso alla | no — päivitys luo uuden `app-<version>`-kansion |
 | `mpchc` | rekisteri, vain tumma teema + OSD-typografia | no — MPC-HC kirjoittaa asetuksensa uusiksi lopettaessaan |
 | `obsidian` | yhteisöteema vaultia kohti, kaikki paletit asennettu kerralla | **yes** — se on vaultissasi |
-| `saipenview` | kirjoittaa omat `:root`-tokenarvonsa uusiksi `style.css`-tiedostossa | no — lähdetiedosto; aja uudelleen pullin jälkeen |
 | `discord` | CSS pudotettu BetterDiscordin omaan teemakansioon | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]`-avaimet; olemassa olevat viimeisimmät-tiedostosuodattimet käyttävät paletin linkkiväriä | yes — se on sinun ini:si |
-| `smartvac`, `wildrift` | tokenitaulukko kirjoitettu uusiksi sovelluksen omassa lähdekoodissa | no — lähdetiedosto; aja uudelleen pullin jälkeen |
 
 ### FreeBuff-mainosten poisto
 
@@ -274,20 +272,6 @@ tokenilla, jota se vastasi. `-Palette <slug>` määrää, kumpi on aktiivinen as
 teemat ja palauttaa aiemman valintasi — käsin tehtyyn teemaan samassa vaultissa
 ei koskaan kosketa.
 
-### SAIPENVIEW
-
-Sen frontend julistaa jo Wintage-tokenien nimet omassa `:root`-lohkossaan, joten tämä
-paikkaus kirjoittaa uusiksi **vain tokenien arvot** — ei koskaan valitsinta, kirjasinta, reunuksen leveyttä
-tai paddingia. Mikään, mikä vaikuttaa box-malliin, ei muutu, joten teksti ei voi siirtyä.
-Se on tarkoituksellista: aiempi lähestymistapa liitti koko selaimen tyylitiedoston
-päälle, ja `wintage.css` on kirjoitettu mielivaltaisille verkkosivuille — universaalit valitsimet,
-jotka pakottavat kirjasimen, kokotikkaat, 2px-reunukset ja kontrollien korkeudet. Sovelluksessa,
-jolla on jo oma asettelunsa, se siirtää kaiken.
-
-Varmennettu peittämällä jokainen hex ja diffaamalla varmuuskopiota vastaan: rakenteellisesti
-identtinen, vain värikirjaimet eroavat. `--link` raportoidaan siellä julistamattomaksi
-(sen markdown-linkit lukevat `--accentTeal`, jonka tämä asettaa) sen sijaan, että se injektoitaisiin —
-sellaisen muuttujan lisääminen, jota sovellus ei koskaan lue, olisi kuollutta painoa.
 
 ### MPC-HC (K-Lite)
 

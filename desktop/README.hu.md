@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 Témalista színmintákkal, a gépen talált célpontok, élő Win95-előnézet, és mind a huszonegy színtoken szerkeszthető mintaként. Bármely minta szerkesztése a palettát **Custom**-ba forkolja, ahelyett hogy észrevétlenül megváltoztatna egy szállított témát. A jobb oldali panel élő WCAG-kontrasztot mutat a szöveget hordozó három tokenhez — a paletta, amely ott FAIL-t kap, úgyis elutasításra kerül az építőkapuban, ezért jobb még az Apply előtt látni, mint utána.
 
-A célpontok két billentyűzettel elérhető listára vannak osztva: a **MY APPS** a hordozható/source-tree CodeNomad, SAIPENVIEW, SmartVac és WildRift eszközöket tartalmazza; a **POPULAR APPS** a Windowst, OBS-t, terminálokat, szerkesztőket és a többi telepített szoftvert. Az ALL/NONE és az Apply/Revert mindkét listára működik anélkül, hogy megváltoztatná a csoportosítást.
+A célpontok két billentyűzettel elérhető listára vannak osztva: a **MY APPS** a hordozható/source-tree CodeNomad, WorkBuddy eszközöket tartalmazza; a **POPULAR APPS** a Windowst, OBS-t, terminálokat, szerkesztőket és a többi telepített szoftvert. Az ALL/NONE és az Apply/Revert mindkét listára működik anélkül, hogy megváltoztatná a csoportosítást.
 
 Az ablak azt a palettát viseli, amelyet épp telepíteni készül. Ez a leggyorsabb elérhető előnézet, és az eszközt is őszintén tartja: egy paletta, amely ezt az ablakot olvashatatlanná teszi, láthatóan olvashatatlan.
 
@@ -46,10 +46,8 @@ A `-Palette` alapértelmezése a `goldendefault` (**Golden Default**). A GUI ugy
 | `claude` | Electron shim, helyben javítva — lásd lentebb | nem — egy frissítés új `app-<version>` mappát készít |
 | `mpchc` | rendszerleíró adatbázis, csak sötét téma + OSD tipográfia | nem — az MPC-HC kilépéskor felülírja a beállításait |
 | `obsidian` | közösségi téma boltonként, minden paletta egyszerre telepítve | **igen** — a vaultodban él |
-| `saipenview` | felülírja a saját `:root` token értékeit a `style.css`-ben | nem — forrásfájl; futtasd újra pull után |
 | `discord` | CSS a BetterDiscord saját téma mappájába dobva | igen |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` kulcsok; a meglévő friss-fájl szűrők a paletta link színét használják | igen — a te ini-d |
-| `smartvac`, `wildrift` | token tábla felülírva az alkalmazás saját forrásában | nem — forrásfájl; futtasd újra pull után |
 
 ### FreeBuff hirdetéseltávolítás
 
@@ -138,11 +136,6 @@ Ennek a második fele sokkal csendesebb probléma volt. Claude `BrowserWindow`-j
 
 Egy közösségi téma kerül minden vault `.obsidian/themes/` mappájába — mind a tizenhat paletta egyszerre, pontosan mint a VS Code célpontnál, így a **Settings → Appearance** menüben váltogathatsz közöttük újrafuttatás nélkül. A sablon a vaultban már meglévő, kézzel készített `VintageWin95` témából származik, minden szín a tokenre cserélve, amelynek megfelelt. A `-Palette <slug>` határozza meg, melyik legyen aktív telepítéskor; az `appearance.json` előbb mentésre kerül, a `-Revert` pedig csak a `Wintage *` témákat távolítja el, és visszaállítja az előző választásod — a kézzel készített téma ugyanabban a vaultban soha nincs megérintve.
 
-### SAIPENVIEW
-
-A frontendje már deklarálja a Wintage tokenneveket a saját `:root`-jában, így ez a javítás **csak a token értékeket** írja át — soha szelektort, fontot, szegélyszélességet vagy paddinget. Semmi, ami a box modellt érinti, nem változik, így a szöveg nem tud elmozdulni. Ez szándékos: a korábbi megközelítés a teljes böngésző-stíluslapot a tetejére fűzte, a `wintage.css` pedig tetszőleges weboldalakra van írva — univerzális szelektorok, amelyek kényszerítik a fontot, a méret-létrát, a 2px-es szegélyeket és a vezérlőmagasságokat. Egy olyan alkalmazáson, amelynek már van saját elrendezése, ez mindent elmozdít.
-
-Ellenőrizve: minden hex elmaszkolása és a mentéssel való diffelés után — szerkezetileg azonos, csak a színliterálok különböznek. A `--link` nincs ott deklarálva (a markdown linkjei `--accentTeal`-t olvasnak, amelyet ez beállít), így nem kerül beinjektálásra — egy változó hozzáadása, amelyet az alkalmazás soha nem olvas, holt teher lenne.
 
 ### MPC-HC (K-Lite)
 

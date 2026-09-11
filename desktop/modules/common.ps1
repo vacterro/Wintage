@@ -74,7 +74,7 @@ function Copy-FileAtomic([string]$source, [string]$dest) {
 function Get-PaletteTokens([string]$jsonPath) { (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens }
 
 # Known paths.json keys: the source-tree targets whose folders the GUI can remember.
-$script:PATHS_KEYS = @('saipenview', 'smartvac', 'wildrift', 'codenomad', 'workbuddy', 'portable')
+$script:PATHS_KEYS = @('codenomad', 'workbuddy', 'zcode', 'portable', 'notepadplusplus', 'cinema4d')
 
 function Read-PathsJson {
     if (-not (Test-Path $PathsPath)) { return @{} }
@@ -328,6 +328,42 @@ function Remove-ManifestEntry($target) {
             Write-Manifest $m
         }
     } finally { Exit-ManifestLock $lock }
+}
+
+# SRC-006:R005: a Reapply child may acquire its target lock long after the
+# parent planned the work from a manifest snapshot. The per-target lock
+# serializes the MUTATION, not the INTENT: a Revert or an explicit palette
+# change can win the race in that window. This token is the canonical
+# fingerprint of every stable manifest field the parent planned from; a child
+# whose token no longer matches the live entry must not mutate anything.
+#
+# The TARGET NAME is deliberately NOT hashed in: a token is always validated
+# against the already-selected, already-locked target (the parent dispatches
+# '-Target <name> -ExpectedIntent <token>' as one unit, and the child compares
+# the token against THAT target's live manifest entry under its lock). Target
+# identity comes from the lock, never from the fingerprint.
+#
+# Item paths are a recorded SET, not an ordered sequence, so they are sorted
+# under the ordinal comparer before hashing: semantically identical entries
+# must not read as stale merely because serialization order changed. `applied`
+# stays in the fingerprint on purpose - it only changes when a real re-apply
+# commits a new ownership epoch, which is exactly an intent change.
+function Get-ReapplyIntentToken($entry) {
+    if ($null -eq $entry) { return 'absent' }
+    $itemPaths = @()
+    if ($entry.items) { $itemPaths = @($entry.items | ForEach-Object { [string]$_.'path' }) }
+    if ($itemPaths.Count -gt 1) { [System.Array]::Sort($itemPaths, [StringComparer]::Ordinal) }
+    $canonical = (@(
+        [string]$entry.palette,
+        [string]$entry.path,
+        [string]$entry.appVersion,
+        [string]$entry.payloadVersion,
+        [string]$entry.applied
+    ) + $itemPaths) -join "`x1f"
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-', '').ToLowerInvariant()
+    } finally { $sha.Dispose() }
 }
 
 # Multi-item ownership (T-190): targets that install into MANY locations (e.g.
@@ -766,6 +802,15 @@ function Get-WorkBuddyResources {
         (Join-Path $env:LOCALAPPDATA 'Programs/CodeBuddy/resources'),
         (Join-Path $env:ProgramFiles 'WorkBuddy/resources'),
         (Join-Path $env:ProgramFiles 'CodeBuddy/resources')
+    )
+}
+
+function Get-ZCodeResources {
+    $script:pathsJson = if ($script:pathsJson) { $script:pathsJson } else { Read-PathsJson }
+    return Resolve-PortableElectron 'zcode' $ZCodePath $script:pathsJson @('ZCode', 'zcode') @(
+        (Join-Path $env:LOCALAPPDATA 'Programs/ZCode/resources'),
+        (Join-Path $env:LOCALAPPDATA 'Programs/zcode/resources'),
+        (Join-Path $env:ProgramFiles 'ZCode/resources')
     )
 }
 

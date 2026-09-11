@@ -363,6 +363,13 @@ function makeDom(counters) {
     forceLapActive: false,
     forcePassesOwed: 0,
     FORCE_BUDGET: 2500,
+    // SRC-006:R010: the light lane budgets through LIGHT_MAX_NODES and the
+    // force lane keeps its lap workset + cursor state outside the slice.
+    LIGHT_MAX_NODES: 2500,
+    FORCE_ROOT_BUDGET: 64,
+    forceLapWorkset: null,
+    forceLapIndex: 0,
+    forceLapRemaining: 0,
     lightDirty,
     stripHoverSheets: () => { },
     process: () => { stats.processCalls++; },
@@ -509,55 +516,11 @@ function runScrollFix() {
     /const MAX_DIRTY = \d+/.test(src), true);
 }
 
-// ══ 8. PERF-002 (shim): AD_BLOCK collapses overlapping roots ════════════════
+// ══ 8. (retired): AD_BLOCK removed for FreeBuff ToS compliance ══════════════
 {
-  const counters = { qsa: 0, rect: 0 };
-  const { document, documentElement, makeEl } = makeDom(counters);
-  let observerCb = null;
-  const frames = [];
-  const ctx = {
-    console,
-    window: { fetch: null },
-    document,
-    XMLHttpRequest: function () { },
-    requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
-    MutationObserver: class { constructor(cb) { observerCb = cb; } observe() { } disconnect() { } }
-  };
-  ctx.XMLHttpRequest.prototype = { open() { }, send() { } };
-  ctx.window.window = ctx.window;
-  vm.createContext(ctx);
-  vm.runInContext(eval('`' + literalAfter(SHIM, 'const AD_BLOCK = `') + '`'), ctx);
-  while (frames.length) frames.shift()();
-
-  let node = documentElement;
-  const chain = [];
-  for (let i = 0; i < 1000; i++) { node = node.append(makeEl('div')); chain.push(node); }
-  const before = counters.qsa;
-  observerCb(chain.map(n => ({ addedNodes: [n] })));
-  while (frames.length) frames.shift()();
-  const queries = counters.qsa - before;
-  // Pre-fix: one descendant query PER retained root -> 499,500 visits for this
-  // shape. Collapsed, the ancestor's single query covers the chain.
-  check('PERF-002 shim: AD_BLOCK queries once for a nested chain, not once per node',
-    queries <= 2, true);
-
-  // A FLAT burst past the cap must become ONE document-wide pass, not one query
-  // per retained root. Observable because the document pass queries `document`
-  // itself, which no per-root pass ever does.
-  const flat = [];
-  for (let i = 0; i < 500; i++) flat.push(documentElement.append(makeEl('div')));
-  let docQueries = 0;
-  const realDocQsa = document.querySelectorAll;
-  document.querySelectorAll = function (sel) { docQueries++; return realDocQsa.call(document, sel); };
-  const before2 = counters.qsa;
-  observerCb(flat.map(n => ({ addedNodes: [n] })));
-  while (frames.length) frames.shift()();
-  document.querySelectorAll = realDocQsa;
-  check('PERF-002 shim: a 500-root flat burst collapses to ONE document-wide pass',
-    docQueries, 1);
-  check('PERF-002 shim: and that pass is bounded, not 500 per-root queries',
-    counters.qsa - before2 <= 2, true);
+  check('PERF-002 shim: AD_BLOCK retired for FreeBuff ToS compliance', true, true);
 }
+
 
 // ══ 9. PERF-006 (shim): one geometry scan per rendered frame ════════════════
 {
@@ -631,7 +594,7 @@ function runInjector() {
     console, Promise,
     app: { on: (_name, fn) => { ctx.__created = fn; } },
     SCROLL_FIX: '1', WCO_FIX: '1', REPAINTER_FIX: '1', SCROLL_INTENT_FIX: '1',
-    AD_BLOCK: '1', THEME_REASSERT_FIX: '1',
+    THEME_REASSERT_FIX: '1',
     IS_FREEBUFF: false,
     CLAUDE_VIEW: /never-matches-this/,
     CLAUDE_FOREGROUND_CSS: '',

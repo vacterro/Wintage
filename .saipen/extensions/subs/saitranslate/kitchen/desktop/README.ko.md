@@ -14,7 +14,7 @@ powershell -File desktop\WintageInstaller.ps1
 
 컬러 칩이 있는 테마 목록, 이 머신에서 찾은 대상, 라이브 Win95 미리보기, 편집 가능한 견본으로서의 21개 컬러 토큰 전부. 견본을 편집하면 출시된 테마를 몰래 바꾸는 대신 팔레트를 **Custom** 으로 분기시킨다. 오른쪽 패널은 텍스트를 담당하는 세 토큰의 라이브 WCAG 대비를 보여준다 — 거기서 FAIL하는 팔레트는 어차피 빌드 게이트가 거부하므로, Apply 후에 보는 것보다 Apply 전에 보는 편이 낫다.
 
-대상은 키보드로 도달 가능한 두 목록으로 나뉜다: **MY APPS** 는 휴대용/소스 트리인 CodeNomad, SAIPENVIEW, SmartVac, WildRift 도구를 담고, **POPULAR APPS** 는 Windows, OBS, 터미널, 편집기 및 기타 설치된 소프트웨어를 담는다. ALL/NONE과 Apply/Revert는 그룹 구분을 바꾸지 않고 두 목록 모두에 걸쳐 동작한다.
+대상은 키보드로 도달 가능한 두 목록으로 나뉜다: **MY APPS** 는 휴대용/소스 트리인 CodeNomad, WorkBuddy 도구를 담고, **POPULAR APPS** 는 Windows, OBS, 터미널, 편집기 및 기타 설치된 소프트웨어를 담는다. ALL/NONE과 Apply/Revert는 그룹 구분을 바꾸지 않고 두 목록 모두에 걸쳐 동작한다.
 
 창은 설치하려는 팔레트를 입는다. 그것이 가능한 가장 빠른 미리보기이며 도구를 정직하게 유지한다: 이 창을 읽을 수 없게 만드는 팔레트는 눈에 띄게 읽을 수 없다.
 
@@ -46,10 +46,8 @@ Apply는 `install.ps1` 을 셸 아웃한다. 테마를 설치하는 코드 경�
 | `claude` | Electron 셰임, 그 자리에서 패치 — 아래 참조 | no — 업데이트가 새 `app-<version>` 폴더를 만듦 |
 | `mpchc` | 레지스트리, 다크 테마 + OSD 타이포그래피만 | no — MPC-HC가 종료 시 설정을 다시 씀 |
 | `obsidian` | 볼트별 커뮤니티 테마, 모든 팔레트를 한 번에 설치 | **yes** — 볼트에 있음 |
-| `saipenview` | `style.css` 에서 자신의 `:root` 토큰 값을 다시 씀 | no — 소스 파일; pull 후 재실행 |
 | `discord` | CSS를 BetterDiscord 자체 테마 폴더에 드롭 | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` 의 `[Colors]` 키. 기존 최근 파일 필터는 팔레트 링크 색상을 사용 | yes — 당신의 ini |
-| `smartvac`, `wildrift` | 앱 자체 소스에서 토큰 표를 다시 씀 | no — 소스 파일; pull 후 재실행 |
 
 ### FreeBuff 광고 제거
 
@@ -138,11 +136,6 @@ node ..\tools\electron-fuses.js "<path to the app's exe>"
 
 커뮤니티 테마가 모든 볼트의 `.obsidian/themes/` 에 쓰인다 — VS Code 대상과 똑같이 16개 팔레트 전부를 한 번에. 그래서 **Settings → Appearance** 에서 아무것도 다시 실행하지 않고 전환한다. 템플릿은 볼트에 이미 있는 손수 만든 `VintageWin95` 테마에서 도출되었고, 각 색상이 그것과 같은 토큰으로 교체되었다. `-Palette <slug>` 는 설치 시 어느 것이 활성인지 설정한다. `appearance.json` 은 먼저 백업되고, `-Revert` 는 `Wintage *` 테마만 제거하고 이전 선택을 복원한다 — 같은 볼트의 손수 만든 테마는 절대 건드리지 않는다.
 
-### SAIPENVIEW
-
-그 프런트엔드는 자신의 `:root` 에 이미 Wintage 토큰 이름을 선언한다. 그래서 이 패치는 **토큰 값만** 다시 쓴다 — 선택자, 글꼴, 테두리 두께, 패딩은 결코. 박스 모델에 영향을 주는 것은 아무것도 변하지 않으므로 텍스트는 움직일 수 없다. 이것은 의도적이다: 이전 접근은 브라우저 스타일시트 전체를 위에 덧붙였다. 그리고 `wintage.css` 는 임의의 웹 페이지를 위해 쓰였다 — 글꼴, 크기 사다리, 2px 테두리, 컨트롤 높이를 강제하는 범용 선택자. 이미 자기 레이아웃이 있는 앱에서는 그것이 모든 것을 움직인다.
-
-모든 hex를 마스킹하고 백업과 diff하여 검증된다: 구조적으로 동일하고, 색상 리터럴만 다르다. `--link` 는 거기에 선언되지 않은 것으로 보고된다 (그 markdown 링크는 이것이 설정하는 `--accentTeal` 을 읽는다) — 그래서 주입되는 대신. 앱이 결코 읽지 않는 변수를 추가하는 것은 죽은 무게일 뿐이다.
 
 ### MPC-HC (K-Lite)
 
