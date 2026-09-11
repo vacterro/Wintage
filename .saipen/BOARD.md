@@ -1,6 +1,7 @@
 # BOARD
 
 ## DOING
+- [ ] T-244 [P2] (claimed 2026-09-11T06:40:00Z) ZCode desktop "Usage remaining" popup: the "5 hours" quota label must be visible and distinguishable, light orange (user request). Implemented: GLOBAL_CSS rule in wintage.user.js selects the column by its inline --color-usage-chart-1 bar marker (the only structural discriminator; Weekly=chart-2, MCP=chart-5), sets bold + color-mix(borderHighlight 55%, dangerText 45%) - no hardcoded hex, per-theme derivation. | verify: node --check wintage.user.js; node tools/check-css.js (18 themes); node tools/build-desktop.js regenerates 16 palettes; generated rule present in desktop/out/electron/*/wintage.css; deployed to installed ZCode app; full tests/Run-Tests.ps1 as ship gate | owner: zcode | claim_time: 2026-09-11T06:40:00Z
 
 ## DONE
 - [x] T-243 [P1] (done 2026-09-11) v1.35.0 reconciliation: web fixes, BetterDiscord plugins (GoodEmoji, RemoveStickers), installer tab overhaul (Win95 panels + flat ComboBox), ZCode, Notepad++, Cinema 4D, installer batch-timer null safety. All 16 tool suites PASS. | verify: surviving working tree reconciled, new plugins and targets verified, Run-Tests.ps1 ALL PASS | owner: opencode

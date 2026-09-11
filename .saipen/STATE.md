@@ -1,24 +1,24 @@
 ---
-phase: SHIP
-task: T-243
-next_action: "PHASE SHIP v1.35.0"
+phase: VERIFY
+task: T-244
+next_action: "PHASE REVIEW T-244"
 blocker: none
-agent: opencode
+agent: zcode
 saipen_version: 7
 schema_version: 3
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN
 mode: full
 execution_intent: converge
 converge_target: ship
-last_event: 906
+last_event: 912
 style_contract: ded-4ae736e4
-updated: "2026-09-11T02:35:00Z"
-transition_from: SCOUT
+updated: "2026-09-11T07:05:00Z"
+transition_from: BUILD
 ---
 
 # Active Work
 
-T-242 DONE 2026-09-11 (SRC-006 closed E-902, audit/4.md consumed, 10/10 VERIFIED). Sole DOING owner: T-243 (v1.35.0 WIP reconciliation: web fixes, Notepad++, Cinema 4D, installer batch-timer fixes). Concurrent-writer reconciliation E-901: merged tree adopted as authority after the E-900 actor interleaved; all five SRC-006 gates re-verified green on the merged tree. audit/5.md remains uncaptured.
+Sole DOING owner: T-244 (ZCode usage-popup 5-hours label, light orange; claimed E-910). T-243 DONE and SHIPPED as v1.35.0 (ead75e8, tag pushed; ship line reconstructed E-910). T-242 DONE (SRC-006 closed E-902). audit/5.md remains uncaptured; T-238 and T-065 stay parked.
 
 ## Full matrix, current (E-900 verify)
 

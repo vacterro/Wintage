@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.35.1] - 2026-09-11
+
+- ZCode usage popup (user request): the "5 hours" quota label is now bold light
+  orange so the everyday-quota column reads as distinctly as Weekly (green) and
+  ZCode MCP (red). CSS cannot match text, so the column is picked by its inline
+  `--color-usage-chart-1` bar marker (Weekly is chart-2, MCP chart-5); the colour
+  is a palette color-mix (borderHighlight/dangerText), so every theme derives its
+  own warm highlight with zero hardcoded hex.
+
 ## [1.35.0] - 2026-09-11
 
 - Audit repair & feature convergence (T-242/T-243): SRC-006 audit layer executed with all 10 findings terminal VERIFIED; SRC-006 closed and archived.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.35.0
+// @version      1.35.1
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -616,7 +616,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.35.0';
+  const W95_VERSION = '1.35.1';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -1252,6 +1252,34 @@ hr { border: none !important; border-top: 2px solid ${T.borderMuted} !important;
    transition-property note above). Semantic snapping happens in the JS repainter
    instead, gated on the site having ALREADY painted a saturated green/amber/red
    background — i.e. on evidence, not on a name. */
+
+/* ZCode desktop "Usage remaining" popup: the "5 hours" column label. The popup
+   has three quota columns (5 hours / Weekly / ZCode MCP) and CSS cannot match
+   text, so the one column is picked by the only structural thing that separates
+   it from its siblings: the progress bar the renderer paints INLINE with
+   var(--color-usage-chart-1) — Weekly is chart-2 and MCP is chart-5, so the
+   [style*=...] discriminator is exact. The closing paren in "usage-chart-1)"
+   is deliberate: a bare "usage-chart-1" substring would also match
+   usage-chart-10..19 if the app ever grows that many chart tokens. Everything
+   else in the chain is just the column's own skeleton (label span sits in the
+   first row of the column that owns that bar — the value row's "- Sep 18" span
+   is in the SECOND row and stays dim), and the whole selector is inert outside
+   this app because the class names are ZCode's own utility set. Weekly and MCP
+   keep their app colours and stay dim on purpose: the point of this rule is
+   that the 5-hour quota — the one that throttles everyday sessions — reads
+   first; the repainter spares the chart-token bars so both the colour and this
+   rule's anchor survive (see the --color-usage-chart- guard in process()).
+   Light orange, mixed from the palette's warm edge and danger text so every
+   theme derives its own version instead of one hardcoded literal (see the
+   bare-hex gate in tools/check-css.js). Conscious WCAG exception: the mix is
+   55% borderHighlight, a role check-css.js deliberately holds outside
+   WCAG_ROLES ("never text"), so no gate measures this label's contrast; all
+   16 current palettes are dark and compute ~8:1 against the popup surface,
+   but a future light palette must re-check this rule by hand. */
+div[class*="space-y-1.5"]:has(> div[class*="h-1.5"] > div[style*="usage-chart-1)"]) > div > div:first-child > span[class*="text-foreground-subtle"] {
+  color: color-mix(in srgb, ${T.borderHighlight} 55%, ${T.dangerText} 45%) !important;
+  font-weight: 700 !important;
+}
 
 /* 🚨 HOVER STATES: ZEROED OUT v3 🚨
    Generic hover recoloring stays dead (christmas-tree problem: :hover matches the
@@ -2423,7 +2451,18 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     const bgColor = cs.backgroundColor;
     if (bgColor && bgColor !== 'transparent' && !PALETTE_RGB.has(bgColor)) {
       const bg = parseRGB(bgColor);
-      if (bg && bg.a > 0.08) {
+      // ZCode's usage popup binds its quota-bar fills INLINE to the app's own
+      // chart token: style="background-color: var(--color-usage-chart-1)".
+      // Re-grading those would do two harms at once: overwrite the var()
+      // reference in the style ATTRIBUTE with a resolved literal (destroying
+      // the exact substring the GLOBAL_CSS "5 hours" label rule anchors on, so
+      // the label would dim itself again after the next sweep and re-orange on
+      // every React remount), and flatten the three quota bars into one
+      // palette shade, killing the per-column distinction the popup exists
+      // for. The token family is scoped, not a blanket var() exemption, so
+      // nothing else on any other site changes behaviour.
+      if (!(bg && el.style && /var\(--color-usage-chart-/i.test(el.style.backgroundColor || ''))) {
+        if (bg && bg.a > 0.08) {
         const L = elev(lum(bg));
         const spread = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b);
         const grayish = spread <= 24;
@@ -2461,6 +2500,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
         if (repaint) {
           w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
         }
+      }
       }
     }
 
