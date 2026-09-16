@@ -157,6 +157,9 @@ if (!dryRun) {
     // The retired epoch is over: this snapshot is the fresh baseline again.
     remove(epochRetired);
   }
+  if (process.env.WINTAGE_TEST_FAIL_HELPER_MID_WRITE) {
+    fail('simulated helper mid-write failure (WINTAGE_TEST_FAIL_HELPER_MID_WRITE)');
+  }
   writeAtomic(installed, merged);
   writeAtomic(paletteMarker, palette + '\n');
   writeAtomic(activePathMarker, installed + '\n');

@@ -4,11 +4,17 @@
 // silent swallow there is "the site's hover highlight is still there", which
 // looks exactly like a missing feature and leaves nothing to diagnose from.
 //
-// This runs the REAL source slice -- the DIAG block plus walkRules/
-// stripHoverSheets -- against sheets engineered to throw, and asserts the
-// counters move and window.__wintageDiag() reports them. It also proves the
-// gate can fail: a control run with a non-throwing sheet must leave every
-// counter at zero, so a counter that is always non-zero cannot pass as working.
+// This runs the REAL source slice -- the DIAG block plus the bounded hover-rule
+// cursor (drainStyleRules) -- against rule containers engineered to throw, and
+// asserts the counters move and window.__wintageDiag() reports them. It also
+// proves the gate can fail: a control run with a non-throwing container must
+// leave every counter at zero, so a counter that is always non-zero cannot pass
+// as working.
+//
+// R013: this used to drive the root-level stripHoverSheets() helper. That helper
+// is gone from production (the light lane called it once per root, which is
+// unbounded by construction); the gate now drives the scheduler's own
+// drainStyleRules task, i.e. the primitive that actually ships.
 
 const fs = require('fs');
 const path = require('path');
@@ -32,58 +38,78 @@ if (diagFrom < 0 || diagTo < 0 || diagTo < diagFrom) {
 }
 const diagSlice = src.slice(diagFrom, diagTo);
 
-// ---- slice 2: the hover surgery (HOVER_PAINT .. end of stripHoverSheets) ----
+// ---- slice 2: the hover surgery (HOVER_PAINT .. end of drainStyleRules) ----
+// The bounded traversal is the ONLY path to hover rules now, so this slice ends
+// at the last brace of drainStyleRules.
 const hoverFrom = src.indexOf('  const HOVER_PAINT = ');
-const stripIdx = src.indexOf('  function stripHoverSheets(root) {');
-if (hoverFrom < 0 || stripIdx < 0) {
+const drainIdx = src.indexOf('  function drainStyleRules(task, ruleBudget) {');
+if (hoverFrom < 0 || drainIdx < 0) {
   console.error('FAIL: could not locate the hover surgery'); process.exit(1);
 }
 let depth = 0, hoverEnd = -1;
-for (let i = stripIdx; i < src.length; i++) {
+for (let i = drainIdx; i < src.length; i++) {
   if (src[i] === '{') depth++;
   else if (src[i] === '}') { depth--; if (depth === 0) { hoverEnd = i + 1; break; } }
 }
-if (hoverEnd < 0) { console.error('FAIL: stripHoverSheets closing brace not found'); process.exit(1); }
+if (hoverEnd < 0) { console.error('FAIL: drainStyleRules closing brace not found'); process.exit(1); }
 const hoverSlice = src.slice(hoverFrom, hoverEnd);
 
-function makeSheet(kind) {
+// The unbounded root-level helper must not exist any more: if it comes back, the
+// gate fails on the source rather than re-testing a dead function.
+if (/function\s+stripHoverSheets\s*\(/.test(src)) {
+  console.error('FAIL: production still defines stripHoverSheets (R013 removed it)'); process.exit(1);
+}
+
+function makeContainer(kind) {
   // A rule whose selectorText getter throws is the realistic shape: an engine
   // handing back a half-built rule, or a rule from an unresolved @import.
   const throwingRule = { get selectorText() { throw new Error('rule not ready'); }, style: null, cssRules: null };
   const plainRule = { selectorText: 'a:hover', style: { length: 0, removeProperty() { } }, cssRules: null };
   if (kind === 'throwOnRule') {
-    return { cssRules: { length: 1, 0: throwingRule }, ownerNode: null };
+    return { length: 1, 0: throwingRule };
   }
   if (kind === 'clean') {
-    return { cssRules: { length: 1, 0: plainRule }, ownerNode: null };
+    return { length: 1, 0: plainRule };
   }
-  throw new Error('unknown sheet kind ' + kind);
+  if (kind === 'appendThrow') {
+    // The other suppression class: the rule SLOT itself is unreadable, which is
+    // what the append fast path hits when a sheet mutates under the cursor.
+    return { length: 1, get 0() { throw new Error('rule not ready'); } };
+  }
+  throw new Error('unknown container kind ' + kind);
 }
 
-function run(sheetKind) {
-  const styleEls = [];
+function run(containerKind) {
   const ctx = {
     console,
     W95_VERSION: 'test',
     THEME_ID: 'testpal',
     CSS_ONLY_MODE: false,
     CSSStyleSheet: undefined,
-    window: {}
+    window: {},
+    // R013: the hover-surgery slice starts at HOVER_PAINT, which sits after the
+    // declared style budgets. The budget values themselves are not under test
+    // here (tools/test-repainter-budget.js owns them); the traversal just needs
+    // them defined.
+    STYLE_SHEET_BUDGET: 32,
+    STYLE_RULE_BUDGET: 500,
+    STYLE_ROOT_BUDGET: 16
   };
   ctx.window.window = ctx.window;
-  const sheet = makeSheet(sheetKind);
-  ctx.__root = {
-    styleSheets: { length: 1, 0: sheet },
-    adoptedStyleSheets: null,
-    querySelectorAll: () => styleEls
-  };
   vm.createContext(ctx);
   vm.runInContext(
     '(function(){\n' + diagSlice + '\n' + hoverSlice +
-    '\nthis.__strip = stripHoverSheets; this.__diagFn = window.__wintageDiag;\n}).call(this)',
+    '\nthis.__drain = drainStyleRules; this.__diagFn = window.__wintageDiag;\n}).call(this)',
     ctx
   );
-  ctx.__strip(ctx.__root);
+  const container = makeContainer(containerKind);
+  ctx.__drain({
+    sheet: { __wintageGen: 0 },
+    gen: 0,
+    count: container.length,
+    mode: containerKind === 'appendThrow' ? 'append' : 'full',
+    stack: [{ container, index: 0, length: container.length }]
+  }, 8);
   return { diag: ctx.__diagFn(), ctx };
 }
 
@@ -97,6 +123,14 @@ function run(sheetKind) {
   // a gate that crashes reports nothing about the other cases.
   check('the retained error names its kind', diag.firstError ? diag.firstError.kind : null, 'hoverWalkThrows');
   check('the retained error carries the message', diag.firstError ? diag.firstError.message : null, 'rule not ready');
+}
+
+// ---- Test 1b: the unreadable rule SLOT is counted under the append class ----
+{
+  const { diag } = run('appendThrow');
+  check('unreadable rule slot increments hoverAppendThrows', diag.suppressed.hoverAppendThrows >= 1, true);
+  check('the append error is retained with its kind',
+    diag.firstError ? diag.firstError.kind : null, 'hoverAppendThrows');
 }
 
 // ---- Test 2: control -- a clean sheet must leave every counter at zero ----

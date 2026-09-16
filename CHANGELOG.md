@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.36.0] - 2026-09-16
+
+Audit wave: `audit/5.md` (SRC-007) fully executed — all 15 clauses verified
+(T-246) — plus the Total Commander recovery migration (T-245).
+
+- PERF-002: the renderer repainter no longer re-walks the document and every
+  pierced shadow root without bounds. It keeps a persistent incremental root
+  cursor, separates the style lane from the DOM element budget (own root, sheet
+  and rule budgets), walks CSSOM iteratively with a resumable stack, treats
+  dirty style work as scheduler debt instead of a synchronous scan, and
+  invalidates STYLE owner text lazily. Pages with many shadow roots stop paying
+  an unbounded synchronous sweep on every mutation.
+- PERF-004: portable browser detection and profile enumeration are cached. A
+  remembered portable browser root is walked once and afterwards served from a
+  persisted candidate cache — re-validated cheaply, invalidated when the root
+  changes, when a cached browser has disappeared, or on an explicit rescan
+  (`install-browsers.ps1 -Rescan`, `install.ps1 -RescanBrowsers`) — so opening
+  the installer and every Apply/Revert refresh no longer rescans an arbitrary
+  subtree. Chromium `Preferences` files are matched with a bounded chunked
+  search instead of being read whole, and an unchanged profile is never
+  reopened.
+- PERF-003: an Electron palette repaint no longer performs archive-sized
+  recovery I/O at both transaction layers.
+- PERF-001: the legacy wide-push, intake and test-hook branches are gone from
+  the generated Electron shim, and its instrumentation is lazy.
+- CORE-003: Windows theme mutation is encapsulated in one rollback boundary,
+  and the Total Commander recovery format is transactional and schema-strict.
+- R009/R010/R011: one cross-runtime build-generation lock (the PowerShell side
+  now lives in `desktop/modules/generation-lock.ps1`), deterministic red
+  controls for the batch GUI, and explicit portable-root path-preference
+  ordering before any mutation.
+- BetterDiscord: optional `RemoveGIFS` plugin template.
+- Tests: dedicated suites for the repainter budgets
+  (`tools/test-repainter-budget.js`), the browser cache
+  (`tools/test-browser-cache.ps1`) and the generation lock, all wired into
+  `tests/Run-Tests.ps1`.
+
 ## [1.35.1] - 2026-09-11
 
 - ZCode usage popup (user request): the "5 hours" quota label is now bold light

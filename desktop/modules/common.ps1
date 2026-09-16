@@ -23,6 +23,12 @@ function Prune-Backups([int]$keep = 8) {
 
 function Say($msg, $colour = 'Gray') { Write-Host $msg -ForegroundColor $colour }
 
+# Canonical owner-aware cross-runtime generation lock protocol (W2-004,
+# SRC-007:R009). ONE implementation shared with the GUI (WintageInstaller.ps1
+# dot-sources the same file) and mirrored byte-for-byte by the Node side in
+# tools/build-desktop.js; tools/test-batch-generation.ps1 pins all three.
+. (Join-Path $PSScriptRoot 'generation-lock.ps1')
+
 function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script:Utf8NoBom) }
 
 function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllText($path, $text, $script:Utf8NoBom) }
@@ -98,6 +104,23 @@ function Read-PathsJson {
     }
 }
 
+# Strict-safe optional-field read. Test-ManifestSchema also runs in the test
+# runner's scope under Set-StrictMode -Version Latest, where a bare $e.$field
+# on a PSCustomObject that lacks the property throws PropertyNotFoundStrict,
+# and a Hashtable hides its keys from PSObject.Properties. Most schema fields
+# are optional, so absence must read as plain $null in BOTH entry shapes.
+function Get-ManifestField($obj, [string]$name) {
+    # The comma operator keeps single-element collections intact: a bare
+    # `return $value` lets PowerShell unroll a 1-element array into a scalar.
+    if ($obj -is [System.Collections.IDictionary]) {
+        if ($obj.Contains($name)) { return ,$obj[$name] }
+        return $null
+    }
+    $p = $obj.PSObject.Properties[$name]
+    if ($p) { return ,$p.Value }
+    return $null
+}
+
 # T-192 P1#20: semantic manifest validation. JSON syntax is NOT the contract: a
 # top-level array, a scalar, a non-object entry, a wrongly-typed palette/path/
 # version field, or a non-array/duplicate-path `items` set must be rejected just
@@ -121,23 +144,28 @@ function Test-ManifestSchema($m) {
             $errors += "${key}: entry is not an object"
             continue
         }
-        foreach ($field in @('palette', 'path', 'appVersion', 'payloadVersion', 'applied')) {
-            if ($null -ne $e.$field -and $e.$field -isnot [string]) { $errors += "${key}.${field}: not a string" }
+        foreach ($field in @('palette', 'path', 'appVersion', 'payloadVersion', 'applied', 'contentDigest')) {
+            $val = Get-ManifestField $e $field
+            if ($null -ne $val -and $val -isnot [string]) { $errors += "${key}.${field}: not a string" }
         }
-        if ($null -ne $e.items) {
-            if ($e.items -isnot [System.Array] -and $e.items -isnot [System.Collections.IList]) {
+        $items = Get-ManifestField $e 'items'
+        if ($null -ne $items) {
+            if ($items -isnot [System.Array] -and $items -isnot [System.Collections.IList]) {
                 $errors += "${key}.items: not an array"
             } else {
                 $seen = @{}
-                foreach ($item in $e.items) {
+                foreach ($item in $items) {
                     if ($item -isnot [PSCustomObject] -and $item -isnot [System.Collections.IDictionary]) {
                         $errors += "${key}.items: item is not an object"
-                    } elseif ($null -eq $item.path -or $item.path -isnot [string] -or -not ([string]$item.path).Trim()) {
-                        $errors += "${key}.items: item has no nonempty path"
                     } else {
-                        try { $canon = [IO.Path]::GetFullPath([string]$item.path).TrimEnd('\').ToLowerInvariant() } catch { $canon = ([string]$item.path).TrimEnd('\').ToLowerInvariant() }
-                        if ($seen.ContainsKey($canon)) { $errors += "${key}.items: duplicate canonical path $canon" }
-                        $seen[$canon] = $true
+                        $itemPath = Get-ManifestField $item 'path'
+                        if ($null -eq $itemPath -or $itemPath -isnot [string] -or -not ([string]$itemPath).Trim()) {
+                            $errors += "${key}.items: item has no nonempty path"
+                        } else {
+                            try { $canon = [IO.Path]::GetFullPath([string]$itemPath).TrimEnd('\').ToLowerInvariant() } catch { $canon = ([string]$itemPath).TrimEnd('\').ToLowerInvariant() }
+                            if ($seen.ContainsKey($canon)) { $errors += "${key}.items: duplicate canonical path $canon" }
+                            $seen[$canon] = $true
+                        }
                     }
                 }
             }
@@ -304,19 +332,126 @@ function Exit-TargetLock($mutex) {
     try { $mutex.Dispose() } catch { }
 }
 
+# Cross-runtime generation publication lock (shared by PowerShell GUI/install and direct Node build CLI).
+# Uses a lock file in the Wintage appdata directory for cross-runtime serialization.
+# The named mutex is preserved for PS-PS serialization (tested); the file lock bridges to Node.
+function Enter-BuildGenerationLock {
+    # W2-004 (SRC-007:R009): the whole protocol lives in generation-lock.ps1 --
+    # owner-liveness recovery (never age-based), ownerCreated PID-reuse guard,
+    # token-minted metadata and ownership-verified release. Age alone NEVER
+    # steals a live holder's lock; a dead owner stays recoverable.
+    return Enter-BuildGenerationLockCore $WintageAppData
+}
+
+function Exit-BuildGenerationLock($genLock) {
+    if (-not $genLock) { return }
+    Exit-BuildGenerationLockCore $genLock
+}
+
+function Enter-BatchLock {
+    if ($env:WINTAGE_BUILD_LOCK_HELD) { return $null }
+    $mutex = $null
+    $genLock = $null
+    try {
+        $hash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes([string]$WintageAppData))).Replace('-', '').Substring(0, 20)
+        $name = "Local\Wintage-Build-$hash"
+        $mutex = New-Object System.Threading.Mutex($false, $name)
+        $got = $false
+        try { $got = $mutex.WaitOne(15000) } catch [System.Threading.AbandonedMutexException] { $got = $true } catch { $got = $false }
+        if (-not $got) { try { $mutex.Dispose() } catch { }; throw "W2-004: build/output busy - batch/config lock contended (timeout 15s) at $hash. Retry; if recurring, clear stale Wintage-Build mutex." }
+        $genLock = Enter-BuildGenerationLockCore $WintageAppData
+        $obj = New-Object PSObject
+        $obj | Add-Member -MemberType NoteProperty -Name Mutex -Value $mutex
+        $obj | Add-Member -MemberType NoteProperty -Name GenLock -Value $genLock
+        return $obj
+    } catch {
+        if ($mutex) { try { $mutex.Dispose() } catch { } }
+        if ($genLock) { Exit-BuildGenerationLock $genLock }
+        throw
+    }
+}
+
+function Exit-BatchLock($lockObj) {
+    if (-not $lockObj) { return }
+    try { if ($lockObj.GenLock) { Exit-BuildGenerationLockCore $lockObj.GenLock } } catch { }
+    try { if ($lockObj.Mutex) { $lockObj.Mutex.ReleaseMutex(); $lockObj.Mutex.Dispose() } } catch { }
+}
+
+# W2-004 (T-246:R009): deterministic canonical Custom SHA-256 manifest identity.
+# The mutable slug `custom` is not a content identity: two different Custom publishes
+# look identical in the manifest if only the slug is recorded, which is exactly the
+# generation-race blind spot. This hashes a CANONICAL rendering of the custom pack
+# (slug + label + every token in a fixed, key-sorted order) so byte-equivalent
+# generations hash identically regardless of JSON key order or whitespace, and any
+# token change changes the digest.
+#
+# Backward-compatible conservative handling:
+#   - Non-custom palettes return $null -> no field is written (existing entries
+#     keep their shape; the schema treats contentDigest as optional).
+#   - custom.json missing/unreadable -> throw (fail closed), never record a
+#     digest-less custom entry that a later reapply could misread as "no change".
+function Get-CustomContentDigest([string]$Palette) {
+    if ($Palette -ne 'custom') { return $null }
+    $themeRoot = if ($script:root) { Join-Path $script:root 'themes' } elseif ($root) { Join-Path $root 'themes' } else { Join-Path $PSScriptRoot '..\..\themes' }
+    $customPath = Join-Path $themeRoot 'custom.json'
+    if (-not (Test-Path $customPath)) { throw "W2-004: custom palette is 'custom' but themes/custom.json is missing - refusing to record an ambiguous manifest identity." }
+    $pack = [System.IO.File]::ReadAllText($customPath, $script:Utf8NoBom) | ConvertFrom-Json
+    if (-not $pack -or -not $pack.tokens) { throw "W2-004: themes/custom.json is missing its tokens - refusing to record an ambiguous manifest identity." }
+    $keys = @($pack.tokens.PSObject.Properties.Name | Sort-Object)
+    $sep = [string][char]31
+    $canon = [System.Text.StringBuilder]::new()
+    [void]$canon.Append('slug='); [void]$canon.Append([string]$pack.slug); [void]$canon.Append($sep)
+    [void]$canon.Append('label='); [void]$canon.Append([string]$pack.label); [void]$canon.Append($sep)
+    foreach ($k in $keys) {
+        [void]$canon.Append($k); [void]$canon.Append('='); [void]$canon.Append([string]$pack.tokens.$k); [void]$canon.Append($sep)
+    }
+    $bytes = [Text.Encoding]::UTF8.GetBytes($canon.ToString())
+    $sha = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    return [BitConverter]::ToString($sha).Replace('-', '').ToLowerInvariant()
+}
+
 function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $payloadVersion) {
     $lock = Enter-ManifestLock
     try {
         $m = Read-Manifest
-        $m[$target] = @{
+        $entry = @{
             palette       = $palette
             path          = $resolvedPath
             appVersion    = $appVersion
             payloadVersion = $payloadVersion
             applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         }
+        # W2-004 (T-246:R009): the mutable slug `custom` is not a content identity.
+        # Record a deterministic canonical SHA-256 of the Custom generation so two
+        # different Custom publishes carry different manifest identities. Non-custom
+        # palettes get no field (backward compatible; the slug is a shipped, immutable
+        # pack). Missing/unreadable custom.json fails CLOSED (throws) rather than
+        # silently recording a digest-less custom entry.
+        $digest = Get-CustomContentDigest -Palette $palette
+        if ($digest) { $entry.contentDigest = $digest }
+        $m[$target] = $entry
         Write-Manifest $m
     } finally { Exit-ManifestLock $lock }
+}
+
+# W2-006 (SRC-007:R011): paths.json and installed.json are two independent
+# files with two independent lock families, so a plain cross-file write can
+# deadlock (file locks never hand off to each other) and lock ordering is not
+# a documented cross-file invariant. The prerequisite-persistence + manifest
+# commit sequence is therefore composed explicitly: the paths key is applied
+# FIRST (phase 1) so a persistence failure aborts with ZERO manifest mutation,
+# then the manifest entry is committed (phase 2).
+function Set-ManifestEntryWithPreference([string]$target, [string]$palette, [string]$resolvedPath, [string]$appVersion, [string]$payloadVersion, [string]$preferenceKey, [string]$preferencePath) {
+    # Phase 1 (prerequisite): persist the path preference. Failure here throws
+    # with the W2-006 accuracy prefix before the manifest is even touched.
+    Save-PathPreferenceOrThrow $preferenceKey $preferencePath
+    # Phase 2: the manifest entry. If the manifest write fails the preference
+    # is already recorded - a remembered path for a target whose manifest entry
+    # is absent resolves nowhere harmful (the resolver validates every
+    # candidate against Test-ElectronApp before use), so no rollback of the
+    # preference is attempted (a compensating delete would itself need the
+    # same contested lock).
+    Set-ManifestEntry $target $palette $resolvedPath $appVersion $payloadVersion
 }
 
 function Remove-ManifestEntry($target) {
@@ -358,8 +493,9 @@ function Get-ReapplyIntentToken($entry) {
         [string]$entry.path,
         [string]$entry.appVersion,
         [string]$entry.payloadVersion,
-        [string]$entry.applied
-    ) + $itemPaths) -join "`x1f"
+        [string]$entry.applied,
+        [string]$entry.contentDigest
+    ) + $itemPaths) -join [string][char]31
     $sha = [System.Security.Cryptography.SHA256]::Create()
     try {
         return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-', '').ToLowerInvariant()
@@ -375,7 +511,7 @@ function Set-ManifestEntryMulti($target, $palette, [string[]]$paths, $appVersion
     $lock = Enter-ManifestLock
     try {
         $m = Read-Manifest
-        $m[$target] = @{
+        $entry = @{
             palette       = $palette
             path          = if ($paths.Count) { $paths[0] } else { '' }
             items         = @($paths | ForEach-Object { @{ path = $_ } })
@@ -383,6 +519,9 @@ function Set-ManifestEntryMulti($target, $palette, [string[]]$paths, $appVersion
             payloadVersion = $payloadVersion
             applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         }
+        $digest = Get-CustomContentDigest -Palette $palette
+        if ($digest) { $entry.contentDigest = $digest }
+        $m[$target] = $entry
         Write-Manifest $m
     } finally { Exit-ManifestLock $lock }
 }
@@ -706,6 +845,19 @@ function Save-PathPreference([string]$key, [string]$path) {
         } finally { if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue } }
     } finally {
         $lockStream.Dispose()
+    }
+}
+
+# W2-006 (SRC-007:R011): Save-PathPreference with a THROWN, accurate error.
+# The dispatcher's prerequisite ordering calls this BEFORE any target mutation:
+# a failure must abort the target with a persistence-accurate message while
+# every mutation stays zero. Save-PathPreference itself stays best-effort
+# silent for the GUI paths that still want that shape.
+function Save-PathPreferenceOrThrow([string]$key, [string]$path) {
+    try {
+        Save-PathPreference $key $path
+    } catch {
+        throw "W2-006: path-preference persistence FAILED for '$key' ('$path'): $($_.Exception.Message). No application file, stage, manifest, or recovery state was touched - the target was not processed."
     }
 }
 

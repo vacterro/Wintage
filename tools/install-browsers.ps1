@@ -7,6 +7,11 @@ param(
     [string]$StageRoot = (Join-Path $env:LOCALAPPDATA 'Wintage\browser-theme'),
     [string]$Catalog,
     [switch]$NoLaunch,
+    # R015 / PERF-004: an explicit rescan is the ONLY path that re-walks the
+    # PortableRoot subtree; an unchanged root with a valid cache is served from
+    # the persisted candidate set.
+    [switch]$Rescan,
+    [string]$CacheRoot,
     [scriptblock]$ClipboardWriter = { param([string]$Value) Set-Clipboard -Value $Value }
 )
 
@@ -16,6 +21,11 @@ $tampermonkeyId = 'dhdgffkkebhmkfjojejmpbldmpobfkfo'
 $userscriptUrl = 'https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js'
 $tampermonkeyUrl = "https://chromewebstore.google.com/detail/tampermonkey/$tampermonkeyId"
 $script:browsers = @()
+. (Join-Path $PSScriptRoot 'browser-discovery.ps1')
+# Profile theme answers are cached for the length of this run and persisted by
+# mtime fingerprint, so an unchanged Preferences file is never read twice.
+$script:profileThemeCache = @{}
+$script:browserDiscovery = 'none'
 
 function Add-Browser([string]$name, [string]$exe, [string]$userData) {
     if (-not $exe -or -not $userData) { return }
@@ -60,36 +70,21 @@ function Get-Browsers {
     foreach ($item in $known) { Add-Browser $item[0] $item[1] $item[2] }
 
     if ($PortableRoot -and (Test-Path -LiteralPath $PortableRoot)) {
-        $exeNames = @('chrome.exe', 'brave.exe', 'msedge.exe', 'vivaldi.exe', 'opera.exe')
-        $files = Get-ChildItem -LiteralPath $PortableRoot -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -in $exeNames } | Sort-Object { $_.FullName.Length }
-        foreach ($file in $files) {
-            try { $product = $file.VersionInfo.ProductName } catch { $product = '' }
-            if ($product -notmatch '(?i)(Chrome|Chromium|Brave|Cent Browser|Vivaldi|Opera|Microsoft Edge)') { continue }
-            $dir = $file.Directory.FullName
-            $parent = Split-Path $dir -Parent
-            $candidates = @(
-                (Join-Path $dir 'User Data'), (Join-Path $dir 'data'),
-                (Join-Path $parent 'User Data'), (Join-Path $parent 'data'),
-                (Join-Path $parent 'profile\data')
-            )
-            if ($product -match '(?i)Opera') {
-                $candidates = @((Join-Path $env:APPDATA 'Opera Software\Opera Stable')) + $candidates
-            }
-            $data = $candidates | Where-Object {
-                (Test-Path -LiteralPath $_) -and
-                ((Test-Path -LiteralPath (Join-Path $_ 'Local State')) -or
-                 @(Get-ChildItem -LiteralPath $_ -Directory -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -eq 'Default' -or $_.Name -like 'Profile *' }).Count)
-            } | Select-Object -First 1
-            if ($data) { Add-Browser $product $file.FullName $data }
-        }
+        $portable = Get-PortableCandidates -PortableRoot $PortableRoot -CacheRoot $CacheRoot -Rescan:$Rescan
+        foreach ($candidate in @($portable.Candidates)) { Add-Browser $candidate.Name $candidate.Exe $candidate.UserData }
+        $script:browserDiscovery = $portable.Mode
     }
     $script:browsers
 }
 
 function Get-BrowserProfiles {
     $profiles = @()
+    $cacheData = Read-BrowserDiscoveryFile $CacheRoot
+    if ($cacheData -and $cacheData.profiles) {
+        foreach ($property in $cacheData.profiles.PSObject.Properties) {
+            $script:profileThemeCache[$property.Name] = $property.Value
+        }
+    }
     foreach ($browser in @(Get-Browsers)) {
         $dirs = @(Get-ChildItem -LiteralPath $browser.UserData -Directory -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -eq 'Default' -or $_.Name -like 'Profile *' })
@@ -99,14 +94,10 @@ function Get-BrowserProfiles {
         foreach ($dir in $dirs) {
             $tm = (Test-Path -LiteralPath (Join-Path $dir.FullName "Extensions\$tampermonkeyId")) -or
                   (Test-Path -LiteralPath (Join-Path $dir.FullName "Local Extension Settings\$tampermonkeyId"))
-            $preferences = @((Join-Path $dir.FullName 'Preferences'), (Join-Path $dir.FullName 'Secure Preferences'))
-            $escapedStage = $StageRoot.Replace('\', '\\')
-            $themeLoaded = $false
-            foreach ($pref in $preferences) {
-                if (-not (Test-Path -LiteralPath $pref)) { continue }
-                $raw = [System.IO.File]::ReadAllText($pref)
-                if ($raw.Contains($escapedStage) -or $raw.Contains($StageRoot.Replace('\', '/'))) { $themeLoaded = $true; break }
-            }
+            # R015 / PERF-004: bounded chunked search (never ReadAllText) and an
+            # mtime/length fingerprint cache, so an unchanged preference file is
+            # not re-read on the next status refresh.
+            $themeLoaded = Get-ProfileThemeLoaded -ProfilePath $dir.FullName -StageRoot $StageRoot -Cache $script:profileThemeCache
             $profiles += [pscustomobject]@{
                 Browser = $browser.Name
                 Exe = $browser.Exe
@@ -118,6 +109,7 @@ function Get-BrowserProfiles {
             }
         }
     }
+    Merge-ProfileThemeCache -CacheRoot $CacheRoot -Cache $script:profileThemeCache
     $profiles
 }
 
@@ -132,6 +124,9 @@ function Get-Summary {
         ThemeLoadedCount = @($profiles | Where-Object ThemeLoaded).Count
         Palette = $paletteNow
         StageRoot = $StageRoot
+        # Observable discovery cost (R015 / PERF-004): 'cache' proves the status
+        # refresh answered without walking the PortableRoot subtree.
+        PortableDiscovery = $script:browserDiscovery
         Profiles = $profiles
     }
 }

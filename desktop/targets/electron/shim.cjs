@@ -25,7 +25,7 @@ try {
   const { app } = require('electron');
   TARGET_IDENTITY = String(app.getName() || '').trim().toLowerCase();
 } catch (e) { }
-const IS_FREEBUFF = TARGET_IDENTITY === 'freebuff';
+const IS_FREEBUFF = TARGET_IDENTITY === 'freebuff' || TARGET_IDENTITY.includes('freebuff');
 
 let css = '';
 try { css = fs.readFileSync(CSS_FILE, 'utf8'); } catch (e) {
@@ -106,6 +106,21 @@ const SCROLL_FIX = `(() => {
   const NOISE = 8;
   const BUDGET = 200;
   const MARK = "__wintageNoScrollbar";
+  // PERF-001 (SRC-007:R012): BUDGET bounds STYLING work, but pre-fix the two
+  // operations feeding it were unbounded — nextTreeNode pushed EVERY child of
+  // a popped node onto the stack (250,000 direct children = 250,000 array
+  // touches to style ONE node), and the observer callback synchronously walked
+  // every delivered record AND every addedNodes entry (one childList with
+  // 100,000 addedNodes = 100,000 reads before the first budget unit).
+  // Both are now cursor-based, and each carries its own deterministic budget:
+  //   TRAVERSE_BUDGET — child edges advanced per frame (traversal primitive);
+  //   INTAKE_BUDGET   — record/addedNodes entries touched per callback;
+  //   ROOT_QUEUE_BUDGET — tree-root queue operations per callback.
+  // Wall-clock timing is intentionally NOT part of the acceptance contract:
+  // regression tests assert on these counters.
+  const TRAVERSE_BUDGET = 400;
+  const INTAKE_BUDGET = 200;
+  const ROOT_QUEUE_BUDGET = 200;
 
   const fixOne = el => {
     const cs = getComputedStyle(el);
@@ -141,6 +156,24 @@ const SCROLL_FIX = `(() => {
   let settleTimer = null;
   let settlePasses = 0;
   let settleNeeded = false;
+  // PERF-001: deterministic work counters, for tests and diagnosis.
+  const counters = {
+    edges: 0,           // traversal child-edges advanced (nextTreeNode work)
+    styled: 0,          // elements styled (fixOne calls)
+    recordsTouched: 0,  // mutation records consumed by intake
+    addedTouched: 0,    // addedNodes entries read by intake
+    queueOps: 0,        // queueTree/queueDirty bookkeeping ops
+    overflowContinues: 0, // whole-document continuation tokens issued
+    maxRetained: 0      // high-water mark of retained traversal/input state
+  };
+  const noteRetained = () => {
+    let n = pendingIntakeBatches() + dirty.size + (trees.length - treeHead);
+    for (let i = 0; i < activeTrees.length; i++) {
+      const f = activeTrees[i];
+      n += f.stack ? f.stack.length : 1;
+    }
+    if (n > counters.maxRetained) counters.maxRetained = n;
+  };
 
   // PERF-002 (SRC-004): the queue is bounded and ancestor-collapsed. Two
   // measured shapes broke the nominal BUDGET=200:
@@ -157,23 +190,30 @@ const SCROLL_FIX = `(() => {
   // removal and therefore O(n^2) over a drained queue. Everything below treeHead
   // is already consumed, so pending work is trees.length - treeHead.
   let treeHead = 0;
-  const hasWork = () => dirty.size || (trees.length - treeHead) > 0 || activeTrees.length || treeOverflow;
+  const pendingIntakeBatches = () => pendingIntake.length;
+  const hasWork = () => dirty.size || (trees.length - treeHead) > 0 || activeTrees.length || treeOverflow || hasIntakeWork();
   const queueFrame = () => {
     if (frameQueued) return;
     frameQueued = true;
     requestAnimationFrame(flush);
   };
-  const queueDirty = el => {
-    if (!el || el.nodeType !== 1) return;
-    // PERF-002: the dirty set is bounded by the same rule as the root queue. An
-    // attribute storm delivers one record per element, and one Set entry per
-    // record is exactly the per-node retention this finding is about. Past the
-    // cap the whole document is re-walked once instead -- a superset of every
-    // entry that would have been dropped.
-    if (dirty.size >= MAX_DIRTY) { treeOverflow = true; queueFrame(); return; }
-    dirty.add(el);
-    queueFrame();
-  };
+const queueDirty = el => {
+     if (!el || el.nodeType !== 1) return;
+     // PERF-002: the dirty set is bounded by the same rule as the root queue. An
+     // attribute storm delivers one record per element, and one Set entry per record is exactly the
+     // per-node retention this finding is about. Past the cap the whole document
+     // is re-walked once instead -- a superset of every entry that would have been
+     // dropped.
+     if (dirty.size >= MAX_DIRTY) {
+       if (!treeOverflow) counters.overflowContinues++;
+       treeOverflow = true;
+       queueFrame();
+       return;
+     }
+     counters.queueOps++;
+     dirty.add(el);
+     queueFrame();
+   };
   const queueTree = root => {
     if (!root || root.nodeType !== 1 || treeRoots.has(root)) return;
     // Ancestor collapse: an already-queued ancestor will walk this subtree, so
@@ -193,15 +233,17 @@ const SCROLL_FIX = `(() => {
         treeRoots.delete(queued);
       }
     }
-    if (treeRoots.size >= MAX_TREE_ROOTS) {
-      // Overflow is ONE bounded continuation token, not one entry per node: the
-      // next frame re-walks from documentElement, which is a superset of every
-      // root we are dropping here. Nothing is lost, and memory stops scaling
-      // with the size of the insertion burst.
-      treeOverflow = true;
-      queueFrame();
-      return;
-    }
+if (treeRoots.size >= MAX_TREE_ROOTS) {
+       // Overflow is ONE bounded continuation token, not one entry per node: the
+       // next frame re-walks from documentElement, which is a superset of every
+       // root we are dropping here. Nothing is lost, and memory stops scaling
+       // with the size of the insertion burst.
+       if (!treeOverflow) counters.overflowContinues++;
+       treeOverflow = true;
+       queueFrame();
+       return;
+     }
+    counters.queueOps++;
     treeRoots.add(root);
     trees.push(root);
     queueFrame();
@@ -220,6 +262,29 @@ const SCROLL_FIX = `(() => {
     }
     return null;
   };
+  // PERF-001 (SRC-007:R012): persistent incremental traversal. The old
+  // nextTreeNode pushed EVERY child of a popped node onto the stack in one
+  // call, so one node with 250,000 direct children touched all 250,000 child
+  // entries before a single unit of the 200-node styling budget was consumed.
+  //
+  // The replacement keeps an explicit { node, childIndex } frame per tree:
+  //   - one call advances AT MOST one child edge (counters.edges); a wide
+  //     sibling list is consumed through the persistent childIndex, so the
+  //     list is never re-enumerated from zero;
+  //   - the root itself is visited FIRST (it still receives SCROLL_FIX);
+  //   - the pre-order order matches the reference traversal exactly, so
+  //     eventual coverage equals a full unbounded walk.
+  // The returned element is styled this frame; its subtree is descended into
+  // on later calls. Frame childIndex semantics: -1 = the frame's own node has
+  // NOT been styled yet (root frames only); >= 0 = node already served, and
+  // children before that index are already consumed.
+  let edgeBudget = 0; // per-flush traversal allowance, reset in flush()
+  // PERF-001 (SRC-007:R012): the ONLY traversal implementation is the bounded
+  // persistent cursor below. The historical bulk-children variant (one node
+  // with 250,000 direct children enumerating all of them in one budget unit)
+  // is gone from the shipped payload entirely: no runtime flag, no page-context
+  // hook, no fallback path. Red controls reproduce it from temporary mutated
+  // source strings in tools/test-perf-lanes.js, never from shipped branches.
   const nextTreeNode = () => {
     for (;;) {
       let state = activeTrees[activeTrees.length - 1];
@@ -227,14 +292,30 @@ const SCROLL_FIX = `(() => {
         const root = takeRoot();
         if (!root) return null;
         treeRoots.delete(root);
-        state = { stack: [root] };
+        state = { node: root, childIndex: -1 };
         activeTrees.push(state);
       }
-      const node = state.stack.pop();
-      if (!node) { activeTrees.pop(); continue; }
-      const children = node.children;
-      if (children) for (let i = children.length - 1; i >= 0; i--) state.stack.push(children[i]);
-      return node;
+      if (state.childIndex === -1) {
+        // First serve of this tree: style the root, then descend next call.
+        state.childIndex = 0;
+        return state.node;
+      }
+      const kids = state.node.children;
+      const kidCount = kids ? kids.length : 0;
+      if (state.childIndex < kidCount) {
+        // Bounded edge advance: exactly one child edge per call. Reaching the
+        // budget parks the cursor mid-list and resumes here next frame.
+        if (edgeBudget <= 0) return null;
+        edgeBudget--;
+        counters.edges++;
+        const child = kids[state.childIndex++];
+        // childIndex 0 marks the child ALREADY SERVED by this very yield, so
+        // its frame never styles it a second time.
+        activeTrees.push({ node: child, childIndex: 0 });
+        if (child && child.nodeType === 1) return child;
+        continue; // non-element child: its empty frame pops on the next pass
+      }
+      activeTrees.pop(); // subtree exhausted; unwinding costs no edge units
     }
   };
   const scheduleSettle = () => {
@@ -249,6 +330,7 @@ const SCROLL_FIX = `(() => {
   };
   function flush() {
     frameQueued = false;
+    edgeBudget = TRAVERSE_BUDGET;
     let budget = BUDGET;
     while (budget-- > 0) {
       let el;
@@ -256,28 +338,129 @@ const SCROLL_FIX = `(() => {
         el = dirty.values().next().value;
         dirty.delete(el);
       } else {
+        // R012: while mutation intake is still pending, do NOT start new tree
+        // walks. Overflow tokens set during intake would otherwise interleave
+        // with the walk and force one full document re-walk PER intake frame.
+        // Draining intake first collapses them into ONE token -> ONE walk,
+        // which is still a superset: it starts after every dropped entry
+        // already exists and visits every connected child of the root.
+        if (hasIntakeWork()) break;
         el = nextTreeNode();
         if (!el) break;
       }
+      counters.styled++;
       if (fixOne(el)) settleNeeded = true;
     }
+    noteRetained();
     if (hasWork()) queueFrame();
     else scheduleSettle();
   }
 
   queueTree(document.documentElement);
-  new MutationObserver(records => {
-    settleNeeded = true;
-    for (const r of records) {
-      if (r.type === "childList") {
-        queueDirty(r.target);
-        for (const node of r.addedNodes) queueTree(node);
-      } else if (r.type === "attributes") {
-        queueDirty(r.target);
-      }
+  // PERF-001 (SRC-007:R012): BOUNDED MUTATION INTAKE. The old callback
+  // synchronously looped every delivered record and every addedNodes entry of
+  // every childList record — one 100,000-record delivery or one childList with
+  // 100,000 addedNodes performed all of that work in a single observer
+  // callback, before any of the queue caps (which only bound RETENTION, not
+  // INTAKE) ever applied.
+  //
+  // Intake is now incremental scheduler state:
+  //   - the callback itself does only O(1) bookkeeping and schedules work;
+  //   - a persistent pending-intake list carries { records, rIndex, aIndex }
+  //     frames, so a partially consumed childList record's addedNodes cursor
+  //     survives across callbacks;
+  //   - each drain consumes at most INTAKE_BUDGET addedNodes entries plus one
+  //     record at a time, and at most ROOT_QUEUE_BUDGET queue operations;
+  //   - attribute records always repair their target first (bounded O(1) per
+  //     record) and are consumed under the same record budget.
+  //
+  // Overflow (A3) stays a SUPERSET: when pending intake exceeds the retention
+  // cap, the detailed tail records are dropped WITHOUT inspecting them and
+  // exactly ONE whole-document continuation is scheduled, which re-walks from
+  // documentElement and therefore covers every connected element the dropped
+  // tail could have contained. No per-node tokens.
+  const pendingIntake = [];       // frames: { records, rIndex, aIndex, targetDone }
+  let intakeScheduled = false;
+  const MAX_PENDING_BATCHES = 8;  // bounded retained delivery state
+  const hasIntakeWork = () => {
+    for (let i = 0; i < pendingIntake.length; i++) {
+      const f = pendingIntake[i];
+      if (f.rIndex < f.records.length) return true;
     }
-    queueFrame();
-  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+    return false;
+  };
+  const drainIntake = () => {
+    intakeScheduled = false;
+    let recBudget = INTAKE_BUDGET;
+    let queueBudget = ROOT_QUEUE_BUDGET;
+    for (let bi = 0; bi < pendingIntake.length && recBudget > 0 && queueBudget > 0;) {
+      const f = pendingIntake[bi];
+      if (f.rIndex >= f.records.length) { pendingIntake.splice(bi, 1); continue; }
+      const r = f.records[f.rIndex];
+      if (r.type === "attributes") {
+        // Target repair is guaranteed: queueDirty on the record target, O(1).
+        counters.recordsTouched++;
+        recBudget--; queueBudget--;
+        f.rIndex++;
+        queueDirty(r.target);
+        continue;
+      }
+      // childList: the record target is repairable; added nodes are consumed
+      // incrementally against aIndex so a stop halfway through a record's
+      // addedNodes preserves the exact cursor and resumes later. aIndex is
+      // scoped to the CURRENT record: it resets when the record completes, so
+      // every record's target repair and addedNodes are actually consumed.
+      if (!f.targetDone) {
+        counters.recordsTouched++;
+        recBudget--; queueBudget--;
+        queueDirty(r.target);
+        f.targetDone = true;
+      }
+      const added = r.addedNodes;
+      const addedLen = added ? added.length : 0;
+      while (f.aIndex < addedLen) {
+        if (queueBudget <= 0) break; // resume later, exact same cursor
+        queueBudget--;
+        counters.addedTouched++;
+        const node = added[f.aIndex++];
+        queueTree(node);
+      }
+      if (f.aIndex < addedLen) break; // mid-addedNodes: frame stays intact
+      f.rIndex++; f.aIndex = 0; f.targetDone = false; // advance to next record
+    }
+    if (hasIntakeWork()) {
+      // Continuation is scheduled, never synchronous: the callback/drain does
+      // only bounded work and yields.
+      if (!intakeScheduled) { intakeScheduled = true; requestAnimationFrame(drainIntake); }
+    }
+    if (hasWork()) queueFrame(); else scheduleSettle();
+  };
+   // PERF-001 (SRC-007:R012): the callback does only O(1) bookkeeping — enqueue
+  // the batch and schedule the drain. The historical synchronous intake that
+  // looped every record and every addedNodes entry inside the callback is gone
+  // from the shipped payload: no flag, no page-context hook can re-enable it.
+  const newMutationObserver = () => new MutationObserver(records => {
+    settleNeeded = true;
+     // O(1) per callback: enqueue the batch and schedule the drain. A record
+     // batch is never synchronously enumerated here, no matter how large.
+     if (pendingIntake.length >= MAX_PENDING_BATCHES) {
+       // A3: overflow — stop retaining detailed tail state, do NOT inspect the
+       // discarded tail (we do not read its records to discover what is in it),
+       // and schedule exactly ONE whole-document continuation. That re-walk is
+       // a superset of every connected element in the dropped delivery.
+       if (!treeOverflow) counters.overflowContinues++;
+       treeOverflow = true;
+       queueFrame();
+       return;
+     }
+     pendingIntake.push({ records: records, rIndex: 0, aIndex: 0, targetDone: false });
+     if (!intakeScheduled) { intakeScheduled = true; requestAnimationFrame(drainIntake); }
+   });
+  newMutationObserver().observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+
+  // Deterministic primitive counters are exposed for tests and diagnosis (A4):
+  // acceptance asserts on these, never on wall-clock timing.
+  try { window.__wintageScrollCounters = counters; } catch (e) { }
 
   return "scroll fix installed";
 })()`;
@@ -600,6 +783,51 @@ const THEME_REASSERT_FIX = `(() => {
   return "theme re-assert watcher installed";
 })()`;
 
+// ─── FREEBUFF POPOVER LAYOUT THRASH FIX ─────────────────────────────────────
+// Freebuff's Eo layout hook creates an infinite ResizeObserver ping-pong loop
+// on bottom-anchored popovers (.agent-menu) whose unconstrained height exceeds
+// the available viewport space. In its ResizeObserver callback it clears
+// maxHeight to "" to measure unconstrained height, then sets maxHeight = f px,
+// which resizes the element and schedules another ResizeObserver notification
+// every single animation frame, causing 60-144fps top-edge jitter.
+//
+// Observing the constrained container itself with ResizeObserver is what drives
+// the loop; window resize and scroll listeners already reposition and reclamp
+// the menu properly. Wrapping ResizeObserver.prototype.observe to skip observing
+// .agent-menu breaks the feedback loop completely without affecting other UI.
+// Clamping .agent-menu and its scroll container via !important CSS ensures
+// height stability regardless of inline clears.
+const FREEBUFF_POPOVER_FIX = `(() => {
+  if (window.__wintageFreebuffPopoverFix) return "already running";
+  window.__wintageFreebuffPopoverFix = true;
+
+  try {
+    const style = document.createElement("style");
+    style.id = "wintage-freebuff-agent-menu";
+    style.textContent = [
+      ".agent-menu { max-height: calc(100vh - 76px) !important; }",
+      ".agent-menu-scroll { max-height: calc(100vh - 84px) !important; overflow-y: auto !important; }"
+    ].join("\\n");
+    (document.head || document.documentElement).appendChild(style);
+  } catch (e) { }
+
+  try {
+    const rawObserve = ResizeObserver.prototype.observe;
+    ResizeObserver.prototype.observe = function (target, options) {
+      if (target && target.classList && (
+        target.classList.contains("agent-menu") ||
+        (target.matches && target.matches(".agent-menu, [class*='agent-menu']"))
+      )) {
+        return;
+      }
+      return rawObserve.call(this, target, options);
+    };
+  } catch (e) { }
+
+  return "freebuff popover fix installed";
+})()`;
+
+
 // ─── A BAR THAT REPORTS A VALUE: TRIED, MEASURED, WITHDRAWN ──────────────────
 // The problem is real and stays on the board. A usage or quota bar carries its
 // number in the PROPORTION between fill and track, surface flattening paints both
@@ -836,6 +1064,9 @@ if (css) {
           wc.executeJavaScript(THEME_REASSERT_FIX, true)
             .then(r => stamp('themereassert: ' + r))
             .catch(err => stamp('themereassert FAILED: ' + (err && err.message)));
+          wc.executeJavaScript(FREEBUFF_POPOVER_FIX, true)
+            .then(r => stamp('freebuffpopover: ' + r))
+            .catch(err => stamp('freebuffpopover FAILED: ' + (err && err.message)));
         }
         const payload = CLAUDE_VIEW.test(url) ? css + CLAUDE_FOREGROUND_CSS : css;
         // PERF-007: retire the previous key BEFORE installing a replacement, and

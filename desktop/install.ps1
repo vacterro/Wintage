@@ -40,6 +40,11 @@ param(
     [string]$BrowserStageRoot = (Join-Path $env:LOCALAPPDATA 'Wintage\browser-theme'),
     [string]$BrowserCatalog,
     [switch]$NoBrowserLaunch,
+    # R015 / PERF-004: the ordinary listing serves the remembered PortableRoot
+    # candidates from cache and never re-walks the subtree. This switch is the
+    # explicit rescan that discovers portable browsers added beneath an
+    # unchanged root; it is the only path that re-enumerates.
+    [switch]$RescanBrowsers,
     [string]$Cinema4DPath,
     [string]$NotepadPlusPlusPath,
     [switch]$Reapply,
@@ -195,10 +200,10 @@ $CONSOLE_FONT = 'Terminus (TTF) for Windows'
 $CONHOST_KEY = if ($env:WINTAGE_TEST_CONHOST_KEY) { $env:WINTAGE_TEST_CONHOST_KEY } else { 'HKCU:\Console' }
 $CONHOST_BACKUP = Join-Path $backupBase 'conhost-settings.json'
 
-$WINDOWS_THEME_KEY = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes'
-$WINDOWS_THEMES_DIR = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Themes'
+$WINDOWS_THEME_KEY = if ($env:WINTAGE_TEST_WINDOWS_THEME_KEY) { $env:WINTAGE_TEST_WINDOWS_THEME_KEY } else { 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes' }
+$WINDOWS_THEMES_DIR = if ($env:WINTAGE_TEST_WINDOWS_THEMES_DIR) { $env:WINTAGE_TEST_WINDOWS_THEMES_DIR } else { Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Themes' }
 $WINDOWS_THEME_MARKER = Join-Path $WINDOWS_THEMES_DIR '.wintage-windows-palette'
-$WINDOWS_DWM_KEY = 'HKCU:\Software\Microsoft\Windows\DWM'
+$WINDOWS_DWM_KEY = if ($env:WINTAGE_TEST_WINDOWS_DWM_KEY) { $env:WINTAGE_TEST_WINDOWS_DWM_KEY } else { 'HKCU:\Software\Microsoft\Windows\DWM' }
 $WINDOWS_DWM_BACKUP = Join-Path $backupBase 'windows-dwm-settings.json'
 
 $MPC_KEY = 'HKCU:\Software\MPC-HC\MPC-HC\Settings'
@@ -298,6 +303,7 @@ if ($Reapply) {
     if ($BrowserStageRoot) { $passArgs['-BrowserStageRoot'] = $BrowserStageRoot }
     if ($BrowserCatalog) { $passArgs['-BrowserCatalog'] = $BrowserCatalog }
     if ($NoBrowserLaunch) { $passArgs['-NoBrowserLaunch'] = $NoBrowserLaunch }
+    if ($RescanBrowsers) { $passArgs['-RescanBrowsers'] = $RescanBrowsers }
     $sorted = @($manifest.Keys | Sort-Object)
     foreach ($key in $sorted) {
         $data = $manifest[$key]
@@ -553,6 +559,7 @@ if (-not $Target -and -not $Selected) {
     $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-ListJson', '-StageRoot', $BrowserStageRoot)
     if ($PortableBrowserRoot) { $browserArgs += @('-PortableRoot', $PortableBrowserRoot) }
     if ($BrowserCatalog) { $browserArgs += @('-Catalog', $BrowserCatalog) }
+    if ($RescanBrowsers) { $browserArgs += '-Rescan' }
     $browserOut = (& powershell @browserArgs 2>$null | Out-String).Trim()
     $browserInfo = $null
     if ($LASTEXITCODE -eq 0 -and $browserOut) {
@@ -694,10 +701,19 @@ $names = if ($Target -eq 'all') { $known } elseif ($selectedList.Count) { $selec
 # PERF-005 (T-240): a -Selected batch shares ONE build verification across the
 # whole batch, exactly as `-Target all` already does with $allBuildCurrent.
 # The dispatch loop below applies it per PRESENT build-consuming target.
+# W2-004 (T-246:R009): check+dispatch run UNDER the same batch lock, so the
+# verdict describes the generation the batch then consumes. Checked before
+# the lock, a Save-Custom could publish B between the check and target 2's
+# read -- one batch would install A and B under one label.
 $selectedBuildCurrent = $null   # $null = unknown (no node), $true/$false = check result
-if ($selectedList.Count -and $node) {
-    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
-    $selectedBuildCurrent = ($LASTEXITCODE -eq 0)
+$batchLock = $null
+if ($selectedList.Count) {
+    $batchLock = Enter-BatchLock
+    if ($node) {
+        & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
+        $selectedBuildCurrent = ($LASTEXITCODE -eq 0)
+    }
+    if ($env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS) { Start-Sleep -Milliseconds ([int]$env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS) }
 }
 
 # Strict-target semantics (T-189): an explicitly-requested target (or a
@@ -744,6 +760,11 @@ function Restore-FreeBuffPatchState($state) {
     }
 }
 
+# W2-004 T-246:R009: batch-wide serialization -- the lock already owns
+# check+dispatch as one window; dispatch keeps it until every target and the
+# manifest + paths persistence are done.
+
+try {
 foreach ($name in $names) {
     $targetLock = $null
     try {
@@ -794,6 +815,7 @@ foreach ($name in $names) {
         $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-Palette', $Palette, '-StageRoot', $BrowserStageRoot)
         if ($PortableBrowserRoot) { $browserArgs += @('-PortableRoot', $PortableBrowserRoot) }
         if ($BrowserCatalog) { $browserArgs += @('-Catalog', $BrowserCatalog) }
+        if ($RescanBrowsers) { $browserArgs += '-Rescan' }
         if ($NoBrowserLaunch) { $browserArgs += '-NoLaunch' }
         if ($Revert) { $browserArgs += '-Revert' }
         if ($WhatIfPreference) { $browserArgs += '-WhatIf' }
@@ -808,6 +830,10 @@ foreach ($name in $names) {
         # snapshot: the stage stayed half-written and the manifest unchanged.
         # Now every post-snapshot terminating error restores the captured
         # pre-stage through the rollback callback before failing.
+        # R011 prerequisite ordering: persist a validated explicit portable
+        # browser root BEFORE any stage/application mutation. A persistence
+        # failure must abort the target with ZERO stage/manifest mutation.
+        if (-not $Revert -and $PortableBrowserRoot) { Save-PathPreferenceOrThrow 'portable' $PortableBrowserRoot }
         $preStage = Save-DirPreState $BrowserStageRoot
         Invoke-TargetCommit 'browsers' 'Chromium browsers' {
             $script:browserOut = & powershell @browserArgs 2>&1
@@ -818,11 +844,14 @@ foreach ($name in $names) {
             if ($Revert) {
                 Remove-ManifestEntry 'browsers'
             } else {
-                Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion)
+                # W2-006 (R011): the browser preference was already persisted
+                # ABOVE (prerequisite ordering, before the stage mutation);
+                # this composition only re-states the key atomically so a
+                # committed manifest is guaranteed to have its preference on
+                # disk. No post-success persistence can fail the target.
+                Set-ManifestEntryWithPreference 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion) 'portable' $PortableBrowserRoot
             }
         } { Restore-DirPreState $BrowserStageRoot $preStage }
-        # W2-004: remember a validated portable browser root for later runs.
-        if (-not $Revert -and $PortableBrowserRoot) { Save-PathPreference 'portable' $PortableBrowserRoot }
         continue
     }
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
@@ -834,8 +863,17 @@ foreach ($name in $names) {
     if ($name -eq 'totalcmd') { Invoke-TotalCmd -Index 1 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'totalcmd2') { Invoke-TotalCmd -Index 2 -DoRevert:$Revert -PaletteSlug $Palette; continue }
     if ($name -eq 'obsidian') { Invoke-Obsidian -DoRevert:$Revert -PaletteSlug $Palette; continue }
-    if ($name -eq 'notepadplusplus') { Invoke-NotepadPlusPlus -DoRevert:$Revert -PaletteSlug $Palette; continue }
-    if ($name -eq 'cinema4d') { Invoke-Cinema4D -DoRevert:$Revert -PaletteSlug $Palette; continue }
+    # W2-006 (R011): these targets carry a persisted explicit-path preference
+    # (paths.json key owned by the GUI), so a real Apply persists the validated
+    # explicit path BEFORE the target function mutates anything.
+    if ($name -eq 'notepadplusplus') {
+        if (-not $Revert -and $NotepadPlusPlusPath) { Save-PathPreferenceOrThrow 'notepadplusplus' $NotepadPlusPlusPath }
+        Invoke-NotepadPlusPlus -DoRevert:$Revert -PaletteSlug $Palette; continue
+    }
+    if ($name -eq 'cinema4d') {
+        if (-not $Revert -and $Cinema4DPath) { Save-PathPreferenceOrThrow 'cinema4d' $Cinema4DPath }
+        Invoke-Cinema4D -DoRevert:$Revert -PaletteSlug $Palette; continue
+    }
 
                 # ---- Electron targets ----
     if ($ELECTRON.ContainsKey($name)) {
@@ -912,6 +950,16 @@ foreach ($name in $names) {
             continue
         }
         if ($PSCmdlet.ShouldProcess($e.Resources, $action)) {
+            # R011 prerequisite ordering: persist the validated explicit path
+            # preference BEFORE any snapshot or application mutation, so a
+            # preference-persistence failure leaves the application tree, the
+            # stage, the manifest, and the recovery-snapshot lifecycle all
+            # byte-identical and the operation exits nonzero. Never report a
+            # target FAILED after an already-committed mutation just because
+            # preference persistence ran late and failed.
+            if (-not $Revert -and $name -eq 'codenomad' -and $CodeNomadPath) { Save-PathPreferenceOrThrow 'codenomad' $CodeNomadPath }
+            if (-not $Revert -and $name -eq 'workbuddy' -and $WorkBuddyPath) { Save-PathPreferenceOrThrow 'workbuddy' $WorkBuddyPath }
+            if (-not $Revert -and $name -eq 'zcode' -and $ZCodePath) { Save-PathPreferenceOrThrow 'zcode' $ZCodePath }
             # FreeBuff is atomic AS A WHOLE (T-190): BOTH layers are preflighted
             # before ANY mutation, and if the second layer fails the first is
             # restored to its exact pre-operation state (never a blind --revert,
@@ -976,17 +1024,41 @@ foreach ($name in $names) {
                 $verOut = & node $nodeArgs --version 2>$null
                 if ($LASTEXITCODE -eq 0 -and $verOut) { $appVer = $verOut.Trim() }
             } catch {}
-            Invoke-TargetCommit $name $e.Name {
-                Set-ManifestEntry $name $Palette $e.Resources $appVer (Get-PayloadVersion)
-            } {
-                if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
+            # W2-006 (R011): preference persistence is composed INTO the commit
+            # (paths first, manifest second). The prerequisite call above already
+            # guaranteed ordering before ANY mutation; the composed call inside
+            # the commit removes any remaining post-success persistence that
+            # could fail the target after its manifest already committed.
+            if (-not $Revert -and $CodeNomadPath -and $name -eq 'codenomad') {
+                Invoke-TargetCommit $name $e.Name {
+                    Set-ManifestEntryWithPreference $name $Palette $e.Resources $appVer (Get-PayloadVersion) 'codenomad' $CodeNomadPath
+                } {
+                    if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
+                }
+            } elseif (-not $Revert -and $WorkBuddyPath -and $name -eq 'workbuddy') {
+                Invoke-TargetCommit $name $e.Name {
+                    Set-ManifestEntryWithPreference $name $Palette $e.Resources $appVer (Get-PayloadVersion) 'workbuddy' $WorkBuddyPath
+                } {
+                    if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
+                }
+            } elseif (-not $Revert -and $ZCodePath -and $name -eq 'zcode') {
+                Invoke-TargetCommit $name $e.Name {
+                    Set-ManifestEntryWithPreference $name $Palette $e.Resources $appVer (Get-PayloadVersion) 'zcode' $ZCodePath
+                } {
+                    if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
+                }
+            } else {
+                Invoke-TargetCommit $name $e.Name {
+                    Set-ManifestEntry $name $Palette $e.Resources $appVer (Get-PayloadVersion)
+                } {
+                    if ($elSnap) { Restore-ElectronStateSnapshot $name $elSnap }
+                }
             }
             if ($elSnap) { Remove-Item $elSnap -Recurse -Force -ErrorAction SilentlyContinue }
-            # W2-004: a validated explicit portable override is remembered here so
-            # a later run without the flag resolves the same installation.
-            if ($name -eq 'codenomad' -and $CodeNomadPath) { Save-PathPreference 'codenomad' $CodeNomadPath }
-            if ($name -eq 'workbuddy' -and $WorkBuddyPath) { Save-PathPreference 'workbuddy' $WorkBuddyPath }
-            if ($name -eq 'zcode' -and $ZCodePath) { Save-PathPreference 'zcode' $ZCodePath }
+            # W2-004: the explicit-path preference is persisted in the
+            # PREREQUISITE block above and re-applied atomically inside the
+            # commit; no preference write remains downstream of a committed
+            # manifest (R011).
             Say "  Recorded in $ManifestPath" 'DarkGray'
         }
         continue
@@ -1168,8 +1240,15 @@ foreach ($name in $names) {
         Say "$name`: FAILED - $($_.Exception.Message)" 'Red'
         $dispatchFailures += $name
     }
-    finally {
+     finally {
         if ($targetLock) { Exit-TargetLock $targetLock }
+    }
+}
+} finally {
+    if ($batchLock) {
+        # W2-004: do not "fix" a committed-target FAILED by rolling the whole
+        # batch into silence -- see R011 prerequisite semantics below.
+        try { Exit-BatchLock $batchLock } catch { }
     }
 }
 

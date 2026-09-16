@@ -682,10 +682,18 @@ $toolSuites = @(
     # "You cannot call a method on a null-valued expression" on every 250ms
     # tick (the user-visible JIT dialog). The gate AST-extracts the REAL
     # Start-BatchJob, drives it through a real Forms.Timer on a real message
-    # pump with ThreadException hooked, proves null output lines and a throwing
-    # completion handler are contained, and -RedControl re-proves the gate red
-    # against the pre-fix committed GUI.
-    @{ Name = 'test-batch-timer-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-batch-timer-gui.ps1"' },
+    # pump with ThreadException hooked, and proves null output lines and a
+    # throwing completion handler are contained.
+    @{ Name = 'test-batch-timer-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\\tools\\test-batch-timer-gui.ps1"' },
+    # R010 (SRC-007:W2-005) DETERMINISTIC red control. Builds TEMPORARY mutants
+    # of the CURRENT fixed GUI (never the shipped source, never tied to git
+    # HEAD -- a HEAD oracle goes blind once the fix is committed) that each
+    # reintroduce one R010 lifecycle defect: A active-close refusal removed,
+    # B exactly-once Consumed ownership guard removed, C close-safe Cleared
+    # transition removed. The behavioural harness must reproduce every defect;
+    # the matrix fails if the R010 assertions ever stay green on defective
+    # source.
+    @{ Name = 'test-batch-timer-gui.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-batch-timer-gui.ps1" -RedControl' },
     # SRC-006:R007: a palette repaint of an already-themed Electron app must not
     # pay archive-sized I/O at either transaction layer. The gate instruments the
     # real tool through a NODE_OPTIONS preload that logs every byte read and
@@ -702,7 +710,65 @@ $toolSuites = @(
     # must advance monotonically, every root must eventually be served,
     # detached roots must vanish, and the lap must end with all traversal
     # state dropped.
-    @{ Name = 'test-force-root-budget.js'; Cmd = 'node "{0}\tools\test-force-root-budget.js"' }
+    @{ Name = 'test-force-root-budget.js'; Cmd = 'node "{0}\tools\test-force-root-budget.js"' },
+    # PERF-002 (SRC-007:R013): the repainter's style/root/CSSOM work must be
+    # budgeted exactly like its DOM element work. The gate extracts the REAL
+    # repainter out of wintage.user.js (no stubbed style/CSSOM primitives) and
+    # drives it with a lazy indexed 250,000-rule cssRules collection, 25,000
+    # instrumented roots, a nested @media/@supports/@layer/keyframes CSSOM, a
+    # throwing cssRules getter, a mid-lap ShadowRoot insertion, a same-count
+    # stylesheet replacement, a 50,000-rule append and a STYLE text rewrite.
+    # It also holds static guards against forceLapWorkset = [document,
+    # ...piercedRoots], querySelectorAll('style'), a recursive walkRules, an
+    # unbudgeted appended-rule loop and a premature sheetSeen.set, and proves
+    # both historical defects reproduce on TEMPORARY in-memory source mutants
+    # (RED A full root snapshot, RED B recursive unbounded rule walk) while
+    # asserting each mutation actually applied.
+    @{ Name = 'test-repainter-budget.js'; Cmd = 'node "{0}\tools\test-repainter-budget.js"' },
+    # R015 / PERF-004 (SRC-007, T-246): portable browser discovery cache and
+    # bounded preference scanning. It pins that a warm cache answers a status
+    # refresh with ZERO recursive enumeration over the remembered PortableRoot
+    # and the identical candidate set; that a walk happens only on a cold or
+    # corrupt cache, a changed root, an invalidated cached candidate or an
+    # explicit -Rescan; that a vanished browser is dropped rather than invented;
+    # that preference matching is a chunked bounded search still exact for both
+    # the escaped and slash forms; and that an unchanged fingerprint serves the
+    # profile answer without opening the file. Two TEMPORARY source mutants
+    # reproduce the old defects (RED A walk-on-every-refresh, RED B re-read on
+    # every refresh) and assert each mutation actually applied.
+    @{ Name = 'test-browser-cache.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-browser-cache.ps1"' },
+    # W2-001 (SRC-007:R006): Total Commander recovery-format discriminator.
+    # Corrupt/truncated current-format recovery JSON must fail closed with zero
+    # live mutation, manifest preserved, backup preserved; genuine legacy whole-file
+    # INI is positively identified and dynamic recent-file filter colors are migrated.
+    @{ Name = 'test-totalcmd-recovery.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-totalcmd-recovery.ps1"' },
+    # CORE-003 (SRC-007:R003): Windows theme mutation rollback boundary.
+    # Encapsulates helper file creation, AccentColorInactive write, activation,
+    # polling/retry, and manifest update inside a unified transaction.
+    # Rollback restores registry and theme files on mid-write, accent write failure,
+    # activation dispatch throw, activation timeout, or manifest commit failure.
+    @{ Name = 'test-windows-theme-boundary.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-windows-theme-boundary.ps1"' },
+    # W2-004 (SRC-007:R009): Custom batch generation race.
+    # The batch must own check+dispatch as one window and every custom publish
+    # must own the same mutex; emitted files must be staged so no reader sees
+    # a half-published tree.
+    @{ Name = 'test-batch-generation.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-batch-generation.ps1"' },
+    # W2-004 (SRC-007:R009) red-control suite. A regression matrix that cannot
+    # prove its own gates still fail defective source is documentation, not a
+    # gate: this suite reintroduces each historical release defect onto a
+    # TEMPORARY mutated copy (never the shipped module) and must reproduce all
+    # of them - RED A node token-less release leak, RED B MetadataWritten
+    # malformed-release deletion, RED C age-only stealing of a live holder.
+    # It exits 0 only when every defect is reproduced; if the real gates ever
+    # go green on defective source, this suite goes red and the matrix fails.
+    @{ Name = 'test-genlock-redcontrol.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-genlock-redcontrol.ps1"' },
+    # W2-006 (SRC-007:R011): path-preference PREREQUISITE ordering. A validated
+    # explicit portable path must be persisted BEFORE any application/stage
+    # mutation; a forced persistence failure (paths.lock contention) must exit
+    # nonzero with an accurate error while application bytes, manifest and
+    # recovery lifecycle stay byte-identical; the retry records preference and
+    # manifest; a later resolution without the flag finds the remembered path.
+    @{ Name = 'test-path-preference-ordering.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-path-preference-ordering.ps1"' }
 )
 foreach ($s in $toolSuites) {
     $invokeLine = ($s.Cmd -f $root)

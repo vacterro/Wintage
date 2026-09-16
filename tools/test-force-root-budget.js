@@ -10,6 +10,10 @@
 // scan `.some(...)` over the whole root collection. With thousands of
 // ShadowRoots and a tiny element budget, a slice still touched every root.
 //
+// R013 kept this contract and moved hover-sheet work OUT of the force lane
+// entirely: it is now drained once per slice (bounded) by the style lane, so a
+// slice still cannot pay per-root style cost.
+//
 // CONTRACT under test (against the REAL runSweeper source, sliced into a
 // sandbox with instrumented fake roots):
 //  - no continuation slice serves more than FORCE_ROOT_BUDGET roots;
@@ -66,12 +70,12 @@ const NODES_PER_ROOT = 3;
 
 const counters = {
   slices: 0,
-  touchesPerSlice: [],   // isConnected getter hits per slice (prune checks)
-  stripsPerSlice: [],    // stripHoverSheets calls per slice (first-serve only)
-  walkersPerSlice: [],   // walker creations per slice (first serve)
+  touchesPerSlice: [],      // isConnected getter hits per slice (prune checks)
+  styleDrainsPerSlice: [],  // bounded style-lane drains per slice (R013: once per slice, never per root)
+  walkersPerSlice: [],      // walker creations per slice (first serve)
 };
 let sliceTouches = 0;
-let sliceStrips = 0;
+let sliceStyleDrains = 0;
 let sliceWalkers = 0;
 let continuationQueued = false;
 let scheduleCalls = 0;
@@ -119,12 +123,16 @@ const sandbox = {
   FORCE_BUDGET: ELEMENT_BUDGET,
   FORCE_ROOT_BUDGET: ROOT_BUDGET,
   LIGHT_MAX_NODES: ELEMENT_BUDGET,
+  STYLE_SHEET_BUDGET: 2,
+  STYLE_RULE_BUDGET: 4,
   MIN_SWEEP_GAP: 0,
   repainterSuspended: false,
   forceLapActive: false,
   forceLapWorkset: null,
   forceLapIndex: 0,
   forceLapRemaining: 0,
+  forceLapId: 0,
+  forceLapDeferredRoots: new Set(),
   stylesDirty: true,
   forcePassesOwed: 0,
   document,
@@ -135,7 +143,12 @@ const sandbox = {
   flushWrites() { },
   addWorkPressure() { },
   requestLightSweep() { },
-  stripHoverSheets() { sliceStrips++; },
+  // R013: style work is scheduler debt drained in bounded slices, NOT a
+  // registry-wide strip loop inside the force lane. A reintroduced
+  // per-root stripHoverSheets() call has no stub here on purpose: the sandbox
+  // would raise ReferenceError and this gate would fail loudly.
+  drainStyleWork() { sliceStyleDrains++; return { done: true, changed: false }; },
+  requestForceSweep() { scheduleCalls++; continuationQueued = true; },
   scheduleSweep() { scheduleCalls++; continuationQueued = true; },
   process(el) {
     if (el && (el.__rootRef || el.__isDoc)) {
@@ -153,11 +166,11 @@ if (typeof runSweeper !== 'function') { console.error('FAIL: runSweeper did not 
 for (let i = 0; i < ROOT_COUNT; i++) piercedRoots.add(makeRoot('sh' + i, NODES_PER_ROOT));
 
 function slice(force) {
-  sliceTouches = 0; sliceStrips = 0; sliceWalkers = 0;
+  sliceTouches = 0; sliceStyleDrains = 0; sliceWalkers = 0;
   counters.slices++;
   runSweeper(force);
   counters.touchesPerSlice.push(sliceTouches);
-  counters.stripsPerSlice.push(sliceStrips);
+  counters.styleDrainsPerSlice.push(sliceStyleDrains);
   counters.walkersPerSlice.push(sliceWalkers);
 }
 
@@ -165,13 +178,13 @@ function slice(force) {
 const MAX_SLICES = 20000;
 let completedIn = -1;
 let maxTouches = 0;
-let maxStrips = 0;
+let maxStyleDrains = 0;
 let maxWalkers = 0;
 for (let s = 0; s < MAX_SLICES; s++) {
   continuationQueued = false;
   slice(true);
   if (sliceTouches > maxTouches) maxTouches = sliceTouches;
-  if (sliceStrips > maxStrips) maxStrips = sliceStrips;
+  if (sliceStyleDrains > maxStyleDrains) maxStyleDrains = sliceStyleDrains;
   if (sliceWalkers > maxWalkers) maxWalkers = sliceWalkers;
   // Peek the workset while the lap is live (after the first slice it exists).
   if (s === 0) worksetDuringLap = sandbox.forceLapWorkset;
@@ -187,8 +200,8 @@ check('every root eventually receives service (no starvation)', allServed, true)
 check('document processed too', (rootProcessCount.get('document') || 0) > 0, true);
 check('no slice runs prune checks over the whole registry (pre-fix: R per slice)',
   maxTouches <= ROOT_BUDGET + 1, true);
-check('no slice strips hover sheets for the whole registry (pre-fix: R per slice)',
-  maxStrips <= ROOT_BUDGET + 1, true);
+check('R013: style work is drained at most once per slice (pre-fix: per root plus a registry-wide strip loop)',
+  maxStyleDrains <= 1, true);
 check('no slice creates walkers for the whole registry (pre-fix: R per slice)',
   maxWalkers <= ROOT_BUDGET + 1, true);
 
@@ -200,9 +213,14 @@ for (const [nm, arr] of rootServedSlices) {
 }
 check('cursor advances monotonically (all service windows contiguous)', nonContiguous, 0);
 
-// document is represented exactly once while a lap is being built.
-check('document represented exactly once in the lap workset',
-  worksetDuringLap === 'never-set' ? 'never-set' : worksetDuringLap.filter(r => r === sandbox.document).length, 1);
+// R013: the live lap state is a PERSISTENT ROOT CURSOR over the registry, not a
+// materialised `[document, ...piercedRoots]` snapshot. A snapshot re-enumerates
+// the whole registry on the first slice; a cursor touches one root per unit of
+// root budget.
+check('lap workset is a persistent root cursor, not a root-array snapshot',
+  worksetDuringLap === 'never-set' ? 'never-set' : Array.isArray(worksetDuringLap), false);
+check('document is served exactly once per lap',
+  rootProcessCount.get('document'), document.__els.length);
 
 // ---- detached roots disappear mid-lap ----
 let det = 0;
@@ -234,9 +252,9 @@ slice(true);   // a fresh force request rebuilds the workset and re-verifies
 check('next lap starts cleanly (document re-served)',
   (rootProcessCount.get('document') || 0) > docCountBefore, true);
 
-// Structural: the lap workset is built exactly once per lap, never per slice.
+// Structural: R013 replaces [document, ...piercedRoots] with bounded persistent cursor.
 const worksetBuilds = (src.match(/= \[document, \.\.\.piercedRoots\]/g) || []).length;
-check('source builds [document, ...piercedRoots] in exactly one place', worksetBuilds, 1);
+check('source builds [document, ...piercedRoots] in zero places (R013 bounded cursor)', worksetBuilds, 0);
 
 console.log('\n' + (bad === 0 ? 'ALL PASS' : bad + ' FAIL'));
 process.exit(bad === 0 ? 0 : 1);

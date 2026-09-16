@@ -1,0 +1,102 @@
+{
+  "op_id": "board-compact-6e4ee00f74f54724ad2775f1c986d124",
+  "operation": "board_legacy_compaction",
+  "created_at": "2026-09-15T19:31:35Z",
+  "agent": "antigravity",
+  "project_identity": "v:\\___vac\\__k\\__code\\_tampermonkey\\_win95theme\\wintage",
+  "project_lineage": "lineage-30ee844c69d34eb68605a4563cfdb8ff",
+  "semantic_payload_hash": "ad076127239556ac",
+  "preconditions": {
+    ".saipen/STATE.md": "62cf2a56437b5f5c",
+    ".saipen/BOARD.md": "2d9c9ad7fd5dd892",
+    ".saipen/LOG.md": "0ef08aff19013664"
+  },
+  "read_preconditions": {
+    ".saipen/logs": "delete-tree-sha256:be43095c78f58412aecbd1528a4d2a49325a98638bc6986c45d7232a78a07b92"
+  },
+  "verification_policy": "core_fast",
+  "status": "PREPARED",
+  "progress_index": 0,
+  "targets": [
+    {
+      "path": ".saipen/recovery/board-compaction/T-246/T-246-66ae1e73771c966b339288d9.BOARD.md",
+      "role": "generic",
+      "action": "write",
+      "before_hash": "",
+      "after_hash": "66ae1e73771c966b",
+      "applied": false
+    },
+    {
+      "path": ".saipen/recovery/board-compaction/T-246/T-246-66ae1e73771c966b339288d9.json",
+      "role": "generic",
+      "action": "write",
+      "before_hash": "",
+      "after_hash": "0445da0141972103",
+      "applied": false
+    },
+    {
+      "path": ".saipen/recovery/board-compaction/T-242/T-242-eea61aa5a19a9c0cb03c7c5a.BOARD.md",
+      "role": "generic",
+      "action": "write",
+      "before_hash": "",
+      "after_hash": "eea61aa5a19a9c0c",
+      "applied": false
+    },
+    {
+      "path": ".saipen/recovery/board-compaction/T-242/T-242-eea61aa5a19a9c0cb03c7c5a.json",
+      "role": "generic",
+      "action": "write",
+      "before_hash": "",
+      "after_hash": "200ac199df4460c2",
+      "applied": false
+    },
+    {
+      "path": ".saipen/LOG.md",
+      "role": "log",
+      "action": "write",
+      "before_hash": "0ef08aff19013664",
+      "after_hash": "5987e08e77034819",
+      "applied": false
+    },
+    {
+      "path": ".saipen/BOARD.md",
+      "role": "board",
+      "action": "write",
+      "before_hash": "2d9c9ad7fd5dd892",
+      "after_hash": "543c52365d59d97c",
+      "applied": false
+    },
+    {
+      "path": ".saipen/STATE.md",
+      "role": "state",
+      "action": "write",
+      "before_hash": "62cf2a56437b5f5c",
+      "after_hash": "ee62f08a0a169e7f",
+      "applied": false
+    }
+  ],
+  "receipt_metadata": {
+    "operation": "board_legacy_compaction",
+    "status": "COMMITTED",
+    "ticket": "T-246",
+    "detail_ref": ".saipen/recovery/board-compaction/T-246/T-246-66ae1e73771c966b339288d9.json",
+    "original_record_sha256": "66ae1e73771c966b339288d94085e09bbbdda8128df7769f0704be67a344bee6",
+    "event_id": "E-933",
+    "reason": "lossless historical BOARD repair",
+    "inherited_findings": [
+      "FLOOR: LOG.md:70: event id E-716 is not strictly increasing after E-717",
+      "FLOOR: LOG.md:73: event id E-721 is not strictly increasing after E-722",
+      "FLOOR: LOG.md:223: duplicate event id E-872",
+      "STATE proposed next_action invalid: 'PHASE BUILD T-246 (R009-R012 VERIFIED E-927..E-932; remaining: R013/R015 PERF findings)' is not a legal `PHASE <phase-enum> [T-###]` -- the argument is one uppercase phase plus at most a ticket ref, and nothing but the optional [...] progress tag may follow it",
+      "BOARD: T-250 has no [T-###] allocation event in the complete history -- ticket identity comes from canonical allocation, never from a record that merely looks like a ticket (CORE-003 / SRC-026:R003)",
+      "LOG: LOG.md:69 E-717 is not consecutive after E-703; an unexplained gap means events were lost or removed from an append-only ledger. A documented historical gap is exempted by a DEC line at or after E-717 whose text BEGINS `LEDGER-GAP AMNESTY E-703 -> E-717`",
+      "LOG: LOG.md:70 E-716 is not consecutive after E-717; an unexplained gap means events were lost or removed from an append-only ledger. A documented historical gap is exempted by a DEC line at or after E-716 whose text BEGINS `LEDGER-GAP AMNESTY E-717 -> E-716`",
+      "LOG: LOG.md:71 E-718 is not consecutive after E-716; an unexplained gap means events were lost or removed from an append-only ledger. A documented historical gap is exempted by a DEC line at or after E-718 whose text BEGINS `LEDGER-GAP AMNESTY E-716 -> E-718`",
+      "LOG: LOG.md:72 E-722 is not consecutive after E-718; an unexplained gap means events were lost or removed from an append-only ledger. A documented historical gap is exempted by a DEC line at or after E-722 whose text BEGINS `LEDGER-GAP AMNESTY E-718 -> E-722`",
+      "LOG: LOG.md:73 E-721 is not consecutive after E-722; an unexplained gap means events were lost or removed from an append-only ledger. A documented historical gap is exempted by a DEC line at or after E-721 whose text BEGINS `LEDGER-GAP AMNESTY E-722 -> E-721`",
+      "LOG: LOG.md:74 E-723 is not consecutive after E-721; an unexplained gap means events were lost or removed from an append-only ledger. A documented historical gap is exempted by a DEC line at or after E-723 whose text BEGINS `LEDGER-GAP AMNESTY E-721 -> E-723`",
+      "LOG: LOG.md:223 duplicate event E-872",
+      "LOG: LOG.md:223 E-872 is not consecutive after E-872; an unexplained gap means events were lost or removed from an append-only ledger. A documented historical gap is exempted by a DEC line at or after E-872 whose text BEGINS `LEDGER-GAP AMNESTY E-872 -> E-872`"
+    ]
+  }
+}

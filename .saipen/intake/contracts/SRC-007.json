@@ -1,0 +1,89 @@
+{
+  "clauses": {
+    "SRC-007:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001 P0: desktop/install.ps1:913-984 generic VS Code-family recovery epoch - generic VS Code-family recovery ledger has no completed-epoch state; successful Revert leaves first-touch recovery permanently authoritative and corrupt/unknown replaced recovery deletes live destination."
+    },
+    "SRC-007:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002 P1: desktop/install.ps1:237-328,679-690 -Reapply intent race - background/logon -Reapply computes work from unlocked historical manifest snapshot and target-locked child never revalidates intent."
+    },
+    "SRC-007:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003 P1: desktop/modules/targets.ps1:1476-1607 + tools/install-windows-theme.js:139-163 Windows mutation occurs outside rollback boundary - failure after helper/registry writes leaves system in partially mutated state before manifest commit."
+    },
+    "SRC-007:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004 P1: desktop/WintageInstaller.ps1:425-442,1368-1369 logon-task checkbox initialization/reentrancy - UI synchronization and user intent share the same mutation handler without initialization/reentrancy guard."
+    },
+    "SRC-007:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-005 P2: tools/import-fastprompter.js:25,175-183 + release.ps1:237-240 FastPrompter freshness gate is fail-open - release gate intended to prove imported packs match source is a no-op when no external source path is supplied."
+    },
+    "SRC-007:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-001 P0: desktop/modules/targets.ps1::Restore-TotalCmdOwned / Total Commander recovery-format migration - Restore-TotalCmdOwned conflates corrupt JSON with legacy INI recovery, failing open and failing to migrate dynamic recent-file filters."
+    },
+    "SRC-007:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-002 P0: desktop/modules/common.ps1::Write-RecoveryProvenance / first-touch recovery writers in BetterDiscord, Obsidian and qBittorrent - persistent recovery file can become visible before bytes and provenance form atomic unit."
+    },
+    "SRC-007:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-003 P1: desktop/modules/targets.ps1::Invoke-TargetCommit callers in TotalCmd / SmartVac / WildRift / SAIPENVIEW / BetterDiscord - transaction migration is partial; final manifest operation is protected but mutation preceding it is not."
+    },
+    "SRC-007:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-004 P1: desktop/WintageInstaller.ps1::Start-BatchJob / Invoke-CustomMutation + tools/build-desktop.js::emit - batch does not operate on immutable palette generation; mutable custom slug can change underneath batch."
+    },
+    "SRC-007:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-005 P1: desktop/WintageInstaller.ps1::Start-BatchJob / FormClosed lifecycle - asynchronous worker has no shutdown boundary owner; in-flight Apply/Revert can outlive window or be interrupted."
+    },
+    "SRC-007:R011": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-006 P1: desktop/install.ps1 browser/Electron dispatch + desktop/modules/common.ps1::Save-PathPreference - secondary persistence operation executes after point of no return but failure reports target transaction failed."
+    },
+    "SRC-007:R012": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-001 P1: PROVEN BOTTLENECK desktop/targets/electron/shim.cjs::SCROLL_FIX / AD_BLOCK observer pipelines - nextTreeNode loops over all node.children and unbounded queue causes O(N) traversal explosions."
+    },
+    "SRC-007:R013": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-002 P1: PROVEN BOTTLENECK wintage.user.js::runSweeper / stripHoverSheets / walkRules + generated Electron REPAINTER_FIX - style sweeper re-walks document and shadow roots without persistent cursor or work bounds."
+    },
+    "SRC-007:R014": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-003 P1: PROVEN BOTTLENECK tools/install-electron.js::repaintRelocation/captureAppDir + desktop/modules/targets.ps1::Save-ElectronStateSnapshot + desktop/install.ps1 Electron Apply - healthy Electron palette repaint performs archive-sized recovery I/O at both transaction layers."
+    },
+    "SRC-007:R015": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-004 P2: STRONGLY EVIDENCED WASTE tools/install-browsers.ps1::Get-Browsers/Get-BrowserProfiles + desktop/WintageInstaller.ps1::Load-Targets - repetitive browser detection and profile enumeration without caching."
+    }
+  },
+  "context": [
+    "Audit captured from audit/5.md (RUN_ID acb-mtu61mp2-48514bf721e64f56bd60, generated 2026-09-09T17:43:47Z, baseline archive SHA256 fcd09e6c..., .git main ref 22468e3, in-flight T-241 tree).",
+    "Triage against current tree b30f33b: 7 findings already repaired after audit baseline (CORE-001, CORE-002, CORE-004, CORE-005, W2-002, W2-003, PERF-003 via v1.35.0 ead75e8); 8 findings live/open.",
+    "W2-001 is active implementation target for T-245."
+  ],
+  "derived_at": "2026-09-11T08:24:19Z",
+  "derived_from": "audit/5.md",
+  "interpretation_revision": 0,
+  "schema_version": 1,
+  "source_sha256": "0a11cc21412a890213c5ad98e47aa76219bc956adc9b9f99ec44b35cb0a0e991"
+}

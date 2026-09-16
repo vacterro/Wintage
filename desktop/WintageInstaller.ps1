@@ -38,6 +38,13 @@ $themeDir = Join-Path $root 'themes'
 
 . (Join-Path $here 'i18n.ps1')
 
+# W2-004 (SRC-007:R009): the canonical owner-aware cross-runtime generation
+# lock protocol is ONE shared module, not a GUI-private copy. Enter/Exit-
+# BuildGenerationLockCore below are the exact functions install.ps1 runs
+# (common.ps1 dot-sources the same file), so GUI publication and CLI batch
+# consumption cannot drift apart.
+. (Join-Path $here 'modules/generation-lock.ps1')
+
 # ---- PALETTE LOADING ----
 $script:packs = @{}
 function Load-Packs {
@@ -279,6 +286,45 @@ $PATH_TARGETS = @()
 $PATH_DEFAULTS = @{}
 $script:pathsFile = Join-Path $env:APPDATA 'Wintage\paths.json'
 $script:customPaths = @{}
+$script:wintageBuildMutex = $null
+
+# W2-004 (T-246:R009): shared generation lock. Same identity as
+# install.ps1 Enter-BatchLock: hash(%APPDATA%\Wintage), same mutex name,
+# so GUI custom publication and CLI batch consumption are one critical
+# section across processes. Also acquires the cross-runtime file lock.
+function Enter-BatchLockShared {
+    if ($env:WINTAGE_BUILD_LOCK_HELD) { return $null }
+    $appData = if ($env:WINTAGE_APPDATA) { $env:WINTAGE_APPDATA } else { Join-Path $env:APPDATA 'Wintage' }
+    $mutex = $null
+    $genLock = $null
+    try {
+        $hash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($appData))).Replace('-', '').Substring(0, 20)
+        $name = "Local\Wintage-Build-$hash"
+        $mutex = New-Object System.Threading.Mutex($false, $name)
+        $got = $false
+        try { $got = $mutex.WaitOne(15000) } catch [System.Threading.AbandonedMutexException] { $got = $true } catch { $got = $false }
+        if (-not $got) { try { $mutex.Dispose() } catch { }; throw "W2-004: build/output busy - batch/config lock contended (timeout 15s) at $hash. Retry; if recurring, clear stale Wintage-Build mutex." }
+        # W2-004 (SRC-007:R009): the file-lock half runs the CANONICAL
+        # owner-aware protocol (shared with install.ps1 via generation-lock.ps1):
+        # no age-only stealing, ownerCreated PID-reuse guard, token-minted
+        # metadata, ownership-verified release.
+        $genLock = Enter-BuildGenerationLockCore $appData
+        $obj = New-Object PSObject
+        $obj | Add-Member -MemberType NoteProperty -Name Mutex -Value $mutex
+        $obj | Add-Member -MemberType NoteProperty -Name GenLock -Value $genLock
+        return $obj
+    } catch {
+        if ($mutex) { try { $mutex.Dispose() } catch { } }
+        if ($genLock) { try { Exit-BuildGenerationLockCore $genLock } catch { } }
+        throw
+    }
+}
+
+function Exit-BatchLock($lockObj) {
+    if (-not $lockObj) { return }
+    try { if ($lockObj.GenLock) { Exit-BuildGenerationLockCore $lockObj.GenLock } } catch { }
+    try { if ($lockObj.Mutex) { $lockObj.Mutex.ReleaseMutex(); $lockObj.Mutex.Dispose() } } catch { }
+}
 
 function Load-CustomPaths {
     $script:customPaths = @{}
@@ -899,6 +945,7 @@ function Get-BdPluginDescription([string]$pluginName) {
     switch ($pluginName) {
         'GoodEmoji' { return (T 'BdGoodEmojiDesc') }
         'RemoveStickers' { return (T 'BdRemoveStickersDesc') }
+        'RemoveGIFS' { return (T 'BdRemoveGIFSDesc') }
         default { return "Plugin: $pluginName" }
     }
 }
@@ -1040,6 +1087,7 @@ $btnBdUninstall.Add_Click({
                 $pluginsJsonData = (Read-Utf8 $script:bdPluginsJsonPath) | ConvertFrom-Json
                 $pluginsJsonData | Add-Member -NotePropertyName 'GoodEmoji' -NotePropertyValue $false -Force
                 $pluginsJsonData | Add-Member -NotePropertyName 'RemoveStickers' -NotePropertyValue $false -Force
+                $pluginsJsonData | Add-Member -NotePropertyName 'RemoveGIFS' -NotePropertyValue $false -Force
                 $jsonStr = $pluginsJsonData | ConvertTo-Json
                 [System.IO.File]::WriteAllText($script:bdPluginsJsonPath, $jsonStr, (New-Object System.Text.UTF8Encoding $false))
             } catch { }
@@ -1424,7 +1472,33 @@ function Update-Info {
     "`r`n`r`nApply runs the same install.ps1 the`r`nterminal does - no second code path."
 }
 
+# W2-004 (T-246:R009): batch-active UI guards. Save/Delete-Custom and token
+# edits mutate the Custom generation; while a batch is running they must be
+# disabled as a UI guard, NOT relied upon as the concurrency fix (other processes
+# remain possible -- the lock handles that). Guards are keyed on $script:batchActive
+# so the tick-completion path and any early return both restore them.
+function Disable-BatchUi {
+    $script:batchActive = $true
+    $btnApply.Enabled = $false; $btnRevert.Enabled = $false
+    $btnSave.Enabled = $false; $btnDelCustom.Enabled = $false
+    $lstThemes.Enabled = $false
+    $clbMyApps.Enabled = $false; $clbPopularApps.Enabled = $false
+    $btnSelectAll.Enabled = $false; $btnSelectNone.Enabled = $false
+    $cmbLanguage.Enabled = $false
+}
+
+function Enable-BatchUi {
+    $script:batchActive = $false
+    $btnApply.Enabled = $true; $btnRevert.Enabled = $true
+    $btnSave.Enabled = $true; $btnDelCustom.Enabled = $true
+    $lstThemes.Enabled = $true
+    $clbMyApps.Enabled = $true; $clbPopularApps.Enabled = $true
+    $btnSelectAll.Enabled = $true; $btnSelectNone.Enabled = $true
+    $cmbLanguage.Enabled = $true
+}
+
 # ---- ACTIONS ----
+
 function Say-Log($msg) {
     if ($null -eq $msg) { return }
     if ($log -and -not $log.IsDisposed) {
@@ -1489,39 +1563,123 @@ function Start-BatchJob([string[]]$argsList, [scriptblock]$onDone) {
     # expression" on every 250ms tick. All tick state therefore lives in ONE
     # script-scope holder; the Apply/Revert buttons are disabled for the
     # whole batch, so two live batches never race over it.
-    $script:batchState = @{ Job = $job; Timer = $timer; Done = $false; OnDone = $onDone }
+    #
+    # W2-005 (SRC-007:R010): the holder is the AUTHORITATIVE batch lifecycle
+    # contract, not a bag of UI bits. Exactly one of each state transition:
+    #   Running (worker alive) -> Terminal (job left Running state)
+    #     -> Consumed (Receive-Job ran once) -> CleanedUp (job/timer disposed
+    #     once) -> Finalized (OnDone ran once) -> Cleared ($script:batchState
+    #     = $null, close safe). Window close while Running is CANCELLED by
+    #     FormClosing; after Cleared a close succeeds normally.
+    $script:batchState = @{
+        Job            = $job
+        Timer          = $timer
+        Done           = $false   # worker reached terminal state
+        Consumed       = $false   # Receive-Job ran exactly once
+        CleanedUp      = $false   # Remove-Job + timer Stop/Dispose exactly once
+        Finalized      = $false   # completion callback ran exactly once
+        Cleared        = $false   # state cleared exactly once; close now safe
+        OnDone         = $onDone
+    }
+    # W2-004 (T-246:R009): batch-active UI guard. Disable generation-mutating and
+    # selection controls for the whole batch so no Save/Delete-Custom or token-edit
+    # can race the running worker from this window (the cross-runtime lock still
+    # covers processes outside this one).
+    Disable-BatchUi
     $timer.Add_Tick({
         $st = $script:batchState
         if ($null -eq $st -or $st.Done) { return }
         if ($st.Job -and $st.Job.State -eq 'Running') { return }
-        $st.Done = $true
-        $st.Timer.Stop()
-        $st.Timer.Dispose()
-        try {
-            $result = Receive-Job $st.Job
-            if ($result -is [array]) {
-                $customObj = $result | Where-Object { $_ -and ($_.PSObject.Properties['Output']) } | Select-Object -Last 1
-                if ($customObj) { $result = $customObj }
-                else { $result = [pscustomobject]@{ Output = @($result); ExitCode = 0 } }
-            }
-            if (-not $result) {
-                $result = [pscustomobject]@{ Output = @(); ExitCode = 1 }
-            }
-        } catch {
-            Say-Log ('BATCH FAILED: ' + $_.Exception.Message)
-            $result = [pscustomobject]@{ Output = @(); ExitCode = 1 }
-        } finally {
-            if ($st.Job) { Remove-Job $st.Job -Force -ErrorAction SilentlyContinue }
-        }
-        try {
-            & $st.OnDone $result
-        } catch {
-            Say-Log ('BATCH COMPLETION HANDLER FAILED: ' + $_.Exception.Message)
-        }
+        Complete-BatchWorker $st
     })
     $timer.Start()
     Say-Log 'batch worker started - the window stays responsive while it runs.'
 }
+
+# W2-005 (SRC-007:R010): ONE terminal-finalization path for success and
+# failure. Receive-Job once, Remove-Job once, timer Stop/Dispose once,
+# OnDone once, state cleared once, UI restored once. A Receive-Job throw
+# synthesizes the existing failure result and STILL finishes cleanup; an
+# OnDone throw is logged and never leaves the app permanently batch-active.
+# Idempotent by construction: every stage is guarded by its own flag, so a
+# rapid repeated close or a re-entrant tick cannot duplicate anything.
+function Complete-BatchWorker($st) {
+    if ($null -eq $st -or $st.Done) { return }
+    $st.Done = $true
+    try {
+        if (-not $st.Consumed) {
+            $st.Consumed = $true
+            try {
+                $result = Receive-Job $st.Job
+                if ($result -is [array]) {
+                    $customObj = $result | Where-Object { $_ -and ($_.PSObject.Properties['Output']) } | Select-Object -Last 1
+                    if ($customObj) { $result = $customObj }
+                    else { $result = [pscustomobject]@{ Output = @($result); ExitCode = 0 } }
+                }
+                if (-not $result) {
+                    $result = [pscustomobject]@{ Output = @(); ExitCode = 1 }
+                }
+            } catch {
+                Say-Log ('BATCH FAILED: ' + $_.Exception.Message)
+                $result = [pscustomobject]@{ Output = @(); ExitCode = 1 }
+            }
+            $st.Result = $result
+        }
+        if (-not $st.CleanedUp) {
+            $st.CleanedUp = $true
+            if ($st.Timer) { try { $st.Timer.Stop() } catch { }; try { $st.Timer.Dispose() } catch { } }
+            if ($st.Job) { try { Remove-Job $st.Job -Force -ErrorAction SilentlyContinue } catch { }
+            }
+        }
+        if (-not $st.Finalized) {
+            $st.Finalized = $true
+            try {
+                if ($st.OnDone) { & $st.OnDone $st.Result }
+            } catch {
+                Say-Log ('BATCH COMPLETION HANDLER FAILED: ' + $_.Exception.Message)
+            }
+        }
+    } finally {
+        # W2-004 (T-246:R009): re-enable all generation-mutating and selection
+        # controls once the batch worker has fully completed.
+        Enable-BatchUi
+        if (-not $st.Cleared) {
+            $st.Cleared = $true
+            $script:batchState = $null
+        }
+    }
+}
+
+# W2-005 (SRC-007:R010): the authoritative FormClosing contract. A close is
+# answered ONLY from the lifecycle state, never from button Enabled flags.
+#   - no active batch            -> close normally;
+#   - batch active (not Cleared) -> cancel the close, keep the worker alive
+#     (no Stop-Job, no child kill, no early timer dispose), tell the user;
+#   - batch terminal and consumed-> close normally. Rapid repeated close
+#     attempts while active hit the same guard: no duplicate cleanup, no
+#     duplicate completion callback, no timer corruption, no worker kill.
+# Destructive mid-target cancellation is deliberately NOT implemented here:
+# there is no safe cooperative-cancellation contract yet (non-goal).
+function Test-BatchCloseSafe {
+    $st = $script:batchState
+    if ($null -eq $st) { return $true }
+    return [bool]$st.Cleared
+}
+
+$form.Add_FormClosing({
+    param($sender, $e)
+    if (Test-BatchCloseSafe) { return }
+    $e.Cancel = $true
+    Say-Log 'An Apply/Revert batch is still running - the window stays open until it completes. Closing is refused so the running operation keeps its owner.'
+})
+
+# W2-004 (T-246:R009): shared generation lock -- the pending shape is
+# wired here too, not only inside Invoke-CustomMutation. A Save-Custom that
+# tried to publish while the batch holder keeps the lock must receive a
+# structured contention, not an unsolicited background throw after the batch
+# releases. Implemented through -ErrorAction Stop so the caller's `catch`
+# sees it as a bearing the `W2-004:` prefix.
+function Enter-BatchLockWithSeam { return Enter-BatchLockShared }
 
 # Build the single -Selected argument list for a batch Apply/Revert from the
 # checked rows, carrying the same per-target path overrides the serial loop did.
@@ -1556,32 +1714,43 @@ function Get-BatchFailures($result) {
 # restored and the generated outputs are regenerated from it - source and
 # generated state can never diverge, and a failed save never leaves a broken
 # half-generated theme behind.
+# W2-004 (T-246:R009): the whole Save/Delete runs under the shared
+# Wintage-Build mutex, so a batch Apply's check+dispatch window cannot see
+# generation B between target 1 and target 2. The lock covers publication,
+# not each file.
 function Invoke-CustomMutation([scriptblock]$mutate, [string]$label) {
     $file = Join-Path $themeDir 'custom.json'
     $hadOld = Test-Path $file
     $oldBytes = if ($hadOld) { [System.IO.File]::ReadAllBytes($file) } else { $null }
+    $batchLock = $null
     try {
-        & $mutate
-        $code1 = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
-        if ($code1 -ne 0) { throw 'apply-themes.js failed - theme packs are stale.' }
-        $code2 = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
-        if ($code2 -ne 0) { throw 'build-desktop.js failed - desktop/out is stale.' }
-        Load-Packs
-    } catch {
-        # Roll back the pack mutation, then regenerate the outputs from the
-        # restored state so source and generated outputs agree again.
-        if ($hadOld) { [System.IO.File]::WriteAllBytes($file, $oldBytes) }
-        elseif (Test-Path $file) { Remove-Item $file -Force }
+        $batchLock = Enter-BatchLockShared
+        # W2-004 (T-246:R009) reentrancy: this GUI process already HOLDS the
+        # generation lock; its child node build-desktop.js must not deadlock trying
+        # to re-acquire it. Mark the held state so the Node-side acquireGenLock
+        # becomes a no-op for the child (same critical section, one owner).
+        if ($batchLock) { $env:WINTAGE_BUILD_LOCK_HELD = '1' }
         try {
-            $null = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
-            $null = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
+            & $mutate
+            $code1 = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
+            if ($code1 -ne 0) { throw 'apply-themes.js failed - theme packs are stale.' }
+            $code2 = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
+            if ($code2 -ne 0) { throw 'build-desktop.js failed - desktop/out is stale.' }
             Load-Packs
-            Say-Log "$label FAILED - the previous custom theme was restored and the generated outputs regenerated."
         } catch {
-            Say-Log "$label FAILED and the rollback regeneration ALSO failed: $($_.Exception.Message) - run apply-themes.js/build-desktop.js by hand."
+            if ($hadOld) { [System.IO.File]::WriteAllBytes($file, $oldBytes) }
+            elseif (Test-Path $file) { Remove-Item $file -Force }
+            try {
+                $null = Invoke-NodeTool @((Join-Path $root 'tools/apply-themes.js'))
+                $null = Invoke-NodeTool @((Join-Path $root 'tools/build-desktop.js'))
+                Load-Packs
+                Say-Log "$label FAILED - the previous custom theme was restored and the generated outputs regenerated."
+            } catch {
+                Say-Log "$label FAILED and the rollback regeneration ALSO failed: $($_.Exception.Message) - run apply-themes.js/build-desktop.js by hand."
+            }
+            throw "$label FAILED: $($_.Exception.Message) - nothing was installed."
         }
-        throw "$label FAILED: $($_.Exception.Message) - nothing was installed."
-    }
+    } finally { if ($batchLock) { Exit-BatchLock $batchLock; Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue } }
 }
 
 function Save-Custom {

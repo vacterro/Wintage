@@ -648,14 +648,43 @@ function Get-IniKey([string[]]$lines, [string]$section, [string]$key) {
     return $null
 }
 
+function Get-TotalCmdRecentFilterIds([string[]]$lines) {
+    $searchFlags = @{}
+    foreach ($line in $lines) {
+        if ($line -match '^(.*)_SearchFlags=(.*)$') {
+            $searchFlags[$matches[1]] = $matches[2] -split '\|'
+        }
+    }
+    $recentFilterIds = @()
+    foreach ($line in $lines) {
+        if ($line -notmatch '^ColorFilter(\d+)=(.*)$') { continue }
+        $filterId = [int]$matches[1]
+        $filter = $matches[2].Trim()
+        $isRecent = $filter -match '(?i)(modified|changed|recent|newer)'
+        if (-not $isRecent -and $filter.StartsWith('>')) {
+            $savedSearch = $filter.Substring(1)
+            if ($searchFlags.ContainsKey($savedSearch)) {
+                $parts = $searchFlags[$savedSearch]
+                $age = 0
+                $unit = 0
+                $isRecent = $parts.Count -gt 5 -and
+                    [int]::TryParse($parts[4], [ref]$age) -and
+                    [int]::TryParse($parts[5], [ref]$unit) -and
+                    $age -ge 0 -and $unit -ge -1
+            }
+        }
+        if ($isRecent) { $recentFilterIds += $filterId }
+    }
+    return @($recentFilterIds | Sort-Object -Unique)
+}
+
 # Capture a JSON snapshot of the Wintage-owned TotalCmd keys (with their original
 # values, or null when absent) so Revert can merge exactly those into the current
-# ini. Legacy whole-file .bak files are parsed by Revert and their owned keys
-# extracted the same way.
+# ini.
 function Save-TotalCmdSnapshot([string[]]$lines, [int[]]$recentFilterIds) {
-    $owned = @{}
+    $owned = [ordered]@{}
     foreach ($s in $script:TC_OWNED_SECTIONS) {
-        $owned[$s] = @{}
+        $owned[$s] = [ordered]@{}
         foreach ($k in $script:TC_OWNED_KEYS) {
             $v = Get-IniKey $lines $s $k
             $owned[$s][$k] = if ($null -ne $v) { $v } else { $null }
@@ -673,26 +702,114 @@ function Save-TotalCmdSnapshot([string[]]$lines, [int[]]$recentFilterIds) {
     @{ owned = $owned } | ConvertTo-Json -Depth 6
 }
 
-function Restore-TotalCmdOwned([string]$ini, [string]$iniBak, [switch]$Keep) {
-    $snapshot = $null
-    if (Test-Path $iniBak) {
+# W2-001 (SRC-007:R006): Total Commander recovery-format discriminator.
+# Strict positive recovery identification: JSON must be parsed and schema-validated
+# without fallback to INI; genuine legacy whole-file INI must be positively identified
+# and converted into the strict current snapshot representation in memory.
+function Parse-TotalCmdRecoverySnapshot([string]$iniBak) {
+    if (-not (Test-Path -LiteralPath $iniBak)) {
+        throw "Total Commander: recovery snapshot file does not exist: $iniBak"
+    }
+    $raw = Read-Utf8 $iniBak
+    if ($null -eq $raw) {
+        throw "Total Commander: recovery snapshot file could not be read: $iniBak"
+    }
+    $trimmed = $raw.TrimStart(@("`r", "`n", ' ', "`t"))
+    if ($trimmed.Length -eq 0) {
+        throw "Total Commander: recovery snapshot is empty: $iniBak"
+    }
+
+    if ($trimmed.StartsWith('{')) {
+        # Current format (JSON). Must parse and schema-validate strictly:
+        # root object; exactly usable 'owned' section maps; only supported value states;
+        # no fallback to legacy on parse/schema failure.
         try {
-            $parsed = Read-Utf8 $iniBak | ConvertFrom-Json
-            if ($parsed.owned) { $snapshot = $parsed }
+            $parsed = ConvertFrom-Json $raw -ErrorAction Stop
         } catch {
-            # Legacy whole-file backup: parse as INI and extract the owned keys.
-            $legacy = (Read-Utf8 $iniBak) -split '\r?\n'
-            $owned = @{}
-            foreach ($s in $script:TC_OWNED_SECTIONS) {
-                $owned[$s] = @{}
-                foreach ($k in $script:TC_OWNED_KEYS) {
-                    $v = Get-IniKey $legacy $s $k
-                    $owned[$s][$k] = if ($null -ne $v) { $v } else { $null }
+            throw "Total Commander: recovery snapshot is malformed JSON: $($_.Exception.Message)"
+        }
+        if ($null -eq $parsed -or $parsed -isnot [System.Management.Automation.PSCustomObject]) {
+            throw "Total Commander: recovery snapshot root must be a JSON object."
+        }
+        $rootProps = @($parsed.PSObject.Properties)
+        if ($rootProps.Count -eq 0) {
+            throw "Total Commander: recovery snapshot root object is empty."
+        }
+        foreach ($rp in $rootProps) {
+            if ($rp.Name -ne 'owned') {
+                throw "Total Commander: recovery snapshot root contains unknown property '$($rp.Name)'."
+            }
+        }
+        $ownedProp = $parsed.PSObject.Properties['owned']
+        if ($null -eq $ownedProp -or $null -eq $ownedProp.Value -or $ownedProp.Value -isnot [System.Management.Automation.PSCustomObject]) {
+            throw "Total Commander: recovery snapshot missing valid 'owned' object."
+        }
+        $ownedProps = @($ownedProp.Value.PSObject.Properties)
+        if ($ownedProps.Count -eq 0) {
+            throw "Total Commander: recovery snapshot 'owned' object has no sections."
+        }
+        foreach ($s in $script:TC_OWNED_SECTIONS) {
+            $sp = $ownedProp.Value.PSObject.Properties[$s]
+            if ($null -eq $sp -or $null -eq $sp.Value -or $sp.Value -isnot [System.Management.Automation.PSCustomObject]) {
+                throw "Total Commander: recovery snapshot 'owned' object missing required section '$s'."
+            }
+        }
+        foreach ($secProp in $ownedProps) {
+            if ($secProp.Name -notin $script:TC_OWNED_SECTIONS) {
+                throw "Total Commander: recovery snapshot contains unknown section '$($secProp.Name)'."
+            }
+            foreach ($keyProp in $secProp.Value.PSObject.Properties) {
+                $k = $keyProp.Name
+                $isAllowedKey = ($k -in $script:TC_OWNED_KEYS) -or ($k -match '^ColorFilter\d+(Color|ColorDark)$')
+                if (-not $isAllowedKey) {
+                    throw "Total Commander: recovery snapshot section '$($secProp.Name)' contains unknown key '$k'."
+                }
+                $val = $keyProp.Value
+                if ($null -ne $val -and $val -isnot [string]) {
+                    throw "Total Commander: recovery snapshot key '$($secProp.Name)::$k' has unsupported value type '$($val.GetType().FullName)' (only string or null allowed)."
                 }
             }
-            $snapshot = [pscustomobject]@{ owned = $owned }
         }
+        return $parsed
     }
+
+    # Not JSON-looking. Positive identification of legacy whole-file INI:
+    # requires recognizable INI structure before treating bytes as a whole-file legacy backup.
+    $legacyLines = $raw -split '\r?\n'
+    $hasSection = ($legacyLines -match '^\[[^\]]+\]$').Count -gt 0
+    $hasKv = ($legacyLines -match '^[A-Za-z0-9_.-]+\s*=').Count -gt 0
+    $hasTcSection = ($legacyLines -match '^\[(Colors|ColorsDark|Configuration)\]$').Count -gt 0
+
+    if (-not $hasSection -or -not $hasKv -or -not $hasTcSection) {
+        throw "Total Commander: recovery snapshot is neither valid JSON nor a recognized Total Commander INI structure."
+    }
+
+    # Valid legacy INI: reconstruct current snapshot representation in memory.
+    $recentFilterIds = Get-TotalCmdRecentFilterIds $legacyLines
+    $ownedObj = [pscustomobject]@{}
+    foreach ($s in $script:TC_OWNED_SECTIONS) {
+        $secObj = [pscustomobject]@{}
+        foreach ($k in $script:TC_OWNED_KEYS) {
+            $v = Get-IniKey $legacyLines $s $k
+            $val = if ($null -ne $v) { $v } else { $null }
+            $secObj | Add-Member -NotePropertyName $k -NotePropertyValue $val
+        }
+        foreach ($id in $recentFilterIds) {
+            foreach ($suffix in @('Color', 'ColorDark')) {
+                $ck = "ColorFilter$($id)$suffix"
+                $v = Get-IniKey $legacyLines $s $ck
+                $val = if ($null -ne $v) { $v } else { $null }
+                $secObj | Add-Member -NotePropertyName $ck -NotePropertyValue $val
+            }
+        }
+        $ownedObj | Add-Member -NotePropertyName $s -NotePropertyValue $secObj
+    }
+    return [pscustomobject]@{ owned = $ownedObj }
+}
+
+function Restore-TotalCmdOwned([string]$ini, [string]$iniBak, [switch]$Keep) {
+    if (-not (Test-Path -LiteralPath $iniBak)) { return $false }
+    $snapshot = Parse-TotalCmdRecoverySnapshot $iniBak
     if (-not $snapshot) { return $false }
     $current = (Read-Utf8 $ini) -split '\r?\n'
     # The split yields a trailing empty element for a file ending in EOL; trimming
@@ -712,6 +829,10 @@ function Restore-TotalCmdOwned([string]$ini, [string]$iniBak, [switch]$Keep) {
                 $current = Remove-IniKey $current $s $prop.Name
             }
         }
+    }
+    if ($env:WINTAGE_TEST_FAIL_TOTALCMD_RESTORE_WRITE) {
+        [System.IO.File]::WriteAllText($ini, "CORRUPTED_MID_WRITE`r`n", $script:Utf8WithBom)
+        throw "simulated failure during live INI restoration (WINTAGE_TEST_FAIL_TOTALCMD_RESTORE_WRITE)"
     }
     Write-Utf8BomLines $ini $current
     # T-192 P2/C: the backup is consumed only when no manifest transition is
@@ -1339,6 +1460,13 @@ function Test-WintageBytesEqual($a, $b) {
 }
 
 function Invoke-WindowsThemeActivation([string]$themePath) {
+    if ($env:WINTAGE_TEST_SKIP_ACTIVATION) {
+        if (-not $env:WINTAGE_TEST_FAIL_WIN_ACTIVATION_TIMEOUT -and -not $env:WINTAGE_TEST_FAIL_WIN_ACTIVATION_THROW) {
+            $key = if ($WINDOWS_THEME_KEY) { $WINDOWS_THEME_KEY } elseif ($env:WINTAGE_TEST_WINDOWS_THEME_KEY) { $env:WINTAGE_TEST_WINDOWS_THEME_KEY } else { 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes' }
+            Set-ItemProperty -Path $key -Name CurrentTheme -Value $themePath -ErrorAction SilentlyContinue
+        }
+        return
+    }
     # Microsoft documents ShellExecute as the supported installer path for
     # .theme files. Show=0 asks the Personalization host to stay hidden while
     # applying; Windows may ignore that hint, but the colours are selected
@@ -1515,12 +1643,15 @@ function Invoke-WindowsTheme {
         throw 'Windows theme: the active .theme file was not found - refusing to apply because the wallpaper/cursor merge would have nothing to preserve.'
     }
 
-    $args = @($helper, '--themes-dir', $WINDOWS_THEMES_DIR)
-    if ($DoRevert) { $args += '--revert' }
-    else { $args += @('--theme', $built, '--current-theme', $resolvedCurrent, '--palette', $PaletteSlug) }
+    $helperArgs = @($helper, '--themes-dir', $WINDOWS_THEMES_DIR)
+    if ($DoRevert) { $helperArgs += '--revert' }
+    else { $helperArgs += @('--theme', $built, '--current-theme', $resolvedCurrent, '--palette', $PaletteSlug) }
     $action = if ($DoRevert) { 'Restore the exact pre-Wintage Windows theme snapshot' } else { "Merge and activate Wintage $PaletteSlug, preserving wallpaper/sounds and selecting ___CURRENT___ cursors" }
-    if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'Windows theme dry-run FAILED - see the message above.' }; return }
+    if ($WhatIfPreference) { & node ($helperArgs + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw 'Windows theme dry-run FAILED - see the message above.' }; return }
     if (-not $PSCmdlet.ShouldProcess($WINDOWS_THEMES_DIR, $action)) { return }
+
+    # CORE-003: Preflight validation - non-mutating check before transaction boundary
+    Invoke-Native 'Windows theme preflight' { & node ($helperArgs + '--dry-run') }
 
     $preAccentItem = Get-Item $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
     $preAccentExists = $preAccentItem -and ($preAccentItem.GetValueNames() -contains 'AccentColorInactive')
@@ -1545,89 +1676,90 @@ function Invoke-WindowsTheme {
     })
     $rollbackArgs = @{ PreAccentExists = [bool]$preAccentExists; PreAccent = $preAccent; PreCurrentTheme = $preCurrentTheme; PreThemeState = $preThemeState }
 
-    $helperOutput = @(& node $args)
-    if ($LASTEXITCODE -ne 0) { throw 'Windows theme preparation failed.' }
-    $payload = $helperOutput[-1] | ConvertFrom-Json
+    # CORE-003: Put every real owned mutation after $rollbackArgs creation inside
+    # one checked transaction boundary: helper writes, AccentColorInactive write,
+    # activation, activation polling/retry, cleanup, and manifest Set/Remove.
+    Invoke-TargetCommit 'windows' 'Windows system theme' {
+        $helperOutput = @(Invoke-Native 'Windows theme preparation' { & node $helperArgs })
+        $payload = $helperOutput[-1] | ConvertFrom-Json
 
-    $expectedAccent = $null
-    if ($DoRevert) { Restore-WindowsInactiveAccent -Keep }
-    else {
-        Backup-WindowsInactiveAccent
-        $tokens = Get-PaletteTokens (Join-Path $root "themes/$PaletteSlug.json")
-        $inactiveAccent = ([uint32](Convert-HexToBgr $tokens.surfaceRaised)) -bor [uint32]4278190080
-        $expectedAccent = $inactiveAccent
-        New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $inactiveAccent -PropertyType DWord -Force | Out-Null
-    }
-
-    Invoke-WindowsThemeActivation ([string]$payload.activate)
-    $activated = $false
-    for ($attempt = 0; $attempt -lt 50; $attempt++) {
-        Start-Sleep -Milliseconds 100
-        $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
-        if ($now -and ([IO.Path]::GetFullPath($now) -eq [IO.Path]::GetFullPath([string]$payload.activate))) { $activated = $true; break }
-        if (-not $DoRevert) {
-            $dwmNow = Get-ItemProperty $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
-            $cursorNow = (Get-ItemProperty 'HKCU:\Control Panel\Cursors' -ErrorAction SilentlyContinue).'(default)'
-            if ([uint32]$dwmNow.AccentColor -eq $expectedAccent -and [uint32]$dwmNow.AccentColorInactive -eq $expectedAccent -and $cursorNow -eq '___CURRENT___') { $activated = $true; break }
+        $expectedAccent = $null
+        if ($DoRevert) { Restore-WindowsInactiveAccent -Keep }
+        else {
+            Backup-WindowsInactiveAccent
+            $tokens = Get-PaletteTokens (Join-Path $root "themes/$PaletteSlug.json")
+            $inactiveAccent = ([uint32](Convert-HexToBgr $tokens.surfaceRaised)) -bor [uint32]4278190080
+            $expectedAccent = $inactiveAccent
+            if ($env:WINTAGE_TEST_FAIL_WIN_ACCENT_WRITE) { throw 'simulated accent color write failure (WINTAGE_TEST_FAIL_WIN_ACCENT_WRITE)' }
+            New-ItemProperty -Path $WINDOWS_DWM_KEY -Name AccentColorInactive -Value $inactiveAccent -PropertyType DWord -Force | Out-Null
         }
-    }
-    if (-not $activated) {
-        # Windows 10 keeps a hidden SystemSettings process after some .theme
-        # activations. A second ShellExecute is then swallowed by that stale
-        # process: no error, no theme change. Close only after the documented path
-        # failed, retry once, and keep the retry hidden too.
-        Get-Process SystemSettings -ErrorAction SilentlyContinue | Stop-Process -Force
-        Start-Sleep -Milliseconds 250
-        Start-Process -FilePath ([string]$payload.activate) -WindowStyle Hidden
-        for ($attempt = 0; $attempt -lt 50; $attempt++) {
-            Start-Sleep -Milliseconds 100
-            $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
-            if ($now -and ([IO.Path]::GetFullPath($now) -eq [IO.Path]::GetFullPath([string]$payload.activate))) { $activated = $true; break }
-            if (-not $DoRevert) {
-                $dwmNow = Get-ItemProperty $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
-                $cursorNow = (Get-ItemProperty 'HKCU:\Control Panel\Cursors' -ErrorAction SilentlyContinue).'(default)'
-                if ([uint32]$dwmNow.AccentColor -eq $expectedAccent -and [uint32]$dwmNow.AccentColorInactive -eq $expectedAccent -and $cursorNow -eq '___CURRENT___') { $activated = $true; break }
+
+        if ($env:WINTAGE_TEST_FAIL_WIN_ACTIVATION_THROW) { throw 'simulated activation dispatch failure (WINTAGE_TEST_FAIL_WIN_ACTIVATION_THROW)' }
+        Invoke-WindowsThemeActivation ([string]$payload.activate)
+
+        $activated = $false
+        if ($env:WINTAGE_TEST_FAIL_WIN_ACTIVATION_TIMEOUT) {
+            # Simulated timeout seam
+        } else {
+            for ($attempt = 0; $attempt -lt 50; $attempt++) {
+                Start-Sleep -Milliseconds 100
+                $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+                if ($now -and ([IO.Path]::GetFullPath($now) -eq [IO.Path]::GetFullPath([string]$payload.activate))) { $activated = $true; break }
+                if (-not $DoRevert) {
+                    $dwmNow = Get-ItemProperty $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
+                    $cursorNow = (Get-ItemProperty 'HKCU:\Control Panel\Cursors' -ErrorAction SilentlyContinue).'(default)'
+                    if ([uint32]$dwmNow.AccentColor -eq $expectedAccent -and [uint32]$dwmNow.AccentColorInactive -eq $expectedAccent -and $cursorNow -eq '___CURRENT___') { $activated = $true; break }
+                }
+            }
+            if (-not $activated) {
+                # Windows 10 keeps a hidden SystemSettings process after some .theme
+                # activations. A second ShellExecute is then swallowed by that stale
+                # process: no error, no theme change. Close only after the documented path
+                # failed, retry once, and keep the retry hidden too.
+                Get-Process SystemSettings -ErrorAction SilentlyContinue | Stop-Process -Force
+                Start-Sleep -Milliseconds 250
+                Start-Process -FilePath ([string]$payload.activate) -WindowStyle Hidden
+                for ($attempt = 0; $attempt -lt 50; $attempt++) {
+                    Start-Sleep -Milliseconds 100
+                    $now = (Get-ItemProperty $WINDOWS_THEME_KEY -Name CurrentTheme -ErrorAction SilentlyContinue).CurrentTheme
+                    if ($now -and ([IO.Path]::GetFullPath($now) -eq [IO.Path]::GetFullPath([string]$payload.activate))) { $activated = $true; break }
+                    if (-not $DoRevert) {
+                        $dwmNow = Get-ItemProperty $WINDOWS_DWM_KEY -ErrorAction SilentlyContinue
+                        $cursorNow = (Get-ItemProperty 'HKCU:\Control Panel\Cursors' -ErrorAction SilentlyContinue).'(default)'
+                        if ([uint32]$dwmNow.AccentColor -eq $expectedAccent -and [uint32]$dwmNow.AccentColorInactive -eq $expectedAccent -and $cursorNow -eq '___CURRENT___') { $activated = $true; break }
+                    }
+                }
             }
         }
-    }
-    if (-not $activated) {
-        # P1#27: activation was not confirmed - roll back through the VERIFIED
-        # primitive. The success message below is only reachable when the
-        # restore actually proved the captured pre-state; a failed rollback
-        # throws an INCOMPLETE double failure naming the resource.
-        Invoke-WindowsActivationRecovery -ActivationFailure 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts.' @rollbackArgs
-    }
-    foreach ($oldTheme in @($payload.cleanup)) {
-        if (-not $oldTheme) { continue }
-        $fullOld = [IO.Path]::GetFullPath([string]$oldTheme)
-        $safeParent = [IO.Path]::GetFullPath($WINDOWS_THEMES_DIR).TrimEnd('\')
-        $safeLeaf = Split-Path $fullOld -Leaf
-        if ((Split-Path $fullOld -Parent).TrimEnd('\') -eq $safeParent -and
-            $safeLeaf -match '^Wintage(?:-[0-9a-f]{10})?\.theme$' -and
-            $fullOld -ne [IO.Path]::GetFullPath([string]$payload.activate)) {
-            Remove-Item -LiteralPath $fullOld -Force -ErrorAction SilentlyContinue
+        if (-not $activated) {
+            Invoke-WindowsActivationRecovery -ActivationFailure 'Windows: theme activation was dispatched but Windows did not confirm it after both attempts.' @rollbackArgs
         }
-    }
-    if ($DoRevert) {
-        Say 'Windows: restored the saved pre-Wintage theme.' 'Green'
-        # P1#27: the DWM backup is consumed ONLY after the manifest transition
-        # succeeded. A failed Remove-ManifestEntry keeps it for an idempotent retry.
-        Invoke-TargetCommit 'windows' 'Windows system theme' {
+
+        foreach ($oldTheme in @($payload.cleanup)) {
+            if (-not $oldTheme) { continue }
+            $fullOld = [IO.Path]::GetFullPath([string]$oldTheme)
+            $safeParent = [IO.Path]::GetFullPath($WINDOWS_THEMES_DIR).TrimEnd('\')
+            $safeLeaf = Split-Path $fullOld -Leaf
+            if ((Split-Path $fullOld -Parent).TrimEnd('\') -eq $safeParent -and
+                $safeLeaf -match '^Wintage(?:-[0-9a-f]{10})?\.theme$' -and
+                $fullOld -ne [IO.Path]::GetFullPath([string]$payload.activate)) {
+                Remove-Item -LiteralPath $fullOld -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        if ($DoRevert) {
             Remove-ManifestEntry 'windows'
-        } {
-            Restore-WindowsPreState @rollbackArgs
+            Say 'Windows: restored the saved pre-Wintage theme.' 'Green'
+            $finalize = & node $helper --themes-dir $WINDOWS_THEMES_DIR --finalize-revert 2>$null
+            if ($LASTEXITCODE -ne 0) { throw 'Windows: could not finalize the theme epoch after manifest removal; recovery state was kept for retry.' }
+            if (Test-Path $WINDOWS_DWM_BACKUP) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
         }
-        # W2-003: retire the snapshot epoch ONLY after the manifest transition
-        # committed. The next Apply re-baselines from the then-current theme.
-        $finalize = & node $helper --themes-dir $WINDOWS_THEMES_DIR --finalize-revert 2>$null
-        if ($LASTEXITCODE -ne 0) { throw 'Windows: could not finalize the theme epoch after manifest removal; recovery state was kept for retry.' }
-        if (Test-Path $WINDOWS_DWM_BACKUP) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
-    }
-    else {
-        Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'
-        Invoke-TargetCommit 'windows' 'Windows system theme' {
+        else {
             Set-ManifestEntry 'windows' $PaletteSlug $WINDOWS_THEMES_DIR 'n/a' (Get-PayloadVersion)
-        } { Restore-WindowsPreState @rollbackArgs }
+            Say "Windows: activated Wintage $PaletteSlug; wallpaper/sounds preserved, ___CURRENT___ cursors selected." 'Green'
+        }
+    } {
+        Restore-WindowsPreState @rollbackArgs
     }
 }
 
@@ -1655,17 +1787,28 @@ function Invoke-TotalCmd {
             if (Test-Path $iniBak) {
                 # Ownership merge (T-189): restore ONLY the Wintage-owned keys into
                 # the CURRENT ini; unrelated user edits made after Apply survive.
-                # T-192 P2/C: the backup is kept until the manifest transition wins.
-                $restored = Restore-TotalCmdOwned $ini $iniBak -Keep
-                if (-not $restored) { throw "$($appName): backup exists but could not be parsed - nothing restored." }
-                Say "$($appName): restored the Wintage-owned keys into the current wincmd.ini" 'Green'
+                # SRC-007:R008 / W2-003: the restored live INI, recovery authority
+                # and manifest behave as one transaction.
+                # 1. Complete read-only recovery validation before destructive work.
+                $null = Parse-TotalCmdRecoverySnapshot $iniBak
+
+                # 2. Capture exact pre-operation state of wincmd.ini and recovery file.
+                $preIni = Save-FilePreState $ini $iniBak
+
+                # 3. Enter Invoke-TargetCommit BEFORE live restoration.
+                # 4. Inside commit: Restore-TotalCmdOwned with backup preservation, then Remove-ManifestEntry last.
+                # 5. On ANY exception: restore live INI and backup byte-exactly via Restore-FilePreState.
                 Invoke-TargetCommit $manifestName $appName {
+                    $restored = Restore-TotalCmdOwned $ini $iniBak -Keep
+                    if (-not $restored) { throw "$($appName): failed to restore owned keys into wincmd.ini." }
                     Remove-ManifestEntry $manifestName
                 } {
-                    # Manifest removal failed: the backup is still present (kept
-                    # above), so an idempotent retry can finish the revert.
+                    Restore-FilePreState $preIni $ini $iniBak
                 }
+
+                # 6. Consume the recovery backup only after the transaction commits successfully.
                 if (Test-Path $iniBak) { Remove-Item $iniBak -Force }
+                Say "$($appName): restored the Wintage-owned keys into the current wincmd.ini" 'Green'
             }
             else {
                 # No backup. Only an ini that WE themed (manifest says so) may be
@@ -1734,33 +1877,7 @@ function Invoke-TotalCmd {
         # Recolour only existing age filters. User expressions, ordering and every
         # unrelated filter remain byte-for-byte in place.
         $lines = (Read-Utf8 $ini) -split '\r?\n'
-        $searchFlags = @{}
-        foreach ($line in $lines) {
-            if ($line -match '^(.*)_SearchFlags=(.*)$') {
-                $searchFlags[$matches[1]] = $matches[2] -split '\|'
-            }
-        }
-        $recentFilterIds = @()
-        foreach ($line in $lines) {
-            if ($line -notmatch '^ColorFilter(\d+)=(.*)$') { continue }
-            $filterId = $matches[1]
-            $filter = $matches[2].Trim()
-            $isRecent = $filter -match '(?i)(modified|changed|recent|newer)'
-            if (-not $isRecent -and $filter.StartsWith('>')) {
-                $savedSearch = $filter.Substring(1)
-                if ($searchFlags.ContainsKey($savedSearch)) {
-                    $parts = $searchFlags[$savedSearch]
-                    $age = 0
-                    $unit = 0
-                    $isRecent = $parts.Count -gt 5 -and
-                        [int]::TryParse($parts[4], [ref]$age) -and
-                        [int]::TryParse($parts[5], [ref]$unit) -and
-                        $age -ge 0 -and $unit -ge -1
-                }
-            }
-            if ($isRecent) { $recentFilterIds += $filterId }
-        }
-        $recentFilterIds = @($recentFilterIds | Sort-Object -Unique)
+        $recentFilterIds = Get-TotalCmdRecentFilterIds $lines
         $recentFg = Convert-HexToBgr $t.link
 
         # Snapshot ONLY the owned keys (with their original values/absence) once,

@@ -49,6 +49,7 @@ if ($List) {
     Write-Host " 12. new app generation refuses stale baseline"
     Write-Host " 13. baseline pruning stays bounded"
     Write-Host " 14. missing live chime restored from baseline"
+    Write-Host " 15. FreeBuff through the -Selected batch/generation-lock path (R009)"
     exit 0
 }
 
@@ -373,6 +374,63 @@ $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--
 check 'missing-live: missing chime Revert exits 0' ($r.Code -eq 0)
 check 'missing-live: Revert does not refuse missing chime' (($r.Out -join ' ') -notmatch 'REVERT REFUSED')
 check 'missing-live: missing chime recreated byte-exact from baseline' ((Test-Path $chimePath) -and (-not (Compare-Object $stockChime14 ([System.IO.File]::ReadAllBytes($chimePath)))))
+
+# ---- Test 15: R009 - FreeBuff through the -Selected batch/generation-lock path ----
+# The PID automatic-variable collision died in exactly this path (the batch
+# worker's generation lock), so FreeBuff must prove out through -Selected, not
+# only -Target. Same isolated fixture; nothing real is touched.
+Clean-Fixture
+Write-StockFixture
+$chimeStock15 = [System.IO.File]::ReadAllBytes($chimePath)
+$stockAsar15 = [System.IO.File]::ReadAllBytes((Join-Path $app 'resources\app.asar'))
+$bundleStock15 = [System.IO.File]::ReadAllBytes($bundlePath)
+[System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavAPath, $utf8)
+$genLockFile15 = Join-Path $fakeAppData 'Wintage\build-generation.lock'
+$null = Run-TestChild node @((Join-Path $root 'tools\build-desktop.js'))
+
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Selected', 'freebuff', '-Palette', 'goldendefault')
+$selOut15 = ($r.Out | ForEach-Object { "$_" }) -join ' '
+check 'selected: -Selected freebuff Apply enters the batch + generation boundary (exit 0)' ($r.Code -eq 0)
+check 'selected: no PID automatic-variable collision on the batch path' ($selOut15 -notmatch 'Cannot overwrite variable PID')
+check 'selected: generation lock released after the batch' (-not (Test-Path $genLockFile15))
+$mSel = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
+check 'selected: Electron layer + sound post-step committed as ONE target operation' ([bool]$mSel.freebuff -and (Test-Path (Join-Path $app 'resources\app\app.asar')) -and (-not (Compare-Object $wavA ([System.IO.File]::ReadAllBytes($chimePath)))))
+check 'selected: renderer bundle untouched (ad stripping stays retired)' (-not (Compare-Object $bundleStock15 ([System.IO.File]::ReadAllBytes($bundlePath))))
+
+# Forced post-step failure must restore the Electron layer AND the sound layer
+# to the exact pre-operation state, with the manifest untouched.
+$selPkg15 = [System.IO.File]::ReadAllText((Join-Path $app 'resources\app\package.json'), $utf8)
+$selChime15 = [System.IO.File]::ReadAllBytes($chimePath)
+$env:WINTAGE_FREEBUFF_TEST_FAIL_APPLY = '1'
+[System.IO.File]::WriteAllText((Join-Path $fakeAppData 'Wintage\freebuff-sound.txt'), $wavBPath, $utf8)
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Selected', 'freebuff', '-Palette', 'dracula')
+$env:WINTAGE_FREEBUFF_TEST_FAIL_APPLY = ''
+$selOut15b = ($r.Out | ForEach-Object { "$_" }) -join ' '
+check 'selected: forced FreeBuff post-step failure exits NONZERO' ($r.Code -ne 0)
+check 'selected: the failing run also stays free of the PID collision' ($selOut15b -notmatch 'Cannot overwrite variable PID')
+check 'selected: Electron layer restored to EXACT pre-failure state' (([System.IO.File]::ReadAllText((Join-Path $app 'resources\app\package.json'), $utf8)) -eq $selPkg15)
+check 'selected: sound layer restored to pre-failure bytes' (-not (Compare-Object $selChime15 ([System.IO.File]::ReadAllBytes($chimePath))))
+check 'selected: failure releases the generation lock' (-not (Test-Path $genLockFile15))
+$mSel2 = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
+check 'selected: manifest still the pre-failure state (goldendefault)' ($mSel2.freebuff.palette -eq 'goldendefault')
+
+# Sound tamper is still detected and repaired by -Reapply. The configured
+# preference after the failed dracula attempt is wavB, so desired state is
+# wavB - Reapply must repair toward the CONFIGURED sound, not the last applied.
+[System.IO.File]::WriteAllBytes($chimePath, $chimeStock15)
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Reapply')
+check 'selected: Reapply after batch-path tamper exits 0 and repairs the configured sound' ($r.Code -eq 0 -and (-not (Compare-Object $wavB ([System.IO.File]::ReadAllBytes($chimePath)))))
+
+# Batch-path Revert restores owned FreeBuff state.
+$r = Run-TestChild powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'desktop\install.ps1'), '-Selected', 'freebuff', '-Revert')
+$selOut15r = ($r.Out | ForEach-Object { "$_" }) -join ' '
+check 'selected: -Selected freebuff Revert exits 0' ($r.Code -eq 0)
+check 'selected: Revert stays free of the PID collision' ($selOut15r -notmatch 'Cannot overwrite variable PID')
+check 'selected: Revert restores the stock app.asar byte-exact' (-not (Compare-Object $stockAsar15 ([System.IO.File]::ReadAllBytes((Join-Path $app 'resources\app.asar')))))
+check 'selected: Revert removes the Wintage app dir' (-not (Test-Path (Join-Path $app 'resources\app')))
+check 'selected: Revert restores the stock sound' (-not (Compare-Object $chimeStock15 ([System.IO.File]::ReadAllBytes($chimePath))))
+$mSel3 = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
+check 'selected: Revert removes the manifest entry + releases the lock' (-not $mSel3.freebuff -and -not (Test-Path $genLockFile15))
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

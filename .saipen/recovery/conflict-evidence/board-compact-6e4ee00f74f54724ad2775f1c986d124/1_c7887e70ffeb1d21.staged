@@ -1,0 +1,20 @@
+{
+  "externalization_event": {
+    "event_id": "E-933",
+    "operation_id": "board-compact-6e4ee00f74f54724ad2775f1c986d124",
+    "reason": "explicit canonical legacy BOARD compaction"
+  },
+  "lossless": true,
+  "metadata_path": ".saipen/recovery/board-compaction/T-246/T-246-66ae1e73771c966b339288d9.json",
+  "operation": "board_legacy_compaction",
+  "original_record_bytes": 3201,
+  "original_record_path": ".saipen/recovery/board-compaction/T-246/T-246-66ae1e73771c966b339288d9.BOARD.md",
+  "original_record_sha256": "66ae1e73771c966b339288d94085e09bbbdda8128df7769f0704be67a344bee6",
+  "project_identity": "v:\\___vac\\__k\\__code\\_tampermonkey\\_win95theme\\wintage",
+  "project_lineage": "lineage-30ee844c69d34eb68605a4563cfdb8ff",
+  "schema_version": 1,
+  "source": ".saipen/BOARD.md",
+  "status": "COMMITTED",
+  "supersedes_detail_ref": "",
+  "ticket_id": "T-246"
+}

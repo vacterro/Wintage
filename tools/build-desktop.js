@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(ROOT, 'themes');
@@ -24,6 +25,140 @@ const VERSION = (/\/\/ @version\s+(\d+\.\d+\.\d+)/.exec(
   fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8')) || [, '0.0.0'])[1];
 
 const checkOnly = process.argv.includes('--check');
+
+// ─── Cross-runtime generation publication lock (W2-004 T-246:R009) ─────────────
+// PowerShell GUI/install (Enter-BatchLock) and this direct Node build CLI share ONE
+// critical section via a lock file in the Wintage appdata dir, so a Save-Custom or a
+// CLI build cannot publish a generation while a batch is consuming one. The lock is a
+// held handle: exclusive create ('wx' here, CreateNew + FileShare.None in PS).
+//
+// R009 owner-aware protocol (mirrors desktop/modules/generation-lock.ps1):
+//  - the lock file holds ONE-LINE JSON metadata: token (ownership token), pid,
+//    runtime, acquired, ownerCreated (the owner process's StartTime, so a reused
+//    pid is never mistaken for the recorded owner);
+//  - recovery is OWNER-LIVENESS-based, never age-based: a contender may steal
+//    only after positively establishing the recorded owner is dead (pid gone,
+//    or pid alive with a different StartTime). A valid long-running holder
+//    never loses the lock, no matter how long it holds. A readable-but-
+//    malformed lock (crash between create and metadata write) is recovered
+//    only after its mtime ages past the stale threshold;
+//  - release is OWNERSHIP-VERIFIED: unlink only when the file still carries
+//    OUR token - a stale/old holder can never unlink a newer generation's lock;
+//  - a holder passes WINTAGE_BUILD_LOCK_HELD=1 to its child node processes for
+//    same-process reentrancy.
+// TEST SEAMS (never set in production):
+//  WINTAGE_TEST_LOCK_TIMEOUT_MS - contention timeout, default 15000
+//  WINTAGE_TEST_LOCK_STALE_MS   - malformed-lock recovery age, default 30000
+const appData = process.env.WINTAGE_APPDATA || path.join(process.env.APPDATA || '', 'Wintage');
+const GEN_LOCK = path.join(appData, 'build-generation.lock');
+function genLockTimeoutMs() { return process.env.WINTAGE_TEST_LOCK_TIMEOUT_MS ? parseInt(process.env.WINTAGE_TEST_LOCK_TIMEOUT_MS, 10) : 15000; }
+function genLockStaleMs() { return process.env.WINTAGE_TEST_LOCK_STALE_MS ? parseInt(process.env.WINTAGE_TEST_LOCK_STALE_MS, 10) : 30000; }
+function readGenLockState() {
+  let txt = null;
+  try { txt = fs.readFileSync(GEN_LOCK, 'utf8'); } catch (e) { return { state: 'held', meta: null }; }
+  if (!txt || !txt.trim()) return { state: 'malformed', meta: null };
+  try {
+    const m = JSON.parse(txt.trim());
+    if (!m || !m.pid) return { state: 'malformed', meta: null };
+    return { state: 'ok', meta: m };
+  } catch (e) { return { state: 'malformed', meta: null }; }
+}
+// Positively establish owner liveness; 'unknown' fails closed (never steal).
+function genLockOwnerAlive(meta) {
+  if (!meta || !meta.pid) return 'unknown';
+  let alive = false;
+  try { alive = process.kill(parseInt(meta.pid, 10), 0); } catch (e) {
+    alive = e && e.code === 'EPERM'; // exists but not ours to signal
+  }
+  if (!alive) return 'dead';
+  if (meta.ownerCreated) {
+    // PID-reuse guard: a live process whose start time does not match the
+    // recorded owner is NOT the recorded owner - the recorder is dead.
+    // On Windows process.start is unavailable to plain Node, so a live pid
+    // with an ownerCreated field from the OTHER runtime is trusted only when
+    // this same process wrote it (our own token path never re-derives it);
+    // cross-runtime start-time comparison rides on the PS side, which runs
+    // the same rule with real StartTime data. Fail closed here when the
+    // recorded ownerCreated is malformed.
+    const rec = Date.parse(meta.ownerCreated);
+    if (isNaN(rec)) return 'unknown';
+  }
+  return 'alive';
+}
+function acquireGenLock() {
+  if (process.env.WINTAGE_BUILD_LOCK_HELD) return null;
+  if (checkOnly) return null;
+  const token = crypto.randomBytes(16).toString('hex');
+  const start = Date.now();
+  while (true) {
+    try {
+      const fd = fs.openSync(GEN_LOCK, 'wx');
+      try {
+        const meta = { token: token, pid: process.pid, runtime: 'node', acquired: new Date().toISOString(), ownerCreated: null };
+        fs.writeSync(fd, JSON.stringify(meta) + '\n');
+        fs.fsyncSync(fd);
+      } catch (e) {
+        try { fs.closeSync(fd); } catch (e2) {}
+        try { fs.unlinkSync(GEN_LOCK); } catch (e2) {}
+        throw e;
+      }
+      return Object.freeze({ fd: fd, token: token, path: GEN_LOCK });
+    } catch (e) {
+      if (e && e.code === 'EEXIST') {
+        const st = readGenLockState();
+        let steal = false;
+        if (st.state === 'ok') {
+          steal = genLockOwnerAlive(st.meta) === 'dead';
+        } else if (st.state === 'malformed') {
+          // No owner identity to protect: recover only after the stale age,
+          // so an in-progress metadata write is never interrupted.
+          try { steal = (Date.now() - fs.statSync(GEN_LOCK).mtimeMs) > genLockStaleMs(); } catch (e2) {}
+        }
+        if (steal) { try { fs.unlinkSync(GEN_LOCK); } catch (e2) { steal = false; } }
+        if (steal) continue;
+        if (Date.now() - start >= genLockTimeoutMs()) {
+          const st2 = readGenLockState();
+          if (st2.state === 'malformed') {
+            throw new Error('W2-004: build/output busy - generation lock contended and ' + GEN_LOCK + ' is malformed (no usable owner metadata). Clear it by hand if no build is running.');
+          }
+          throw new Error('W2-004: build/output busy - generation lock contended (timeout ' + Math.round(genLockTimeoutMs() / 1000) + 's). Retry; if recurring, clear stale ' + GEN_LOCK + '.');
+        }
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+function releaseGenLock(lock) {
+  if (lock == null) return;
+  try {
+    fs.closeSync(lock.fd);
+  } catch (e) {
+    throw new Error('W2-004: generation-lock cleanup failed for ' + lock.path + ': could not close lock handle: ' + e.message);
+  }
+  let st;
+  try {
+    st = readGenLockState();
+  } catch (e) {
+    throw new Error('W2-004: generation-lock cleanup failed for ' + lock.path + ': could not verify ownership: ' + e.message);
+  }
+  if (st.state === 'held') {
+    if (!fs.existsSync(lock.path)) return;
+    throw new Error('W2-004: generation-lock cleanup failed for ' + lock.path + ': could not read current ownership metadata');
+  }
+  if (st.state !== 'ok') {
+    throw new Error('W2-004: generation-lock cleanup failed for ' + lock.path + ': current ownership metadata is malformed');
+  }
+  if (st.meta.token !== lock.token) return;
+  try {
+    fs.unlinkSync(lock.path);
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return;
+    throw new Error('W2-004: generation-lock cleanup failed for ' + lock.path + ': could not remove owned lock: ' + e.message);
+  }
+}
+
 let stale = 0, wrote = 0;
 
 function loadPacks() {
@@ -57,7 +192,12 @@ function emit(file, content) {
   if (prev === content) return;
   if (checkOnly) { console.error('build-desktop: STALE ' + path.relative(ROOT, file)); stale++; return; }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, content);
+  // W2-004: staged write -- no reader (batch child or concurrent build) can
+  // observe a half-published `desktop/out` tree when Save-Custom/regeneration
+  // races Apply.
+  const tmp = file + '.wintage-tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  fs.writeFileSync(tmp, content);
+  fs.renameSync(tmp, file);
   wrote++;
 }
 
@@ -508,17 +648,28 @@ function prune(packs) {
 }
 
 const packs = loadPacks();
-buildVscode(packs);
-buildElectron(packs);
-buildBrowser(packs);
-buildObsidian(packs);
-buildObs(packs);
-buildBetterDiscord(packs);
-buildWindows(packs);
-buildQbittorrent(packs);
-buildNotepadPlusPlus(packs);
-buildCinema4D(packs);
-prune(packs);
+// W2-004 (T-246:R009): direct Node CLI publication is gated by the same
+// cross-runtime generation lock as GUI Save-Custom. A batch holding the lock
+// cannot observe a half-published desktop/out tree; a direct build cannot
+// publish B while a consuming batch pinned A. The lock is advisory to
+// --check, which only reads.
+let genLock = null;
+try {
+  genLock = acquireGenLock();
+  buildVscode(packs);
+  buildElectron(packs);
+  buildBrowser(packs);
+  buildObsidian(packs);
+  buildObs(packs);
+  buildBetterDiscord(packs);
+  buildWindows(packs);
+  buildQbittorrent(packs);
+  buildNotepadPlusPlus(packs);
+  buildCinema4D(packs);
+  prune(packs);
+} finally {
+  releaseGenLock(genLock);
+}
 
 if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }
 console.log('build-desktop: ' + (wrote ? wrote + ' file(s) written' : 'everything up to date') +

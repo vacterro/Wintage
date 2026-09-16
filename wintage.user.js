@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.35.1
+// @version      1.36.0
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -616,7 +616,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.35.1';
+  const W95_VERSION = '1.36.0';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -817,8 +817,9 @@ html { scroll-behavior: auto !important; }
    99,999 seconds on every hovered element and pseudo-element. On a deep React
    tree, :hover matches the whole ancestor chain; every small paint change could
    therefore leave another long-lived transition object behind. Readable hover
-   rules are still stripped by stripHoverSheets(). Unreadable cross-origin hover
-   paint is now tolerated rather than buying a permanent compositor tax. */
+   rules are still stripped by the bounded hover-rule cursor. Unreadable
+   cross-origin hover paint is now tolerated rather than buying a permanent
+   compositor tax. */
 
 /* The page's own photo backdrop goes at the root too. The repainter handles the
    full-bleed DIVs sites use for this (see the page-sized backdrop rule there),
@@ -1952,6 +1953,9 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR|TEMPLATE|NOSCRIPT|AUDIO|SOURCE|TRACK|OPTION|OPTGROUP)$/i;
 
   const piercedRoots = new Set();
+  const forceLapDeferredRoots = new Set();
+  let forceLapActive = false;
+  let forceLapId = 0;
 
   // PERF-004 (SRC-004): the observer options are declared ONCE, here, because
   // the registration has to be rebuilt later (see pruneShadowRegistry) and a
@@ -1969,8 +1973,14 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   function pierceShadow(host) {
     const tag = (host.tagName || '').toUpperCase();
     if (SHADOW_SKIP_TAGS.has(tag)) return;
-    if (!host.shadowRoot || piercedRoots.has(host.shadowRoot)) return;
-    piercedRoots.add(host.shadowRoot);
+    if (!host.shadowRoot || piercedRoots.has(host.shadowRoot) || forceLapDeferredRoots.has(host.shadowRoot)) return;
+    if (forceLapActive) {
+      host.shadowRoot.__wintageLapId = forceLapId + 1;
+      forceLapDeferredRoots.add(host.shadowRoot);
+    } else {
+      host.shadowRoot.__wintageLapId = forceLapId;
+      registerStyleRoot(host.shadowRoot);
+    }
     try {
       injectStyle(host.shadowRoot, 'shadow', SHADOW_CSS);
       if (!CSS_ONLY_MODE) {
@@ -1981,12 +1991,15 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   }
 
 
-  // ─── :hover RULE SURGERY (v29.1) ────────────────────────────────────────────
+  // ─── :hover RULE SURGERY (v29.1 / R013) ─────────────────────────────────────
   // Strips paint properties out of every readable :hover rule so sites cannot
   // flashbang-highlight on hover. Functional props (display, visibility,
   // opacity, transform) are left untouched so hover-opened menus keep working.
   // Cross-origin sheets that throw on cssRules access are covered by the CSS
   // freeze rule in GLOBAL_CSS/SHADOW_CSS instead.
+  const STYLE_SHEET_BUDGET = 32;
+  const STYLE_RULE_BUDGET = 500;
+  const STYLE_ROOT_BUDGET = 16;
   const HOVER_PAINT = /^(background|box-shadow|filter|backdrop-filter|color|border|outline|text-decoration|text-shadow|--)/;
   const sheetSeen = new WeakMap(); // sheet -> { gen, count } at last pass
   // PERF-010: same-count stylesheet replacement (CSSStyleSheet.replace /
@@ -1995,7 +2008,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // not a generation identifier: it can stay constant while every rule is
   // rewritten. We instrument the CSSStyleSheet prototype once at startup to
   // bump a per-sheet generation token whenever ANY rule-mutating API runs.
-  // stripHoverSheets then re-walks the sheet whenever either length or
+  // The bounded style cursor then re-walks the sheet whenever either length or
   // generation changes, instead of silently skipping same-count changes.
   if (typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype && !CSSStyleSheet.prototype.__wintageInstrumented) {
     CSSStyleSheet.prototype.__wintageInstrumented = true;
@@ -2024,21 +2037,19 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       proto.__wintagePatchedDelete = true;
     }
   }
-  // STYLE text replacements mutate the ownerNode's sheet under the hood; the
-  // sibling instrumentations above already cover that case because the
-  // browser dispatches a corresponding API call. We additionally bump the
-  // sheet's generation when a <style> element's text is set, because some
-  // engines bypass the prototype patch in that path.
-  function bumpStyleElementSheets(root) {
-    if (!root || !root.querySelectorAll) return;
-    const els = root.querySelectorAll('style');
-    for (let i = 0; i < els.length; i++) {
-      const el = els[i];
-      if (el.__wintageLastText !== el.textContent) {
-        el.__wintageLastText = el.textContent;
-        try { if (el.sheet) el.sheet.__wintageGen = (el.sheet.__wintageGen || 0) + 1; } catch (e) { noteSuppressed('sheetGenThrows', e); }
+  // TARGET C: lazy STYLE text replacement detection on sheet encounter.
+  // Zero full STYLE node queries across roots.
+  function bumpStyleElementSheets(sheet) {
+    if (!sheet) return;
+    try {
+      const node = sheet.ownerNode;
+      if (node && (node.nodeName === 'STYLE' || node.tagName === 'STYLE')) {
+        if (node.__wintageLastText !== node.textContent) {
+          node.__wintageLastText = node.textContent;
+          sheet.__wintageGen = (sheet.__wintageGen || 0) + 1;
+        }
       }
-    }
+    } catch (e) { noteSuppressed('sheetGenThrows', e); }
   }
 
   function stripHoverRule(rule) {
@@ -2051,64 +2062,267 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     }
   }
 
-  function walkRules(container) {
-    let rules;
-    try { rules = container.cssRules; } catch (e) { return; } // cross-origin
-    if (!rules) return;
-    for (let i = 0; i < rules.length; i++) {
-      const r = rules[i];
-      if (r.type === 7) continue; // CSSRule.KEYFRAMES_RULE has no :hover rules
+  // TARGET D: Iterative, bounded rule traversal with persistent stack frame.
+  // Replaces recursive walkRules. Every cssRules index read consumes ruleBudget.
+  function drainStyleRules(task, ruleBudget) {
+    let budgetRemaining = ruleBudget;
+    while (task.stack.length > 0 && budgetRemaining > 0) {
+      const frame = task.stack[task.stack.length - 1];
+      if (frame.index >= frame.length) {
+        task.stack.pop();
+        continue;
+      }
+      let rule;
       try {
-        if (r.selectorText && r.selectorText.indexOf(':hover') !== -1) stripHoverRule(r);
-        if (r.cssRules && r.cssRules.length) walkRules(r); // @media/@supports/@layer/nesting
+        rule = frame.container[frame.index];
+      } catch (e) {
+        if (task.mode === 'append') {
+          try { throw e; } catch (e) { noteSuppressed('hoverAppendThrows', e); }
+        } else {
+          try { throw e; } catch (e) { noteSuppressed('hoverWalkThrows', e); }
+        }
+        rule = null;
+      }
+      frame.index++;
+      budgetRemaining--;
+
+      if (!rule) continue;
+      if (rule.type === 7) continue; // CSSRule.KEYFRAMES_RULE has no :hover rules
+
+      try {
+        if (rule.selectorText && rule.selectorText.indexOf(':hover') !== -1) {
+          stripHoverRule(rule);
+        }
+        let nested = null;
+        try {
+          if (rule.cssRules && rule.cssRules.length > 0) nested = rule.cssRules;
+        } catch (e) { }
+        if (nested) {
+          task.stack.push({
+            container: nested,
+            index: 0,
+            length: nested.length
+          });
+        }
       } catch (e) { noteSuppressed('hoverWalkThrows', e); }
     }
+    return ruleBudget - budgetRemaining;
   }
 
-  // Returns true when at least one sheet had changed since the last pass — the
-  // caller treats that as "late CSS is still landing" and requests a force
-  // re-verify (v1.3.0). On a settled page it returns false every time, which is
-  // what lets the expensive pass go quiet.
-  function stripHoverSheets(root) {
+  let activeStyleTask = null;
+  let styleCursorRoot = null;
+  let styleCursorRootIterator = null;
+  let styleCursorListIndex = 0;
+  let styleCursorSheetIndex = 0;
+
+  // R013 / TARGET D: style-lap membership is FINITE. `piercedRoots.values()`
+  // is a LIVE Set iterator, so a root pierced while a style lap is running
+  // would otherwise join that same lap (unbounded, and it makes the lap's size
+  // a function of how long the lap takes, which is exactly the coupling
+  // TARGET A removed from the force lane). Every root is stamped with a
+  // monotonic sequence when it is registered; a style lap captures the
+  // sequence reached when it STARTS; a root stamped later is deferred to the
+  // NEXT lap. Deferral costs root budget (discovery is never free) and keeps
+  // the style debt set, so the later lap is guaranteed to happen.
+  let styleRootSeq = 0;                     // monotonic registration stamp
+  let styleLapSeqLimit = 0;                 // stamp captured by the ACTIVE lap
+  const styleLapDeferredRoots = new Set();  // arrived during the active lap
+
+  // Single registration point: membership stamp and registry add stay together
+  // so no future caller can add a root that a running lap would swallow.
+  function registerStyleRoot(root) {
+    // A frozen/exotic root cannot take the stamp; it then reads as pre-existing
+    // (undefined > limit is false) and is served by the current lap. Failing
+    // open here can only cost work, never coverage.
+    try { root.__wintageStyleSeq = ++styleRootSeq; } catch (e) { }
+    try { piercedRoots.add(root); } catch (e) { }
+  }
+
+  // TARGET B & G: Bounded incremental style work draining.
+  function drainStyleWork(sheetBudget, ruleBudget, rootBudget = STYLE_ROOT_BUDGET) {
+    let rulesRemaining = ruleBudget;
+    let sheetsRemaining = sheetBudget;
+    let rootsRemaining = rootBudget;
     let changed = false;
-    bumpStyleElementSheets(root);
-    const lists = [root.styleSheets, root.adoptedStyleSheets];
-    for (let l = 0; l < lists.length; l++) {
-      const list = lists[l];
-      if (!list) continue;
-      for (let i = 0; i < list.length; i++) {
-        const sheet = list[i];
-        const node = sheet.ownerNode;
-        if (node && node.getAttribute && node.getAttribute('data-w95')) continue; // our own hover bevels stay
-        let count;
-        try { count = sheet.cssRules ? sheet.cssRules.length : 0; } catch (e) { continue; }
-        const gen = sheet.__wintageGen || 0;
-        const seen = sheetSeen.get(sheet);
-        // PERF-010: a same-length sheet that was rewritten still invalidates
-        // the cache (the old length-only check silently skipped it). The
-        // generation token is bumped by the prototype-instrumented mutators
-        // and by bumpStyleElementSheets; any of them invalidates this pass.
-        if (seen && seen.gen === gen && seen.count === count) continue;
-        sheetSeen.set(sheet, { gen, count });
-        changed = true;
-        if (!seen || seen.count > count || seen.gen !== gen) {
-          walkRules(sheet); // first sight, rules removed, or same-count rewrite: full walk
+
+    // 1. Drain active task if one is in flight
+    if (activeStyleTask) {
+      const currentGen = activeStyleTask.sheet.__wintageGen || 0;
+      if (currentGen !== activeStyleTask.gen) {
+        // Generation changed mid-task; re-initialize task with the new generation!
+        const newSheet = activeStyleTask.sheet;
+        let newCount;
+        try { newCount = newSheet.cssRules ? newSheet.cssRules.length : 0; } catch (e) { newCount = -1; }
+        let newRules;
+        try { newRules = newSheet.cssRules; } catch (e) { newRules = null; }
+        if (newRules && newCount > 0) {
+          activeStyleTask = {
+            sheet: newSheet,
+            gen: currentGen,
+            count: newCount,
+            mode: 'full',
+            stack: [{
+              container: newRules,
+              index: 0,
+              length: newCount
+            }]
+          };
         } else {
-          // CSS-in-JS engines insertRule constantly; re-walking the whole sheet
-          // every tick was a jank source. Walk the appended rules only.
-          try {
-            const rules = sheet.cssRules;
-            for (let r = seen.count; r < count; r++) {
-              const rule = rules[r];
-              if (rule.selectorText && rule.selectorText.indexOf(':hover') !== -1) stripHoverRule(rule);
-              if (rule.cssRules && rule.cssRules.length) walkRules(rule);
-            }
-          } catch (e) { noteSuppressed('hoverAppendThrows', e); }
+          sheetSeen.set(newSheet, { gen: currentGen, count: newCount });
+          activeStyleTask = null;
+        }
+      }
+      if (activeStyleTask) {
+        const spent = drainStyleRules(activeStyleTask, rulesRemaining);
+        rulesRemaining -= spent;
+        if (activeStyleTask.stack.length === 0) {
+          if ((activeStyleTask.sheet.__wintageGen || 0) === activeStyleTask.gen) {
+            sheetSeen.set(activeStyleTask.sheet, { gen: activeStyleTask.gen, count: activeStyleTask.count });
+          }
+          activeStyleTask = null;
+          changed = true;
+        } else {
+          return { done: false, changed };
         }
       }
     }
-    return changed;
+
+    // 2. Discover sheets incrementally across document and pierced roots
+    if (styleCursorRoot === null) {
+      if (stylesDirty) {
+        styleCursorRoot = document;
+        styleCursorRootIterator = null;
+        styleCursorListIndex = 0;
+        styleCursorSheetIndex = 0;
+        // TARGET D: capture the membership boundary for THIS lap.
+        styleLapSeqLimit = styleRootSeq;
+        styleLapDeferredRoots.clear();
+      } else {
+        return { done: true, changed };
+      }
+    }
+
+    while (sheetsRemaining > 0 && rulesRemaining > 0 && styleCursorRoot !== null) {
+      const list = (styleCursorListIndex === 0 ? styleCursorRoot.styleSheets : styleCursorRoot.adoptedStyleSheets);
+      const listLen = list ? list.length : 0;
+
+      if (styleCursorSheetIndex < listLen) {
+        const sheet = list[styleCursorSheetIndex];
+        styleCursorSheetIndex++;
+        sheetsRemaining--;
+
+        if (sheet) {
+          const node = sheet.ownerNode;
+          if (!node || !node.getAttribute || !node.getAttribute('data-w95')) {
+            bumpStyleElementSheets(sheet);
+            let count;
+            try { count = sheet.cssRules ? sheet.cssRules.length : 0; } catch (e) { count = -1; }
+            const gen = sheet.__wintageGen || 0;
+            const seen = sheetSeen.get(sheet);
+
+            if (count === -1) {
+              // Throwing / cross-origin: mark seen so we don't retry forever (TARGET D/8)
+              sheetSeen.set(sheet, { gen, count: -1 });
+            } else if (seen && seen.gen === gen && seen.count === count) {
+              // Clean
+            } else {
+              const isAppend = seen && seen.gen === gen && seen.count < count;
+              let rules = null;
+              try { rules = sheet.cssRules; } catch (e) { rules = null; }
+
+              if (rules && count > 0) {
+                // TARGET F: Append uses the EXACT same rule budget and task stack
+                activeStyleTask = {
+                  sheet,
+                  gen,
+                  count,
+                  mode: isAppend ? 'append' : 'full',
+                  stack: [{
+                    container: rules,
+                    index: isAppend ? seen.count : 0,
+                    length: count
+                  }]
+                };
+
+                const spent = drainStyleRules(activeStyleTask, rulesRemaining);
+                rulesRemaining -= spent;
+
+                if (activeStyleTask.stack.length === 0) {
+                  // TARGET E: Completion-safe sheetSeen
+                  if ((sheet.__wintageGen || 0) === gen) {
+                    sheetSeen.set(sheet, { gen, count });
+                  }
+                  activeStyleTask = null;
+                  changed = true;
+                } else {
+                  return { done: false, changed };
+                }
+              } else {
+                sheetSeen.set(sheet, { gen, count });
+              }
+            }
+          }
+        }
+      } else {
+        if (styleCursorListIndex === 0) {
+          styleCursorListIndex = 1;
+          styleCursorSheetIndex = 0;
+        } else {
+          styleCursorListIndex = 0;
+          styleCursorSheetIndex = 0;
+          if (styleCursorRoot === document) {
+            styleCursorRootIterator = piercedRoots.values();
+          }
+          if (styleCursorRootIterator) {
+            let nextRoot = null;
+            while (rootsRemaining > 0) {
+              const n = styleCursorRootIterator.next();
+              if (n.done) {
+                styleCursorRootIterator = null;
+                break;
+              }
+              rootsRemaining--;
+              const r = n.value;
+              // TARGET D: stamped after this lap started -> next lap. Discovery
+              // already consumed root budget above; the debt flag at the end of
+              // the lap keeps the continuation scheduled.
+              let stampedLate = false;
+              try { stampedLate = r.__wintageStyleSeq > styleLapSeqLimit; } catch (e) { stampedLate = false; }
+              if (stampedLate) { styleLapDeferredRoots.add(r); continue; }
+              let detached = false;
+              try { detached = !r.host || !r.host.isConnected; } catch (e) { detached = true; }
+              if (!detached) { nextRoot = r; break; }
+            }
+            styleCursorRoot = nextRoot;
+            if (rootsRemaining <= 0 && styleCursorRootIterator) {
+              return { done: false, changed };
+            }
+          } else {
+            styleCursorRoot = null;
+          }
+        }
+      }
+    }
+
+    if (styleCursorRoot === null && activeStyleTask === null) {
+      // TARGET D: incomplete membership is NOT completion. Roots that arrived
+      // mid-lap (or arrived after the iterator ran out) leave the debt set, so
+      // the scheduler arms the next lap instead of the work being lost.
+      if (styleLapDeferredRoots.size > 0 || styleRootSeq > styleLapSeqLimit) {
+        return { done: false, changed };
+      }
+      stylesDirty = false;
+      return { done: true, changed };
+    }
+
+    return { done: false, changed };
   }
+
+  // R013 / TARGET G: there is no root-level stripHoverSheets() helper any more.
+  // It was the last place a stylesheet could be walked OUTSIDE the scheduler
+  // (the light lane called it once per root, and a root-level helper call is
+  // unbounded by construction). Every sheet now goes through drainStyleWork's
+  // persistent cursor, so the only way to reach CSSOM is a budgeted slice.
 
   // `w` is the caller's write queue (see flushWrites). Reads only — every style
   // change is appended, never applied here.
@@ -2904,7 +3118,6 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   const FORCE_ROOT_BUDGET = 64;
   const LIGHT_MAX_NODES = FORCE_BUDGET;
   const forceRootCursors = new Map();
-  let forceLapActive = false;
   let forceLapWorkset = null;   // ordered roots of the CURRENT lap (document once, then a registry snapshot)
   let forceLapIndex = 0;        // cursor into forceLapWorkset; advances monotonically within a lap
   let forceLapRemaining = 0;    // roots not yet done/dropped in this lap; O(1) completion detection
@@ -2912,7 +3125,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   let forcePassesOwed = 0;
   let lightPending = false;
   let sweepTimer = null;
-  let stylesDirty = true;
+  let stylesDirty = false;
 
   // 🚨 THE SWEEP RATE IS FLOOR-LIMITED. NOTHING MAY SCHEDULE A SWEEP AT 0ms 🚨
   // Measured on a real chatgpt.com conversation (3392 elements, 15s, primitives
@@ -2995,8 +3208,8 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   }
 
   // A request means "there is fresh work, revisit soon" — soon being the fast
-  // lane, NEVER immediately. runSweeper itself calls this (via stripHoverSheets
-  // spotting a changed sheet), so an immediate schedule here is a direct
+  // lane, NEVER immediately. runSweeper itself calls this (the bounded style
+  // lane reporting a changed sheet), so an immediate schedule here is a direct
   // sweep-calls-sweep loop.
   //
   function requestForceSweep() {
@@ -3039,25 +3252,25 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   function runSweeper(force) {
     if (repainterSuspended) return;
     const sweepStarted = performance.now();
-    const scanStyles = force || stylesDirty;
     const w = [];
-    if (!force) {
-      if (stylesDirty) {
-        stylesDirty = false;
-        stripHoverSheets(document);
-        piercedRoots.forEach(root => { try { stripHoverSheets(root); } catch (e) { } });
+
+    // R013 / TARGET G: the light lane no longer strips hover sheets
+    // synthetically for document + every pierced root. Dirty style work IS
+    // scheduler debt now: one bounded slice is drained here, and an incomplete
+    // slice schedules its own continuation, so a DOM continuation never
+    // restarts stylesheet enumeration.
+    const styleRes = drainStyleWork(STYLE_SHEET_BUDGET, STYLE_RULE_BUDGET);
+    if (styleRes.changed) {
+      if (force) {
+        forcePassesOwed = Math.max(forcePassesOwed, 1);
+      } else {
+        requestForceSweep();
       }
+    }
+
+    if (!force) {
       // PERF-003 (SRC-004): the light lane drains its OWN bounded registry and
-      // never touches the root list. The old form ran
-      // `root.querySelectorAll('*:not([data-w95-done])')` for EVERY search root,
-      // which materialises the complete matching NodeList BEFORE the budget is
-      // consulted -- measured at 12,000 materialised matches to do 2,500 units
-      // of work -- and on a settled document it still made the selector engine
-      // walk every root to return nothing. The registry holds exactly the
-      // elements that lost their done marker without being re-processed,
-      // wherever they live, so shadow roots are covered without a per-root
-      // query. An overflow was already promoted to the force lane at
-      // registration time.
+      // never touches the root list.
       let remaining = LIGHT_MAX_NODES;
       let incomplete = false;
       for (const el of lightDirty) {
@@ -3070,63 +3283,44 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
       flushWrites(w);
       // Sweep-work accounting feeds the mutation-work suspension guard.
       addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
-      if (incomplete && !repainterSuspended && !document.hidden) {
+      if ((incomplete || !styleRes.done) && !repainterSuspended && !document.hidden) {
         requestLightSweep();
       }
       return;
     }
-    // ---- FORCE LANE (SRC-006:R010) ----
-    // A lap owns an ordered workset built ONCE from the registry (document
-    // first, represented exactly once). Continuation slices resume at
-    // forceLapIndex instead of reconstructing `[document, ...piercedRoots]`
-    // and walking from root zero; detached roots are dropped lazily AS
-    // VISITED, never via a registry-wide scan per slice; hover-sheet work is
-    // folded into first-serve per root; completion is the O(1) remaining
-    // counter, not a full-rootCollection scan. Roots pierced DURING a lap
-    // join the next lap's workset.
+
+    // ---- FORCE LANE (R013 / PERF-002) ----
+    // Persistent incremental root cursor.
+    // Document served once per lap, pierced roots advanced incrementally.
+    // Zero full materialization `[document, ...piercedRoots]`.
     if (!forceLapActive || !forceLapWorkset) {
-      forceLapWorkset = [document, ...piercedRoots];
-      forceLapIndex = 0;
-      forceLapRemaining = forceLapWorkset.length;
       forceLapActive = true;
+      forceLapWorkset = {
+        docDone: false,
+        iterator: piercedRoots.values(),
+        currentRoot: null,
+        lapFinished: false,
+        id: ++forceLapId
+      };
+      forceLapIndex = 0;
+      forceLapRemaining = 1;
       stylesDirty = false;
-      // Cursors from an earlier lap are garbage once the workset is rebuilt.
       forceRootCursors.clear();
     }
+
     let remaining = FORCE_BUDGET;
     let rootsServed = 0;
-    while (forceLapIndex < forceLapWorkset.length && remaining > 0) {
-      if (rootsServed >= FORCE_ROOT_BUDGET) break;
-      const root = forceLapWorkset[forceLapIndex];
-      if (root !== document) {
-        let detached = false;
-        try { detached = !root.host || !root.host.isConnected; } catch (e) { detached = true; }
-        if (detached) {
-          // SRC-006:R010: lazy prune-as-visited. Detached roots never leak in
-          // forceRootCursors past this point (and a lap end clears the rest).
-          try { piercedRoots.delete(root); forceRootCursors.delete(root); } catch (e) { }
-          forceLapRemaining--;
-          forceLapIndex++;
-          continue;
-        }
-      }
+
+    // 1. Serve document once per lap
+    if (!forceLapWorkset.docDone && remaining > 0 && rootsServed < FORCE_ROOT_BUDGET) {
+      const root = document;
       let state = forceRootCursors.get(root);
       if (!state) {
-        // PERF-002: TreeWalker.NodeFilter.SHOW_ELEMENT only. No full
-        // querySelectorAll materialisation. The walker advances one node at
-        // a time and is GC'd when its root detaches; never retain a static
-        // NodeList.
         const walker = (root.createTreeWalker ? root.createTreeWalker(root, 0x1 /* SHOW_ELEMENT */, null) : null);
         state = { walker, total: 0, done: false };
         forceRootCursors.set(root, state);
-        // Hover-sheet work is incremental too: one strip per root per lap,
-        // paid when the root is first SERVED -- not a registry-wide forEach
-        // on every continuation slice.
-        if (scanStyles) { try { stripHoverSheets(root); } catch (e) { } }
       }
       try {
-        // Walk incrementally until the element budget is exhausted, then
-        // resume on the next slice from this exact walker.
         while (remaining > 0) {
           const node = state.walker ? state.walker.nextNode() : null;
           if (!node) { state.done = true; break; }
@@ -3135,33 +3329,104 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
           remaining--;
         }
       } catch (e) { state.done = true; }
+
       if (state.done) {
-        forceLapRemaining--;
+        forceLapWorkset.docDone = true;
         forceLapIndex++;
+        rootsServed++;
       } else {
-        // Element budget exhausted mid-root: stay on this root so the next
-        // slice resumes from the same walker (cursor never moves backwards).
-        break;
+        rootsServed++;
       }
-      rootsServed++;
     }
+
+    // 2. Advance pierced roots incrementally
+    if (forceLapWorkset.docDone) {
+      while (rootsServed < FORCE_ROOT_BUDGET && remaining > 0) {
+        if (!forceLapWorkset.currentRoot) {
+          if (!forceLapWorkset.iterator) {
+            forceLapWorkset.lapFinished = true;
+            break;
+          }
+          const next = forceLapWorkset.iterator.next();
+          if (next.done) {
+            forceLapWorkset.lapFinished = true;
+            break;
+          }
+          const candidate = next.value;
+          if (forceLapDeferredRoots.has(candidate)) {
+            continue;
+          }
+          if (candidate.__wintageLapId && candidate.__wintageLapId > forceLapWorkset.id) {
+            forceLapDeferredRoots.add(candidate);
+            continue;
+          }
+          forceLapWorkset.currentRoot = candidate;
+        }
+
+        const root = forceLapWorkset.currentRoot;
+        let detached = false;
+        try { detached = !root.host || !root.host.isConnected; } catch (e) { detached = true; }
+        if (detached) {
+          try { piercedRoots.delete(root); forceRootCursors.delete(root); } catch (e) { }
+          forceLapWorkset.currentRoot = null;
+          forceLapIndex++;
+          rootsServed++;
+          continue;
+        }
+
+        let state = forceRootCursors.get(root);
+        if (!state) {
+          const walker = (root.createTreeWalker ? root.createTreeWalker(root, 0x1 /* SHOW_ELEMENT */, null) : null);
+          state = { walker, total: 0, done: false };
+          forceRootCursors.set(root, state);
+        }
+        try {
+          while (remaining > 0) {
+            const node = state.walker ? state.walker.nextNode() : null;
+            if (!node) { state.done = true; break; }
+            process(node, true, w);
+            state.total++;
+            remaining--;
+          }
+        } catch (e) { state.done = true; }
+
+        if (state.done) {
+          forceLapWorkset.currentRoot = null;
+          forceLapIndex++;
+          rootsServed++;
+        } else {
+          rootsServed++;
+          break;
+        }
+      }
+    }
+
     flushWrites(w);
-    // Sweep-work accounting feeds the mutation-work suspension guard; every
-    // slice must report its own duration regardless of which lane ran.
     addWorkPressure(performance.now() - sweepStarted, 'sweep-work');
-    const lapComplete = forceLapRemaining <= 0 && forceLapIndex >= forceLapWorkset.length;
+
+    const lapComplete = forceLapWorkset.docDone && !forceLapWorkset.currentRoot && forceLapWorkset.lapFinished;
+    const styleComplete = styleRes.done;
+
     if (force && forceLapActive) {
       if (lapComplete) {
-        // Lap done: drop ALL traversal state so neither cursors nor a dead
-        // workset outlive the lap.
         forceRootCursors.clear();
         forceLapWorkset = null;
         forceLapIndex = 0;
         forceLapRemaining = 0;
         forceLapActive = false;
+
+        if (forceLapDeferredRoots.size > 0) {
+          for (const r of forceLapDeferredRoots) registerStyleRoot(r);
+          forceLapDeferredRoots.clear();
+          forcePassesOwed = Math.max(forcePassesOwed, 1);
+          scheduleSweep(MIN_SWEEP_GAP);
+        }
       } else if (!repainterSuspended && !document.hidden) {
         forcePassesOwed = Math.max(forcePassesOwed, 1);
         scheduleSweep(MIN_SWEEP_GAP);
+      }
+      if (!styleComplete && !repainterSuspended && !document.hidden) {
+        requestLightSweep();
       }
     }
   }
