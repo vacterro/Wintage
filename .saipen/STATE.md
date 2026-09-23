@@ -1,24 +1,24 @@
 ---
-phase: VERIFY
+phase: DONE
 task: T-244
-next_action: "PHASE REVIEW T-244"
+next_action: "PHASE SCOUT T-238"
 blocker: none
-agent: zcode
+agent: claude
 saipen_version: 7
 schema_version: 3
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN
 mode: full
 execution_intent: converge
 converge_target: ship
-last_event: 912
+last_event: 916
 style_contract: ded-4ae736e4
-updated: "2026-09-11T07:05:00Z"
-transition_from: BUILD
+updated: "2026-09-23T23:52:00Z"
+transition_from: REVIEW
 ---
 
 # Active Work
 
-Sole DOING owner: T-244 (ZCode usage-popup 5-hours label, light orange; claimed E-910). T-243 DONE and SHIPPED as v1.35.0 (ead75e8, tag pushed; ship line reconstructed E-910). T-242 DONE (SRC-006 closed E-902). audit/5.md remains uncaptured; T-238 and T-065 stay parked.
+DOING is empty. T-244 DONE and SHIPPED as v1.35.1 (b30f33b, tag 2c21c2e; REVIEW E-914 post-hoc, ship line reconstructed E-915). T-243 shipped v1.35.0 (ead75e8). Next: T-238 (saitranslate duplicate kitchen), which needs saipen_home validate.py on the Windows checkout. audit/5.md remains uncaptured; T-065 stays BLOCKED.
 
 ## Full matrix, current (E-900 verify)
 
