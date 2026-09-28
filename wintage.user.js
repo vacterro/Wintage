@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.36.0
+// @version      1.36.1
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -35,8 +35,11 @@
   const EXCLUDE = [
     // Auth & Payments (don't break secure forms)
     /oauth/i, /captcha/i, /accounts\.google/i, /login\.microsoft/i, /paypal/i, /stripe/i, /bank/i,
-    // Heavy Web Apps (lag too much or UI gets destroyed)
-    /translate\.google/i, /maps\.google/i, /figma\.com/i, /canva\.com/i, /webflow\.com/i, /photopea\.com/i
+    // Bot challenges & anti-fraud tokens (avoid breaking form/reply submissions on X/Twitter and elsewhere)
+    /arkoselabs/i, /funcaptcha/i, /challenges\.cloudflare/i, /turnstile/i, /kasada/i, /perimeterx/i,
+    // Heavy Web Apps & Readers (lag too much or UI/canvas/flipbook gets destroyed)
+    /translate\.google/i, /maps\.google/i, /figma\.com/i, /canva\.com/i, /webflow\.com/i, /photopea\.com/i,
+    /publuu\.com/i, /issuu\.com/i, /fliphtml5\.com/i, /yumpu\.com/i, /heyzine\.com/i
   ];
 
   // CORE-003: the exclusion predicate is centralized so the SAME check that
@@ -208,7 +211,12 @@
   const IS_X = /(^|\.)(x\.com|twitter\.com)$/.test(HOST);
   const IS_REDDIT = /(^|\.)(reddit\.com|redd\.it)$/.test(HOST);
   const IS_GOOGLE = /(^|\.)google\.[a-z.]+$/.test(HOST);
-  const HIGH_CHURN_HOST = IS_X || /(^|\.)(chatgpt\.com|chat\.openai\.com|claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
+  const IS_CHATGPT = /(^|\.)(chatgpt\.com|chat\.openai\.com)$/.test(HOST);
+  // A dev server is NOT a high-churn chat SPA and must not be treated as one.
+  // Folding IS_LOCAL in here silently disabled the surface remapping, the
+  // floating-panel solidification and the hover surgery that the @description
+  // promises on exactly the host most likely to be inspected.
+  const HIGH_CHURN_HOST = IS_X || IS_CHATGPT || /(^|\.)(claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
   const CSS_ONLY_MODE = HIGH_CHURN_HOST;
 
   // ─── UI.md TOKENS — THE COMPLETE PALETTE, NOTHING OUTSIDE IT ────────────────
@@ -497,18 +505,45 @@
   const DARK = BG_LUM < 0.18;
   const elev = L => (DARK ? L : 1 - L);
 
+  // ─── ROOT ELEMENT MAY NOT EXIST YET ──────────────────────────────────────────
+  // 🚨 NEVER INSERT ANYTHING INTO THE DOCUMENT NODE ITSELF 🚨
+  // At the earliest document-start point the parser has not created <html> yet:
+  // Firefox's userscript managers hand over control there routinely, and so does
+  // Chromium's earliest injection hook. In that state Document accepts ONE element
+  // child without complaint -- so a <style> inserted into it does not throw, it
+  // BECOMES the root element, and the page the parser builds afterwards never
+  // attaches. Measured: a blank white page with document.getElementsByTagName('*')
+  // returning 1 element (our style) instead of 16,982 on the same article.
+  // So the root is always WAITED for, never created. The observer is on the
+  // Document node for childList only (no subtree), fires once, and disconnects.
+  function whenRoot(cb) {
+    if (document.documentElement) { cb(); return; }
+    try {
+      const mo = new MutationObserver(function () {
+        if (!document.documentElement) return;
+        mo.disconnect();
+        cb();
+      });
+      mo.observe(document, { childList: true });
+    } catch (e) { }
+  }
+
   // ─── IMMEDIATE BACKGROUND ────────────────────────────────────────────────────
   // Must stay the first thing that touches the document so nothing white ever
   // paints, and it now paints the ACTIVE theme rather than a hardcoded golden.
-  if (document.documentElement) {
-    document.documentElement.style.setProperty('background-color', T.background, 'important');
-    document.documentElement.style.setProperty('color', T.textPrimary, 'important');
-    document.documentElement.setAttribute('data-w95-dark', DARK ? '1' : '0');
-    document.documentElement.setAttribute('data-w95-theme', THEME_ID);
-    if (IS_X) document.documentElement.setAttribute('data-w95-x', '1');
-    if (IS_REDDIT) document.documentElement.setAttribute('data-w95-reddit', '1');
-    if (IS_GOOGLE) document.documentElement.setAttribute('data-w95-google', '1');
-  }
+  whenRoot(function paintRoot() {
+    const root = document.documentElement;
+    root.style.setProperty('background-color', T.background, 'important');
+    root.style.setProperty('color', T.textPrimary, 'important');
+    root.setAttribute('data-w95-dark', DARK ? '1' : '0');
+    root.setAttribute('data-w95-theme', THEME_ID);
+    // typeof-guarded: tools/test-theme-switch.js evaluates this block without
+    // the host constants above it.
+    if (typeof IS_X !== 'undefined' && IS_X) root.setAttribute('data-w95-x', '1');
+    if (typeof IS_REDDIT !== 'undefined' && IS_REDDIT) root.setAttribute('data-w95-reddit', '1');
+    if (typeof IS_GOOGLE !== 'undefined' && IS_GOOGLE) root.setAttribute('data-w95-google', '1');
+    if (typeof IS_CHATGPT !== 'undefined' && IS_CHATGPT) root.setAttribute('data-w95-chatgpt', '1');
+  });
 
   // ─── THEME MENU ──────────────────────────────────────────────────────────────
   // Top frame only. The script runs in every frame (see FRAME ROLE above), so
@@ -616,7 +651,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.36.0';
+  const W95_VERSION = '1.36.1';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -831,7 +866,7 @@ body { background-color: ${T.backgroundSoft} !important; color: ${T.textPrimary}
 
 /* 🚨 VERDANA 100% FORCED EVERYWHERE — inputs/textareas included 🚨
    Only true icon-font carriers are excluded (glyphs would turn into letters). */
-*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
+*:not(svg):not(path):not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]):not([class*="google-symbols" i]):not([class*="material-symbols" i]):not([class*="material-icons" i]):not([class*="google-material-icons" i]):not([class*="VfPpkd" i]) {
   font-family: ${FONT} !important;
   -webkit-font-smoothing: none !important;
   -moz-osx-font-smoothing: unset !important;
@@ -867,7 +902,7 @@ input, textarea, select, option, button, code, pre, kbd, samp, tt,
    rejected for the status colours above: '[class*="meta" i]' also matches a
    '.pagemeta' wrapper full of body copy, and shrinking that to 10px is worse
    than leaving it at 12px. */
-*:not(svg):not(path):not(i):not(html):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]) {
+*:not(svg):not(path):not(i):not(html):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(figcaption):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="codicon" i]):not([class*="lucide" i]):not([class*="octicon" i]):not([class*="remixicon" i]):not([class*="phosphor" i]):not([class*="iconify" i]):not([class*="feather" i]):not([data-icon]):not([data-cds="Icon"]):not([class*="google-symbols" i]):not([class*="material-symbols" i]):not([class*="material-icons" i]):not([class*="google-material-icons" i]):not([class*="VfPpkd" i]) {
   font-size: 12px !important;
   line-height: 1.2 !important;
 }
@@ -1041,8 +1076,7 @@ button:not(.ytp-button) *:not(i):not([class*="icon" i]):not([class*="fa-" i]):no
 [class~="button" i] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 [class~="btn" i] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 span[role="button"] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-a[role="button"] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-.btn *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
+a[role="button"] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
@@ -1102,8 +1136,11 @@ yt-icon-button button, yt-button-shape button, .ytp-button, [class*="yt-spec-but
    misalignment inside one widget, traded for every field on the web being the
    same field. Textareas are exempt (they get UI.md's own min-height instead). */
 input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
-select {
+select:not([multiple]):not([size]), select[size="1"] {
   height: 20px !important; padding: 1px 3px !important;
+}
+select[multiple], select[size]:not([size="1"]) {
+  height: auto !important; min-height: 48px !important; padding: 1px 3px !important;
 }
 input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
 textarea, select {
@@ -1400,7 +1437,7 @@ div[class*="space-y-1.5"]:has(> div[class*="h-1.5"] > div[style*="usage-chart-1)
     display: none !important;
   }
 
-  /* Google Search & Material 3 / AI Overview surface tokens */
+  /* Google Search & Material 3 / AI Overview / OneGoogle surface tokens */
   html[data-w95-google="1"] {
     --color-surface: ${T.surface} !important;
     --color-surface-variant: ${T.surfaceRaised} !important;
@@ -1416,6 +1453,25 @@ div[class*="space-y-1.5"]:has(> div[class*="h-1.5"] > div[style*="usage-chart-1)
     --color-primary: ${T.link} !important;
     --color-outline: ${T.borderMuted} !important;
     --color-outline-variant: ${T.bevelLight} !important;
+    --gm3-sys-color-surface: ${T.surface} !important;
+    --gm3-sys-color-surface-container: ${T.surface} !important;
+    --gm3-sys-color-surface-container-high: ${T.surfaceRaised} !important;
+    --gm3-sys-color-surface-container-highest: ${T.surfaceAlt} !important;
+    --gm3-sys-color-surface-container-low: ${T.backgroundSoft} !important;
+    --gm3-sys-color-surface-container-lowest: ${T.background} !important;
+    --gm3-sys-color-on-surface: ${T.textPrimary} !important;
+    --gm3-sys-color-on-surface-variant: ${T.textSecondary} !important;
+    --gm3-sys-color-outline: ${T.borderMuted} !important;
+    --gm3-sys-color-outline-variant: ${T.bevelLight} !important;
+    --gm3-sys-color-background: ${T.backgroundSoft} !important;
+    --gm3-sys-color-on-background: ${T.textPrimary} !important;
+    --mdc-theme-surface: ${T.surface} !important;
+    --mdc-theme-on-surface: ${T.textPrimary} !important;
+    --mdc-theme-background: ${T.backgroundSoft} !important;
+    --og-surface: ${T.surface} !important;
+    --og-surface-container: ${T.surface} !important;
+    --og-color-surface: ${T.surface} !important;
+    --og-background: ${T.backgroundSoft} !important;
     --m3c-surface: ${T.surface} !important;
     --m3c-surface-container: ${T.surface} !important;
     --m3c-surface-container-high: ${T.surfaceRaised} !important;
@@ -1435,6 +1491,32 @@ div[class*="space-y-1.5"]:has(> div[class*="h-1.5"] > div[style*="usage-chart-1)
     --appbar-background: ${T.surface} !important;
     --header-background: ${T.surface} !important;
   }
+  /* Google Account popup dialog / one-google card surface */
+  html[data-w95-google="1"] [role="dialog"],
+  html[data-w95-google="1"] c-wiz,
+  html[data-w95-google="1"] [class*="gb_" i] {
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+  }
+  /* Google Material Symbols and ligature icon protection */
+  html[data-w95-google="1"] [class*="google-symbols" i],
+  html[data-w95-google="1"] [class*="material-symbols" i],
+  html[data-w95-google="1"] [class*="material-icons" i],
+  html[data-w95-google="1"] [class*="google-material-icons" i],
+  html[data-w95-google="1"] [style*="Google Symbols" i],
+  html[data-w95-google="1"] [style*="Material Symbols" i],
+  html[data-w95-google="1"] [style*="Material Icons" i],
+  html[data-w95-google="1"] [jsname][aria-hidden="true"],
+  html[data-w95-google="1"] span[aria-hidden="true"]:not([class*="label"]):not([class*="text"]) {
+    font-family: 'Google Symbols', 'Material Symbols Outlined', 'Material Icons', sans-serif !important;
+    font-feature-settings: 'liga' 1 !important;
+    -webkit-font-feature-settings: 'liga' 1 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    word-wrap: normal !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+  }
   /* Google AI Overview and Follow-up / Ask anything bar */
   html[data-w95-google="1"] form:has([placeholder*="Ask" i]),
   html[data-w95-google="1"] div:has(> form [placeholder*="Ask" i]),
@@ -1451,6 +1533,14 @@ div[class*="space-y-1.5"]:has(> div[class*="h-1.5"] > div[style*="usage-chart-1)
     color: ${T.textPrimary} !important;
     border-color: ${T.borderDark} !important;
     box-shadow: none !important;
+  }
+
+  /* ChatGPT composer background — v1.36.1 fix: removed div[class*="bottom-0" i] (too broad,
+     hit scroll containers and created large dark void), removed padding-bottom on
+     main div[role="presentation"] (now ChatGPT's main scroll viewport, not a clearance div). */
+  html[data-w95-chatgpt="1"] [class*="composer" i],
+  html[data-w95-chatgpt="1"] div.sticky.bottom-0 {
+    background-color: ${T.background} !important;
   }
 
   yt-interaction, paper-ripple, .mdc-ripple-surface, .mdc-ripple-upgraded::before, .mdc-ripple-upgraded::after {
@@ -1590,17 +1680,7 @@ rect.bar.previous-period {
    thing carrying its meaning. And the floating surfaces are re-solidified straight
    after, or menus and tooltips render see-through with the text behind them showing
    through. */
-div:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-span:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-section:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-article:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-aside:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-nav:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-header:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-footer:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
-main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
-  /* Blanket wipe retired (T-121). JS repainter handles backgrounds accurately now. */
-}
+/* Blanket wipe retired (T-121). JS repainter handles backgrounds accurately now. */
 
 
 `;
@@ -1707,7 +1787,9 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     /* Same exclusions as the light-DOM wipe retired in T-121 */
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK} box-sizing: border-box !important; }
-    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select { height: 20px !important; padding: 1px 3px !important; }
+    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    select:not([multiple]):not([size]), select[size="1"] { height: 20px !important; padding: 1px 3px !important; }
+    select[multiple], select[size]:not([size="1"]) { height: auto !important; min-height: 48px !important; padding: 1px 3px !important; }
     textarea { min-height: 64px !important; resize: none !important; padding: 1px 3px !important; }
     /* appearance:auto not forced here either — see GLOBAL_CSS checkbox note */
     input[type="checkbox"], input[type="radio"] { accent-color: ${T.borderHighlight} !important; background-image: none !important; }
@@ -1724,34 +1806,48 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     a, a:link { color: ${T.link} !important; text-decoration: none !important; }
     a:visited { color: ${T.textSecondary} !important; }
     a:hover { text-decoration: underline !important; background-color: transparent !important; }
+    @supports (scrollbar-color: ${T.borderMuted} ${T.background}) {
+      * { scrollbar-color: ${T.borderMuted} ${T.background} !important; }
+    }
   `;
 
   // ─── attachShadow INTERCEPTION ───────────────────────────────────────────────
   (function interceptAttachShadow() {
+    if (typeof Element === 'undefined' || !Element.prototype || !Element.prototype.attachShadow) return;
     const orig = Element.prototype.attachShadow;
     Element.prototype.attachShadow = function (init) {
       const shadow = orig.call(this, init);
-      try {
-        if (!shadow.querySelector('style[data-w95="shadow"]')) {
-          const s = document.createElement('style');
-          s.setAttribute('data-w95', 'shadow'); s.setAttribute('data-w95-ver', W95_VERSION);
-          s.textContent = SHADOW_CSS;
-          shadow.insertBefore(s, shadow.firstChild);
-        }
-      } catch (e) { }
+      if (shadow) {
+        queueMicrotask(() => {
+          try {
+            if (!shadow.querySelector('style[data-w95="shadow"]')) {
+              const s = document.createElement('style');
+              s.setAttribute('data-w95', 'shadow'); s.setAttribute('data-w95-ver', W95_VERSION);
+              s.textContent = SHADOW_CSS;
+              shadow.insertBefore(s, shadow.firstChild);
+            }
+          } catch (e) { }
+        });
+      }
       return shadow;
     };
   })();
 
   function injectStyle(root, id, content) {
+    // No <html> yet: defer (see whenRoot). The old fallback inserted into the
+    // Document node here, which does not throw -- it hijacks the root element.
+    if (root === document && !document.documentElement) {
+      whenRoot(function () { injectStyle(root, id, content); });
+      return;
+    }
     if (root.querySelector && root.querySelector(`style[data-w95="${id}"]`)) return;
     const s = document.createElement('style');
     s.setAttribute('data-w95', id);
     s.setAttribute('data-w95-ver', W95_VERSION);
     s.textContent = content;
-    // At document-start <head> may not exist yet; inserting into the Document
-    // node itself throws HierarchyRequestError and would kill the whole script.
-    // Fall back to documentElement and never let injection abort the userscript.
+    // At document-start <head> may not exist yet: documentElement is the
+    // fallback (a ShadowRoot has neither and takes the style directly), and
+    // injection must never abort the userscript.
     const target = root.head || root.documentElement || root;
     try { target.insertBefore(s, target.firstChild); } catch (e) {
       try { (document.head || document.documentElement).appendChild(s); } catch (e2) { }
@@ -1799,10 +1895,13 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // Write-if-changed: re-verify passes revisit every element, so identical
   // rewrites must not invalidate styles or churn the style attribute.
   function setImp(el, prop, val) {
-    const st = el.style;
-    if (st.getPropertyValue(prop) !== val || st.getPropertyPriority(prop) !== 'important') {
+    const st = el && el.style;
+    if (!st || typeof st.getPropertyValue !== 'function' || typeof st.setProperty !== 'function') return false;
+    const priority = typeof st.getPropertyPriority === 'function' ? st.getPropertyPriority(prop) : null;
+    if (st.getPropertyValue(prop) !== val || priority !== 'important') {
       st.setProperty(prop, val, 'important');
     }
+    return true;
   }
 
   // 🚨 READ/WRITE SPLIT — this was THE idle-CPU bug (v1.3.0) 🚨
@@ -1867,8 +1966,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   function flushWrites(w) {
     if (!w.length) return;
     for (let i = 0; i < w.length; i += 3) {
-      setImp(w[i], w[i + 1], w[i + 2]);
-      selfWritten.add(w[i]);
+      if (setImp(w[i], w[i + 1], w[i + 2])) selfWritten.add(w[i]);
     }
     w.length = 0;
     // takeRecords() returns AND clears the pending queue, so this runs before
@@ -2010,30 +2108,58 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // bump a per-sheet generation token whenever ANY rule-mutating API runs.
   // The bounded style cursor then re-walks the sheet whenever either length or
   // generation changes, instead of silently skipping same-count changes.
-  if (typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype && !CSSStyleSheet.prototype.__wintageInstrumented) {
+  if (!CSS_ONLY_MODE && typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype && !CSSStyleSheet.prototype.__wintageInstrumented) {
     CSSStyleSheet.prototype.__wintageInstrumented = true;
-    const bump = function (sheet) {
-      try { sheet.__wintageGen = (sheet.__wintageGen || 0) + 1; } catch (e) { }
+    // PERF-001 (audit/7.md, SRC-018:R013): a direct CSSOM mutation
+    // (insertRule / deleteRule / replaceSync / replace) need not create a DOM
+    // MutationObserver record, so before this fix the generation token advanced
+    // while NO scheduler debt was set: the change stayed untreated until some
+    // unrelated DOM event happened to set stylesDirty. The generation bump and
+    // the scheduler wake are now ONE operation, and the wake is the existing
+    // coalesced light lane (one pending timer however many mutations arrive).
+    const bumpStyleSheet = function (sheet) {
+      try { if (sheet && typeof sheet === 'object') sheet.__wintageGen = (sheet.__wintageGen || 0) + 1; } catch (e) { }
+      try { stylesDirty = true; } catch (e) { }
+      try { requestLightSweep(); } catch (e) { }
     };
     const proto = CSSStyleSheet.prototype;
     if (typeof proto.replace === 'function' && !proto.__wintagePatchedReplace) {
       const origReplace = proto.replace;
-      proto.replace = function () { const r = origReplace.apply(this, arguments); bump(this); return r; };
+      // replace() is ASYNC. Invalidating at call time stamps the NEW generation
+      // onto the OLD rules: a style pass that runs before fulfillment scans the
+      // old rules under the new generation, sheetSeen records that generation,
+      // and the completed same-count replacement is then indistinguishable from
+      // an already-scanned sheet. So invalidation is attached to Promise
+      // FULFILLMENT only, a rejection is a no-op, and the ORIGINAL Promise is
+      // returned unchanged (identity preserved).
+      proto.replace = function () {
+        const r = origReplace.apply(this, arguments);
+        const sheet = this;
+        if (r && typeof r.then === 'function') {
+          r.then(function () { bumpStyleSheet(sheet); }, function () { });
+          return r;
+        }
+        bumpStyleSheet(sheet);
+        return r;
+      };
       proto.__wintagePatchedReplace = true;
     }
     if (typeof proto.replaceSync === 'function' && !proto.__wintagePatchedReplaceSync) {
       const origReplaceSync = proto.replaceSync;
-      proto.replaceSync = function () { const r = origReplaceSync.apply(this, arguments); bump(this); return r; };
+      // Native return value and thrown exceptions are preserved: if the native
+      // call throws, invalidate never runs (only a successful operation
+      // advances the generation and arms the continuation).
+      proto.replaceSync = function () { const r = origReplaceSync.apply(this, arguments); bumpStyleSheet(this); return r; };
       proto.__wintagePatchedReplaceSync = true;
     }
     if (typeof proto.insertRule === 'function' && !proto.__wintagePatchedInsert) {
       const origInsert = proto.insertRule;
-      proto.insertRule = function () { const r = origInsert.apply(this, arguments); bump(this); return r; };
+      proto.insertRule = function () { const r = origInsert.apply(this, arguments); bumpStyleSheet(this); return r; };
       proto.__wintagePatchedInsert = true;
     }
     if (typeof proto.deleteRule === 'function' && !proto.__wintagePatchedDelete) {
       const origDelete = proto.deleteRule;
-      proto.deleteRule = function () { const r = origDelete.apply(this, arguments); bump(this); return r; };
+      proto.deleteRule = function () { const r = origDelete.apply(this, arguments); bumpStyleSheet(this); return r; };
       proto.__wintagePatchedDelete = true;
     }
   }
@@ -2612,13 +2738,18 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
             try { stack = document.elementsFromPoint(cx, cy); } catch (e) { }
           }
           const at = stack ? stack.indexOf(el) : -1;
+          // MEDIA, not just video/canvas: an img, picture or inline svg is
+          // artwork this surface does not own, and painting an opaque
+          // surfaceRaised panel plus a bevel over it hides the image. Hero
+          // badges, carousel captions and avatar overlays are the common case.
+          const MEDIA = 'video, audio, canvas, img, picture, svg';
           let isOverMediaOrCanvas = false;
           for (let k = at + 1; at >= 0 && k < stack.length; k++) {
             const u = stack[k];
             if (u.tagName === 'VIDEO' || u.tagName === 'AUDIO' || u.tagName === 'CANVAS' ||
                 u.tagName === 'IMG' || u.tagName === 'PICTURE' || u.tagName === 'SVG' ||
-                (u.closest && u.closest('video, audio, canvas, img, picture, svg')) ||
-                (u.querySelector && u.querySelector('video, audio, canvas, img, picture, svg'))) {
+                (u.closest && u.closest(MEDIA)) ||
+                (u.querySelector && u.querySelector(MEDIA))) {
               isOverMediaOrCanvas = true;
               break;
             }
@@ -2862,6 +2993,26 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
     // a Set of elements that nothing will ever drain once the lane is dead.
     try { lightDirty.clear(); } catch (e) { }
     forceLapActive = false;
+    // PERF-003 (SRC-018:R015): suspension is permanent, so it must be a COMPLETE
+    // scheduler-state disposal boundary. The previous cleanup missed the style
+    // lane's strong owners: forceLapDeferredRoots and styleLapDeferredRoots are
+    // Sets that STRONGLY own ShadowRoots; activeStyleTask strongly owns its
+    // sheet; styleCursorRoot directly owns the current Document/ShadowRoot; and
+    // styleCursorRootIterator is a live iterator over them. With no future pass
+    // to drain or overwrite them, a page that tripped the breaker could freeze a
+    // large dead DOM/CSSOM retention graph for the rest of the document's life.
+    // WeakMap caches (sheetSeen, attrCooldown) and the already-injected theme
+    // stay: they do not own their keys and must keep working.
+    try { forceLapDeferredRoots.clear(); } catch (e) { }
+    try { styleLapDeferredRoots.clear(); } catch (e) { }
+    activeStyleTask = null;
+    styleCursorRoot = null;
+    styleCursorRootIterator = null;
+    styleCursorListIndex = 0;
+    styleCursorSheetIndex = 0;
+    styleLapSeqLimit = styleRootSeq;
+    lightPending = false;
+    stylesDirty = false;
     try {
       document.documentElement.setAttribute('data-w95-perf', 'css-only');
       document.documentElement.setAttribute('data-w95-perf-reason', reason);
@@ -3014,33 +3165,21 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
           if (m.removedNodes && m.removedNodes.length) removalSeen = true;
         }
         for (let ni = 0; ni < m.addedNodes.length; ni++) {
-          // PERF-002 (SRC-004): STOP at the budget. The previous loop kept
-          // iterating every remaining entry after the 500th just to discover it
-          // existed -- measured on one 20,000-node childList record:
-          // iteratedAddedNodes = 20,000 for processCalls = 500. The tail is now
-          // never touched, so intake cost stops scaling with the size of a
-          // framework bulk insert. Nothing is lost: truncation requests a force
-          // sweep below, and a force pass re-scans stylesheets unconditionally
-          // (scanStyles = force || stylesDirty), which is what the old per-node
-          // tail peek for STYLE/LINK was protecting.
-          //
-          // The record loop itself continues -- attribute records after this
-          // point still need their process() call, and that walk is bounded by
-          // MUTATION_RECORD_LIMIT rather than by node cardinality.
+          // PERF-002 (SRC-018:R014): collection does ONLY O(1) per-node
+          // bookkeeping for the hard intake bound. Stylesheet discovery is
+          // DEFERRED to the deduplicated retained-root set below, so a nested
+          // batch (parser/SPA hydration reports a container AND its descendants)
+          // no longer runs an overlapping descendant query per collected node
+          // before the ancestor dedup. Measured pre-fix: 500 nested roots -> 500
+          // querySelector calls and 124,750 descendant visits for 500 process
+          // calls; the dedup reduced DOM processing but arrived after the
+          // quadratic selector work.
           if (addedCollected >= collectionBudget) { addedTruncatedDuringCollection = true; break; }
           const node = m.addedNodes[ni];
           if (node.nodeType !== 1) continue;
           if (node.hasAttribute && node.hasAttribute('data-w95')) continue;
           added.push(node);
           addedCollected++;
-          if (!styleishAdded) {
-            const tag = (node.tagName || '').toUpperCase();
-            if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
-              styleishAdded = true;
-            } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
-              styleishAdded = true;
-            }
-          }
         }
       }
 
@@ -3063,6 +3202,18 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
           // Added then removed again inside the same 60ms window: a detached
           // element has no computed style worth reading and no pixels to fix.
           if (covered || !node.isConnected) continue;
+          // PERF-002 (SRC-018:R014): stylesheet discovery runs ONCE per RETAINED
+          // top-level root, after deduplication. The root's own tag first, then
+          // at most ONE descendant query -- not one query per collected node
+          // (most of which are descendants of another retained root).
+          if (!styleishAdded) {
+            const tag = (node.tagName || '').toUpperCase();
+            if (tag === 'STYLE' || (tag === 'LINK' && (node.rel || '').toLowerCase().includes('stylesheet'))) {
+              styleishAdded = true;
+            } else if (node.querySelector && node.querySelector('style,link[rel*=stylesheet i]')) {
+              styleishAdded = true;
+            }
+          }
           node.removeAttribute && node.removeAttribute('data-w95-done');
           process(node, false, w);
           addedProcessed++;
@@ -3075,11 +3226,19 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
           }
           if (addedProcessed >= ADDED_NODE_BUDGET) { addedTruncated = true; break; }
         }
-        // Only stylesheet-bearing additions need a force re-verify. Plain DOM
-        // churn is already processed inline above and does not justify another
-        // full sweep.
-        if (styleishAdded || addedTruncated || addedTruncatedDuringCollection) {
-          stylesDirty = stylesDirty || styleishAdded;
+        // PERF-002 (SRC-018:R014): coverage at the budget boundary. The old
+        // fallback relied on a pre-R013 assumption (`scanStyles = force ||
+        // stylesDirty`) that no longer exists: runSweeper always calls
+        // drainStyleWork, and drainStyleWork is gated by stylesDirty. So a
+        // truncated batch MUST set stylesDirty=true -- an inline STYLE in the
+        // uninspected tail is unknown, and a force pass alone would not scan it.
+        // A non-truncated batch sets stylesDirty only when a style was actually
+        // detected, so ordinary DOM churn still does not force a scan.
+        if (addedTruncated || addedTruncatedDuringCollection) {
+          stylesDirty = true;
+          requestForceSweep();
+        } else if (styleishAdded) {
+          stylesDirty = true;
           requestForceSweep();
         }
       }
@@ -3090,15 +3249,21 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   }
   const mainObserver = new MutationObserver(onMutations);
   const shadowObserver = new MutationObserver(onMutations);
+  let observersStarted = false;
 
-  if (!CSS_ONLY_MODE) {
+  function startObservers() {
+    if (CSS_ONLY_MODE || repainterSuspended || observersStarted) return;
     const obsTarget = document.documentElement || document;
-    mainObserver.observe(obsTarget, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'bgcolor', 'background', 'style']
-    });
+    if (!obsTarget) return;
+    try {
+      mainObserver.observe(obsTarget, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'bgcolor', 'background', 'style']
+      });
+      observersStarted = true;
+    } catch (e) { }
   }
 
   // Force passes are budgeted: on huge pages (endless feeds) each pass
@@ -3439,6 +3604,7 @@ main:not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]
   // The write-if-changed guard in setImp keeps repeat passes cheap.
   function startSweeping() {
     injectLate();
+    startObservers();
     if (CSS_ONLY_MODE) {
       try {
         document.documentElement.setAttribute('data-w95-perf', 'css-only');

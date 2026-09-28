@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-012:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "Investigation complete. ROOT CAUSES: (1) SRC-007 coverage still listed R009/R010/R011 as UNKNOWN although E-927/E-928/E-929 had verified them, so the receipt stayed ACTIVE; T-250/T-245 BOARD lines link SRC-007 while its linked_work is T-246 -> intake.work_closure_gate returned SOURCE_LINKAGE_DRIFT, forwarded by _plan_finish_ticket into Result, whose __post_init__ raised ValueError because that code is absent from REGISTRY.json error_codes -> raw traceback. REPAIRED: disposed R009/R010/R011 VERIFIED and closed SRC-007; unblocked T-250 and T-255; filled SRC-011 R001. RESIDUAL (out of project scope): T-250/T-245 still link the now-closed SRC-007 (tombstone linked_work T-246), so the gate now returns SOURCE_RECEIPT_MISSING which is ALSO unregistered -> same traceback class; T-238 needs shell removal of a canonical subtree the guard refuses (PROTECTED_CANONICAL_NAMESPACE) and its verify tool lives outside the repo.",
+      "text": "Investigate why T-238/T-250/T-255 are BLOCKED, determine whether each blocker is repairable from inside this project via canonical commands, repair what is repairable, and record a written blocker report.",
+      "verification": "python work_closure_gate re-probe: T-246/T-238/T-255 ok=true; T-250/T-245 false SOURCE_RECEIPT_MISSING; saipen validate VALID",
+      "work": "T-256"
+    }
+  },
+  "schema_version": 1
+}

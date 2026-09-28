@@ -154,4 +154,95 @@ node ..\tools\build-desktop.js --check  # izađi s 1 ako je nešto zastarjelo
 
 `release.ps1` pokreće izgradnju i svaka vrata, pa izdanje ne može poslati izlaz koji je odlutao od paleta.
 
+<!-- T-311 target/section coverage supplement -->
+## Pokrivenje ciljeva i odjeljaka
+
+Ovaj odjeljak preslikava pokrivenost Process Explorer, Notepad++, Cinema 4D i
+terminalskih fontova iz aktualnog engleskog README-a, pa ova lokalizacija ne
+tiho zastara. Kodni literali (id-jevi ciljeva, putovi u registru, nazivi
+datoteka) namjerno su neovisni o jeziku; okolni je tekst preveden na hrvatski.
+
+### Što svaki cilj zapravo može biti tematiziran (novi ciljevi)
+
+| cilj | mehanizam | preživljava ažuriranje aplikacije |
+|---|---|---|
+| `notepadplusplus` | tema XML + alias u korisnikovu mapu `themes` aplikacije Notepad++ | da — živi u vašem profilu |
+| `cinema4d` | shema boja ubačena u korisnikovu mapu `schemes` aplikacije Cinema 4D | da — živi u vašem profilu |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: boje isticanja redaka i pozadine grafikona, vidi ispod | ne — Process Explorer pri izlasku prepisuje vlastite postavke; zatvorite ga i pokrenite ponovno |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer drži svoje boje u
+`HKCU\Software\Sysinternals\Process Explorer` i pri izlasku prepisuje taj
+ključ, pa cilj **odbija dok `procexp`, `procexp64` ili `procexp64a` radi** —
+zatvorite ga i pokrenite ponovno. Tematizira podesive kategorije boja:
+
+- **dostupne**: boje isticanja redaka procesa (`ColorOwn`, `ColorServices`,
+  `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`,
+  `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`)
+  u varijantama svijetlog načina rada i `*Dark`, plus pozadine grafikona
+  (`ColorGraphBk`, `ColorGraphBkDark`) — ukupno 24 vrijednosti. Svaka se
+  varijanta miješa prema odgovarajućem polu aktivne palete (svjetlija nijansa
+  za popunjavanje u svijetlom načinu rada, tamnija za `*Dark`), pa
+  popunjavanja redaka ostaju u vlastitom ključu palete umjesto da izblijede
+  gotovo u bijelo;
+- **nedostupne**: naslovna traka, traka izbornika, alatna traka, pozadina i
+  boje teksta popisa te boje linija grafikona — one su ugrađene u
+  `procexp.exe` i nisu izložene nijednom postavkom. Cilj tematizira isticanje
+  redaka i pozadinu grafikona kojima doista posjeduje i ne tvrdi ništa
+  više.
+
+Svaka vrijednost koju Apply može promijeniti snima se prije promjene (oporavak
+pri prvom dodirivanju u `%APPDATA%\Wintage\recovery\processexplorer\`) i
+`-Revert` je vraća točno, uključujući je li svaka vrijednost bila odsutna i je
+li oznaka bila prisutna-ali-prazna. Prijenosna mapa izvan standardnih
+Sysinternalsovih mapa pamti se preko kanonskog ključa `processexplorer` u
+`paths.json` (CLI argument `-ProcessExplorerPath`; i GUI ga može odabrati).
+
+### Terminalski fontovi (`fonts/terminal/`)
+
+Oba terminalska cilja čitaju JEDNU kanonsku postavku tipografije na
+`%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`,
+`renderingMode`). Kad datoteka ne postoji, ciljevi zadržavaju isporučenu
+zadanu vrijednost (Terminus (TTF) za Windows, 12 pt, s aliasom), pa postojeća
+računala ostaju nepromijenjena. Neispravna postavka pada zatvoreno: ništa se
+ne prepišuje i cilj odbija.
+
+`fonts/terminal/catalog.json` jedini je katalog fontova: 20 isporučenih
+otvorenokodnih monospaced obitelji plus dva sistemska fonta koje Wintage
+navodi ali nikad ne isporučuje (Terminus (TTF) za Windows, Consolas). Svaki
+isporučeni unos nosi vlastiti izvorni izvor, zaključanu reviziju, id licence,
+datoteku licence i SHA-256. Točne datoteke ugrađene su pod
+`fonts/terminal/files/` s tekstovima licenci pod `licenses/`; Wintage tijekom
+rada radi potpuno offline i nikad ne preuzima font.
+
+`tools/sync-terminal-fonts.ps1` alat je samo za održavanje. Čita
+`fonts/terminal/sources.json` (jedan nepromjenjiv artefakt po obitelji),
+provjerava svaki SHA-256 i odbija nedosljednost. `-VerifyOnly` (zadano)
+provjerava stablo na disku bez mreže; `-Fetch -Write` ponovno ugrađuje
+datoteke. Preuzeti bajtovi fontova tretiraju se kao nepouzdana binarna
+sredstva — hashiraju se i zapisuju, nikad se ne izvršavaju. Zabilježena je
+jedna zamjena: **Fantasque Sans Mono** zamjenjuje Liberation Mono, koji ne
+objavljuje zaključenu binarnu verziju (samo izvorni `.sfd`).
+
+Instalater **pretražuje fontove, ne instalira ih.** Kartica TERMINAL FONTS
+učitava isporučeni font u `PrivateFontCollection` lokalnu za proces radi
+živog pregleda, što izvodi **nula** registracija sistemskih fontova. Odabir
+fonta, veličine (7–24 pt) ili načina iscrtavanja (aliased/grayscale/cleartype)
+mijenja samo pregled i postavku. Instaliranje fonta zasebna je radnja
+**INSTALL SELECTED** koja otvara vlastiti instalater fontova sustava
+Windows; nakon potvrde sustava Windows korisnik ponovno provjeri s Refresh.
+Doista nastale promjene terminala događaju se tek nakon izričite radnje
+**APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal primjenjuje se na odabranu instaliranu obitelj fontova u
+odabranoj veličini, a način iscrtavanja mapira se na
+`profiles.defaults.antialiasingMode`. Klasični conhost je stroži: iscrtava na
+fiksnoj mreži ćelija pa se odabrani font odbije prije bilo kakve izmjene
+registra, osim ako ga Windows ne razriješi (zadani font i Consolas zamjena
+izuzeti su). Health i Reapply provjeravaju podešeni font, veličinu i
+ublažavanje rubova prema postavci, pa se promjena postavke nakon Applya
+prijavljuje kao odstupanje, a ne kao „zdravo". Životni ciklus boja terminala
+nije diran: Revert vraća točne vrijednosti iz vremena prije Wintagea i nikad
+ne uklanja font s računala.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

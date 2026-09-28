@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-022:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-280 closed with verification evidence in LOG: verify -> PASS [target: T-280] conf: high -- post-SHIP re-confirmation: tests/Run-Tests.ps1 ALL TESTS PASSED exit 0; all milestone tickets DONE; SRC-018 17/17. Reconcile-only, zero delta.",
+      "text": "Execute Wintage convergence handoff V:\\_TEMP_\\fastprompter_drag\\Wintage_20260920_2045_2.md",
+      "verification": "the Work this request created reached its own verification gate; see the T-280 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-280"
+    }
+  },
+  "schema_version": 1
+}

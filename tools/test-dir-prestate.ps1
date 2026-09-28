@@ -54,6 +54,12 @@ if ($List) {
     Write-Host " 13. W2-002: failed swap preserves BOTH original and restored copy as recovery locations"
     Write-Host " 14. W2-002: successful swap retires the original cleanly (no .wintage-retired leftovers)"
     Write-Host " 15. W2-002: snapshot directory is consumed once the swap is known good"
+    Write-Host " 16. CORE-003: failed restore preserves the authoritative snapshot"
+    Write-Host " 17. W2-006: Complete-DirPreState disposes a captured snapshot"
+    Write-Host " 18. W2-006: Complete-DirPreState is inert for an absent pre-state"
+    Write-Host " 19. W2-006: Complete-DirPreState tolerates a consumed/null snapshot"
+    Write-Host " 20. W2-006: Complete-DirPreState handles OrderedDictionary and PSCustomObject"
+    Write-Host " 21. W2-006 structural: every Save-DirPreState site has a disposal path"
     exit 0
 }
 
@@ -66,6 +72,11 @@ $src = Get-Content $targets -Raw
 $start = $src.IndexOf('function Save-DirPreState')
 $end   = $src.IndexOf("`nfunction", $start + 1)
 $body  = $src.Substring($start, $end - $start)
+# W2-006 (SRC-018:R012): Complete-DirPreState sits between Save and Restore and
+# is the success-disposal helper this suite now also covers.
+$startC = $src.IndexOf('function Complete-DirPreState')
+$endC   = $src.IndexOf("`nfunction", $startC + 1)
+$body  += "`n" + $src.Substring($startC, $endC - $startC)
 # Repeat to capture Restore-DirPreState too.
 $start2 = $src.IndexOf('function Restore-DirPreState', $end)
 $end2   = $src.IndexOf("`nfunction", $start2 + 1)
@@ -294,6 +305,58 @@ try {
 check 'snapshot-preserved: snapshot survives the failed restore' (Test-Path $snapKeepPath)
 check 'snapshot-preserved: snapshot content is byte-exact' ((Get-Content (Join-Path $snapKeepPath 'orig.txt') -Raw) -replace "`r?`n", '' -eq 'orig')
 if ($snapKeepPath -and (Test-Path $snapKeepPath)) { Remove-Item $snapKeepPath -Recurse -Force -ErrorAction SilentlyContinue }
+
+# ---- Tests 17-20 (W2-006 / SRC-018:R012): success disposal ----
+# A SUCCESSFUL commit never calls Restore-DirPreState, so before
+# Complete-DirPreState existed the snapshot survived every happy-path Apply/
+# Revert and accumulated in %TEMP%. The helper is the ONE success-disposal path.
+# 17. Complete disposes a captured Existed=true snapshot.
+$d17 = Join-Path $testRoot 'dispose-17'
+New-Item -ItemType Directory -Path $d17 -Force | Out-Null
+'x' | Set-Content (Join-Path $d17 'f.txt')
+$snap17 = Save-DirPreState $d17
+$path17 = $snap17.SnapshotPath
+check 'W2-006: snapshot exists before disposal' (Test-Path $path17)
+Complete-DirPreState $snap17
+check 'W2-006: Complete-DirPreState removes the snapshot' (-not (Test-Path $path17))
+# 18. Complete is inert for an Existed=false snapshot (no path to free).
+$snap18 = Save-DirPreState (Join-Path $testRoot 'never-existed-18')
+Complete-DirPreState $snap18
+check 'W2-006: Complete-DirPreState is inert for an absent pre-state' ($true)
+# 19. Complete is idempotent and tolerant of a null snapshot.
+Complete-DirPreState $snap18
+Complete-DirPreState $null
+$snap19 = Save-DirPreState $d17
+Remove-Item $snap19.SnapshotPath -Recurse -Force -ErrorAction SilentlyContinue
+Complete-DirPreState $snap19
+check 'W2-006: Complete-DirPreState tolerates an already-consumed snapshot' ($true)
+# 20. Complete accepts the OrderedDictionary shape Restore accepts, and a
+# PSObject drop-in, so a caller cannot be silently skipped by shape.
+$d20 = Join-Path $testRoot 'dispose-20'
+New-Item -ItemType Directory -Path $d20 -Force | Out-Null
+$od20 = [ordered]@{ Existed = $true; SnapshotPath = (Save-DirPreState $d20).SnapshotPath }
+Complete-DirPreState $od20
+check 'W2-006: Complete-DirPreState handles an OrderedDictionary snapshot' (-not (Test-Path $od20.SnapshotPath))
+$ps20 = [pscustomobject]@{ Existed = $true; SnapshotPath = (Save-DirPreState $d20).SnapshotPath }
+Complete-DirPreState $ps20
+check 'W2-006: Complete-DirPreState handles a PSCustomObject snapshot' (-not (Test-Path $ps20.SnapshotPath))
+
+# ---- Test 21 (W2-006 structural): every Save-DirPreState call site has a
+# success-disposal path ----
+# The original defect was asymmetry: failures consumed the snapshot through
+# Restore, successes relied on each caller remembering. This guard requires that
+# the number of Complete-DirPreState (or a legacy equivalent manual Remove-Item
+# on .SnapshotPath) uses at least matches the Save-DirPreState call sites, so a
+# future caller that omits disposal fails the gate.
+$installSrc = Get-Content (Join-Path $root 'desktop\install.ps1') -Raw
+$targetsSrcRaw = Get-Content $targets -Raw
+$saveSites = @([regex]::Matches($installSrc + "`n" + $targetsSrcRaw, 'Save-DirPreState\s')).Count
+$disposeSites = @([regex]::Matches($installSrc + "`n" + $targetsSrcRaw, 'Complete-DirPreState\s')).Count
+check 'W2-006: Complete-DirPreState is used (call sites present)' ($disposeSites -ge 1)
+check 'W2-006: no Save-DirPreState call site lacks a disposal helper' ($disposeSites -ge $saveSites)
+# And no legacy raw .SnapshotPath Remove-Item survives beside the helper.
+$legacy = @([regex]::Matches($installSrc + "`n" + $targetsSrcRaw, 'Remove-Item \$pre\w*\.SnapshotPath')).Count
+check 'W2-006: no legacy raw snapshot Remove-Item remains' ($legacy -eq 0)
 
 Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 

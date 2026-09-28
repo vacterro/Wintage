@@ -41,6 +41,7 @@ Apply deleguje na `install.ps1`. Existuje presne jedna cesta kódu, ktorá inšt
 | `terminal` | schéma Windows Terminal + predvolené nastavenia všetkých profilov, Consolas 12 s aliasom | áno — nastavenia sú vo vašom profile |
 | `conhost` | predvolené `HKCU\Console` + každý existujúci profil cmd/PowerShell | áno — presná snímka dotknutých hodnôt |
 | `obs` | OBS 30.2+ `.ovt` variant + aktívne ID témy v `user.ini` | áno — žije vo vašom profile |
+| `qbittorrent` | rozbalená Qt UI téma (`config.json` + `stylesheet.qss`) + dva kľúče témy v `qBittorrent.ini` | áno — žije vo vašom profile |
 | `antigravity`, `vscode` | rozšírenie farebnej témy v `~/.antigravity/extensions` / `~/.vscode/extensions` | **áno** — žije vo vašom profile |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, pozri nižšie | nie — znova spustite inštalátor |
 | `claude` | Electron shim, opravený na mieste — pozri nižšie | nie — aktualizácia vytvorí nový priečinok `app-<verzia>` |
@@ -109,6 +110,21 @@ Chromium zámerne zakazuje tichú inštaláciu rozšírení mimo obchodu na nesp
 
 `obs` generuje variant OBS 30.2+ nad udržiavanou základňou Yami Classic, nainštaluje ho do `%APPDATA%\obs-studio\themes` a zapíše svoje stabilné ID témy do `user.ini`, takže vybraná paleta Wintage je už vybraná pri ďalšom spustení. Zatvorte OBS pred Apply alebo Revert: OBS prepíše `user.ini` pri ukončení. Prvé aplikovanie zálohuje predchádzajúci výber aj akúkoľvek tému s rovnakým názvom byte-za-byte.
 
+### qBittorrent
+
+`qbittorrent` zapisuje **rozbalenú** Qt tému rozhrania do `%APPDATA%\qBittorrent\themes\wintage` — súbor `config.json` (roly `Palette.*` plus vlastné kontextové farby qBittorrentu: stavy zoznamu prenosov, závažnosti denníka) a vedľa neho `stylesheet.qss` (2px skosenia, pravé rohy a Verdana, čo paleta nedokáže vyjadriť) — potom nasmeruje `General\CustomUIThemePath` na tento `config.json` a nastaví `General\UseCustomUITheme=true`.
+Rozbalene, a nie ako balík `.qbtheme` — zámerne: `.qbtheme` je súbor typu Qt Resource Collection a na jeho vytvorenie by bol na stroji potrebný `rcc` so zhodnou hlavnou verziou, teda závislosť na prekladači kvôli dvom textovým súborom. qBittorrent číta priečinkovú podobu natívne (`FolderThemeSource`).
+Pred Apply alebo Revert qBittorrent zatvorte: pri ukončení prepisuje celý `qBittorrent.ini`, takže úprava vykonaná počas behu sa pri zatvorení zahodí — cieľ v takom stave odmietne pracovať, namiesto toho, aby hlásil úspech, ktorý nasledujúce ukončenie zmaže. `-Revert` vráti dva kľúče v INI na presné hodnoty pred Wintage (alebo ich odstráni, ak neboli) a vráti každý rovnomenný priečinok témy bajt po bajte; nesúvisiace úpravy `qBittorrent.ini` vykonané po Apply ostanú.
+Nedostupné: ikony panela nástrojov a oznamovacej oblasti pochádzajú z vlastného skompilovaného balíka zdrojov qBittorrentu, takže si zachovávajú pôvodné farby.
+
+### Písma: pomenované, nikdy nenainštalované
+
+Prvý zákon v UI.md žiada Verdanu **bez vyhladzovania hrán**. Qt stylesheet na to nemá vlastnosť a `OSDFont` v MPC-HC je len názov GDI rezu — jedinou pákou je samotný rez. `Verdana_m1.ttf` v koreni repozitára je kópia Verdany s predvykreslenými 1bpp bitmapovými rezmi pri 3–30 ppem, ktoré vykresľovací engine použije pred vyhladením obrysu.
+Stylesheety `qbittorrent` a `obs` uvádzajú `Verdana_m1, Verdana` a `mpchc` uvádza ten z dvoch, ktorý stroj skutočne rozlíši. **Inštalátor písmo nikdy nenainštaluje ani neodstráni**, a to je zámer, nie nedokončená práca:
+Rodina písma sa rozlišuje podľa (rodina, rez). Zaregistrujte Regular + Bold + Italic a každý spotrebiteľ ju rozlíši správne; odregistrujte **jedného** člena a každý spotrebiteľ žiadajúci túto rodinu sa presmeruje na prežívajúceho člena. Na stroji, ktorý na túto rodinu cez `HKLM\...\FontSubstitutes` aliasuje `MS Shell Dlg 2` — dialógové písmo Windows —, odstránenie Regularu prepne **celú plochu do kurzívy**, vrátane titulkov okien, ktoré má DWM už v pamäti, a späť to vráti len odhlásenie. Žiadne počítanie referencií to nespraví: dopad je v rámci celého stroja a inštalátor tém tam nemá čo robiť.
+Rez je preto jednorazová, výslovná akcia používateľa: kliknite pravým na `Verdana_m1.ttf` → **Install** (pre používateľa, bez správcu) a potom cieľ znova použite. Ak rez chýba, ciele to raz povedia, pomenujú riešenie a vrátia sa k štandardnej Verdanе — vyhladenej, ale na stroji sa nič nerobí za vašim chrbtom.
+
+
 ### Aplikácie Electron
 
 `resources/app.asar` sa presunie do `resources/app/app.asar` (jeho súrodenec `app.asar.unpacked` sa presúva s ním — to párovanie je podľa názvu súboru a oddelenie rozbije každý natívny modul) a malý `shim.cjs` zaberie uvoľnený slot `resources/app`. Shim vstrekne štýlový list a potom načíta pôvodný archív. **Žiadny bajt aplikácie nie je prepísaný**, iba presunutý; `-Revert` ho presunie priamo späť.
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # ukončiť 1, ak je niečo zastarané
 
 `release.ps1` spúšťa build a každú bránu, takže vydanie nemôže odoslať výstup, ktorý sa odchýlil od paliet.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

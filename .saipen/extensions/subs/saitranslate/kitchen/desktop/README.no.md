@@ -41,6 +41,7 @@ Apply delegerer til `install.ps1`. Det er nøyaktig én kodebane som installerer
 | `terminal` | Windows Terminal-skjema + standarder for alle profiler, Consolas 12 med alias | ja — innstillingene ligger i profilen din |
 | `conhost` | `HKCU\Console`-standarder + alle eksisterende cmd/PowerShell-profiler | ja — nøyaktig øyeblikksbilde av berørte verdier |
 | `obs` | OBS 30.2+ `.ovt`-variant + aktiv `user.ini`-tema-ID | ja — det ligger i profilen din |
+| `qbittorrent` | utpakket Qt-uitema (`config.json` + `stylesheet.qss`) + de to temanøklene i `qBittorrent.ini` | ja — det ligger i profilen din |
 | `antigravity`, `vscode` | fargetema-utvidelse i `~/.antigravity/extensions` / `~/.vscode/extensions` | **ja** — det ligger i profilen din |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, se nedenfor | nei — kjør installatøren på nytt |
 | `claude` | Electron-shim, patchet på plass — se nedenfor | nei — en oppdatering lager en ny `app-<versjon>`-mappe |
@@ -109,6 +110,21 @@ Chromium forbyr bevisst stille installasjon av utvidelser utenfor butikken på e
 
 `obs` genererer en OBS 30.2+-variant over den vedlikeholdte Yami Classic-basen, installerer den i `%APPDATA%\obs-studio\themes` og skriver den stabile tema-ID-en til `user.ini`, så den valgte Wintage-paletten allerede er valgt ved neste oppstart. Lukk OBS før Apply eller Revert: OBS skriver om `user.ini` ved avslutning. Første bruk sikkerhetskopierer både det forrige valget og ethvert tema med samme navn byte-for-byte.
 
+### qBittorrent
+
+`qbittorrent` skriver et **utpakket** Qt-uitema til `%APPDATA%\qBittorrent\themes\wintage` — en `config.json` (rollene `Palette.*` pluss qBittorrents egne kontekstfarger: tilstander i overføringslisten, loggalvorlighet) og en `stylesheet.qss` ved siden av (2px-fasene, de rette hjørnene og Verdana, som en palett ikke kan uttrykke) — og peker deretter `General\CustomUIThemePath` på den `config.json` og setter `General\UseCustomUITheme=true`.
+Utpakket i stedet for en `.qbtheme`-pakke, med vilje: en `.qbtheme` er en Qt Resource Collection-fil og ville kreve en `rcc`-binærfil med samme hovedversjon på maskinen for å bli laget, altså en kompilatoravhengighet for to tekstfiler. qBittorrent leser mappeformen innebygd (`FolderThemeSource`).
+Lukk qBittorrent før Apply eller Revert: den skriver hele `qBittorrent.ini` på nytt ved avslutning, så en endring gjort mens den kjører blir forkastet ved lukking — målet nekter å kjøre i den tilstanden i stedet for å rapportere en suksess som neste avslutning sletter. `-Revert` fører de to INI-nøklene tilbake til sine nøyaktige verdier før Wintage (eller fjerner dem hvis de ikke fantes) og legger en eventuell temamappe med samme navn tilbake byte for byte; urelaterte endringer i `qBittorrent.ini` gjort etter Apply overlever.
+Ikke tilgjengelig: ikonene i verktøylinjen og systemkurven kommer fra qBittorrents egen kompilerte ressursbunt, så de beholder originalfargene.
+
+### Skrifter: navngitt, aldri installert
+
+Lov 1 i UI.md krever Verdana **uten kantutjevning**. Et Qt-stilark har ingen egenskap for det, og MPC-HCs `OSDFont` er bare et GDI-navn — den eneste spaken er selve skriften. `Verdana_m1.ttf` i repoets rot er en kopi av Verdana med forhåndsrendrede 1bpp-bitmapsnitt ved 3–30 ppem, som en renderer foretrekker framfor å jevne ut omrisset.
+Stilarkene til `qbittorrent` og `obs` oppgir `Verdana_m1, Verdana`, og `mpchc` oppgir den av de to maskinen faktisk løser opp. **Installasjonsprogrammet installerer eller avinstallerer aldri en skrift**, og det er med vilje snarere enn uferdig:
+En skriftfamilie løses opp etter (familie, snitt). Registrer Regular + Bold + Italic, og enhver forbruker løser opp riktig; avregistrer **ett** medlem, og enhver forbruker som ber om den familien peker på et gjenlevende medlem. På en maskin som aliaser `MS Shell Dlg 2` — Windows-dialogskriften — til den familien via `HKLM\...\FontSubstitutes`, gjør fjerning av Regular **hele skrivebordet kursivt**, inkludert vindusittler DWM allerede har bufret, og det kreves utlogging for å få det tilbake. Ingen referansetelling fikser det: skadeomfanget er maskinomfattende, og et temainstallasjonsprogram har ingenting der å gjøre.
+Skriften er derfor en engangs, uttrykkelig brukerhandling: høyreklikk på `Verdana_m1.ttf` → **Install** (per bruker, ingen administrator), og bruk deretter målet på nytt. Mangler skriften, sier målene det én gang, navngir løsningen og faller tilbake på vanlig Verdana — kantutjevnet, men ingenting gjøres med maskinen bak ryggen din.
+
+
 ### Electron-apper
 
 `resources/app.asar` flyttes til `resources/app/app.asar` (søskenet `app.asar.unpacked` flytter med — den paringen er etter filnavn, og å skille dem bryter hver nativ modul), og en liten `shim.cjs` tar den frigjorte `resources/app`-plassen. Shim-en injiserer stilarket og laster deretter det originale arkivet. **Ingen app-byte skrives om**, bare flyttes; `-Revert` flytter den rett tilbake.
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # avslutt 1 hvis noe er utdatert
 
 `release.ps1` kjører bygget og hver port, så en utgivelse kan ikke sende utdata som har drevet bort fra palettene.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

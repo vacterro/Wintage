@@ -41,8 +41,17 @@ function check($label, $cond) {
 
 $src = Get-Content $userscript -Raw
 
-# ---- Test 1: production source carries the continuation mechanism ----
-check 'static: production carries the CORE-010 continuation block' ($src.IndexOf('CORE-010') -ge 0)
+# ---- Test 1: production source carries the current continuation mechanism ----
+# CORE-010 was the original whole-lap fix. The scheduler was later split into
+# the force cursor/style lanes, so the old literal marker is no longer a valid
+# oracle. Assert the current structural contract instead.
+$hasForceLapState = $src -match 'let forceLapActive = false;' -and
+    $src -match 'let forceLapWorkset = null;'
+check 'static: production carries the current force-lap state' $hasForceLapState
+
+$hasWholeLapRequest = $src -match 'forceLapActive = true;' -and
+    $src -match 'forcePassesOwed = Math\.Max\(forcePassesOwed, 1\)'
+check 'static: request opens a whole force lap' $hasWholeLapRequest
 
 # The "one owed pass per request" anti-pattern is gone. The old line was
 # exactly:
@@ -64,6 +73,9 @@ check 'static: continuation re-arms via MIN_SWEEP_GAP (no 0ms reschedule)' $cont
 $bodyStart = $src.IndexOf('const FORCE_BUDGET = 2500;')
 $bodyEnd   = $src.IndexOf("`n  if (document.readyState ===", $bodyStart)
 $body      = $src.Substring($bodyStart, $bodyEnd - $bodyStart)
+$styleSheetBudget = [int]([regex]::Match($src, 'const STYLE_SHEET_BUDGET = (\d+);').Groups[1].Value)
+$styleRuleBudget = [int]([regex]::Match($src, 'const STYLE_RULE_BUDGET = (\d+);').Groups[1].Value)
+if ($styleSheetBudget -le 0 -or $styleRuleBudget -le 0) { throw 'production style budgets are missing or invalid' }
 
 $tmpNode = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-sweep-test-" + [guid]::NewGuid().ToString('N') + ".mjs")
 
@@ -84,7 +96,15 @@ const timers = [];
 globalThis.setTimeout = (fn, d) => { timers.push({ fn, d, id: timers.length }); return timers.length - 1; };
 globalThis.clearTimeout = (id) => { if (timers[id]) timers[id].cancelled = true; };
 function makeRoot(elements) {
-  return { querySelectorAll: (sel) => sel === '*' ? elements : elements.filter(e => e.dataset.w95Done !== '1'), styleSheets: [], adoptedStyleSheets: [], host: { isConnected: true } };
+  return {
+    querySelectorAll: (sel) => sel === '*' ? elements : elements.filter(e => e.dataset.w95Done !== '1'),
+    styleSheets: [], adoptedStyleSheets: [],
+    createTreeWalker() {
+      let index = 0;
+      return { nextNode() { return index < elements.length ? elements[index++] : null; } };
+    },
+    host: { isConnected: true }
+  };
 }
 let allElements = [];
 let rootA = [];
@@ -93,6 +113,10 @@ const document = {
   hidden: false,
   documentElement: { setAttribute: () => {} },
   querySelectorAll: (sel) => sel === '*' ? allElements : allElements.filter(e => e.dataset.w95Done !== '1'),
+  createTreeWalker() {
+    let index = 0;
+    return { nextNode() { return index < allElements.length ? allElements[index++] : null; } };
+  },
   styleSheets: [],
   adoptedStyleSheets: [],
   forEach: () => {},
@@ -106,6 +130,12 @@ function process(el, force) {
   processed.add(el._i);
 }
 globalThis.process = process;
+let forceLapActive = false;
+let forceLapId = 0;
+const forceLapDeferredRoots = new Set();
+const STYLE_SHEET_BUDGET = __STYLE_SHEET_BUDGET__;
+const STYLE_RULE_BUDGET = __STYLE_RULE_BUDGET__;
+function drainStyleWork() { return { done: true, changed: false }; }
 function stripHoverSheets() {}
 globalThis.stripHoverSheets = stripHoverSheets;
 function flushWrites() {}
@@ -168,6 +198,8 @@ console.log(JSON.stringify(out, null, 2));
 "@
 
 $nodeScript = $nodeScript -replace '__BODY__', $body
+$nodeScript = $nodeScript -replace '__STYLE_SHEET_BUDGET__', ([string]$styleSheetBudget)
+$nodeScript = $nodeScript -replace '__STYLE_RULE_BUDGET__', ([string]$styleRuleBudget)
 Set-Content -LiteralPath $tmpNode -Value $nodeScript -Encoding UTF8
 $result = & node $tmpNode 2>&1 | Out-String
 Remove-Item $tmpNode -Force -ErrorAction SilentlyContinue

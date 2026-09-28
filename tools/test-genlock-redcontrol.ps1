@@ -104,7 +104,9 @@ try {
     # this acquisition once wrote metadata -- ownership never re-verified.
     $anchor = @"
         if (`$state.State -eq 'ok' -and [string]`$state.Meta.token -eq [string]`$genLock.Token) {
-            Remove-Item -LiteralPath `$genLock.Path -Force -ErrorAction SilentlyContinue
+            # -WhatIf:`$false: releasing OUR OWN lock is protocol cleanup, not a
+            # user-facing mutation; a caller's -WhatIf must never leak it.
+            Remove-Item -LiteralPath `$genLock.Path -Force -ErrorAction SilentlyContinue -WhatIf:`$false
         }
 "@
     $defective = @"

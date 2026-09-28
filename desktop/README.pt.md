@@ -154,4 +154,37 @@ node ..\tools\build-desktop.js --check  # sair 1 se algo estiver obsoleto
 
 `release.ps1` executa o build e todos os gates, por isso um release não pode enviar output que se desviou das paletas.
 
+<!-- T-311 target/section coverage supplement -->
+## Cobertura de alvos e secções
+
+Esta secção espelha a cobertura de Process Explorer, Notepad++, Cinema 4D e fontes de terminal do README em inglês atual, para que esta localização não fique silenciosamente desatualizada. Os literais de código (ids de alvo, caminhos de registo, nomes de ficheiro) são invariantes de idioma por conceção; o texto em redor está traduzido.
+
+### O que cada alvo pode realmente ser tematizado (alvos acrescentados)
+
+| alvo | mecanismo | sobrevive a uma atualização da aplicação |
+|---|---|---|
+| `notepadplusplus` | XML de tema + alias para a sua pasta `themes` do Notepad++ | sim — vive no seu perfil |
+| `cinema4d` | esquema de cores colocado na sua pasta `schemes` do Cinema 4D | sim — vive no seu perfil |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: cores de destaque de linha e fundos de gráfico, ver abaixo | não — o Process Explorer reescreve as suas definições ao sair; feche-o e volte a executar |
+
+### Process Explorer (Sysinternals)
+
+O Process Explorer guarda as suas cores em `HKCU\Software\Sysinternals\Process Explorer` e reescreve essa chave ao sair, por isso o alvo **recusa enquanto `procexp`, `procexp64` ou `procexp64a` estiver em execução** — feche-o e volte a executar. Tematiza as categorias de cor configuráveis:
+
+- **acessíveis**: as cores de destaque de linha dos processos (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) tanto nas variantes de modo claro como nas suas variantes `*Dark`, mais os fundos de gráfico (`ColorGraphBk`, `ColorGraphBkDark`) — 24 valores ao todo. Cada variante é misturada na direção do polo correspondente da paleta ativa (o seu tom mais claro para o preenchimento em modo claro, o mais escuro para o `*Dark`), de modo que os preenchimentos das linhas mantêm o próprio tom da paleta em vez de pastelizarem quase até ao branco;
+- **não acessíveis**: a barra de título, a barra de menus, a barra de ferramentas, o fundo e as cores de texto da vista de lista e as cores das linhas do gráfico — estão compiladas em `procexp.exe` e nenhum valor de definição as expõe. O alvo tematiza os destaques de linha e o fundo de gráfico que possui mesmo, e não reivindica mais nada.
+
+Cada valor que o Apply consegue alterar é guardado como instantâneo antes da alteração (recuperação ao primeiro toque em `%APPDATA%\Wintage\recovery\processexplorer\`) e reposto exatamente por `-Revert`, incluindo se cada valor estava ausente e se o marcador estava presente mas vazio. Uma pasta portátil fora dos diretórios normais da Sysinternals é recordada através da chave canónica `processexplorer` em `paths.json` (argumento de linha de comandos `-ProcessExplorerPath`; o GUI também a consegue escolher).
+
+### Fontes de terminal (`fonts/terminal/`)
+
+Ambos os alvos de terminal lêem UMA preferência tipográfica canónica de `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Quando o ficheiro está ausente, os alvos mantêm o valor por omissão fornecido (Terminus (TTF) for Windows, 12 pt, aliased), pelo que as máquinas existentes ficam inalteradas. Uma preferência malformada falha de forma fechada: nada é sobrescrito e o alvo recusa.
+
+`fonts/terminal/catalog.json` é o catálogo de fontes único: 20 famílias monoespaçadas de código aberto incluídas, mais os dois tipos de sistema que o Wintage nomeia mas nunca fornece (Terminus (TTF) for Windows, Consolas). Cada entrada incluída traz a sua fonte upstream, a revisão fixada, o id de licença, o ficheiro de licença e o SHA-256. Os ficheiros exatos são fornecidos em `fonts/terminal/files/` com os respetivos textos de licença em `licenses/`; o Wintage em execução funciona totalmente offline e nunca transfere uma fonte.
+
+`tools/sync-terminal-fonts.ps1` é o transferidor reservado aos responsáveis de manutenção. Lê `fonts/terminal/sources.json` (um artefacto imutável por família), verifica cada SHA-256 e recusa qualquer divergência. `-VerifyOnly` (predefinição) verifica a árvore em disco sem rede; `-Fetch -Write` volta a fornecer os ficheiros. Os bytes de fonte transferidos são tratados como recursos binários não fiáveis — Receiptos e escritos, nunca executados. Está registada uma substituição: **Fantasque Sans Mono** substitui a Liberation Mono, que não publica nenhuma versão binária fixada (apenas a fonte `.sfd`).
+
+O instalador **navega nas fontes, não as instala.** O separador TERMINAL FONTS carrega um tipo incluído para uma `PrivateFontCollection` local ao processo para pré-visualização ao vivo, que executa **zero** registos de fontes de sistema. Escolher uma fonte, um tamanho (7–24 pt) ou um modo de renderização (aliased/grayscale/cleartype) atualiza apenas a pré-visualização e a preferência. Instalar uma fonte é uma ação explícita **INSTALL SELECTED** que abre o instalador de fontes do próprio Windows; depois da confirmação do Windows, o utilizador volta a sondar com Refresh. As alterações reais ao terminal só acontecem com uma ação explícita **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+O Windows Terminal é aplicado à família instalada selecionada no tamanho selecionado, e o modo de renderização mapeia-se para `profiles.defaults.antialiasingMode`. O conhost clássico é mais estrito: renderiza numa grelha fixa de células, por isso um tipo selecionado é recusado antes de qualquer mutação no registo, a menos que o Windows o resolva (o tipo predefinido e a reserva Consolas estão isentos). O Health e o Reapply validam o tipo, o tamanho e o suavizado configurados face à preferência, pelo que alterar a preferência depois de um Apply é reportado como desvio e não como "saudável". O ciclo de vida das cores do terminal fica intocado: o Revert repõe os valores exatos possuídos antes do Wintage e nunca remove uma fonte da máquina.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

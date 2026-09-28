@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-027:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-284 closed with verification evidence in LOG: verify -> PASS [target: T-284] conf: high -- node tools/test-terminal-fonts.js 70 PASS 0 FAIL, powershell tools/test-terminal-fonts-gui.ps1 22 PASS 0 FAIL, node tools/test-terminal-font.js PASS (7/7), powershell tools/test-locale-parity.ps1 68 PASS 0 FAIL, parse check WintageInstaller/terminal-fonts/targets 3/3 OK; full defect coverage (15 original + 21 new + 10 gui) green",
+      "text": "Wintage terminal fonts post-closure repair: execute V:\\_TEMP_\\fastprompter_drag\\Wintage_20260921_2147_2.md",
+      "verification": "the Work this request created reached its own verification gate; see the T-284 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-284"
+    }
+  },
+  "schema_version": 1
+}

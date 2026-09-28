@@ -41,6 +41,7 @@ Applyは `install.ps1` にシェルアウトする。テーマをインストー
 | `terminal` | Windows Terminalスキーム+全プロファイル既定値、Consolas 12エイリアス | yes — 設定はプロファイルにある |
 | `conhost` | `HKCU\Console` 既定値+既存のすべてのcmd/PowerShellプロファイル | yes — 触れた値の正確なスナップショット |
 | `obs` | OBS 30.2+ `.ovt` バリアント+アクティブな `user.ini` テーマID | yes — プロファイルにある |
+| `qbittorrent` | 未パッケージの Qt UI テーマ（`config.json` + `stylesheet.qss`）+ `qBittorrent.ini` の 2 つのテーマキー | yes — プロファイルにある |
 | `antigravity`, `vscode` | `~/.antigravity/extensions` / `~/.vscode/extensions` のカラーテーマ拡張 | **yes** — プロファイルにある |
 | `freebuff`, `antigravity-app`, `codenomad` | Electronシム、下記参照 | no — インストーラーを再実行 |
 | `claude` | Electronシム、その場でパッチ — 下記参照 | no — 更新が新しい `app-<version>` フォルダを作る |
@@ -109,6 +110,21 @@ Chromiumは、管理されていないWindowsマシンでのオフストア拡�
 
 `obs` は、維持されているYami Classicベースの上にOBS 30.2+バリアントを生成し、`%APPDATA%\obs-studio\themes` にインストールし、安定テーマIDを `user.ini` に書き込む。選択したWintageパレットが次回起動時にすでに選択されているように。ApplyまたはRevertの前にOBSを閉じること: OBSは終了時に `user.ini` を書き直す。初回の適用は、以前の選択と同名のテーマの両方をバイト単位でバックアップする。
 
+### qBittorrent
+
+`qbittorrent` は**展開済み**の Qt UI テーマを `%APPDATA%\qBittorrent\themes\wintage` に書き込みます — `config.json`（`Palette.*` の役割に加え、qBittorrent 自身の文脈色：転送リストの状態、ログの重要度）と、その隣の `stylesheet.qss`（2px の面取り、直角の角、そしてパレットでは表現できない Verdana）です — その後 `General\CustomUIThemePath` をその `config.json` に向け、`General\UseCustomUITheme=true` を設定します。
+あえて `.qbtheme` バンドルではなく展開形式にしています。`.qbtheme` は Qt Resource Collection ファイルで、生成するには同じメジャーバージョンの `rcc` バイナリがマシンに必要となり、テキストファイル 2 つのためにコンパイラ依存を持ち込むことになります。qBittorrent はフォルダ形式をネイティブに読み込みます（`FolderThemeSource`）。
+Apply や Revert の前に qBittorrent を終了してください。終了時に `qBittorrent.ini` 全体を書き直すため、起動中に行った編集は終了時に破棄されます — このターゲットはその状態での実行を拒否し、次回の終了で消える「成功」を報告したりはしません。`-Revert` は 2 つの INI キーを Wintage 以前の正確な値に戻し（存在しなかった場合は削除し）、同名のテーマフォルダをバイト単位で復元します。Apply 後に加えた無関係な `qBittorrent.ini` の編集は残ります。
+到達不可：ツールバーとトレイのアイコンは qBittorrent 自身のコンパイル済みリソースバンドル由来なので、標準の色のままです。
+
+### フォント: 名前を挙げるだけで、決してインストールしない
+
+UI.md の第一法則は、**アンチエイリアスなし**の Verdana を求めます。Qt スタイルシートにそのためのプロパティはなく、MPC-HC の `OSDFont` は単なる GDI の書体名です — 唯一の手段は書体そのものです。リポジトリ直下の `Verdana_m1.ttf` は Verdana の複製で、3–30 ppem の事前レンダリング済み 1bpp ビットマップストライクを持ち、レンダラは輪郭を滑らかにする代わりにこれを使います。
+`qbittorrent` と `obs` のスタイルシートは `Verdana_m1, Verdana` を指定し、`mpchc` はマシンが実際に解決する方を指定します。**インストーラはフォントをインストールもアンインストールもしません**。これは未完成ではなく意図的です：
+フォントファミリは（ファミリ、スタイル）で解決されます。Regular + Bold + Italic を登録すればどの利用側も正しく解決しますが、**1 つ**のメンバーを解除すると、そのファミリを求めるすべての利用側が残ったメンバーを指すようになります。`HKLM\...\FontSubstitutes` 経由で `MS Shell Dlg 2` — Windows のダイアログフォント — をそのファミリに別名付けしているマシンでは、Regular を削除すると DWM が既にキャッシュしたウィンドウタイトルを含め**デスクトップ全体が斜体**になり、元に戻すにはログオフが必要です。参照カウントでは解決しません：影響範囲はマシン全体に及び、テーマインストーラの領分ではありません。
+したがって書体は一度きりの明示的なユーザー操作です：`Verdana_m1.ttf` を右クリック → **Install**（ユーザー単位、管理者不要）、そのうえでターゲットを再適用してください。書体がなければターゲットが一度だけその旨を告げ、対処法を示し、標準の Verdana にフォールバックします — アンチエイリアスは効きますが、あなたの知らないうちにマシンへ手を入れることはありません。
+
+
 ### Electron アプリ
 
 `resources/app.asar` は `resources/app/app.asar` に移動される (その `app.asar.unpacked` の兄弟も一緒に移動する — そのペアリングはファイル名によるもので、分離するとすべてのネイティブモジュールが壊れる)。小さな `shim.cjs` が空いた `resources/app` スロットを占める。シムはスタイルシートを注入してから、元のアーカイブを読み込む。**アプリケーションのバイトは書き換えられない**。移動されるだけ。`-Revert` はそれをそのまま戻す。
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # 何か古ければexit 1
 
 `release.ps1` はビルドとすべてのゲートを実行するので、リリースがパレットから逸脱した出力を出荷することはない。
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

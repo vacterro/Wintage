@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-008:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Execute T-246 R013/PERF-002 final closure against the supplied mission: fix test-repainter-budget Test 4 fake DOM, wire the suite into Run-Tests.ps1, add style-root cursor and mid-lap style tests, finite style-lap membership epoch, sheet-budget pin, remove the dead stripHoverSheets unbounded helper, strengthen the red controls, and return full R013 closure evidence with T-246 advancing 13/15 -> 14/15."
+    }
+  },
+  "derived_at": "2026-09-16T15:03:08Z",
+  "derived_from": "SRC-008",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "a30bc2cebca4e50ec0c9fee7cef2c042bd0b3d3c67242c1e127a2db9afc39a6c"
+}

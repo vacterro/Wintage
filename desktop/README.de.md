@@ -154,4 +154,97 @@ node ..\tools\build-desktop.js --check  # exit 1, wenn etwas stale ist
 
 `release.ps1` führt den Build und jedes Gate aus, also kann ein Release keinen Output liefern, der von den Paletten abgedriftet ist.
 
+<!-- T-311 target/section coverage supplement -->
+## Ziel- und Abschnittsabdeckung (T-311)
+
+Dieser Abschnitt spiegelt die Abdeckung für Process Explorer, Notepad++, Cinema 4D
+und Terminalschriften des aktuellen englischen READMEs, damit diese Sprachfassung
+nicht unbemerkt veraltet. Die Code-Literale (Ziel-IDs, Registry-Pfade, Dateinamen)
+sind per Sprachinvariante unverändert; der umgebende Text ist jetzt in dieser
+Sprache verfasst.
+
+### Was jedes Ziel tatsächlich thematisieren kann (neue Ziele)
+
+| target | Mechanismus | übersteht ein App-Update |
+|---|---|---|
+| `notepadplusplus` | Theme-XML + Alias in den `themes`-Ordner des Notepad++-Benutzers | ja — sie liegt in deinem Profil |
+| `cinema4d` | Farbschema im `schemes`-Ordner des Cinema-4D-Benutzers | ja — es liegt in deinem Profil |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: Farben der Zeilenhervorhebung und Graph-Hintergründe, siehe unten | nein — Process Explorer schreibt seine Einstellungen beim Beenden neu; schließe es und führe erneut aus |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer hält seine Farben in `HKCU\Software\Sysinternals\Process Explorer`
+und schreibt diesen Schlüssel beim Beenden neu, deshalb **verweigert das Ziel,
+solange `procexp`, `procexp64` oder `procexp64a` läuft** — schließe es und starte
+erneut. Es thematisiert die konfigurierbaren Farbkategorien:
+
+- **erreichbar**: die Farben der Zeilenhervorhebung beim Prozess (`ColorOwn`,
+  `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`,
+  `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`,
+  `ColorSuspend`) sowohl in ihrer hellen Variante als auch in der `*Dark`-Variante,
+  dazu die Graph-Hintergründe (`ColorGraphBk`, `ColorGraphBkDark`) — insgesamt 24
+  Werte. Jede Variante wird in Richtung des passenden Pols der aktiven Palette
+  gemischt (ihr hellerer Ton für die helle Füllung, ihr dunklerer Ton für `*Dark`),
+  damit die Zeilenfüllungen im Farbklang der Palette bleiben, statt zu einem fast
+  weißen Pastell auszubleichen;
+- **nicht erreichbar**: Titelleiste, Menüleiste, Symbolleiste, Hintergrund der
+  Listenansicht und Textfarben sowie die Linienfarben des Graphs — die sind in
+  `procexp.exe` einkompiliert und über keinen Einstellungswert zugänglich. Das Ziel
+  thematisiert die Zeilenhervorhebungen und den Graph-Hintergrund, die es wirklich
+  besitzt, und beansprucht nichts darüber hinaus.
+
+Jeder von Apply veränderbare Wert wird vor der Änderung gesichert (Wiederherstellung
+beim ersten Zugriff unter `%APPDATA%\Wintage\recovery\processexplorer\`) und von
+`-Revert` exakt zurückgespielt — auch ob der Wert vorher gar nicht vorhanden war und
+ob die Markierung vorhanden, aber leer war. Ein portabler Ordner außerhalb der
+üblichen Sysinternals-Verzeichnisse wird über den kanonischen `paths.json`-Schlüssel
+`processexplorer` gemerkt (CLI-Argument `-ProcessExplorerPath`; die GUI kann ihn
+ebenfalls wählen).
+
+### Terminalschriften (`fonts/terminal/`)
+
+Beide Terminalziele lesen EINE kanonische Typografie-Vorliebe aus
+`%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`,
+`renderingMode`). Fehlt die Datei, behalten die Ziele die mitgelieferte Voreinstellung
+(Terminus (TTF) für Windows, 12 pt, aliased), sodass bestehende Maschinen unverändert
+bleiben. Eine fehlerhafte Vorliebe schließt sicher aus: Es wird nichts überschrieben,
+und das Ziel verweigert.
+
+`fonts/terminal/catalog.json` ist der einzige Schriftkatalog: 20 mitgelieferte
+quelloffene Monospace-Familien plus die beiden Systemschriften, die Wintage benennt,
+aber nie mitschickt (Terminus (TTF) für Windows, Consolas). Jeder mitgelieferte
+Eintrag trägt seine Upstream-Quelle, die festgehaltene Revision, die Lizenz-ID, die
+Lizenzdatei und die SHA-256. Die exakten Dateien liegen unter `fonts/terminal/files/`
+mit ihren Lizenztexten unter `licenses/`; Wintage arbeitet zur Laufzeit vollständig
+offline und lädt nie eine Schrift herunter.
+
+`tools/sync-terminal-fonts.ps1` ist der Downloader nur für Maintainer. Er liest
+`fonts/terminal/sources.json` (ein unveränderliches Artefakt pro Familie), prüft
+jede SHA-256 und verweigert bei Abweichung. `-VerifyOnly` (Standard) prüft den Baum
+auf der Festplatte ganz ohne Netzwerk; `-Fetch -Write` holt ihn neu. Heruntergeladene
+Schrift-Bytes gelten als nicht vertrauenswürdige Binärassets — gehasht und geschrieben,
+niemals ausgeführt. Eine Ersetzung ist vermerkt: **Fantasque Sans Mono** ersetzt
+Liberation Mono, das kein festgehaltenes Binär-Release veröffentlicht (nur
+Quell-`.sfd`).
+
+Der Installer **durchsucht Schriften, er installiert sie nicht.** Die Registerkarte
+TERMINAL FONTS lädt eine mitgelieferte Schrift in eine prozesslokale
+`PrivateFontCollection` für eine Live-Vorschau, was **null** Registrierungen im
+System auslöst. Die Wahl von Schrift, Größe (7–24 pt) oder Rendering-Modus
+(aliased/grayscale/cleartype) aktualisiert nur die Vorschau und die Vorliebe. Eine
+Schrift zu installieren ist eine ausdrückliche **INSTALL SELECTED**-Aktion, die den
+eigenen Schrift-Installer von Windows öffnet; nach der Bestätigung durch Windows
+prüft der Benutzer mit Refresh erneut. Tatsächliche Terminal-Änderungen geschehen erst
+bei einem ausdrücklichen **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal wird auf die gewählte installierte Familie in der gewählten Größe
+angewendet, und der Rendering-Modus bildet sich auf `profiles.defaults.antialiasingMode`
+ab. Klassisches conhost ist strenger: Es rendert auf einem festen Zellraster, daher
+wird eine gewählte Schrift vor jeder Registry-Änderung abgelehnt, sofern Windows sie
+nicht auflöst (die Standardschrift und der Consolas-Fallback sind großzügig ausgenommen).
+Health und Reapply prüfen die konfigurierte Schrift, Größe und Kantenglättung gegen
+die Vorliebe, sodass eine Änderung der Vorliebe nach einem Apply als Drift gemeldet
+wird und nicht als "gesund". Der Lebenszyklus der Terminalfarben bleibt unberührt:
+Revert stellt die exakten Werte wieder her, die Wintage vorher besaß, und entfernt nie
+eine Schrift vom Rechner.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-042:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1434 + E-1443 full-matrix current-tree run",
+      "text": "PERF-002: Async Apply terminal/conhost via one selected-set worker - Apply Both launches one process with terminal,conhost; UI heartbeat responsive; CORE-002 truthful result model (audit/8.md finding PERF-002, projected from SRC-028:R012)",
+      "verification": "powershell tools/test-tf-async-apply.ps1 17 PASS 0 FAIL (child launch count, selected-set contents, delayed child + heartbeat, RED control: old synchronous two-process Apply Both gone)",
+      "work": "T-300"
+    }
+  },
+  "schema_version": 1
+}

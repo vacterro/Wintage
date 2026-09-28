@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-020:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Repair T-262 umbrella continuity through canonical intake operations so T-262 closure is refused while any audit/7 child T-268,T-269,T-272..T-278 is nonterminal; preserve completed children T-260,T-263..T-267,T-270,T-271; do not hand-edit BOARD/STATE/LOG to make validation green"
+    }
+  },
+  "derived_at": "2026-09-18T18:39:04Z",
+  "derived_from": "SRC-020",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "1d7114eb4c283105348d4bd48f5b64283e12ab05513e39b6ab5fff3301482641"
+}

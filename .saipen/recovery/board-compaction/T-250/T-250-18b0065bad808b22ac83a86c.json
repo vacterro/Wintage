@@ -1,0 +1,20 @@
+{
+  "externalization_event": {
+    "event_id": "E-1644",
+    "operation_id": "ticket-828a745838b245358be64419afd74cc4",
+    "reason": "existing/proposed oversized BOARD record requires canonical ticket block update"
+  },
+  "lossless": true,
+  "metadata_path": ".saipen/recovery/board-compaction/T-250/T-250-18b0065bad808b22ac83a86c.json",
+  "operation": "board_legacy_compaction",
+  "original_record_bytes": 1608,
+  "original_record_path": ".saipen/recovery/board-compaction/T-250/T-250-18b0065bad808b22ac83a86c.BOARD.md",
+  "original_record_sha256": "18b0065bad808b22ac83a86cff2589552e77ed22e52cb46e90129eefca59f105",
+  "project_identity": "v:\\___vac\\__k\\__code\\_tampermonkey\\_win95theme\\wintage",
+  "project_lineage": "lineage-30ee844c69d34eb68605a4563cfdb8ff",
+  "schema_version": 1,
+  "source": ".saipen/BOARD.md",
+  "status": "COMMITTED",
+  "supersedes_detail_ref": ".saipen/recovery/board-compaction/T-250/T-250-e5af618d1b100f1b7374976e.json",
+  "ticket_id": "T-250"
+}

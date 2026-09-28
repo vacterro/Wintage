@@ -29,6 +29,11 @@ function Say($msg, $colour = 'Gray') { Write-Host $msg -ForegroundColor $colour 
 # tools/build-desktop.js; tools/test-batch-generation.ps1 pins all three.
 . (Join-Path $PSScriptRoot 'generation-lock.ps1')
 
+# W2-005: the strict reader for the two-writer user JSON documents (paths.json).
+# ONE policy shared with the GUI writer, so a present-but-unreadable file fails
+# closed in both instead of being normalized away in either.
+. (Join-Path $PSScriptRoot 'json-doc.ps1')
+
 function Read-Utf8([string]$path) { [System.IO.File]::ReadAllText($path, $script:Utf8NoBom) }
 
 function Write-Utf8([string]$path, [string]$text) { [System.IO.File]::WriteAllText($path, $text, $script:Utf8NoBom) }
@@ -80,7 +85,10 @@ function Copy-FileAtomic([string]$source, [string]$dest) {
 function Get-PaletteTokens([string]$jsonPath) { (Read-Utf8 $jsonPath | ConvertFrom-Json).tokens }
 
 # Known paths.json keys: the source-tree targets whose folders the GUI can remember.
-$script:PATHS_KEYS = @('codenomad', 'workbuddy', 'zcode', 'portable', 'notepadplusplus', 'cinema4d')
+# W2-005 / Process Explorer: processexplorer is a remembered portable folder too
+# (procexp can live anywhere), so it is a canonical accepted key here, in the GUI
+# PATH_TARGETS_MAP, and in the one -ProcessExplorerPath argument.
+$script:PATHS_KEYS = @('codenomad', 'workbuddy', 'zcode', 'portable', 'notepadplusplus', 'cinema4d', 'processexplorer')
 
 function Read-PathsJson {
     if (-not (Test-Path $PathsPath)) { return @{} }
@@ -349,7 +357,11 @@ function Exit-BuildGenerationLock($genLock) {
 }
 
 function Enter-BatchLock {
-    if ($env:WINTAGE_BUILD_LOCK_HELD) { return $null }
+    # W2-002 (audit/7 T-269): inherited ownership is proven, never declared.
+    # The marker carries the owning acquisition's token and is accepted only
+    # while that live holder still owns the generation lock; anything else
+    # (forged, stale, or leaked marker) acquires normally below.
+    if (Test-GenerationLockInheritance -AppData $WintageAppData -Marker $env:WINTAGE_BUILD_LOCK_HELD) { return $null }
     $mutex = $null
     $genLock = $null
     try {
@@ -825,11 +837,15 @@ function Save-PathPreference([string]$key, [string]$path) {
     if ($null -eq $lockStream) { throw "could not acquire paths.json lock at $lockPath after 100 attempts." }
     try {
         $o = [ordered]@{}
-        if (Test-Path $PathsPath) {
-            try {
-                $existing = (Read-Utf8 $PathsPath).Trim() | ConvertFrom-Json
-                foreach ($prop in $existing.PSObject.Properties) { $o[$prop.Name] = $prop.Value }
-            } catch { }
+        # W2-005 (SRC-018:R011): absent file initializes; present-and-valid is
+        # merged preserving every unknown key; present-but-unreadable FAILS
+        # CLOSED. The old empty `catch { }` started from an empty object and the
+        # atomic replace below silently destroyed the unreadable original along
+        # with every remembered location in it.
+        $document = Read-OwnedJsonDocument $PathsPath
+        if (-not $document.Ok) { throw (Format-OwnedJsonRefusal 'paths.json' $document) }
+        if ($document.Exists) {
+            foreach ($prop in $document.Value.PSObject.Properties) { $o[$prop.Name] = $prop.Value }
         }
         # W2-007 test seam: widen the read -> write window so a concurrency gate
         # can prove the lock is what serialises the update rather than luck. With
@@ -1056,7 +1072,31 @@ function Get-ConhostKeys {
 }
 
 function Backup-WindowsInactiveAccent {
-    if (Test-Path $WINDOWS_DWM_BACKUP) { return }
+    # W2-002: existence is NOT validity -- a truncated final-name file from a
+    # prior interrupted write must not be adopted. But a MISSING provenance
+    # sidecar is not evidence of truncation: it is exactly the state of every
+    # backup written by a build that predates Write-RecoveryProvenance, and
+    # Assert-RecoveryProvenance deliberately treats a missing stamp as
+    # adoptable everywhere else. This file is the only authority a later
+    # -Target windows -Revert has for AccentColorInactive, so it is never
+    # deleted on the strength of an absent sidecar: doing so re-captures the
+    # PREVIOUS WINTAGE RUN's themed accent as the "original" and permanently
+    # destroys the user's real desktop accent. Delete only what is provably
+    # unusable -- a payload that does not parse.
+    if (Test-Path $WINDOWS_DWM_BACKUP) {
+        $parseable = $true
+        try { Read-Utf8 $WINDOWS_DWM_BACKUP | ConvertFrom-Json | Out-Null }
+        catch { $parseable = $false }
+        if ($parseable) {
+            # Legacy pre-contract or already-stamped backup: adopt as-is, no re-snapshot.
+            return
+        }
+        # Unusable authority: drop the payload and any stamp that no longer
+        # describes it, then re-capture below. Nothing recoverable is lost --
+        # a file that does not parse was never a recovery path.
+        Remove-Item $WINDOWS_DWM_BACKUP -Force -ErrorAction SilentlyContinue
+        Remove-Item ($WINDOWS_DWM_BACKUP + '.provenance.json') -Force -ErrorAction SilentlyContinue
+    }
     $item = Get-Item $WINDOWS_DWM_KEY
     $name = 'AccentColorInactive'
     $existed = $item.GetValueNames() -contains $name
@@ -1067,9 +1107,16 @@ function Backup-WindowsInactiveAccent {
         Value = if ($existed) { $item.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { $null }
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $WINDOWS_DWM_BACKUP -Parent) | Out-Null
-    Write-Utf8 $WINDOWS_DWM_BACKUP ($snapshot | ConvertTo-Json)
+    Write-Utf8Atomic $WINDOWS_DWM_BACKUP ($snapshot | ConvertTo-Json) -ValidateJson
     # W2-001: the backup is now authoritative - stamp it with the owning epoch.
-    Write-RecoveryProvenance $WINDOWS_DWM_BACKUP 'windows'
+    try {
+        Write-RecoveryProvenance $WINDOWS_DWM_BACKUP 'windows'
+    } catch {
+        # Data published but provenance publication failed: roll back the data
+        # file so no poisoned half-authority remains. A retry will recapture.
+        Remove-Item $WINDOWS_DWM_BACKUP -Force -ErrorAction SilentlyContinue
+        throw
+    }
 }
 
 function Restore-WindowsInactiveAccent([switch]$Keep) {
@@ -1083,10 +1130,15 @@ function Restore-WindowsInactiveAccent([switch]$Keep) {
     } else {
         Remove-ItemProperty -Path $WINDOWS_DWM_KEY -Name $snapshot.Name -ErrorAction SilentlyContinue
     }
-    # T-192 P1#27: the backup is the ONLY recovery authority for the accent value.
-    # Callers that still face a manifest transition pass -Keep and delete it only
-    # after the transition succeeded; a failed transition must not lose it.
-    if (-not $Keep) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
+     # T-192 P1#27: the backup+provenance pair is the ONLY recovery authority for
+    # the accent value. Callers that still face a manifest transition pass -Keep
+    # and delete it only after the transition succeeded; a failed transition
+    # must not lose it. Successful revert retires BOTH the data and provenance
+    # sidecar so no orphaned ownership record remains.
+    if (-not $Keep) {
+        Remove-Item $WINDOWS_DWM_BACKUP -Force -ErrorAction SilentlyContinue
+        Remove-Item ($WINDOWS_DWM_BACKUP + '.provenance.json') -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-CssShape {
@@ -1135,6 +1187,11 @@ function Get-ObsidianVaults {
     }
     $out
 }
+
+# Canonical terminal typography preference reader (T-283 / SRC-026) now lives in
+# modules/json-doc.ps1, which BOTH the CLI (via common.ps1) and the GUI dot-source
+# -- so conhost, Windows Terminal, health, Reapply and the Terminal Fonts tab all
+# read the ONE schema without a `node` runtime dependency.
 
 function Assert-SafeProjectPath([string]$path, [string]$label) {
     # Source-tree targets write into a folder the user owns. A path inside a

@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-011:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Reconcile the T-250 locale-parity work: its implementation was executed and closed as T-254, so T-250 must be bound to that implementation and closed rather than re-implemented."
+    }
+  },
+  "derived_at": "2026-09-16T16:53:10Z",
+  "derived_from": "SRC-011",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "652ea9be93f6233b8d22d7da6fe622eff0ced2f9876b2d9f213792a71c42307f"
+}

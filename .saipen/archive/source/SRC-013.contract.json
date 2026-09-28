@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-013:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Implement user-configurable Scenario Presets per audit/6.md: named presets of palette + checked target keys, stored outside the repo, loaded as UI state only (never a second execution engine, Apply/Revert remain authoritative), with strict schema validation, fail-safe atomic persistence, a dedicated regression suite and red controls."
+    }
+  },
+  "derived_at": "2026-09-16T17:27:41Z",
+  "derived_from": "SRC-013",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "8612182c7ba4e1b3697f1614ae9f4e92b409d76d3913d33d4486bed641c24fe2"
+}

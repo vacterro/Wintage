@@ -217,6 +217,42 @@ function Tamper-Cinema4D {
     [System.IO.File]::WriteAllText($c4dMarker, "tampered`r`n", $utf8)
 }
 
+# Stock fused exe (schema v1, count 8, blocking fuses enabled) so the portable
+# Electron fixture has exactly one verifiable candidate executable.
+function New-FusedExe {
+    $sentinel = [System.Text.Encoding]::ASCII.GetBytes('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX')
+    $fuses = New-Object byte[] 8
+    for ($i = 0; $i -lt 8; $i++) { $fuses[$i] = 0x30 }
+    $fuses[5] = 0x31
+    $fuses[6] = 0x31
+    $bytes = New-Object System.Collections.Generic.List[byte]
+    $bytes.AddRange([System.Text.Encoding]::ASCII.GetBytes('MZ fake exe '))
+    $bytes.AddRange($sentinel)
+    $bytes.Add(1); $bytes.Add(8)
+    $bytes.AddRange($fuses)
+    $bytes.AddRange([System.Text.Encoding]::ASCII.GetBytes(' padding'))
+    $bytes.ToArray()
+}
+
+# Minimal valid asar so install-electron can read a package.json version.
+function Build-FakeAsar([string]$path, [string]$version) {    $pkgJson = '{"name":"FakeApp","version":"' + $version + '","main":"' + ('x'.PadRight(40, 'x')) + '"}'
+    $data = [System.Text.Encoding]::UTF8.GetBytes($pkgJson)
+    $jsonStr = '{"files":{"package.json":{"size":' + $data.Length + ',"offset":"0"}}}'
+    $json = [System.Text.Encoding]::UTF8.GetBytes($jsonStr)
+    $jsonLen = $json.Length
+    $pickleSize = 8 + $jsonLen + (4 - ((8 + $jsonLen) % 4))
+    if ((8 + $jsonLen) % 4 -eq 0) { $pickleSize = 8 + $jsonLen }
+    $base = 8 + $pickleSize
+    $w = [System.IO.BinaryWriter]::new([System.IO.File]::Open($path, 'Create'))
+    try {
+        $w.Write([uint32]4); $w.Write([uint32]$pickleSize); $w.Write([uint32]$jsonLen); $w.Write([uint32]$jsonLen)
+        $w.Write($json)
+        $pad = New-Object byte[] ($base - 16 - $jsonLen)
+        $w.Write($pad)
+        $w.Write($data)
+    } finally { $w.Dispose() }
+}
+
 function Start-ReapplyParent([string]$extraArgs = '') {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'powershell'
@@ -487,6 +523,30 @@ if (Select-Fixture '9') {
     check 'case-9 c4d: reapply with the explicit path exits 0' ($r.Code -eq 0)
     check 'case-9 c4d: the child repaired the EXPLICIT path (scheme reinstated)' (Test-Path (Join-Path $c4dExplicit 'resource\modules\c4d_base\schemes\Wintage\wintage.col'))
     check 'case-9 c4d: the child did NOT mutate the decoy path instead' (-not (Test-Path (Join-Path $c4dDecoy 'resource\modules\c4d_base\schemes\Wintage\wintage.col')))
+    # W2-003: ZCode is a portable Electron target whose explicit override must
+    # survive the Reapply parent -> child boundary. paths.json remembers A; the
+    # explicit -ZCodePath B is the parent's authority. A child that lost the
+    # override would follow the remembered decoy and mutate A instead.
+    $zA = Join-Path $testRoot 'zcode-a'
+    $zB = Join-Path $testRoot 'zcode-b'
+    foreach ($zRoot in @($zA, $zB)) {
+        New-Item -ItemType Directory -Force -Path (Join-Path $zRoot 'resources') | Out-Null
+        Build-FakeAsar (Join-Path $zRoot 'resources\app.asar') '1.0.0'
+        [System.IO.File]::WriteAllBytes((Join-Path $zRoot 'ZCode.exe'), (New-FusedExe))
+    }
+    [System.IO.File]::WriteAllText((Join-Path $appData 'paths.json'),
+        (@{ notepadplusplus = $nppExplicit; cinema4d = $c4dExplicit; zcode = $zA } | ConvertTo-Json), $utf8)
+    $m9 = Read-TestManifest
+    if ($null -eq $m9) { $m9 = @{} }
+    $m9['zcode'] = @{ palette = 'goldendefault'; path = (Join-Path $zA 'resources'); appVersion = 'n/a'; payloadVersion = '1.9.0'; applied = '2020-01-01T00:00:00Z' }
+    Write-TestManifest $m9
+    $r = Run-Installer @('-Reapply', '-ZCodePath', $zB)
+    check 'case-9 zcode: reapply with the explicit path exits 0' ($r.Code -eq 0)
+    check 'case-9 zcode: the EXPLICIT root B got the shim' (Test-Path (Join-Path $zB 'resources\app\app.asar'))
+    check 'case-9 zcode: the remembered decoy root A was NOT touched' (-not (Test-Path (Join-Path $zA 'resources\app')))
+    check 'case-9 zcode: manifest names B resources' (((Read-TestManifest)['zcode'].path) -eq (Join-Path $zB 'resources'))
+    $pathsAfter9 = ([System.IO.File]::ReadAllText((Join-Path $appData 'paths.json'), $utf8)) | ConvertFrom-Json
+    check 'case-9 zcode: B became the remembered preference' ($pathsAfter9.zcode -eq $zB)
 }
 
 # ---- case 10: REAL REVERT RACE -- a real install.ps1 -Revert wins the plan->child race ----
@@ -522,7 +582,15 @@ if (Select-Fixture '10') {
     }
 }
 
-# ---- case 11: REAL PALETTE RACE -- a real explicit Apply to palette B wins ----
+# ---- case 11: SERIALIZED PALETTE CHANGE -- T-269 (W2-002) generation epoch ----
+# A real explicit Apply to a build-consuming target consumes generated output,
+# so T-269 serializes it behind the Reapply epoch: while the parent holds the
+# generation lock the competing Apply must be REFUSED with the generation
+# contention verdict (zero mutation), the stale child then consumes the
+# generation the parent planned, and only after the epoch releases may the
+# user's palette change be applied and win. The old plan->child interleaving
+# for a CONSUMING Apply is impossible by contract; the intent-token revalidation
+# that still guards non-consuming races stays covered by case 10 (Revert).
 if (Select-Fixture '11') {
     Reset-Fixture
     $seamDir11 = Join-Path $testRoot 'seam-palette'
@@ -536,17 +604,25 @@ if (Select-Fixture '11') {
         if ($planned) {
             # The user explicitly applies palette B while the old plan is parked.
             $r = Run-Installer @('-Target', 'notepadplusplus', '-Palette', 'dracula')
-            check 'case-11 palette: the explicit user Apply to palette B completed (exit 0)' ($r.Code -eq 0)
+            $textR11 = ($r.Out -join ' ')
+            check 'case-11 palette: the competing Apply is REFUSED while the Reapply epoch is held (generation contention)' (
+                $r.Code -ne 0 -and $textR11 -match 'build/output busy')
             Set-Content -LiteralPath (Join-Path $seamDir11 'resume') -Value 'go'
         }
         $text11 = Finish-Parent $parent11
         if ($parent11.ExitCode -ne 0) { Write-Host "---- parent output (failure diagnostic) ----`n$text11" -ForegroundColor Yellow }
-        check 'case-11 palette: the stale Reapply parent exits 0' ($parent11.ExitCode -eq 0)
-        check 'case-11 palette: the parent reported the target as SKIPPED' ($text11 -match 'notepadplusplus: SKIPPED')
-        check 'case-11 palette: the parent NEVER reported re-applied successfully' ($text11 -notmatch 'notepadplusplus: re-applied successfully')
+        check 'case-11 palette: the Reapply parent exits 0' ($parent11.ExitCode -eq 0)
+        check 'case-11 palette: the child consumed the generation the parent planned (goldendefault)' (
+            $text11 -match 'notepadplusplus: re-applied successfully')
         $final11 = [System.IO.File]::ReadAllText($nppMarker, $utf8).Trim()
-        check 'case-11 palette: the target remains palette B (dracula, not goldendefault)' ($final11 -eq 'dracula')
-        check 'case-11 palette: the manifest remains palette B' (((Read-TestManifest)['notepadplusplus'].palette) -eq 'dracula')
+        check 'case-11 palette: target is goldendefault after the serialized epoch' ($final11 -eq 'goldendefault')
+        check 'case-11 palette: manifest is goldendefault after the serialized epoch' (((Read-TestManifest)['notepadplusplus'].palette) -eq 'goldendefault')
+        # Once the epoch releases, the user's explicit palette change applies.
+        $r2 = Run-Installer @('-Target', 'notepadplusplus', '-Palette', 'dracula')
+        check 'case-11 palette: the explicit user Apply to palette B succeeds after the epoch' ($r2.Code -eq 0)
+        $finalB11 = [System.IO.File]::ReadAllText($nppMarker, $utf8).Trim()
+        check 'case-11 palette: the target ends on palette B (dracula)' ($finalB11 -eq 'dracula')
+        check 'case-11 palette: the manifest ends on palette B' (((Read-TestManifest)['notepadplusplus'].palette) -eq 'dracula')
     } finally {
         $env:WINTAGE_TEST_REAPPLY_PARENT_SEAM = $null
     }

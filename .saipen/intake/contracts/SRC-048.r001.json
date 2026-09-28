@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-048:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "T-315 finish: checkpoint WIP changes, run declared gates on live checkout, full Windows matrix, VERIFY REVIEW SHIP"
+    }
+  },
+  "derived_at": "2026-09-25T01:43:03Z",
+  "derived_from": "SRC-048",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "e072fa0d7b1be6d3d157a3c864e756baa924e518d94a89bf40dabe1f17ee8fc3"
+}

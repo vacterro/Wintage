@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-023:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Add Wintage theme support for Sysinternals Process Explorer. The current blue-heavy default appearance does not fit Wintage."
+    }
+  },
+  "derived_at": "2026-09-20T18:57:09Z",
+  "derived_from": "SRC-023",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "bb12a8ac14aaf455082d16811561bcae700a595cd08ef8a742aa0d006f94ffd6"
+}

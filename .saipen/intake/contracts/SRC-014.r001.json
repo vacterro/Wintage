@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-014:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Finish T-246 R015 evidence closure per the supplied spec: add a large Preferences bounded-memory fixture, explicit-rescan discovery of a newly added browser, cached-executable replace/invalidate, a live WinForms pre-ShowDialog smoke, cache/profile result parity, extend tools/test-browser-cache.ps1, then mark R015 VERIFIED and T-246 15/15."
+    }
+  },
+  "derived_at": "2026-09-16T21:11:11Z",
+  "derived_from": "SRC-014",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "7ef23576d94354ddcf3e94462f3169cd837b2479c0443516b2a3c3f1400ddff0"
+}

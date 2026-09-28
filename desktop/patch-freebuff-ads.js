@@ -169,7 +169,10 @@ function pruneBaselines() {
   if (all.length <= 3) return;
   for (const old of all.slice(3)) {
     try { fs.rmSync(old.dir, { recursive: true, force: true }); console.log('pruned stale baseline ' + path.basename(old.dir)); }
-    catch (e) { }
+    // Best-effort housekeeping: a locked dir (app running, AV scan, shell sitting
+    // in it) throws EPERM/EBUSY and must NOT break the patch -- but it must not be
+    // silent either, or the log reads as if retention were enforced (T-251).
+    catch (e) { console.log('could not prune stale baseline ' + path.basename(old.dir) + ': ' + ((e && e.code) || e)); }
   }
 }
 

@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-045:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-303 closed with verification evidence in LOG: verify -> PASS [target: T-303] conf: high -- audit/8 close-out complete on current tree: 14/14 SRC-028 clauses VERIFIED (E-1440..E-1443 + E-1449..E-1610 child dispositions); all 14 projected children T-289..T-302 DONE (zero-delta reconcile, inherited implementation from T-286) + T-288 duplicate settled canonically (unblock E-1610 + SRC-030:R001 DUPLICATE + done E-1621); receipts SRC-030..SRC-044 a",
+      "text": "close out audit/8: reconcile children T-289..T-302 receipts and consume audit inbox",
+      "verification": "the Work this request created reached its own verification gate; see the T-303 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-303"
+    }
+  },
+  "schema_version": 1
+}

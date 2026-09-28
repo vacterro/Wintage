@@ -41,6 +41,7 @@ Apply délègue à `install.ps1`. Il y a exactement un chemin de code qui instal
 | `terminal` | schéma Windows Terminal + défauts tous-profils, Consolas 12 aliased | oui — les paramètres sont dans votre profil |
 | `conhost` | défauts `HKCU\Console` + chaque profil cmd/PowerShell existant | oui — instantané exact des valeurs touchées |
 | `obs` | variante OBS 30.2+ `.ovt` + ID de thème `user.ini` actif | oui — il vit dans votre profil |
+| `qbittorrent` | thème d’interface Qt non empaqueté (`config.json` + `stylesheet.qss`) + les deux clés de thème dans `qBittorrent.ini` | oui — il vit dans votre profil |
 | `antigravity`, `vscode` | extension de thème de couleurs dans `~/.antigravity/extensions` / `~/.vscode/extensions` | **oui** — elle vit dans votre profil |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electron, voir ci-dessous | non — relancez l'installeur |
 | `claude` | shim Electron, patché sur place — voir ci-dessous | non — une mise à jour crée un nouveau dossier `app-<version>` |
@@ -109,6 +110,21 @@ Chromium interdit délibérément l'installation silencieuse d'extensions hors-s
 
 `obs` génère une variante OBS 30.2+ sur la base maintenue Yami Classic, l'installe dans `%APPDATA%\obs-studio\themes`, et écrit son ID de thème stable dans `user.ini`, donc la palette Wintage choisie est déjà sélectionnée au prochain lancement. Fermez OBS avant Apply ou Revert : OBS réécrit `user.ini` à la fermeture. Le premier apply sauvegarde à la fois la sélection précédente et tout thème homonyme octet pour octet.
 
+### qBittorrent
+
+`qbittorrent` écrit un thème d’interface Qt **non empaqueté** dans `%APPDATA%\qBittorrent\themes\wintage` — un `config.json` (les rôles `Palette.*` plus les couleurs contextuelles propres à qBittorrent : états de la liste de transfert, gravités du journal) et un `stylesheet.qss` à côté (les biseaux de 2px, les angles droits et Verdana, qu’une palette ne peut pas exprimer) — puis pointe `General\CustomUIThemePath` vers ce `config.json` et définit `General\UseCustomUITheme=true`.
+Non empaqueté plutôt qu’un ensemble `.qbtheme`, volontairement : un `.qbtheme` est un fichier Qt Resource Collection et exigerait un binaire `rcc` de même version majeure sur la machine pour être produit, soit une dépendance à un compilateur pour deux fichiers texte. qBittorrent lit nativement la forme en dossier (`FolderThemeSource`).
+Fermez qBittorrent avant Apply ou Revert : il réécrit tout `qBittorrent.ini` à la fermeture, donc une modification faite pendant qu’il tourne est perdue à la fermeture — la cible refuse de s’exécuter dans cet état plutôt que d’annoncer une réussite que la prochaine fermeture efface. `-Revert` restaure les deux clés de l’INI à leurs valeurs exactes d’avant Wintage (ou les supprime si elles étaient absentes) et remet en place, octet par octet, tout dossier de thème du même nom ; les modifications sans rapport de `qBittorrent.ini` faites après Apply survivent.
+Non accessible : les icônes de la barre d’outils et de la zone de notification viennent du propre paquet de ressources compilé de qBittorrent, elles gardent donc leurs couleurs d’origine.
+
+### Polices : nommées, jamais installées
+
+La loi 1 d’UI.md demande Verdana **sans anticrénelage**. Une feuille de style Qt n’a pas de propriété pour cela, et `OSDFont` de MPC-HC n’est qu’un nom de fonte GDI — le seul levier est la fonte elle-même. `Verdana_m1.ttf` à la racine du dépôt est une copie de Verdana portant des frappes bitmap 1bpp pré-rendues à 3–30 ppem, qu’un moteur de rendu préfère au lissage du contour.
+Les feuilles de style `qbittorrent` et `obs` nomment `Verdana_m1, Verdana`, et `mpchc` nomme celle que la machine résout réellement. **L’installeur n’installe ni ne désinstalle jamais une police**, et c’est délibéré plutôt qu’inachevé :
+Une famille de polices se résout par (famille, style). Enregistrez Regular + Bold + Italic et chaque consommateur résout correctement ; désenregistrez **un** membre et chaque consommateur demandant cette famille pointe vers un membre survivant. Sur une machine qui alias `MS Shell Dlg 2` — la police des boîtes de dialogue Windows — vers cette famille via `HKLM\...\FontSubstitutes`, retirer Regular met **tout le bureau en italique**, y compris les titres de fenêtres que le DWM a déjà mis en cache, et une déconnexion est nécessaire pour le récupérer. Aucun comptage de références n’y remédie : le rayon d’impact couvre toute la machine et un installeur de thèmes n’a rien à y faire.
+La fonte est donc une action ponctuelle et explicite de l’utilisateur : clic droit sur `Verdana_m1.ttf` → **Install** (par utilisateur, sans administrateur), puis réappliquez la cible. Si la fonte est absente, les cibles le disent une fois, nomment la solution et se rabattent sur la Verdana standard — anticrénelée, mais rien n’est fait à la machine dans votre dos.
+
+
 ### Apps Electron
 
 `resources/app.asar` est déplacé vers `resources/app/app.asar` (son frère `app.asar.unpacked` suit — ce jumelage passe par le nom de fichier, et les séparer casse chaque module natif), et un petit `shim.cjs` prend l'emplacement `resources/app` libéré. Le shim injecte la feuille de style puis charge l'archive d'origine. **Aucun octet d'application n'est réécrit**, seulement relocalisé ; `-Revert` le replace directement.
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # exit 1 si quoi que ce soit est obsolè
 
 `release.ps1` exécute le build et chaque gate, donc une release ne peut pas livrer une sortie qui a dérivé des palettes.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

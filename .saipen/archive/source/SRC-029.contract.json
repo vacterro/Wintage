@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-029:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "'saipen ship' --json 2>&1"
+    }
+  },
+  "derived_at": "2026-09-21T23:54:21Z",
+  "derived_from": "SRC-029",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "e62fc43b2b4b645219900ca1f3d6c8c82a21e7d317cef48b3daea81e9de6d41f"
+}

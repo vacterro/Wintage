@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-024:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-305 closed with verification evidence in LOG: verify -> PASS [target: T-305] conf: high -- reconcile-only zero delta: T-261 [x] DONE + SRC-017 CLOSED (tombstone 2026-09-20T20:41:56Z, unresolved 0, needs T-262 DONE E-1324); T-280 [x] DONE + SRC-022 CLOSED (tombstone 2026-09-20T20:51:44Z, unresolved 0, mission reconciled E-1338); handoff Vintage_20260920_2327.md absent from drag dir -- stale pointer, mission already closed (T-303 close-out E-16",
+      "text": "Finish post-audit convergence: reconcile stale foreign T-261/SRC-017, then claim/reconcile T-280/SRC-022 and close completed mission per handoff V:\\_TEMP_\\fastprompter_drag\\Wintage_20260920_2327.md",
+      "verification": "the Work this request created reached its own verification gate; see the T-305 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-305"
+    }
+  },
+  "schema_version": 1
+}

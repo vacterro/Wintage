@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "note": "Pinned upstream download manifest for tools/sync-terminal-fonts.ps1. One entry per bundled family: the immutable artifact, its exact SHA-256, the archive member to extract, the output file, and the license artifact. Nothing here is fetched at Wintage runtime; the tool is maintainer-only and refuses a hash mismatch. google/fonts is pinned by commit; release archives are pinned by tag + asset URL.",
+  "fonts": [
+    {
+      "slug": "cascadia-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/cascadiamono/CascadiaMono%5Bwght%5D.ttf",
+      "sha256_file": "78864a1b4d03767a44731454a6f24c6b7d6e93fb5f62932860eb02e409cd50cb",
+      "out": "files/cascadia-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/cascadiamono/OFL.txt",
+      "license_sha256": "82c05d6c53dfa0c9025985c19e371810020b74ed2c61d51d370f2a8ab2506d52",
+      "license_out": "licenses/cascadia-mono.txt"
+    },
+    {
+      "slug": "jetbrains-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+      "sha256_file": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda",
+      "out": "files/jetbrains-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/jetbrainsmono/OFL.txt",
+      "license_sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
+      "license_out": "licenses/jetbrains-mono.txt"
+    },
+    {
+      "slug": "fira-code",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/firacode/FiraCode%5Bwght%5D.ttf",
+      "sha256_file": "9335b082b3c7850d98a64b584f3417f65355f3471278bb5eeb8c6c0e8657aeeb",
+      "out": "files/fira-code.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/firacode/OFL.txt",
+      "license_sha256": "926041dac670e6922505e35ac1661a4e8d20f1ffeabbbcb5edb5544370702369",
+      "license_out": "licenses/fira-code.txt"
+    },
+    {
+      "slug": "source-code-pro",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/sourcecodepro/SourceCodePro%5Bwght%5D.ttf",
+      "sha256_file": "b400fc584e10aff25d0e775ce181b4fc1c5ea1b5dc37b81aeb2084375b945790",
+      "out": "files/source-code-pro.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/sourcecodepro/OFL.txt",
+      "license_sha256": "cb30d3086a8b3ce0b9e3690bf48d6620402b61160bc658076f95180ccd9e9dae",
+      "license_out": "licenses/source-code-pro.txt"
+    },
+    {
+      "slug": "ibm-plex-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
+      "sha256_file": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46",
+      "out": "files/ibm-plex-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/ibmplexmono/OFL.txt",
+      "license_sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+      "license_out": "licenses/ibm-plex-mono.txt"
+    },
+    {
+      "slug": "roboto-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/robotomono/RobotoMono%5Bwght%5D.ttf",
+      "sha256_file": "66a80e79d17e4c7cabd162e2916578a4cc08fd19eef6e2a643305eae9c567b2b",
+      "out": "files/roboto-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/robotomono/OFL.txt",
+      "license_sha256": "50ab8dd54680d3473f649c9db86fece88434d097c7834475c1c72d2f8c429215",
+      "license_out": "licenses/roboto-mono.txt"
+    },
+    {
+      "slug": "ubuntu-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ufl/ubuntumono/UbuntuMono-Regular.ttf",
+      "sha256_file": "b35dd9d2131d5d83a9b87fe9ad22c6288fa3d17688d43302c14da29812417d63",
+      "out": "files/ubuntu-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ufl/ubuntumono/UFL.txt",
+      "license_sha256": "2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002",
+      "license_out": "licenses/ubuntu-mono.txt"
+    },
+    {
+      "slug": "noto-sans-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/notosansmono/NotoSansMono%5Bwdth%2Cwght%5D.ttf",
+      "sha256_file": "2cb2adb378a8f574213e23df697050b83c54c27df465a2015552740b2769a081",
+      "out": "files/noto-sans-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/notosansmono/OFL.txt",
+      "license_sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a",
+      "license_out": "licenses/noto-sans-mono.txt"
+    },
+    {
+      "slug": "hack",
+      "kind": "zip",
+      "url": "https://github.com/source-foundry/Hack/releases/download/v3.003/Hack-v3.003-ttf.zip",
+      "sha256_file": "0c2604631b1f055041c68a0e09ae4801acab6c5072ba2db6a822f53c3f8290ac",
+      "entry": "ttf/Hack-Regular.ttf",
+      "sha256_out": "15f55cc0c85a2988d2b4b3a8cdb5d77fdfbaf319e1bb5309d725db9818fb7125",
+      "out": "files/hack.ttf",
+      "license_url": "https://raw.githubusercontent.com/source-foundry/Hack/v3.003/LICENSE.md",
+      "license_sha256": "1f61bb7c790c59b4b0ecdf304628b94e42ae4c8020094a8c3da73381ab212623",
+      "license_out": "licenses/hack.txt"
+    },
+    {
+      "slug": "iosevka",
+      "kind": "zip",
+      "url": "https://github.com/be5invis/Iosevka/releases/download/v31.0.0/PkgTTF-Iosevka-31.0.0.zip",
+      "sha256_file": "fca4e8d8849b9829275bb5fac89606b8b13dcbaefa947a867e34ec2fcdc9f252",
+      "entry": "Iosevka-Regular.ttf",
+      "sha256_out": "ca05eeb383e6371f45b8756c82b2ffcf142e23fca6a0528fd11056b11a36299c",
+      "out": "files/iosevka.ttf",
+      "license_url": "https://raw.githubusercontent.com/be5invis/Iosevka/v31.0.0/LICENSE.md",
+      "license_sha256": "8c914a5c7d8d5e5be1ae07fd8591b437ece15b665f6ccc913cea050ffa8448f7",
+      "license_out": "licenses/iosevka.txt"
+    },
+    {
+      "slug": "inconsolata",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/inconsolata/Inconsolata%5Bwdth%2Cwght%5D.ttf",
+      "sha256_file": "23ded25b447074d00659392bf9b1123d89df55cb07b0ad9bfef3366d199b5fcb",
+      "out": "files/inconsolata.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/inconsolata/OFL.txt",
+      "license_sha256": "29bd0cfd0fb2a45f9b057c834a057724bae1f63b525a8ac83d3e7525706d9f80",
+      "license_out": "licenses/inconsolata.txt"
+    },
+    {
+      "slug": "victor-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/rubjo/victor-mono/v1.5.6/src/assets/VictorMono-Regular.ttf",
+      "sha256_file": "1af31bba86bd438a7aa5cd072db4e8ec9c36d20e2ed3f34e664b6a2bf37b3633",
+      "out": "files/victor-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/rubjo/victor-mono/v1.5.6/LICENSE",
+      "license_sha256": "09a2b8de67102a99a94a583510967e67b0e3848784ff8e818ab3a7a95c329767",
+      "license_out": "licenses/victor-mono.txt"
+    },
+    {
+      "slug": "commit-mono",
+      "kind": "zip",
+      "url": "https://github.com/eigilnikolajsen/commit-mono/releases/download/v1.143/CommitMono-1.143.zip",
+      "sha256_file": "f7d1f26a7c7554800a996f76f5d706bf0648b936ca2a66b5bc4d46e3a2c49ed0",
+      "entry": "CommitMono-1.143/ttfautohint/CommitMono-400-Regular.ttf",
+      "sha256_out": "7430751f8621b4027df29dbc54d466fca9d75eb4e7a99c7f227625249ad4fb76",
+      "out": "files/commit-mono.ttf",
+      "license_entry": "CommitMono-1.143/license.txt",
+      "license_sha256": "2e2dc937707819086e7631d02e6183fbe52316a89da0a611d9b09d3be7d4bd72",
+      "license_out": "licenses/commit-mono.txt"
+    },
+    {
+      "slug": "anonymous-pro",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/anonymouspro/AnonymousPro-Regular.ttf",
+      "sha256_file": "46d8b9a5f4b38fc9d30f3cdd676d4c6f78a9bef949bb1a8304216cc731eb87f8",
+      "out": "files/anonymous-pro.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/anonymouspro/OFL.txt",
+      "license_sha256": "8594350034ab1cb85a1946ef8852e69290255816c311450a66fed6eeda9d6292",
+      "license_out": "licenses/anonymous-pro.txt"
+    },
+    {
+      "slug": "dejavu-sans-mono",
+      "kind": "zip",
+      "url": "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.zip",
+      "sha256_file": "7576310b219e04159d35ff61dd4a4ec4cdba4f35c00e002a136f00e96a908b0a",
+      "entry": "dejavu-fonts-ttf-2.37/ttf/DejaVuSansMono.ttf",
+      "sha256_out": "b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582",
+      "out": "files/dejavu-sans-mono.ttf",
+      "license_entry": "dejavu-fonts-ttf-2.37/LICENSE",
+      "license_sha256": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93",
+      "license_out": "licenses/dejavu-sans-mono.txt"
+    },
+    {
+      "slug": "fantasque-sans-mono",
+      "kind": "zip",
+      "url": "https://github.com/belluzj/fantasque-sans/releases/download/v1.8.0/FantasqueSansMono-Normal.zip",
+      "sha256_file": "84be689e231ff773ed9d352e83dccd8151d9e445f1cb0b88cb0e9330fc4d9cfc",
+      "entry": "TTF/FantasqueSansMono-Regular.ttf",
+      "sha256_out": "c949732ce5e779c03bf46bfe4a1e4128450a47eef7e78b470d5f8ae358e889c5",
+      "out": "files/fantasque-sans-mono.ttf",
+      "license_entry": "LICENSE.txt",
+      "license_sha256": "847988f40bfc79f3c3260167ff952f1fd7abe7e428ca616e110a2ea82c71f0a9",
+      "license_out": "licenses/fantasque-sans-mono.txt"
+    },
+    {
+      "slug": "cousine",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/cousine/Cousine-Regular.ttf",
+      "sha256_file": "1da22250675fc4c42fcf3a9736c44bc0570516105331443b663fd5cfbd1412fe",
+      "out": "files/cousine.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/cousine/OFL.txt",
+      "license_sha256": "b81c4d4dc0a9f72c9155e78187316e016e2012a8102468804173dc61468b906d",
+      "license_out": "licenses/cousine.txt"
+    },
+    {
+      "slug": "space-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/spacemono/SpaceMono-Regular.ttf",
+      "sha256_file": "95837e182baeeada83368f7748db28357f0a1b75c6b84ff7065b5edf933c8e18",
+      "out": "files/space-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/spacemono/OFL.txt",
+      "license_sha256": "8e4ee42b2553e1e01504e61cb0d46d148cd8c9e5eacaa3622a7df2d4f2955b9f",
+      "license_out": "licenses/space-mono.txt"
+    },
+    {
+      "slug": "monaspace-neon",
+      "kind": "zip",
+      "url": "https://github.com/githubnext/monaspace/releases/download/v1.101/monaspace-v1.101.zip",
+      "sha256_file": "7ff2317c7bdaed8e81dcbe1314e6ab12ad9641b7ddf921e996a227ff4ec7752f",
+      "entry": "monaspace-v1.101/fonts/variable/MonaspaceNeonVarVF[wght,wdth,slnt].ttf",
+      "sha256_out": "92d51169cd35da790298d81a972052555863c7b53498f7a4cabd4a9f4606501c",
+      "out": "files/monaspace-neon.ttf",
+      "license_entry": "monaspace-v1.101/LICENSE",
+      "license_sha256": "0e84e5f7dd6f05e74a00f2fb828ca43e489d954f5509ff0fa439ea18c0d35fe9",
+      "license_out": "licenses/monaspace-neon.txt"
+    },
+    {
+      "slug": "geist-mono",
+      "kind": "raw",
+      "url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/geistmono/GeistMono%5Bwght%5D.ttf",
+      "sha256_file": "d00e590b8eb3a59acc329b2d044fd143ae935090b7da33199ebee27cc7de8196",
+      "out": "files/geist-mono.ttf",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/e44c4b011a820c2cbe2fd2cfa8052037d7edb571/ofl/geistmono/OFL.txt",
+      "license_sha256": "1781d2806a07d91c4edf4740b88449fab7d0eadad53f7c351b94cd4d4eb8c00f",
+      "license_out": "licenses/geist-mono.txt"
+    }
+  ]
+}

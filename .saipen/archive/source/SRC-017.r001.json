@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-017:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "audit all"
+    }
+  },
+  "derived_at": "2026-09-20T20:37:00Z",
+  "derived_from": "SRC-017",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "e1c885f134e0f9df7b7db9e1a6bbe8c353c7954303d06eee479c7066e2c69cdd"
+}

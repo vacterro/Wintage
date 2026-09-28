@@ -8,14 +8,100 @@
 # moved install, a replaced archive) leaves payloadVersion unchanged while the
 # theme is gone. These helpers probe the cheap signals and return one verdict.
 
-# The console scrollback floor Wintage owns (T-193). A console profile whose
-# screen-buffer height is at or below its window height has ZERO scrollback and
-# therefore no scrollbar (the "terminal cuts my history" bug). conhost rewrites
-# ScreenBufferSize back into the registry whenever the window is resized, so a
-# once-applied 9001 floor can silently collapse back to the window height after
-# the fact. Both the apply (Invoke-Conhost) and the Reapply health probe
-# (Test-TargetNeedsReapply) share this single floor value, so a drifted buffer
-# is detected and re-asserted instead of being left scrollbar-less.
+# ─── Terminal typography (T-283 / SRC-026) ───────────────────────────────────
+# ONE resolution of the canonical terminal-font preference for every console
+# consumer. The preference default is the face/size Wintage has always written
+# (Terminus, 16pt), so a machine WITHOUT terminal-font.json keeps exactly the
+# prior behavior; a machine with one gets the user's chosen face/size/mode.
+#
+# conhost safety: classic conhost renders on a fixed cell grid, so a face that is
+# not positively proven fixed-pitch must never be substituted into it. The
+# DEFAULT face and the shipped Wintage fallbacks are grandfathered (that is the
+# behavior that already shipped); any OTHER selected face is refused before any
+# registry mutation unless the machine resolves it AND it measures fixed-pitch.
+$CONHOST_FONT_SIZE_DEFAULT = 1048576  # 16pt in conhost's (points << 16) encoding
+
+function Get-ConhostOwnedFont {
+    $pref = Get-TerminalFontPreference
+    $face = [string]$pref.family
+    # Defaulted (no file) -> the established 16pt; an explicit preference owns
+    # its own size.
+    $size = if ($pref.source -eq 'file') { [int]$pref.size * 65536 } else { $CONHOST_FONT_SIZE_DEFAULT }
+    return [ordered]@{ Face = $face; Size = $size; Source = $pref.source; Slug = $pref.fontSlug; Rendering = $pref.renderingMode }
+}
+
+# Does this machine resolve the given family? Same question the console's own
+# face resolver asks. GDI+ enumeration first, registry fallback for hosts
+# without System.Drawing. Distinct from Test-WintageFontInstalled (which is
+# pinned to the Verdana_m1 face).
+function Test-WintageFontInstalledFamily([string]$family) {
+    if ([string]::IsNullOrWhiteSpace($family)) { return $false }
+    if ($family -eq $WINTAGE_FONT_FACE) { return (Test-WintageFontInstalled) }
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        return [bool](@([System.Drawing.FontFamily]::Families | Where-Object { $_.Name -eq $family }).Count)
+    } catch {
+        foreach ($hive in @('HKCU:', 'HKLM:')) {
+            $key = "$hive\Software\Microsoft\Windows NT\CurrentVersion\Fonts"
+            $props = Get-ItemProperty $key -ErrorAction SilentlyContinue
+            if ($props -and @($props.PSObject.Properties.Name | Where-Object { $_ -like "$family*" }).Count) { return $true }
+        }
+        return $false
+    }
+}
+
+# Refuse a conhost face that is not provably usable. Returns $null when the face
+# may be applied, or a reason string when it must be refused.
+#
+# conhost renders on a fixed cell grid: a proportional face corrupts the layout.
+# This is the AUTHORITY boundary for classic conhost -- the GUI is NOT. The
+# probe proves: (1) the family is resolvable by Windows, (2) it is fixed-pitch
+# via GDI+ measurement of several glyphs (not an allowlist), and (3) the
+# grandfathered defaults still pass. It must fail BEFORE any HKCU\Console
+# mutation: Invoke-Conhost calls this before Get-ConhostThemeValues.
+function Test-ConhostFaceUsable([string]$face) {
+    if ([string]::IsNullOrWhiteSpace($face)) { return 'no font face resolved' }
+    # Grandfathered: the default/legacy console look (Terminus, and the bundled
+    # safe fallback Consolas) is what Wintage already ships; do not refuse it.
+    if ($face -eq 'Terminus (TTF) for Windows' -or $face -eq 'Consolas') { return $null }
+    if (-not (Test-WintageFontInstalledFamily $face)) {
+        return "the selected face '$face' is not resolvable by Windows on this machine"
+    }
+    if (-not (Test-ConhostFaceFixedPitch $face)) {
+        return "the selected face '$face' is not fixed-pitch -- conhost requires a monospace family"
+    }
+    return $null
+}
+
+# Behavioral fixed-pitch probe for a RESOLVED family: measures several
+# representative glyphs via GDI+ and requires equal advance widths within a
+# bounded tolerance. A proportional family (different i/W/M/0/1/space widths) is
+# refused before conhost registry mutation. The glyph set and tolerance mirror
+# Test-TfFileFixedPitch in terminal-fonts.ps1 so the GUI capability and the
+# target-side guard cannot diverge by measurement.
+function Test-ConhostFaceFixedPitch([string]$family) {
+    if ([string]::IsNullOrWhiteSpace($family)) { return $false }
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $fam = $null
+        foreach ($f in [System.Drawing.FontFamily]::Families) { if ($f.Name -eq $family) { $fam = $f; break } }
+        if (-not $fam) { return $false }
+        $bmp = New-Object System.Drawing.Bitmap 64, 32
+        try {
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            try {
+                $font = New-Object System.Drawing.Font($fam, 12, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+                try {
+                    $widths = @('i','W','M','0','1',' ' | ForEach-Object { $g.MeasureString($_, $font).Width })
+                    $max = ($widths | Measure-Object -Maximum).Maximum
+                    $min = ($widths | Measure-Object -Minimum).Minimum
+                    return (($max - $min) -le 0.6)
+                } finally { $font.Dispose() }
+            } finally { $g.Dispose() }
+        } finally { $bmp.Dispose() }
+    } catch { return $false }
+}
+
 $CONSOLE_SCROLLBACK_HEIGHT = 9001
 
 # ─── The non-antialiased face (UI.md law 1) ──────────────────────────────────
@@ -109,6 +195,7 @@ function Get-TargetCurrentPath([string]$key) {
         'qbittorrent' { if (Test-Path $QBT_INI) { $QBT_INI } else { $null }; break }
         'notepadplusplus' { $nppDir = Get-NotepadPlusPlusPath; if ($nppDir -and (Test-Path $nppDir)) { $nppDir } else { $null }; break }
         'cinema4d'        { $c4dDir = Get-Cinema4DPath; if ($c4dDir -and (Test-Path $c4dDir)) { $c4dDir } else { $null }; break }
+        'processexplorer' { if (Test-Path $PE_KEY) { $PE_KEY } else { $null }; break }
         'discord'   { $css = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (Test-Path $css) { $css } else { $null }; break }
         # W2-004: Total Commander health re-resolves through the SAME resolver
         # Apply uses (RedirectSection included), but the manifest-recorded
@@ -148,7 +235,7 @@ function Get-ElectronStatus([string]$key) {
 # silently dropped into "no custom sound". Format validation is the patch
 # script's own preflight (isAudio).
 function Get-FreeBuffPatchArgs {
-    $soundPref = Join-Path $env:APPDATA 'Wintage\freebuff-sound.txt'
+    $soundPref = Join-Path $(if ($env:WINTAGE_APPDATA) { $env:WINTAGE_APPDATA } else { Join-Path $env:APPDATA 'Wintage' }) 'freebuff-sound.txt'
     if (-not (Test-Path $soundPref)) { return @() }
     $wav = (Read-Utf8 $soundPref).Trim()
     if (-not $wav) { return @() }
@@ -433,14 +520,22 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                             $aa = if ($def.antialiasingMode) { $def.antialiasingMode.ToString() } else { $null }
                             $hs = if ($null -ne $def.historySize) { [int]$def.historySize } else { $null }
                             $fntFace = if ($def.font -and $def.font.face) { $def.font.face.ToString() } else { $null }
+                            $fntSize = if ($def.font -and $null -ne $def.font.size) { $def.font.size } else { $null }
+                            # T-283: the configured typography is validated against
+                            # the canonical preference, so changing the preference
+                            # after Apply is reported as drift (not "healthy").
+                            $pref = Get-TerminalFontPreference
                             # colorScheme must be 'Wintage'
                             if ($cs -ne 'Wintage') { $reasons += "terminal colorScheme is '$cs' not 'Wintage': $settingsPath" }
-                            # antialiasingMode must be 'aliased'
-                            if ($aa -ne 'aliased') { $reasons += "terminal antialiasingMode is '$aa' not 'aliased': $settingsPath" }
+                            # antialiasingMode must equal the preferred rendering mode
+                            if ($aa -ne $pref.renderingMode) { $reasons += "terminal antialiasingMode is '$aa' not the preferred '$($pref.renderingMode)': $settingsPath" }
                             # historySize must be >= TERMINAL_SCROLLBACK floor
                             if ($null -eq $hs -or $hs -lt $CONSOLE_SCROLLBACK_HEIGHT) { $reasons += "terminal historySize ($hs) below $CONSOLE_SCROLLBACK_HEIGHT floor: $settingsPath" }
-                            # font face must be set to a non-default value
+                            # font face must equal the preferred family
                             if ([string]::IsNullOrEmpty($fntFace)) { $reasons += "terminal font face missing: $settingsPath" }
+                            elseif ($fntFace -ne $pref.family) { $reasons += "terminal font face is '$fntFace' not the preferred '$($pref.family)': $settingsPath" }
+                            # font size must equal the preferred size when set
+                            if ($null -ne $fntSize -and [int]$fntSize -ne [int]$pref.size) { $reasons += "terminal font size is '$fntSize' not the preferred '$($pref.size)': $settingsPath" }
                             # Wintage color scheme must exist in schemes[]
                             $hasWintageScheme = $false
                             if ($term.schemes) {
@@ -553,6 +648,23 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
                 else { $mv = (Read-Utf8 $c4dMarker).Trim(); if ($mv -ne $data.palette) { $reasons += "cinema4d marker mismatch ($mv)" } }
             }
             'conhost'   { $pal = (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette; if (-not $pal) { $reasons += 'conhost WintagePalette marker missing' } elseif ($pal -ne $data.palette) { $reasons += "conhost marker palette mismatch ($pal)" }
+                # T-283: the configured font face must match the canonical
+                # preference. A preference change after Apply leaves the registry
+                # on the old face; health must report the drift so Reapply fixes it.
+                # Get-ConhostOwnedFont throws BY DESIGN when terminal-font.json
+                # fails schema validation. Health runs inside the -Reapply PLANNING
+                # loop, so an unguarded throw here aborted the whole unattended
+                # run before a single target was touched. Report the drift; do not
+                # take the other targets down with a malformed preference file.
+                try {
+                    $wantFont = Get-ConhostOwnedFont
+                    $curFace = (Get-ItemProperty $CONHOST_KEY -Name FaceName -ErrorAction SilentlyContinue).FaceName
+                    if ($curFace -ne $wantFont.Face) { $reasons += "conhost FaceName is '$curFace' not the preferred '$($wantFont.Face)'" }
+                    $curSize = (Get-ItemProperty $CONHOST_KEY -Name FontSize -ErrorAction SilentlyContinue).FontSize
+                    if ($null -ne $curSize -and [int]$curSize -ne [int]$wantFont.Size) { $reasons += "conhost FontSize is '$curSize' not the preferred '$($wantFont.Size)'" }
+                } catch {
+                    $reasons += "conhost font preference unreadable: $($_.Exception.Message)"
+                }
                 # A console profile whose screen-buffer height fell at/below its
                 # window height has ZERO scrollback and no scrollbar. conhost
                 # rewrites ScreenBufferSize into the registry on window resize,
@@ -573,6 +685,34 @@ function Test-TargetNeedsReapply([string]$key, $data, [string]$currentVer) {
             # W2-005: health compares EVERY owned registry value (the exact set
             # Invoke-MpcHc owns), not just one cheap marker.
             'mpchc'     { $props = Get-ItemProperty $MPC_KEY -ErrorAction SilentlyContinue; if ($props) { if ($props.MPCTheme -ne 1) { $reasons += 'mpc MPCTheme not themed' }; if ($props.ModernThemeMode -ne 2) { $reasons += 'mpc ModernThemeMode not themed' }; $wantFace = Get-WintageFontFace; if ($props.OSDFont -ne $wantFace) { $reasons += "mpc OSD font is '$($props.OSDFont)' not '$wantFace'" }; if ($props.OSDSize -ne 16) { $reasons += 'mpc OSD size not themed' }; if ($props.OSDTransparency -ne 0) { $reasons += 'mpc OSD transparency not themed' }; if ($props.OSDBorder -ne 1) { $reasons += 'mpc OSD border not themed' }; if ($props.TitleBarTextStyle -ne 1) { $reasons += 'mpc title bar text style not themed' } } else { $reasons += 'mpc settings key unreadable' } }
+            # Same W2-005 discipline for Process Explorer: the marker AND all 24
+            # owned colour values against the values Get-ProcessExplorerThemeMap
+            # generates for the recorded palette (one definition of "themed").
+            'processexplorer' {
+                # Get-ProcessExplorerOwnedState throws when an owned value is not
+                # a REG_DWORD. Health runs inside the -Reapply PLANNING loop, so an
+                # unguarded throw there aborted the whole unattended run before a
+                # single target was touched. Report the drift instead.
+                try { $peState = Get-ProcessExplorerOwnedState $PE_KEY }
+                catch { $peState = $null; $reasons += "processexplorer owned state unreadable: $($_.Exception.Message)" }
+                if ($null -eq $peState) { }
+                elseif (-not $peState.Existed) { $reasons += 'processexplorer settings key unreadable' }
+                else {
+                    if (-not $peState.Marker) { $reasons += 'processexplorer WintagePalette marker missing' }
+                    elseif ("$($peState.Marker)" -ne "$($data.palette)") { $reasons += "processexplorer marker palette mismatch ($($peState.Marker))" }
+                    if ($palTokens) {
+                        $peMap = Get-ProcessExplorerThemeMap $palTokens
+                        $peBad = @()
+                        foreach ($n in $peMap.Keys) {
+                            $peWant = [uint32]$peMap[$n]
+                            $peHave = $peState.Colors[$n]
+                            if ($null -eq $peHave) { $peBad += "$n missing" }
+                            elseif ($peHave -ne $peWant) { $peBad += "$n=$peHave (want $peWant)" }
+                        }
+                        if ($peBad.Count) { $reasons += 'processexplorer owned colours drifted: ' + (($peBad | Select-Object -First 4) -join '; ') }
+                    } else { $reasons += 'recorded palette tokens unavailable' }
+                }
+            }
             'discord'   { $bdCss = Join-Path (Join-Path $env:APPDATA 'BetterDiscord\themes') 'wintage.theme.css'; if (-not (Test-Path $bdCss)) { $reasons += 'betterdiscord css missing' } elseif ($palTokens -and -not ((Read-Utf8 $bdCss) -match [regex]::Escape($palTokens.background))) { $reasons += 'betterdiscord css does not match the recorded palette' } }
         }
     }
@@ -995,8 +1135,30 @@ function Save-DirPreState([string]$dir) {
     Copy-Item $dir $snap -Recurse -Force
     return @{ Existed = $true; SnapshotPath = $snap }
 }
-function Restore-DirPreState([string]$dir, $snap) {
+
+# W2-006 (audit/7.md, SRC-018:R012): the ONE success-disposal helper for a
+# structured directory pre-state. Restore-DirPreState consumes the snapshot when
+# it runs (rollback), but a SUCCESSFUL commit never calls it -- so every caller
+# had to remember a raw Remove-Item on success, and several (browser stage, the
+# VS Code-family extension dirs, Cinema 4D schemes) did not. Every successful
+# Apply/Revert therefore stranded a complete recursive copy in %TEMP%. Call this
+# after the live mutation AND the manifest transition are both known good; it is
+# deliberately inert for an Existed=false snapshot (no path to free) and
+# idempotent (a path already consumed by a rollback is simply absent).
+function Complete-DirPreState($snap) {
     if (-not $snap) { return }
+    $path = $null
+    if ($snap -is [hashtable] -or $snap -is [System.Collections.Specialized.OrderedDictionary]) {
+        if ($snap.Contains('SnapshotPath')) { $path = $snap.SnapshotPath }
+    } elseif ($snap.PSObject) {
+        $prop = $snap.PSObject.Properties['SnapshotPath']
+        if ($prop) { $path = $prop.Value }
+    }
+    if ($path -and (Test-Path -LiteralPath $path)) {
+        Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+function Restore-DirPreState([string]$dir, $snap) {    if (-not $snap) { return }
     # W2-001: refuse malformed/non-structured snapshot values. A raw path or
     # any object without explicit Existed/SnapshotPath fields must never be
     # silently coerced into the absent-prestate branch (which would delete a
@@ -1205,10 +1367,15 @@ function Invoke-WindowsTerminal {
         }
     }
     $applied = @()
+    # T-283: the chosen typography is read ONCE from the canonical preference and
+    # passed explicitly to the helper, so WT Apply and the conhost target agree
+    # on the same face/size/rendering.
+    $termFont = Get-TerminalFontPreference
     foreach ($settings in $settingsPaths) {
         $args = @($helper, '--settings', $settings)
         $args += @('--palette', $paletteFile)
-        $action = "Apply $PaletteSlug + $CONSOLE_FONT to every profile"
+        $args += @('--face', [string]$termFont.family, '--font-size', [string]$termFont.size, '--rendering', [string]$termFont.renderingMode)
+        $action = "Apply $PaletteSlug + $($termFont.family) to every profile"
         if ($WhatIfPreference) { & node ($args + '--dry-run'); if ($LASTEXITCODE -ne 0) { throw "Windows Terminal dry-run FAILED ($LASTEXITCODE) - see the message above." }; continue }
         if ($PSCmdlet.ShouldProcess($settings, $action)) {
             & node $args
@@ -1289,13 +1456,14 @@ function Invoke-Conhost {
         if ($null -eq $value -and $name -eq 'ScreenBufferSize') { $value = Get-ConhostBufferValue $psPath }
         New-ItemProperty -LiteralPath $psPath -Name $name -Value $value -PropertyType $entry.Type -Force | Out-Null
     }
-    function Get-ConhostThemeValues([string]$paletteSlug) {
+    function Get-ConhostThemeValues([string]$paletteSlug, $ownedFont) {
         $t = Get-PaletteTokens (Join-Path $root "themes/$paletteSlug.json")
+        if (-not $ownedFont) { $ownedFont = Get-ConhostOwnedFont }
         return [ordered]@{
-            FaceName       = @{ Value = $CONSOLE_FONT; Type = 'String' }
+            FaceName       = @{ Value = $ownedFont.Face; Type = 'String' }
             FontFamily     = @{ Value = 54; Type = 'DWord' }
             FontWeight     = @{ Value = 400; Type = 'DWord' }
-            FontSize       = @{ Value = 1048576; Type = 'DWord' }
+            FontSize       = @{ Value = $ownedFont.Size; Type = 'DWord' }
             ScreenColors   = @{ Value = 15; Type = 'DWord' }
             PopupColors    = @{ Value = 240; Type = 'DWord' }
             CursorColor    = @{ Value = (Convert-HexToBgr $t.link); Type = 'DWord' }
@@ -1367,9 +1535,16 @@ function Invoke-Conhost {
 
     $paletteFile = Join-Path $root "themes\$PaletteSlug.json"
     if (-not (Test-Path $paletteFile)) { throw "Console Host: theme file not found ($PaletteSlug.json)" }
-    $values = Get-ConhostThemeValues $PaletteSlug
+    # The canonical preference decides the face/size; resolve it ONCE and refuse
+    # an unusable face BEFORE any registry mutation (no silent fallback).
+    $ownedFont = Get-ConhostOwnedFont
+    $refusal = Test-ConhostFaceUsable $ownedFont.Face
+    if ($refusal) {
+        throw "Console Host: refusing to apply '$($ownedFont.Face)' - $refusal. Windows Terminal can still use it; conhost keeps its current safe face."
+    }
+    $values = Get-ConhostThemeValues $PaletteSlug $ownedFont
 
-    if ($PSCmdlet.ShouldProcess($CONHOST_KEY, "Apply $PaletteSlug + $CONSOLE_FONT to defaults and existing console profiles")) {
+    if ($PSCmdlet.ShouldProcess($CONHOST_KEY, "Apply $PaletteSlug + $($ownedFont.Face) to defaults and existing console profiles")) {
         # Keep the first-seen value for every path/name pair. A console profile can
         # appear after the first install (Git, a shortcut, another shell); repainting
         # must extend the snapshot before touching that new key or Revert would know
@@ -1419,7 +1594,7 @@ function Invoke-Conhost {
                     Set-ConhostValue $key.PSPath $name $values[$name]
                 }
             }
-            Say "Console Host: applied $PaletteSlug + $CONSOLE_FONT to $($keys.Count) registry profile(s)." 'Green'
+            Say "Console Host: applied $PaletteSlug + $($ownedFont.Face) to $($keys.Count) registry profile(s)." 'Green'
             Say "  Restart cmd/PowerShell windows: new font cells + guaranteed $CONSOLE_SCROLLBACK_HEIGHT-line scrollback (zero-history consoles are fixed)." 'Yellow'
             Set-ManifestEntry 'conhost' $PaletteSlug $CONHOST_KEY 'n/a' (Get-PayloadVersion)
         } {
@@ -1753,6 +1928,7 @@ function Invoke-WindowsTheme {
             $finalize = & node $helper --themes-dir $WINDOWS_THEMES_DIR --finalize-revert 2>$null
             if ($LASTEXITCODE -ne 0) { throw 'Windows: could not finalize the theme epoch after manifest removal; recovery state was kept for retry.' }
             if (Test-Path $WINDOWS_DWM_BACKUP) { Remove-Item $WINDOWS_DWM_BACKUP -Force }
+            if (Test-Path ($WINDOWS_DWM_BACKUP + '.provenance.json')) { Remove-Item ($WINDOWS_DWM_BACKUP + '.provenance.json') -Force }
         }
         else {
             Set-ManifestEntry 'windows' $PaletteSlug $WINDOWS_THEMES_DIR 'n/a' (Get-PayloadVersion)
@@ -2711,7 +2887,7 @@ function Invoke-Qbittorrent {
         Remove-Item ($recMeta + '.provenance.json') -Force -ErrorAction SilentlyContinue
         Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
         if (Test-Path $pristineDir) { Remove-Item $pristineDir -Recurse -Force -ErrorAction SilentlyContinue }
-        if ($preDir -and $preDir.SnapshotPath -and (Test-Path $preDir.SnapshotPath)) { Remove-Item $preDir.SnapshotPath -Recurse -Force -ErrorAction SilentlyContinue }
+        Complete-DirPreState $preDir
         return
     }
 
@@ -2778,7 +2954,7 @@ function Invoke-Qbittorrent {
         Restore-DirPreState $QBT_THEME_DIR $preDir
         Restore-FilePreState $preMarker $QBT_MARKER $null
     }
-    if ($preDir -and $preDir.SnapshotPath -and (Test-Path $preDir.SnapshotPath)) { Remove-Item $preDir.SnapshotPath -Recurse -Force -ErrorAction SilentlyContinue }
+    Complete-DirPreState $preDir
     Say '  Start qBittorrent to see it. Undo: .\install.ps1 -Target qbittorrent -Revert' 'DarkGray'
     Say '  NOT reachable: qBittorrent draws its own toolbar/tray icons from its resource' 'Yellow'
     Say '  bundle, so those keep their stock colours - the palette, the transfer-list state' 'Yellow'
@@ -2796,6 +2972,126 @@ function Get-NotepadPlusPlusPath {
     return $null
 }
 
+# W2-001 first-touch ownership ledger. One Apply owns a COMPLETE write set: the
+# primary Wintage.xml, every generated Wintage-<pack>.xml alias and the palette
+# marker. The ledger under recovery\notepadplusplus records, per path, whether
+# the path existed before the FIRST Wintage Apply and - when it did - its exact
+# original bytes under pristine\. Revert is driven by this ledger, NEVER by a
+# filename wildcard: a matching alias outside the set is not ours to delete.
+function Get-NppLedgerKey([string]$path) {
+    try { return ([IO.Path]::GetFullPath($path)).ToLowerInvariant() } catch { return "$path".ToLowerInvariant() }
+}
+
+function Get-NppManagedPaths([string]$themesDir, [string]$outRoot, [string]$markerFile) {
+    $managed = [System.Collections.Generic.List[string]]::new()
+    $seen = @{}
+    foreach ($p in @($markerFile, (Join-Path $themesDir 'Wintage.xml'))) {
+        $full = $p
+        try { $full = [IO.Path]::GetFullPath($p) } catch { }
+        $key = Get-NppLedgerKey $full
+        if (-not $seen.ContainsKey($key)) { $seen[$key] = $true; $managed.Add($full) }
+    }
+    foreach ($pack in @(Get-ChildItem (Join-Path $outRoot 'notepadplusplus') -Directory -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        if (-not (Test-Path -LiteralPath (Join-Path $pack.FullName 'Wintage.xml'))) { continue }
+        $full = Join-Path $themesDir ("Wintage-" + $pack.Name + '.xml')
+        $key = Get-NppLedgerKey $full
+        if (-not $seen.ContainsKey($key)) { $seen[$key] = $true; $managed.Add($full) }
+    }
+    return ,$managed.ToArray()
+}
+
+# The ledger is rollback authority, so a corrupt/foreign/legacy-backed recovery
+# fails closed: nothing is touched and the evidence is kept. An absent 'owned'
+# list is a pre-W2-001 recovery file that recorded no pristine bytes - a
+# byte-exact Revert is impossible and is refused rather than faked.
+function Read-NppRecoveryLedger([string]$recDir, [string]$recMeta) {
+    if (-not (Test-Path -LiteralPath $recMeta)) { throw "Notepad++: persistent recovery is missing ($recMeta) - refusing to touch the live theme files." }
+    $parsed = $null
+    try { $parsed = Read-Utf8 $recMeta | ConvertFrom-Json } catch {
+        throw "Notepad++: persistent recovery is unreadable ($recMeta) - refusing to touch the live theme files. Preserve the file or remove it by hand."
+    }
+    if ($null -eq $parsed -or $parsed -is [string] -or $parsed -is [System.Array] -or $parsed -is [int] -or $parsed -is [bool]) {
+        throw "Notepad++: persistent recovery at $recMeta is not a JSON object - refusing to touch the live theme files."
+    }
+    $ownedProp = $parsed.PSObject.Properties['owned']
+    if (-not $ownedProp) {
+        throw "Notepad++: the recovery at $recMeta was written before first-touch ownership existed and carries no pristine ledger - a byte-exact Revert is impossible, so nothing was changed. Remove the Wintage theme files by hand, or re-apply with this version and Revert again. The recovery file and the manifest entry are kept as evidence."
+    }
+    $entries = @()
+    $seen = @{}
+    foreach ($e in @($ownedProp.Value)) {
+        if ($null -eq $e) { continue }
+        $pp = $e.PSObject.Properties['path']
+        $ep = $e.PSObject.Properties['existed']
+        if (-not $pp -or -not $ep) { throw "Notepad++: persistent recovery at $recMeta has a malformed ownership entry - refusing to touch the live theme files." }
+        $path = "$($pp.Value)"
+        if (-not $path) { throw "Notepad++: persistent recovery at $recMeta has an ownership entry with no path - refusing to touch the live theme files." }
+        $key = Get-NppLedgerKey $path
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        $existed = [bool]$ep.Value
+        $pr = $e.PSObject.Properties['pristine']
+        $pristineRel = if ($pr -and $pr.Value) { "$($pr.Value)" } else { $null }
+        $pristine = if ($pristineRel) { Join-Path $recDir $pristineRel } else { $null }
+        if ($existed -and (-not $pristine -or -not (Test-Path -LiteralPath $pristine))) {
+            throw "Notepad++: the pristine copy of $path is missing ($pristine) - refusing to Revert; nothing was changed."
+        }
+        $entries += [pscustomobject]@{ Path = $path; Existed = $existed; Pristine = $pristine; PristineRel = $pristineRel }
+    }
+    if (-not $entries.Count) { throw "Notepad++: persistent recovery at $recMeta owns no paths - refusing to touch the live theme files." }
+    return ,$entries
+}
+
+# First-touch capture: extend the ledger with every managed path it does not
+# already own, then publish it atomically and validate it before any live
+# mutation. A repaint whose write set is fully owned returns the existing
+# ledger untouched - the original pristine bytes are the recovery epoch.
+function Initialize-NppRecovery([string[]]$managedPaths, [string]$recDir, [string]$recMeta) {
+    $existing = $null
+    if (Test-Path -LiteralPath $recMeta) {
+        Assert-RecoveryProvenance $recMeta 'notepadplusplus' 'Notepad++' | Out-Null
+        $existing = Read-NppRecoveryLedger $recDir $recMeta
+    }
+    $entries = @()
+    if ($existing) {
+        # Normalize back to the on-disk schema: the ledger is re-serialized
+        # whole, so an extended ledger must never mix two property spellings
+        # or persist the absolute pristine path.
+        foreach ($e in $existing) {
+            $entries += [pscustomobject]@{ path = $e.Path; existed = $e.Existed; pristine = $e.PristineRel }
+        }
+    }
+    $keys = @{}
+    foreach ($e in $entries) { $keys[(Get-NppLedgerKey $e.path)] = $true }
+    $added = $false
+    foreach ($p in $managedPaths) {
+        $key = Get-NppLedgerKey $p
+        if ($keys.ContainsKey($key)) { continue }
+        $existed = Test-Path -LiteralPath $p
+        $pristineRel = $null
+        if ($existed) {
+            $pristineRel = Join-Path 'pristine' ('{0:D4}.bin' -f $entries.Count)
+            Copy-FileAtomic $p (Join-Path $recDir $pristineRel)
+        }
+        $entries += [pscustomobject]@{ path = $p; existed = $existed; pristine = $pristineRel }
+        $keys[$key] = $true
+        $added = $true
+    }
+    if ($existing -and -not $added) { return ,$entries }
+    if ($env:WINTAGE_TEST_FAIL_NPP_RECOVERY) {
+        throw 'simulated Notepad++ recovery promotion failure (WINTAGE_TEST_FAIL_NPP_RECOVERY)'
+    }
+    New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+    Write-Utf8Atomic $recMeta ([ordered]@{
+        target = 'notepadplusplus'
+        schema = 2
+        created = (Get-Date).ToUniversalTime().ToString('o')
+        owned = @($entries)
+    } | ConvertTo-Json -Depth 6) -ValidateJson
+    Write-RecoveryProvenance $recMeta 'notepadplusplus'
+    return ,(Read-NppRecoveryLedger $recDir $recMeta)
+}
+
 function Invoke-NotepadPlusPlus {
     param([switch]$DoRevert, [string]$PaletteSlug)
 
@@ -2808,28 +3104,38 @@ function Invoke-NotepadPlusPlus {
 
     $recDir = Join-Path $WintageAppData 'recovery\notepadplusplus'
     $recMeta = Join-Path $recDir 'recovery.json'
+    $pristineDir = Join-Path $recDir 'pristine'
 
     if ($DoRevert) {
         if (-not (Assert-RevertSource 'notepadplusplus' $recMeta 'Notepad++')) { return }
-        if (-not $PSCmdlet.ShouldProcess($targetTheme, 'Remove Wintage Notepad++ theme')) { return }
+        if (-not $PSCmdlet.ShouldProcess($targetTheme, 'Restore the pre-Wintage Notepad++ theme files')) { return }
 
-        $preTheme = Save-FilePreState $targetTheme $null
-        $preMarker = Save-FilePreState $markerFile $null
+        # The ledger is the ONLY ownership authority: restore what pre-existed
+        # byte-for-byte, remove what Wintage created, and touch nothing else.
+        $ledger = Read-NppRecoveryLedger $recDir $recMeta
+        $pre = @{}
+        foreach ($e in $ledger) { $pre[$e.Path] = Save-FilePreState $e.Path $null }
 
         Invoke-TargetCommit 'notepadplusplus' 'Notepad++' {
-            if (Test-Path $targetTheme) { Remove-Item $targetTheme -Force }
-            if (Test-Path $markerFile) { Remove-Item $markerFile -Force }
-            if (Test-Path $nppThemesDir) {
-                Get-ChildItem $nppThemesDir -Filter 'Wintage-*.xml' -ErrorAction SilentlyContinue | Remove-Item -Force
+            foreach ($e in $ledger) {
+                if ($e.Existed) {
+                    $parent = Split-Path $e.Path -Parent
+                    if ($parent -and -not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+                    [System.IO.File]::WriteAllBytes($e.Path, [System.IO.File]::ReadAllBytes($e.Pristine))
+                } elseif (Test-Path -LiteralPath $e.Path) {
+                    Remove-Item -LiteralPath $e.Path -Force
+                }
             }
-            Say 'Notepad++: removed Wintage theme.' 'Green'
+            Say 'Notepad++: restored the pre-Wintage theme files.' 'Green'
             Remove-ManifestEntry 'notepadplusplus'
         } {
-            Restore-FilePreState $preTheme $targetTheme $null
-            Restore-FilePreState $preMarker $markerFile $null
+            foreach ($p in $pre.Keys) { Restore-FilePreState $pre[$p] $p $null }
         }
+        # Recovery is consumed ONLY after the target restoration AND the
+        # manifest transition both committed; a failed transition keeps it.
         Remove-Item ($recMeta + '.provenance.json') -Force -ErrorAction SilentlyContinue
         Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $pristineDir) { Remove-Item $pristineDir -Recurse -Force -ErrorAction SilentlyContinue }
         return
     }
 
@@ -2841,8 +3147,17 @@ function Invoke-NotepadPlusPlus {
 
     if (-not $PSCmdlet.ShouldProcess($targetTheme, "Install Wintage ($PaletteSlug) theme")) { return }
 
-    $preTheme = Save-FilePreState $targetTheme $null
-    $preMarker = Save-FilePreState $markerFile $null
+    # A. Persistent first-touch recovery for the COMPLETE write set, created,
+    # atomically published and validated BEFORE any live mutation. If it cannot
+    # be established, the target refuses to move.
+    $managedPaths = Get-NppManagedPaths $nppThemesDir $out $markerFile
+    $null = Initialize-NppRecovery $managedPaths $recDir $recMeta
+
+    # B. The in-operation rollback snapshot covers the same complete set, each
+    # path at its immediate pre-operation state (never the first-install state).
+    $pre = @{}
+    foreach ($p in $managedPaths) { $pre[$p] = Save-FilePreState $p $null }
+    $themesDirExisted = Test-Path -LiteralPath $nppThemesDir
 
     Invoke-TargetCommit 'notepadplusplus' 'Notepad++' {
         if (-not (Test-Path $nppThemesDir)) {
@@ -2850,25 +3165,29 @@ function Invoke-NotepadPlusPlus {
         }
         Copy-Item $builtTheme $targetTheme -Force
         $allPacks = Get-ChildItem (Join-Path $out 'notepadplusplus') -Directory -ErrorAction SilentlyContinue
+        $aliasCount = 0
         foreach ($p in $allPacks) {
             $srcFile = Join-Path $p.FullName 'Wintage.xml'
             if (Test-Path $srcFile) {
                 Copy-Item $srcFile (Join-Path $nppThemesDir "Wintage-$($p.Name).xml") -Force
+                $aliasCount++
+                if ($env:WINTAGE_TEST_FAIL_NPP_AFTER_ALIAS -and $aliasCount -ge 1) {
+                    throw 'simulated failure after the first Notepad++ alias write (WINTAGE_TEST_FAIL_NPP_AFTER_ALIAS)'
+                }
             }
         }
         Write-Utf8 $markerFile $PaletteSlug
         Set-ManifestEntry 'notepadplusplus' $PaletteSlug $nppConfigDir 'n/a' (Get-PayloadVersion)
         Say "Notepad++: installed Wintage ($PaletteSlug) theme -> $targetTheme" 'Green'
     } {
-        Restore-FilePreState $preTheme $targetTheme $null
-        Restore-FilePreState $preMarker $markerFile $null
+        foreach ($p in $pre.Keys) { Restore-FilePreState $pre[$p] $p $null }
+        if (-not $themesDirExisted -and (Test-Path -LiteralPath $nppThemesDir)) { Remove-Item $nppThemesDir -Recurse -Force -ErrorAction SilentlyContinue }
     }
 
-    if (-not (Test-Path $recMeta)) {
-        New-Item -ItemType Directory -Force -Path $recDir | Out-Null
-        $meta = [ordered]@{ target = 'notepadplusplus'; schema = 1; epoch = (Get-InstallEpoch); date = (Get-Date).ToUniversalTime().ToString('o') }
-        Write-Utf8 $recMeta (($meta | ConvertTo-Json) + "
-")
+    # Crash seam: the process dies right after the manifest committed. The
+    # persistent first-touch recovery already exists, so Revert stays possible.
+    if ($env:WINTAGE_TEST_CRASH_AFTER_NPP_COMMIT) {
+        throw 'simulated crash immediately after the Notepad++ manifest commit (WINTAGE_TEST_CRASH_AFTER_NPP_COMMIT)'
     }
 
     Say '  In Notepad++: Settings -> Style Configurator -> Select theme: Wintage' 'DarkGray'
@@ -2904,6 +3223,76 @@ function Get-Cinema4DSchemesDir([string]$c4dRoot) {
     return $null
 }
 
+# W2-001 first-touch recovery for the directory-shaped Cinema 4D target. The
+# ledger is a mode plus (for `replaced`) a complete pristine tree captured
+# OUTSIDE the live target. `created` means schemes\Wintage did not exist before
+# the first Wintage Apply; `replaced` means it did and the pristine tree is the
+# byte-exact pre-Wintage state, unrelated files and nested directories
+# included. The directory NAME 'Wintage' is never ownership evidence.
+function Read-C4dRecovery([string]$recDir, [string]$recMeta) {
+    if (-not (Test-Path -LiteralPath $recMeta)) { throw "Cinema 4D: persistent recovery is missing ($recMeta) - refusing to touch the live scheme directory." }
+    $parsed = $null
+    try { $parsed = Read-Utf8 $recMeta | ConvertFrom-Json } catch {
+        throw "Cinema 4D: persistent recovery is unreadable ($recMeta) - refusing to touch the live scheme directory. Preserve the file or remove it by hand."
+    }
+    if ($null -eq $parsed -or $parsed -is [string] -or $parsed -is [System.Array] -or $parsed -is [int] -or $parsed -is [bool]) {
+        throw "Cinema 4D: persistent recovery at $recMeta is not a JSON object - refusing to touch the live scheme directory."
+    }
+    $modeProp = $parsed.PSObject.Properties['mode']
+    $mode = if ($modeProp) { "$($modeProp.Value)" } else { '' }
+    if ($mode -ne 'created' -and $mode -ne 'replaced') {
+        throw "Cinema 4D: the recovery at $recMeta was written before first-touch ownership existed and carries no created/replaced mode - a byte-exact Revert is impossible, so nothing was changed. Remove the Wintage scheme directory by hand, or re-apply with this version and Revert again. The recovery file and the manifest entry are kept as evidence."
+    }
+    $pristineDir = Join-Path $recDir 'pristine'
+    if ($mode -eq 'replaced' -and -not (Test-Path -LiteralPath $pristineDir)) {
+        throw "Cinema 4D: the pristine recovery tree is missing ($pristineDir) - refusing to Revert; nothing was changed."
+    }
+    return [pscustomobject]@{ Mode = $mode; PristineDir = $pristineDir }
+}
+
+# First-touch capture, created and validated BEFORE the live directory is
+# touched. A repaint never recaptures: the original recovery epoch stands.
+function Initialize-C4dRecovery([string]$schemeDir, [string]$recDir, [string]$recMeta) {
+    if (Test-Path -LiteralPath $recMeta) {
+        Assert-RecoveryProvenance $recMeta 'cinema4d' 'Cinema 4D' | Out-Null
+        return (Read-C4dRecovery $recDir $recMeta)
+    }
+    $mode = if (Test-Path -LiteralPath $schemeDir) { 'replaced' } else { 'created' }
+    $pristineDir = Join-Path $recDir 'pristine'
+    if ($mode -eq 'replaced') {
+        if ($env:WINTAGE_TEST_FAIL_C4D_CAPTURE) {
+            throw 'simulated failure during the Cinema 4D pristine capture (WINTAGE_TEST_FAIL_C4D_CAPTURE)'
+        }
+        if (Test-Path -LiteralPath $pristineDir) { Remove-Item $pristineDir -Recurse -Force }
+        New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+        Copy-Item $schemeDir $pristineDir -Recurse -Force
+        # Every source file must have a captured twin of the same length before
+        # the metadata may claim the tree is authoritative.
+        foreach ($f in @(Get-ChildItem $schemeDir -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+            $rel = $f.FullName.Substring($schemeDir.Length).TrimStart('\')
+            $cap = Join-Path $pristineDir $rel
+            if (-not (Test-Path -LiteralPath $cap) -or (Get-Item -LiteralPath $cap).Length -ne $f.Length) {
+                throw "Cinema 4D: the pristine capture is incomplete for $($f.FullName) - refusing to touch the live scheme directory."
+            }
+        }
+    } else {
+        if (Test-Path -LiteralPath $pristineDir) { Remove-Item $pristineDir -Recurse -Force }
+    }
+    if ($env:WINTAGE_TEST_FAIL_C4D_RECOVERY) {
+        throw 'simulated Cinema 4D recovery promotion failure (WINTAGE_TEST_FAIL_C4D_RECOVERY)'
+    }
+    New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+    Write-Utf8Atomic $recMeta ([ordered]@{
+        target = 'cinema4d'
+        schema = 2
+        mode = $mode
+        path = $schemeDir
+        created = (Get-Date).ToUniversalTime().ToString('o')
+    } | ConvertTo-Json) -ValidateJson
+    Write-RecoveryProvenance $recMeta 'cinema4d'
+    return (Read-C4dRecovery $recDir $recMeta)
+}
+
 function Invoke-Cinema4D {
     param([switch]$DoRevert, [string]$PaletteSlug)
 
@@ -2924,24 +3313,39 @@ function Invoke-Cinema4D {
 
     $recDir = Join-Path $WintageAppData 'recovery\cinema4d'
     $recMeta = Join-Path $recDir 'recovery.json'
+    $pristineDir = Join-Path $recDir 'pristine'
 
     if ($DoRevert) {
         if (-not (Assert-RevertSource 'cinema4d' $recMeta 'Cinema 4D')) { return }
-        if (-not $PSCmdlet.ShouldProcess($wintageSchemeDir, 'Remove Wintage scheme from Cinema 4D')) { return }
+        if (-not $PSCmdlet.ShouldProcess($wintageSchemeDir, 'Restore the pre-Wintage Cinema 4D scheme')) { return }
 
+        $ledger = Read-C4dRecovery $recDir $recMeta
         $preDir = Save-DirPreState $wintageSchemeDir
 
         Invoke-TargetCommit 'cinema4d' 'Cinema 4D' {
-            if (Test-Path $wintageSchemeDir) {
+            if ($ledger.Mode -eq 'replaced') {
+                # Restore-DirPreState CONSUMES the snapshot it is handed, so it
+                # receives a working copy: the persistent pristine tree must
+                # survive until the manifest transition commits, or a failed
+                # transition would leave the Revert unretryable.
+                $pristineWork = Join-Path $env:TEMP ('wintage-c4d-pristine-' + [guid]::NewGuid().ToString('N'))
+                Copy-Item $ledger.PristineDir $pristineWork -Recurse -Force
+                Restore-DirPreState $wintageSchemeDir @{ Existed = $true; SnapshotPath = $pristineWork }
+                Say "Cinema 4D: restored the pre-Wintage scheme -> $wintageSchemeDir" 'Green'
+            } elseif (Test-Path -LiteralPath $wintageSchemeDir) {
                 Remove-Item $wintageSchemeDir -Recurse -Force
+                Say "Cinema 4D: removed the Wintage-created scheme from $schemesDir" 'Green'
             }
-            Say "Cinema 4D: removed Wintage scheme from $schemesDir" 'Green'
             Remove-ManifestEntry 'cinema4d'
         } {
             Restore-DirPreState $wintageSchemeDir $preDir
         }
+        Complete-DirPreState $preDir
+        # Consume ONLY after the target restoration AND the manifest transition
+        # both committed; a failed transition keeps the recovery epoch.
         Remove-Item ($recMeta + '.provenance.json') -Force -ErrorAction SilentlyContinue
         Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $pristineDir) { Remove-Item $pristineDir -Recurse -Force -ErrorAction SilentlyContinue }
         return
     }
 
@@ -2954,6 +3358,10 @@ function Invoke-Cinema4D {
 
     if (-not $PSCmdlet.ShouldProcess($wintageSchemeDir, "Install Wintage ($PaletteSlug) scheme")) { return }
 
+    # First-touch created/replaced recovery + a complete pristine tree are
+    # persisted and validated BEFORE the live scheme directory is touched.
+    $null = Initialize-C4dRecovery $wintageSchemeDir $recDir $recMeta
+
     $preDir = Save-DirPreState $wintageSchemeDir
 
     Invoke-TargetCommit 'cinema4d' 'Cinema 4D' {
@@ -2962,6 +3370,9 @@ function Invoke-Cinema4D {
         }
         Copy-Item $builtCol $colFile -Force
         Copy-Item $builtRes $resFile -Force
+        if ($env:WINTAGE_TEST_FAIL_C4D_AFTER_COPY) {
+            throw 'simulated failure after the Cinema 4D live writes (WINTAGE_TEST_FAIL_C4D_AFTER_COPY)'
+        }
 
         # Copy bitmaps from Dark scheme so icons and widgets render
         $darkSchemeDir = Join-Path $schemesDir 'Dark'
@@ -2978,15 +3389,428 @@ function Invoke-Cinema4D {
     } {
         Restore-DirPreState $wintageSchemeDir $preDir
     }
+    Complete-DirPreState $preDir
 
-    if (-not (Test-Path $recMeta)) {
-        New-Item -ItemType Directory -Force -Path $recDir | Out-Null
-        $meta = [ordered]@{ target = 'cinema4d'; schema = 1; epoch = (Get-InstallEpoch); date = (Get-Date).ToUniversalTime().ToString('o') }
-        Write-Utf8 $recMeta (($meta | ConvertTo-Json) + "
-")
+    # Crash seam: the process dies right after the manifest committed. The
+    # persistent first-touch recovery already exists, so Revert stays possible.
+    if ($env:WINTAGE_TEST_CRASH_AFTER_C4D_COMMIT) {
+        throw 'simulated crash immediately after the Cinema 4D manifest commit (WINTAGE_TEST_CRASH_AFTER_C4D_COMMIT)'
     }
 
     Say '  In Cinema 4D: Edit -> Preferences -> Interface -> Scheme: Wintage' 'DarkGray'
     Say '  Undo: .\install.ps1 -Target cinema4d -Revert' 'DarkGray'
+}
+
+# ─── TARGET: Process Explorer (Sysinternals) ─────────────────────────────────
+# The persisted surface below was PROVEN against the product (live registry of a
+# running Process Explorer 17.x), not assumed: Process Explorer stores every user
+# setting under HKCU\Software\Sysinternals\Process Explorer, and its ENTIRE
+# configurable colour surface is a fixed set of REG_DWORD COLORREF (0x00BBGGRR)
+# value pairs named Color*/Color*Dark -- exactly the twelve categories the
+# Options -> Configure Colors dialog edits. The plain variant is used in the
+# light UI (stock values are pastels read against the system's black list text);
+# the Dark variant is used in dark mode (stock values are deep colours read
+# against light text). Wintage derives both from the palette so either UI mode
+# stays readable: each variant is blended toward the matching POLE of the pack -
+# the plain variant toward its light tone, the Dark variant toward its dark tone
+# - so the fills keep the pack's own key (black list text stays readable on the
+# light variant, white graph text on the Dark one) instead of washing out to
+# pure white over the olive/brown surfaces.
+#
+# HONEST COVERAGE: the title bar, menu bar, toolbar, list-view background and
+# text colours, graph LINE colours and fonts are compiled into the executable and
+# exposed by NO settings value. This target owns the row highlights and the graph
+# background -- which includes the intrusive default blue/lavender own-process
+# rows and the light-gray graph background -- and says so rather than claiming a
+# full window theme.
+#
+# RUNNING-PROCESS RULE: Process Explorer holds its settings in memory and
+# rewrites the key on exit (Windowplacement is rewritten unconditionally at
+# every exit), so a background mutation would be discarded - or worse, overwritten
+# with stock colours - the next time the user closes the app. Same discipline as
+# MPC-HC/qBittorrent: the target REFUSES while the process runs, and -WhatIf only
+# notes it.
+
+$script:PE_MARKER_VALUE = 'WintagePalette'
+# The canonical owned surface is defined ONCE, here, and every consumer derives
+# from it: the write map (Get-ProcessExplorerThemeMap), first-touch recovery,
+# immediate rollback, Revert, health and verification. The old shape kept a
+# 12-name base list beside a write map that emitted 24 names (base + *Dark), so
+# Apply mutated the *Dark values while the snapshot/rollback/recovery ledger
+# never covered them - a Revert left Wintage dark colours behind and health could
+# not see it. Process Explorer genuinely persists both variants (verified against
+# a real installed settings surface), so both are in the owned set.
+$script:PE_ROW_ROLES = @(
+    'ColorOwn', 'ColorServices', 'ColorRelocatedDlls', 'ColorImmersive',
+    'ColorPacked', 'ColorJobs', 'ColorNet', 'ColorProtected',
+    'ColorNewProc', 'ColorDelProc', 'ColorSuspend'
+)
+$script:PE_COLOR_VALUES = @(
+    foreach ($n in $script:PE_ROW_ROLES) { $n; "${n}Dark" }
+    'ColorGraphBk'
+    'ColorGraphBkDark'
+)
+
+
+# Component-wise linear blend of #RRGGBB toward another #RRGGBB. Used to derive
+# the row-highlight variants from one palette token so light/dark UI modes both
+# keep readable list text - a raw dark token as a light-mode row fill would paint
+# black list text onto a dark surface (unreadable), and a raw gold on the dark UI
+# would wash out its light text.
+#
+# The blend target is one of the pack's OWN poles: the LIGHTER of its textPrimary
+# and backgroundSoft drives the plain (light-UI) fill, and the darker member the
+# *Dark fill. So a dark pack blends its plain rows toward a readable light tone
+# and a light pack toward a readable dark one, both from the palette itself.
+# Blending toward a literal #FFFFFF instead resolved every plain fill to
+# near-white on the olive/brown packs - the harsh Process Explorer text this
+# target was repaired for.
+# WCAG relative luminance of #RRGGBB (or #AARRGGBB), 0..1. Used only to decide
+# which pack token is the LIGHT pole; the same formula the GUI's contrast readout
+# uses, so the two never disagree about which pack is dark.
+function Get-RelativeLuminance([string]$hex) {
+    $h = $hex.Replace('#', '')
+    if ($h.Length -eq 8) { $h = $h.Substring(0, 6) }
+    $lin = {
+        param($byte)
+        $s = $byte / 255.0
+        if ($s -le 0.03928) { $s / 12.92 } else { [Math]::Pow(($s + 0.055) / 1.055, 2.4) }
+    }
+    $r = & $lin ([Convert]::ToInt32($h.Substring(0, 2), 16))
+    $g = & $lin ([Convert]::ToInt32($h.Substring(2, 2), 16))
+    $b = & $lin ([Convert]::ToInt32($h.Substring(4, 2), 16))
+    return 0.2126 * $r + 0.7152 * $g + 0.0722 * $b
+}
+
+function Convert-HexBlendToward([string]$hex, [string]$towardHex, [double]$ratio) {
+    $h = $hex.Replace('#', ''); $t = $towardHex.Replace('#', '')
+    if ($h.Length -eq 8) { $h = $h.Substring(0, 6) }
+    if ($t.Length -eq 8) { $t = $t.Substring(0, 6) }
+    $ch = { param($src, $i) [Convert]::ToInt32($src.Substring($i, 2), 16) }
+    $out = ''
+    foreach ($i in @(0, 2, 4)) {
+        $v = (& $ch $h $i) + ((& $ch $t $i) - (& $ch $h $i)) * $ratio
+        # [Math]::Round returns a Double; the X2 format specifier requires an
+        # integral type, so the cast is load-bearing (a raw double throws
+        # "Format specifier was invalid"). Clamp to the byte range so a ratio
+        # outside 0..1 can never emit a >2-hex-digit channel.
+        $bv = [int][Math]::Round($v)
+        if ($bv -lt 0) { $bv = 0 } elseif ($bv -gt 255) { $bv = 255 }
+        $out += '{0:X2}' -f $bv
+    }
+    return "#$out"
+}
+
+# The exact owned write set, derived from the palette tokens. Apply, health and
+# -WhatIf all read THIS function, so there is one definition of "the recorded
+# palette" and health can never drift from what Apply generates (W2-005
+# discipline). Colour roles are semantic: gold/link for the most visible row
+# (own processes - stock light blue, the complaint that motivated this target),
+# danger/warning for suspect and exiting categories, success for new processes,
+# muted for suspended, teal accents for network/.NET, dark browns for graph
+# backgrounds.
+function Get-ProcessExplorerThemeMap($palTokens) {
+    $t = $palTokens
+    $roles = [ordered]@{
+        ColorOwn           = $t.link
+        ColorServices      = $t.dangerText
+        ColorRelocatedDlls = $t.warning
+        ColorImmersive     = $t.accentTeal
+        ColorPacked        = $t.warning
+        ColorJobs          = $t.surfaceAlt
+        ColorNet           = $t.accentTealDeep
+        ColorProtected     = $t.danger
+        ColorNewProc       = $t.success
+        ColorDelProc       = $t.dangerText
+        ColorSuspend       = $t.textMuted
+    }
+    # The two poles of THIS pack: whichever of textPrimary / backgroundSoft is the
+    # lighter carries every plain (light-UI) fill, the other every Dark fill. No
+    # literal white or black is blended in, so the fills stay in the pack's own
+    # key rather than washing out to pure white over the olive/brown surfaces.
+    $lightPole = if ((Get-RelativeLuminance $t.textPrimary) -ge (Get-RelativeLuminance $t.backgroundSoft)) { $t.textPrimary } else { $t.backgroundSoft }
+    $darkPole = if ((Get-RelativeLuminance $t.textPrimary) -lt (Get-RelativeLuminance $t.backgroundSoft)) { $t.textPrimary } else { $t.backgroundSoft }
+    $map = [ordered]@{}
+    foreach ($k in $roles.Keys) {
+        $map[$k]       = Convert-HexToBgr (Convert-HexBlendToward $roles[$k] $lightPole 0.75)
+        $map["${k}Dark"] = Convert-HexToBgr (Convert-HexBlendToward $roles[$k] $darkPole 0.55)
+    }
+    $map['ColorGraphBk']     = Convert-HexToBgr $t.backgroundSoft
+    $map['ColorGraphBkDark'] = Convert-HexToBgr $t.background
+    # CONTRACT GUARD: the write map and the canonical owned set must agree
+    # exactly. A future role added to one and forgotten in the other is the very
+    # drift this target was repaired for, and it fails loudly here instead of
+    # silently leaving values that Revert can never restore.
+    $diff = @(@($script:PE_COLOR_VALUES) | Where-Object { -not $map.Contains($_) }) +
+            @(@($map.Keys) | Where-Object { $_ -notin $script:PE_COLOR_VALUES })
+    if ($diff.Count) {
+        throw "Process Explorer: owned-value contract drift - the write map and PE_COLOR_VALUES disagree on: $($diff -join ', ')."
+    }
+    return $map
+}
+
+# Read the COMPLETE owned surface (24 colour DWORDs + the Wintage marker) as
+# value-or-absent. Absence is $null - the only absence sentinel (CORE-005), so a
+# pre-existing empty-string marker is restored as present-empty, never deleted.
+function Get-ProcessExplorerOwnedState([string]$keyPath) {
+    $colors = @{}
+    foreach ($n in $script:PE_COLOR_VALUES) { $colors[$n] = $null }
+    $marker = $null
+    $existed = (Test-Path $keyPath)
+    if ($existed) {
+        $rk = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(($keyPath -replace '^HKCU:\\', ''))
+        if (-not $rk) { throw "Process Explorer: cannot open $keyPath for reading." }
+        try {
+            foreach ($n in $script:PE_COLOR_VALUES) {
+                $v = $rk.GetValue($n)
+                if ($null -eq $v) { continue }
+                if ($v -isnot [int] -and $v -isnot [int32]) { throw "Process Explorer: $n exists but is not a REG_DWORD - refusing to treat the settings surface as readable." }
+                # REG_DWORD reads as Int32; normalise through its unsigned bits so
+                # a high-bit COLORREF survives the round trip value-for-value.
+                $colors[$n] = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$v), 0)
+            }
+            $m = $rk.GetValue($script:PE_MARKER_VALUE)
+            if ($null -ne $m) { $marker = "$m" }
+        } finally { $rk.Close() }
+    }
+    [pscustomobject]@{ Existed = [bool]$existed; Colors = $colors; Marker = $marker }
+}
+
+# Uint32-safe REG_DWORD write (COLORREF values are unsigned; Set-ItemProperty
+# -Type DWord takes an Int32 and would throw past 0x7FFFFFFF).
+function Set-ProcessExplorerDWord([string]$keyPath, [string]$name, [uint32]$value) {
+    if (-not (Test-Path $keyPath)) { New-Item -Path $keyPath -Force | Out-Null }
+    $rk = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(($keyPath -replace '^HKCU:\\', ''), $true)
+    if (-not $rk) { throw "Process Explorer: cannot open $keyPath for writing." }
+    try {
+        $asInt = [BitConverter]::ToInt32([BitConverter]::GetBytes($value), 0)
+        $rk.SetValue($name, $asInt, [Microsoft.Win32.RegistryValueKind]::DWord)
+    } finally { $rk.Close() }
+}
+
+# Checked rollback primitive (W2-005): restores every owned value to the given
+# state, VERIFIES the result by re-reading the surface, and THROWS on any
+# mismatch - a rollback that silently half-worked is the one failure mode the
+# "exact pre-operation state" claim cannot survive.
+function Restore-ProcessExplorerState([string]$keyPath, $state) {
+    $errs = @()
+    foreach ($n in $script:PE_COLOR_VALUES) {
+        try {
+            $want = $state.Colors[$n]
+            if ($null -eq $want) {
+                if (Test-Path $keyPath) {
+                    $rk = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(($keyPath -replace '^HKCU:\\', ''), $true)
+                    if ($rk) {
+                        try { if ($rk.GetValueNames() -contains $n) { $rk.DeleteValue($n) } } finally { $rk.Close() }
+                    }
+                }
+            } else { Set-ProcessExplorerDWord $keyPath $n $want }
+        } catch { $errs += "$n`: $($_.Exception.Message)" }
+    }
+    try {
+        if ($null -eq $state.Marker) {
+            if (Test-Path $keyPath) {
+                $rk = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(($keyPath -replace '^HKCU:\\', ''), $true)
+                if ($rk) {
+                    try { if ($rk.GetValueNames() -contains $script:PE_MARKER_VALUE) { $rk.DeleteValue($script:PE_MARKER_VALUE) } } finally { $rk.Close() }
+                }
+            }
+        } else {
+            if (-not (Test-Path $keyPath)) { New-Item -Path $keyPath -Force | Out-Null }
+            Set-ItemProperty -Path $keyPath -Name $script:PE_MARKER_VALUE -Value $state.Marker -Type String -ErrorAction Stop
+        }
+    } catch { $errs += "$($script:PE_MARKER_VALUE): $($_.Exception.Message)" }
+    if ($errs.Count) { throw "Process Explorer: rollback INCOMPLETE ($($errs -join '; ')). Every recovery artifact was kept." }
+    # First-touch Revert: the key did not exist before Apply, so a Revert that
+    # only deletes the owned values leaves an empty
+    # HKCU\Software\Sysinternals\Process Explorer behind. Test-Path then keeps
+    # reporting the target as present forever.
+    if ($state.Existed -eq $false) {
+        try {
+            if (Test-Path $keyPath) {
+                $leftover = Get-Item $keyPath
+                if (-not $leftover.GetValueNames()) { Remove-Item -LiteralPath $keyPath -Force -ErrorAction Stop }
+            }
+        } catch { $errs += "settings key cleanup: $($_.Exception.Message)" }
+    }
+    # Verified restore: read the surface back and compare value-for-value.
+    $now = Get-ProcessExplorerOwnedState $keyPath
+    foreach ($n in $script:PE_COLOR_VALUES) {
+        if ($now.Colors[$n] -ne $state.Colors[$n]) { $errs += "$n did not restore (have $($now.Colors[$n]), want $($state.Colors[$n]))" }
+    }
+    if ($now.Marker -ne $state.Marker) { $errs += "$($script:PE_MARKER_VALUE) did not restore" }
+    if ($errs.Count) { throw "Process Explorer: rollback INCOMPLETE ($($errs -join '; ')). Every recovery artifact was kept." }
+}
+
+# Discovery: remembered/explicit folder carrying procexp*.exe, then the standard
+# Sysinternals install dirs. Deliberately NO recursive disk scan - Process
+# Explorer is portable and can live anywhere, and the theming surface is the
+# registry anyway; the exe path is evidence, not the mutation target.
+function Test-ProcessExplorerFolder([string]$dir) {
+    if (-not $dir -or -not (Test-Path $dir)) { return $false }
+    return @(@(Get-ChildItem -LiteralPath $dir -Filter 'procexp*.exe' -File -ErrorAction SilentlyContinue)).Count -gt 0
+}
+
+function Get-ProcessExplorerPath {
+    # Test seam: common-location autodiscovery would otherwise make the "not
+    # installed" listing case depend on whether the machine has the Sysinternals
+    # Suite in Program Files. Never set outside tests.
+    $commonDirs = if ($env:WINTAGE_TEST_PE_COMMON_DIRS) { @($env:WINTAGE_TEST_PE_COMMON_DIRS -split '\|') }
+                  else { @(Join-Path $env:ProgramFiles 'Sysinternals') }
+    $pf86 = ${env:ProgramFiles(x86)}
+    if (-not $env:WINTAGE_TEST_PE_COMMON_DIRS -and $pf86) { $commonDirs += (Join-Path $pf86 'Sysinternals') }
+    foreach ($candidate in @($ProcessExplorerPath, $pathsJson['processexplorer']) + $commonDirs) {
+        if (Test-ProcessExplorerFolder $candidate) { return $candidate }
+    }
+    return $null
+}
+
+# F. The refusal path. Process Explorer persists on exit, so a live mutation
+# while it runs is not deterministic. The force/allow seams make the refusal and
+# the safe-apply paths both provable on any machine (no real process needed).
+function Test-ProcessExplorerRunning {
+    if ($env:WINTAGE_TEST_ALLOW_RUNNING_PE) { return @() }
+    if ($env:WINTAGE_TEST_FORCE_RUNNING_PE) { return @('procexp64-seam') }
+    return @(Get-Process procexp, procexp64, procexp64a -ErrorAction SilentlyContinue)
+}
+
+function Invoke-ProcessExplorer {
+    param([switch]$DoRevert, [string]$PaletteSlug)
+
+    $recDir = Join-Path $WintageAppData 'recovery\processexplorer'
+    $recMeta = Join-Path $recDir 'recovery.json'
+
+    $peRunning = Test-ProcessExplorerRunning
+    if ($peRunning.Count) {
+        if ($WhatIfPreference) {
+            Say 'Process Explorer: process is running (must be closed for a real install)' 'Yellow'
+        } else {
+            throw "Process Explorer: close Process Explorer and run this again - it holds its colours in memory and rewrites $PE_KEY on exit, which would discard the theme."
+        }
+    }
+
+    if ($DoRevert) {
+        if (-not (Assert-RevertSource 'processexplorer' $recMeta 'Process Explorer')) { return }
+        if (-not $PSCmdlet.ShouldProcess($PE_KEY, 'Restore the pre-Wintage Process Explorer colours')) { return }
+        # W2-004: preflight every recovery dependency BEFORE the first mutation.
+        $meta = $null
+        try { $meta = Read-Utf8 $recMeta | ConvertFrom-Json } catch {
+            throw "Process Explorer: persistent recovery is unreadable ($recMeta) - refusing to touch the live settings. Preserve the file or remove it by hand."
+        }
+        # Shape discipline identical to Read-NppRecoveryLedger and Read-C4dRecovery:
+        # a missing 'values' property is not the same as a 'values' that is not an
+        # object. An array/number/string 'values' made every
+        # $meta.values.PSObject.Properties[$n] lookup return $null, so every owned
+        # colour became $null and the restore DELETED all 24 of them. Refuse before
+        # the first mutation instead.
+        if ($null -eq $meta -or $meta -is [string] -or $meta -is [System.Array] -or $meta -is [int] -or $meta -is [bool]) {
+            throw "Process Explorer: persistent recovery at $recMeta is not a JSON object - refusing to revert; nothing was changed."
+        }
+        $valuesProp = $meta.PSObject.Properties['values']
+        if (-not $valuesProp -or $null -eq $valuesProp.Value -or $valuesProp.Value -is [string] -or $valuesProp.Value -is [System.Array] -or $valuesProp.Value -is [int] -or $valuesProp.Value -is [bool]) {
+            throw "Process Explorer: persistent recovery at $recMeta carries no owned-value ledger object - refusing to revert; nothing was changed. Preserve the file or remove it by hand."
+        }
+        $keyExistedProp = $meta.PSObject.Properties['keyExisted']
+        if (-not $keyExistedProp -or $keyExistedProp.Value -isnot [bool]) {
+            throw "Process Explorer: persistent recovery at $recMeta does not record whether the settings key pre-existed - a first-touch Revert cannot be made exact, so nothing was changed."
+        }
+        $pristineColors = @{}
+        foreach ($n in $script:PE_COLOR_VALUES) {
+            $p = $valuesProp.Value.PSObject.Properties[$n]
+            if ($p -and $null -ne $p.Value) {
+                $parsed = [uint32]0
+                if (-not [uint32]::TryParse("$($p.Value)", [ref]$parsed)) {
+                    throw "Process Explorer: persistent recovery at $recMeta records a non-numeric value for $n - refusing to revert; nothing was changed."
+                }
+                $pristineColors[$n] = $parsed
+            } else {
+                $pristineColors[$n] = $null
+            }
+        }
+        $pristine = [pscustomobject]@{
+            # Consumed by Restore-ProcessExplorerState: a key that did not exist
+            # before Apply must not survive a first-touch Revert, or the target
+            # keeps reporting itself installed forever.
+            Existed = [bool]$keyExistedProp.Value
+            Colors  = $pristineColors
+            Marker  = if ($meta.PSObject.Properties['marker']) { $meta.marker } else { $null }
+        }
+        $pre = Get-ProcessExplorerOwnedState $PE_KEY
+        Invoke-TargetCommit 'processexplorer' 'Process Explorer' {
+            Restore-ProcessExplorerState $PE_KEY $pristine
+            Say 'Process Explorer: restored the pre-Wintage colour values.' 'Green'
+            Remove-ManifestEntry 'processexplorer'
+        } { Restore-ProcessExplorerState $PE_KEY $pre }
+        # Consume the recovery ONLY after target restoration AND the manifest
+        # transition both committed; a failed transition keeps it retryable.
+        Remove-Item ($recMeta + '.provenance.json') -Force -ErrorAction SilentlyContinue
+        Remove-Item $recMeta -Force -ErrorAction SilentlyContinue
+        return
+    }
+
+    $palFile = Join-Path $root "themes\$PaletteSlug.json"
+    if (-not (Test-Path $palFile)) { throw "Process Explorer: unknown palette '$PaletteSlug' - no $palFile." }
+    $map = Get-ProcessExplorerThemeMap (Get-PaletteTokens $palFile)
+
+    # Resolvable = the settings key exists (Process Explorer has run here) or the
+    # executable was found. An app never run anywhere has no settings surface to
+    # theme and no evidence it exists at all.
+    if (-not (Test-Path $PE_KEY) -and -not (Get-ProcessExplorerPath)) {
+        Assert-TargetResolvable 'Process Explorer' $false
+        return
+    }
+
+    # First-touch recovery creation is a WRITE: it belongs after ShouldProcess,
+    # or -WhatIf would become the first writer of persistent state (W2-006).
+    if (-not $PSCmdlet.ShouldProcess($PE_KEY, "Apply the Wintage $PaletteSlug colour set")) { return }
+
+    if (-not (Test-Path $recMeta)) {
+        New-Item -ItemType Directory -Force -Path $recDir | Out-Null
+        $owned = Get-ProcessExplorerOwnedState $PE_KEY
+        $values = [ordered]@{}
+        foreach ($n in $script:PE_COLOR_VALUES) {
+            $values[$n] = if ($null -ne $owned.Colors[$n]) { "$($owned.Colors[$n])" } else { $null }
+        }
+        if ($env:WINTAGE_TEST_FAIL_PE_RECOVERY) {
+            throw 'simulated Process Explorer recovery promotion failure (WINTAGE_TEST_FAIL_PE_RECOVERY)'
+        }
+        Write-Utf8Atomic $recMeta ([ordered]@{
+            target     = 'processexplorer'
+            schema     = 2
+            key        = $PE_KEY
+            keyExisted = $owned.Existed
+            created    = (Get-Date).ToUniversalTime().ToString('o')
+            marker     = $owned.Marker
+            values     = $values
+        } | ConvertTo-Json -Depth 6) -ValidateJson
+        Write-RecoveryProvenance $recMeta 'processexplorer'
+        Say "Process Explorer: recorded the pre-Wintage colour values -> $recMeta" 'DarkGray'
+    } else {
+        # A repaint re-adopts an existing recovery only when it is OURS.
+        Assert-RecoveryProvenance $recMeta 'processexplorer' 'Process Explorer' | Out-Null
+    }
+
+    # In-operation rollback snapshot: every owned value at its immediate
+    # pre-operation state (never the first-install state).
+    $pre = Get-ProcessExplorerOwnedState $PE_KEY
+
+    Invoke-TargetCommit 'processexplorer' 'Process Explorer' {
+        $first = $true
+        foreach ($n in $map.Keys) {
+            Set-ProcessExplorerDWord $PE_KEY $n ([uint32]$map[$n])
+            if ($first -and $env:WINTAGE_TEST_FAIL_PE_MIDAPPLY) {
+                throw 'simulated Process Explorer apply failure after the first colour write (WINTAGE_TEST_FAIL_PE_MIDAPPLY)'
+            }
+            $first = $false
+        }
+        Set-ItemProperty -Path $PE_KEY -Name $script:PE_MARKER_VALUE -Value $PaletteSlug -Type String
+        Say "Process Explorer: Wintage $PaletteSlug colours applied -> $PE_KEY" 'Green'
+        Set-ManifestEntry 'processexplorer' $PaletteSlug $PE_KEY 'n/a' (Get-PayloadVersion)
+    } { Restore-ProcessExplorerState $PE_KEY $pre }
+
+    Say '  NOT reachable: the title bar, menus, toolbar, list background/text and graph line' 'Yellow'
+    Say '  colours are compiled into the executable - no settings value exposes them - so' 'Yellow'
+    Say '  only the row highlights and the graph background follow Wintage.' 'Yellow'
+    Say '  Undo: .\install.ps1 -Target processexplorer -Revert' 'DarkGray'
 }
 

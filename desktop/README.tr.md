@@ -307,4 +307,37 @@ node ..\tools\build-desktop.js --check  # bir şey bayatlaşmışsa 1 çıkış 
 `release.ps1` derlemeyi ve her kapıyı çalıştırır, bu yüzden bir sürüm paletlerden
 sapmış çıktı gönderemez.
 
+<!-- T-311 target/section coverage supplement -->
+## Hedef ve bölüm kapsamı
+
+Bu bölüm, bu dilin sessizce geride kalmaması için güncel İngilizce README'in Process Explorer, Notepad++, Cinema 4D ve terminal yazı tipi kapsamını yansıtır. Kod değişmezleri (hedef kimlikleri, kayıt defteri yolları, dosya adları) tasarım gereği dil bağımsızdır; çevreleyen metin burada çevrilmiştir.
+
+### Her hedefin fiilen temalanabileceği kısım (eklenen hedefler)
+
+| hedef | mekanizma | bir uygulama güncellemesinden sağ çıkar mı |
+|---|---|---|
+| `notepadplusplus` | tema XML'i + sizin Notepad++ `themes` klasörünüze alias | evet — profilinizde yaşar |
+| `cinema4d` | sizin Cinema 4D `schemes` klasörünüze bırakılan renk şeması | evet — profilinizde yaşar |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: satır vurgu renkleri ve grafik arka planları, aşağıya bakın | hayır — Process Explorer çıkışta ayarlarını yeniden yazar; kapatıp yeniden çalıştırın |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer renklerini `HKCU\Software\Sysinternals\Process Explorer` anahtarında tutar ve çıkarken o anahtarı yeniden yazar, bu yüzden hedef, `procexp`, `procexp64` veya `procexp64a` çalışırken **reddeder** — kapatın ve yeniden çalıştırın. Yapılandırılabilir renk kategorilerini temalar:
+
+- **erişilebilir**: işlem satırı vurgu renkleri (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) hem açık modda hem de `*Dark` karşılıklarında, ayrıca grafik arka planları (`ColorGraphBk`, `ColorGraphBkDark`) — toplam 24 değer. Her karşılık, etkin paletin eşleşen kutbuna doğru harmanlanır (açık mod dolgusu için açık tonu, `*Dark` için koyu tonu), böylece satır dolguları neredeyse beyaza pastelize olmak yerine paletin kendi tonunda kalır;
+- **erişilemez**: başlık çubuğu, menü çubuğu, araç çubuğu, liste görünümü arka planı ve metin renkleri, ayrıca grafik çizgisi renkleri — bunlar `procexp.exe` içine derlenmiştir ve hiçbir ayar değeri onları ifşa etmez. Hedef, satır vurgularını ve gerçekten sahibi olduğu grafik arka planını temalar, fazlasını iddia etmez.
+
+Apply'in mutasyona uğratabileceği her değer, mutasyondan önce anlık görüntüsü alınır (`%APPDATA%\Wintage\recovery\processexplorer\` altında ilk dokunuşta kurtarma) ve `-Revert` tarafından, her değerin hiç mevcut olup olmadığı ve işaretçinin var ama boş olup olmadığı dâhil, birebir geri yüklenir. Standart Sysinternals dizinleri dışındaki taşınabilir bir klasör, kanonik `paths.json` anahtarı `processexplorer` üzerinden hatırlanır (CLI argümanı `-ProcessExplorerPath`; arayüz de seçebilir).
+
+### Terminal yazı tipleri (`fonts/terminal/`)
+
+Her iki terminal hedefi de `%APPDATA%\Wintage\terminal-font.json` dosyasındaki TEK kanonik tipografi tercihini okur (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Dosya yoksa hedefler gönderilen varsayılanı korur (Windows için Terminus (TTF), 12 pt, aliased), böylece mevcut makineler değişmez. Bozuk bir tercih kapalı biçimde başarısız olur: hiçbir şey üzerine yazılmaz ve hedef reddeder.
+
+`fonts/terminal/catalog.json` tek yazı tipi kataloğudur: 20 gömülü açık kaynaklı sabit genişlikli aile ve Wintage'in adını anıp asla göndermediği iki sistem yüzü (Windows için Terminus (TTF), Consolas). Her gömülü kayıt kaynağını, sabitlenmiş revizyonunu, lisans kimliğini, lisans dosyasını ve SHA-256 değerini taşır. Dosyaların kendisi `fonts/terminal/files/` altında, lisans metinleri `licenses/` altında durur; çalışma anındaki Wintage tamamen çevrimdışı çalışır ve asla yazı tipi indirmez.
+
+`tools/sync-terminal-fonts.ps1` yalnızca bakımcıların indiricisidir. `fonts/terminal/sources.json` dosyasını okur (aile başına bir değişmez artefakt), her SHA-256'yı doğrular ve uyuşmazlıkta reddeder. `-VerifyOnly` (varsayılan) ağ olmadan diskteki ağacı denetler; `-Fetch -Write` yeniden satın alır. İndirilen yazı tipi baytları güvenilmeyen ikili varlık sayılır — özetlenir ve yazılır, asla çalıştırılmaz. Kayıtlı bir tek değişiklik vardır: **Fantasque Sans Mono**, sabitlenmiş ikili sürüm yayımlamayan Liberation Mono'nun yerini alır (yalnızca kaynak `.sfd`).
+
+Kurulum sihirbazı **yazı tiplerine göz atar, onları kurmaz.** TERMINAL FONTS sekmesi, canlı önizleme için gömülü bir yüzü süreç yerel `PrivateFontCollection` içine yükler; bu **sıfır** sistem yazı tipi kaydı yapar. Yazı tipi, boyut (7–24 pt) veya işleme kipi (aliased/grayscale/cleartype) seçimi yalnızca önizlemeyi ve tercihi günceller. Yazı tipi kurmak, Windows'un kendi yazı tipi kurulum sihirbazını açan açık bir **INSTALL SELECTED** işlemidir; Windows'un onayından sonra kullanıcı Refresh ile yeniden yoklar. Gerçek terminal değişiklikleri yalnızca açık bir **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** işleminde olur.
+
+Windows Terminal, seçilen boyutta seçili kurulu aileye uygulanır ve işleme kipi `profiles.defaults.antialiasingMode` değerine eşlenir. Klasik conhost daha katıdır: sabit bir hücre ızgarasında çizer, bu yüzden seçilen yüz, Windows onu çözebiliyorsa (varsayılan yüz ve Consolas yedeği muaf tutulur) aksi halde herhangi bir kayıt defteri mutasyonundan önce reddedilir. Health ve Reapply, yapılandırılmış yüz/boyut/kenar yumuşatmayı tercihle karşılaştırır, böylece bir Apply'den sonra tercihi değiştirmek sağlıklı olmaktan çıkıp sapma olarak bildirilir. Terminal renkleri yaşam döngüsüne dokunulmaz: Revert, Wintage öncesi sahiplenilen değerleri birebir geri yükler ve makineden asla bir yazı tipi kaldırmaz.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

@@ -154,4 +154,37 @@ node ..\tools\build-desktop.js --check  # exit 1 nếu có gì lỗi thời
 
 `release.ps1` chạy build và mọi cổng, nên một bản phát hành không thể vận chuyển output đã lệch khỏi các palette.
 
+<!-- T-311 target/section coverage supplement -->
+## Độ phủ target và mục
+
+Mục này soi chiếu độ phủ Process Explorer, Notepad++, Cinema 4D và font terminal trong README tiếng Anh hiện tại, để bản bản địa hóa này không âm thầm lỗi thời. Các ký tự mã (id target, đường dẫn registry, tên file) là bất biến theo ngôn ngữ ngay từ thiết kế; văn xuôi quanh chúng đã được dịch ở đây.
+
+### Từng target thực sự được theme đến đâu (target mới thêm)
+
+| target | cơ chế | sống sót qua cập nhật app |
+|---|---|---|
+| `notepadplusplus` | XML theme + alias vào thư mục `themes` của Notepad++ | có — nó nằm trong profile của bạn |
+| `cinema4d` | bảng màu bỏ vào thư mục `schemes` của Cinema 4D | có — nó nằm trong profile của bạn |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: màu tô sáng dòng và nền biểu đồ, xem bên dưới | không — Process Explorer tự ghi lại cài đặt khi thoát; hãy đóng nó rồi chạy lại |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer giữ màu của nó trong `HKCU\Software\Sysinternals\Process Explorer` và ghi lại khoá đó khi thoát, nên target **từ chối khi `procexp`, `procexp64` hoặc `procexp64a` đang chạy** — hãy đóng nó rồi chạy lại. Nó theme các nhóm màu cấu hình được:
+
+- **tới được**: màu tô sáng dòng tiến trình (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) ở cả chế độ sáng lẫn biến thể `*Dark`, cộng thêm nền biểu đồ (`ColorGraphBk`, `ColorGraphBkDark`) — 24 giá trị tất cả. Mỗi biến thể được pha về phía cực tương ứng của palette đang dùng (tông sáng hơn cho nền ở chế độ sáng, tông tối hơn cho `*Dark`), nên màu nền dòng vẫn giữ đúng sắc thái của palette thay vì nhạt dần thành gần trắng;
+- **không tới được**: thanh tiêu đề, thanh menu, thanh công cụ, nền và màu chữ của chế độ xem danh sách, cùng màu các đường biểu đồ — chúng được biên dịch vào `procexp.exe` và không giá trị cài đặt nào phơi bày chúng. Target chỉ theme tô sáng dòng và nền biểu đồ mà nó thực sự sở hữu, không hứa hẹn gì hơn.
+
+Mọi giá trị mà Apply có thể sửa đều được chụp lại trước khi sửa (khôi phục lần chạm đầu dưới `%APPDATA%\Wintage\recovery\processexplorer\`) và được `-Revert` khôi phục y hệt, kể cả việc giá trị đó vốn không có và việc dấu hiệu có mặt nhưng rỗng. Một thư mục portable nằm ngoài các thư mục Sysinternals tiêu chuẩn được ghi nhớ qua khoá chuẩn `paths.json` là `processexplorer` (tham số CLI `-ProcessExplorerPath`; GUI cũng có thể chọn).
+
+### Font terminal (`fonts/terminal/`)
+
+Cả hai target terminal đọc MỘT tuỳ chọn kiểu chữ chuẩn duy nhất tại `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Khi không có file, các target giữ nguyên mặc định đi kèm (Terminus (TTF) for Windows, 12 pt, aliased), nên máy đang dùng không đổi gì. Một tuỳ chọn sai dạng thì hỏng kiểu khép kín: không ghi đè gì cả và target từ chối.
+
+`fonts/terminal/catalog.json` là danh mục font duy nhất: 20 họ font monospace mã nguồn mở đi kèm, cộng thêm hai mặt font hệ thống mà Wintage gọi tên nhưng không bao giờ phát hành (Terminus (TTF) for Windows, Consolas). Mỗi mục đi kèm ghi nhận nguồn gốc, bản sửa đã ghim, id giấy phép, file giấy phép và SHA-256. Chính các file đó nằm trong `fonts/terminal/files/`, còn văn bản giấy phép nằm trong `licenses/`; lúc chạy, Wintage hoạt động hoàn toàn ngoại tuyến và không bao giờ tải font nào.
+
+`tools/sync-terminal-fonts.ps1` là trình tải chỉ dành cho người bảo trì. Nó đọc `fonts/terminal/sources.json` (một artefact bất biến cho mỗi họ), kiểm tra từng SHA-256 và từ chối khi lệch. `-VerifyOnly` (mặc định) kiểm tra cây trên đĩa mà không cần mạng; `-Fetch -Write` tải lại về. Các byte font tải về được coi là tài sản nhị phân không đáng tin — chỉ băm và ghi, không bao giờ chạy. Có một thay thế được ghi nhận: **Fantasque Sans Mono** thay cho Liberation Mono, vốn không phát hành bản nhị phân nào đã ghim (chỉ có mã nguồn `.sfd`).
+
+Trình cài **duyệt font, không cài chúng.** Tab TERMINAL FONTS nạp một mặt font đi kèm vào `PrivateFontCollection` cục bộ tiến trình để xem trước trực tiếp, việc này thực hiện **không** đăng ký font hệ thống nào. Chọn font, cỡ (7–24 pt) hay chế độ vẽ (aliased/grayscale/cleartype) chỉ cập nhật bản xem trước và tuỳ chọn. Cài một font là hành động **INSTALL SELECTED** rõ ràng, mở trình cài font sẵn có của Windows; sau khi Windows xác nhận, người dùng dò lại bằng Refresh. Thay đổi terminal thật sự chỉ xảy ra ở hành động rõ ràng **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal được áp cho họ font đã cài mà bạn chọn ở cỡ đã chọn, và chế độ vẽ ánh xạ tới `profiles.defaults.antialiasingMode`. conhost cổ điển khắt khe hơn: nó vẽ trên lưới ô cố định, nên một mặt font được chọn sẽ bị từ chối trước mọi thay đổi registry trừ khi Windows tự phân giải được nó (mặt font mặc định và dự phòng Consolas được miễn trừ). Health và Reapply kiểm tra mặt font/cỡ/khoá antialiasing đã cấu hình so với tuỳ chọn, nên đổi tuỳ chọn sau một Apply được báo là trôi lệch chứ không phải còn khoẻ. Vòng đời màu terminal không bị đụng: Revert khôi phục đúng các giá trị thuộc sở hữu trước Wintage và không bao giờ gỡ font khỏi máy.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

@@ -194,6 +194,139 @@ function makeDom(counters) {
     stats.forceRequests, 1);
 }
 
+// ══ 1b. PERF-002 (SRC-018:R014): stylesheet discovery after dedup ═══════════
+// The pre-fix loop ran node.querySelector('style,...') on EVERY collected node
+// before ancestor dedup: 500 nested roots -> 500 overlapping queries /
+// 124,750 descendant visits. The fix defers discovery to the retained top-level
+// roots (one query per retained root) and sets stylesDirty=true on truncation.
+{
+  // An element whose querySelector walk COUNTS every descendant it visits, so
+  // the fixture measures overlapping subtree selector cost, not a boolean.
+  function makeNestedDom(counters) {
+    function makeEl(tag) {
+      const el = {
+        nodeType: 1, tagName: (tag || 'DIV').toUpperCase(), children: [], parentNode: null,
+        isConnected: true, attrs: {},
+        style: { setProperty() {}, removeProperty() {}, getPropertyValue() { return ''; } },
+        hasAttribute(n) { return Object.prototype.hasOwnProperty.call(el.attrs, n); },
+        getAttribute(n) { return el.attrs[n]; },
+        setAttribute(n, v) { el.attrs[n] = String(v); },
+        removeAttribute(n) { delete el.attrs[n]; },
+        matches() { return false; }, closest() { return null; },
+        querySelector() {
+          // Count a full subtree visit, exactly what the real selector engine
+          // pays when it searches a nested subtree for style/link, and return a
+          // descendant STYLE/LINK when one exists (the real selector's job).
+          counters.querySelectorCalls++;
+          const desc = el.__descendants();
+          counters.selectorVisits += desc.length;
+          for (const d of desc) {
+            const t = (d.tagName || '').toUpperCase();
+            if (t === 'STYLE' || (t === 'LINK' && (d.rel || '').toLowerCase().includes('stylesheet'))) return d;
+          }
+          return null;
+        },
+        querySelectorAll() { return []; },
+        getElementsByTagName() { return el.__descendants(); },
+        getBoundingClientRect() { return { top: 0, bottom: 10, left: 0, right: 10, width: 10, height: 10 }; },
+        contains(o) { for (let p = o; p; p = p.parentNode) if (p === el) return true; return false; },
+        append(c) { c.parentNode = el; el.children.push(c); return c; },
+        __descendants() { const out = []; const walk = n => { for (const c of n.children) { out.push(c); walk(c); } }; walk(el); return out; }
+      };
+      return el;
+    }
+    const documentElement = makeEl('html');
+    const document = {
+      documentElement, hidden: false, nodeType: 9,
+      querySelector() { return null; }, querySelectorAll() { return []; },
+      addEventListener() {}, createElement: makeEl,
+      createTreeWalker() { let d = false; return { nextNode() { if (d) return null; d = true; return documentElement; } }; },
+      styleSheets: { length: 0 }, adoptedStyleSheets: null
+    };
+    return { document, makeEl };
+  }
+
+  function runOnMutations(counters, doc, addedNodes, stylesDirty0 = false) {
+    const stats = { processCalls: 0, forceRequests: 0, stylesDirty: stylesDirty0 };
+    const ctx = {
+      console, performance: { now: () => 0 }, Date, Set, Map, WeakMap, Symbol, document: doc,
+      setTimeout: (fn) => { fn(); return 1; }, clearTimeout: () => { },
+      repainterSuspended: false, noteMutationPressure: () => false,
+      pendingMuts: [], debounceTimer: null, attrCooldown: new WeakMap(),
+      ADDED_NODE_BUDGET: 500, stylesDirty: stylesDirty0,
+      process: () => { stats.processCalls++; }, flushWrites: () => { },
+      requestForceSweep: () => { stats.forceRequests++; },
+      requestLightSweep: () => { }, markLightDirty: () => { },
+      requestShadowPrune: () => { }, addWorkPressure: () => { }
+    };
+    vm.createContext(ctx);
+    vm.runInContext(sliceBlock(USERSCRIPT, '  function onMutations(mutations) {')
+      + '\nthis.__om = onMutations; this.__stylesDirty = () => stylesDirty;', ctx);
+    ctx.__om([{ type: 'childList', target: doc.documentElement, addedNodes, removedNodes: { length: 0 } }]);
+    stats.stylesDirty = ctx.__stylesDirty();
+    return stats;
+  }
+
+  // (a) 500 nested roots: one outer root with 500 descendants, every descendant
+  // reported as its OWN addedNode (the parser/SPA shape). After dedup the outer
+  // root covers them all, so discovery must run once on the retained root.
+  {
+    const counters = { querySelectorCalls: 0, selectorVisits: 0 };
+    const { document, makeEl } = makeNestedDom(counters);
+    const outer = makeEl('div');
+    const flat = [];
+    let cur = outer;
+    for (let i = 0; i < 500; i++) { const c = makeEl('div'); cur.append(c); cur = c; flat.push(c); }
+    // Every node is an addedNode of the same batch; the last 500 are the nested
+    // descendants so the outer root's subtree search is the overlap the audit
+    // measured. The outer is first so the ancestor dedup keeps it.
+    const all = [outer, ...flat];
+    const stats = runOnMutations(counters, document, { length: all.length, ...all });
+    check('PERF-002 dedupe: stylesheet discovery runs ONCE per retained root, not per collected node',
+      counters.querySelectorCalls <= 2, true);
+    check('PERF-002 dedupe: descendant selector visits are bounded to one subtree (~500), not 124,750',
+      counters.selectorVisits <= 600, true);
+    check('PERF-002 dedupe: process coverage is unchanged (bounded by ADDED_NODE_BUDGET)',
+      stats.processCalls > 0 && stats.processCalls <= 500, true);
+  }
+
+  // (b) truncation: an inline STYLE only BEYOND index 500. The tail must stay
+  // unread (intake bound), yet stylesDirty must be true and a continuation owed.
+  {
+    const counters = { querySelectorCalls: 0, selectorVisits: 0 };
+    const { document, makeEl } = makeNestedDom(counters);
+    const nodes = [];
+    for (let i = 0; i < 700; i++) nodes.push(makeEl('div'));
+    nodes[650] = makeEl('style');  // a STYLE beyond the 500 budget
+    const stats = runOnMutations(counters, document, { length: nodes.length, ...nodes });
+    check('PERF-002 truncation: stylesDirty is TRUE for an unseen tail (was false pre-fix)', stats.stylesDirty, true);
+    check('PERF-002 truncation: a bounded continuation is owed', stats.forceRequests, 1);
+  }
+
+  // (c) a descendant STYLE under one retained parent in a NON-truncated batch
+  // must still be detected.
+  {
+    const counters = { querySelectorCalls: 0, selectorVisits: 0 };
+    const { document, makeEl } = makeNestedDom(counters);
+    const parent = makeEl('div');
+    parent.append(makeEl('style'));
+    const stats = runOnMutations(counters, document, { length: 1, 0: parent });
+    check('PERF-002 non-truncated: a descendant STYLE is detected (stylesDirty true)', stats.stylesDirty, true);
+  }
+
+  // (d) flat 20,000-node fixture: intake still bounded, and with NO styles the
+  // non-truncated path must not force a scan.
+  {
+    const counters = { querySelectorCalls: 0, selectorVisits: 0 };
+    const { document, makeEl } = makeNestedDom(counters);
+    const nodes = [];
+    for (let i = 0; i < 20000; i++) nodes.push(makeEl('div'));
+    const stats = runOnMutations(counters, document, { length: nodes.length, ...nodes });
+    check('PERF-002 flat: intake is bounded and truncation keeps stylesDirty true', stats.stylesDirty, true);
+    check('PERF-002 flat: exactly one continuation is requested', stats.forceRequests, 1);
+  }
+}
+
 // ══ 2. PERF-004 (userscript): a removal-only batch schedules cleanup ═════════
 {
   const counters = { qsa: 0, rect: 0 };

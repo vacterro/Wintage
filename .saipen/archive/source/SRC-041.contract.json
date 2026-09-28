@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-041:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-001: Lazy terminal font initialization - zero AddFontFile/fixed-pitch probes before Fonts tab; first entry loads only selected bundled face; cache per immutable file identity (audit/8.md finding PERF-001, projected from SRC-028:R011)"
+    }
+  },
+  "derived_at": "2026-09-23T19:57:41Z",
+  "derived_from": "SRC-041",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "7e9829cd03d1edfcb793e5496e46c67009c64d25db47b0833c6d284cf37967fa"
+}

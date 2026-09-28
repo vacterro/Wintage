@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-040:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-004: One WINTAGE_APPDATA root for GUI+CLI paths.json/paths.lock; no hardcoded APPDATA split (audit/8.md finding W2-004, projected from SRC-028:R010)"
+    }
+  },
+  "derived_at": "2026-09-23T19:56:57Z",
+  "derived_from": "SRC-040",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "6a118bee22d7d9b7047cdb33250be3ec4b49f6c840ce050c76bab86ad32f44b0"
+}

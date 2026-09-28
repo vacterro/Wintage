@@ -1,0 +1,16 @@
+{
+  "actionable": 1,
+  "archive_ref": ".saipen/archive/source/SRC-033.md",
+  "closed_at": "2026-09-23T19:48:23Z",
+  "closure_event": null,
+  "linked_work": "T-291",
+  "linked_works": [
+    "T-291"
+  ],
+  "receipt_id": "SRC-033",
+  "requirements": 1,
+  "schema_version": 1,
+  "source_sha256": "4ef12af4f0f79b37b2a099c68011a8dfb6c93fe9717dbb8c938ea928c565933e",
+  "status": "CLOSED",
+  "unresolved": 0
+}

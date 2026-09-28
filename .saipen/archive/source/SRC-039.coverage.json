@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-039:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1434 + E-1443 full-matrix current-tree run",
+      "text": "W2-003: Browser Apply persists PortableBrowserRoot exactly once pre-mutation; post-child commit via Set-ManifestEntry only, no paths.lock reacquisition post-mutation (audit/8.md finding W2-003, projected from SRC-028:R009)",
+      "verification": "powershell tools/test-path-preference-ordering.ps1 61 PASS 0 FAIL (one persistence per Apply, no lock reacquisition post-mutation, post-child commit succeeds if lock lost, RED control)",
+      "work": "T-297"
+    }
+  },
+  "schema_version": 1
+}

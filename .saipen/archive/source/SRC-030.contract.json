@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-030:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001: Conhost eligibility validator rejects resolvable proportional faces before registry mutation (duplicate projection of the same audit/8 finding already owned by T-289)"
+    }
+  },
+  "derived_at": "2026-09-23T20:01:52Z",
+  "derived_from": "SRC-030",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "341f273a0c57caead87c0a60da5f632e1416da30f0e2c2fad8fdc019594b9597"
+}

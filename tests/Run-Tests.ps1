@@ -285,6 +285,14 @@ try {
 Write-Host "
 --- Testing Terminal Font, Round Trip and Ownership Revert ---" -ForegroundColor Cyan
 $terminalRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-terminal-" + [guid]::NewGuid().ToString('N'))
+# T-283: the terminal helper reads the canonical typography preference
+# (tools/terminal-font-preference.js -> %APPDATA%\Wintage\terminal-font.json, or
+# WINTAGE_APPDATA when set). This fixture asserts the SHIPPED DEFAULT, so it must
+# pin WINTAGE_APPDATA to an isolated dir with no preference file; otherwise a
+# developer's real selected font would leak into the fixture and "fail" the
+# default assertions. Restored in the finally below.
+$savedWintageAppData = $env:WINTAGE_APPDATA
+$env:WINTAGE_APPDATA = Join-Path $terminalRoot 'Wintage'
 try {
     New-Item -ItemType Directory -Path $terminalRoot -Force | Out-Null
     $terminalSettings = Join-Path $terminalRoot 'settings.json'
@@ -355,6 +363,8 @@ try {
     Assert-True ($installCode -notmatch '\$CONSOLE_FONT\s*=\s*''Verdana''') 'conhost no longer forces proportional Verdana'
 } finally {
     if (Test-Path $terminalRoot) { Remove-Item $terminalRoot -Recurse -Force }
+    if ($null -eq $savedWintageAppData) { Remove-Item Env:\WINTAGE_APPDATA -ErrorAction SilentlyContinue }
+    else { $env:WINTAGE_APPDATA = $savedWintageAppData }
 }
 
 Write-Host "
@@ -519,6 +529,7 @@ try {
     $fnText = if ($saveStart -ge 0 -and $fnEnd2 -gt $saveStart) { $guiSource.Substring($saveStart, $fnEnd2 - $saveStart + 2) } else { '' }
     $harnessLines = @(
         "`$PATH_TARGETS = @('customapp', 'goneapp')",
+        ". '$root\desktop\modules\json-doc.ps1'",
         "`$script:pathsFile = '$pathsFixtureFile'",
         "`$script:customPaths = @{ 'customapp' = '$pathsFixtureCustom' }",
         $fnText,
@@ -694,6 +705,8 @@ $toolSuites = @(
     # the matrix fails if the R010 assertions ever stay green on defective
     # source.
     @{ Name = 'test-batch-timer-gui.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-batch-timer-gui.ps1" -RedControl' },
+    @{ Name = 'test-batch-streaming-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\\tools\\test-batch-streaming-gui.ps1"' },
+    @{ Name = 'test-batch-streaming-gui.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\\tools\\test-batch-streaming-gui.ps1" -RedControl' },
     # SRC-006:R007: a palette repaint of an already-themed Electron app must not
     # pay archive-sized I/O at either transaction layer. The gate instruments the
     # real tool through a NODE_OPTIONS preload that logs every byte read and
@@ -711,6 +724,10 @@ $toolSuites = @(
     # detached roots must vanish, and the lap must end with all traversal
     # state dropped.
     @{ Name = 'test-force-root-budget.js'; Cmd = 'node "{0}\tools\test-force-root-budget.js"' },
+    # CORE-010: a force request must continue through the whole persistent root
+    # lap, not stop after the first budgeted window. The oracle drives the real
+    # scheduler slice and checks document plus two 6,000-element shadow roots.
+    @{ Name = 'test-force-sweep-continuation.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-force-sweep-continuation.ps1"' },
     # PERF-002 (SRC-007:R013): the repainter's style/root/CSSOM work must be
     # budgeted exactly like its DOM element work. The gate extracts the REAL
     # repainter out of wintage.user.js (no stubbed style/CSSOM primitives) and
@@ -725,6 +742,50 @@ $toolSuites = @(
     # (RED A full root snapshot, RED B recursive unbounded rule walk) while
     # asserting each mutation actually applied.
     @{ Name = 'test-repainter-budget.js'; Cmd = 'node "{0}\tools\test-repainter-budget.js"' },
+    # PERF-001 (audit/7.md, SRC-018:R013): direct CSSOM mutations need not
+    # create a DOM MutationObserver record, so insertRule/deleteRule/replaceSync
+    # used to advance a per-sheet generation token while setting NO scheduler
+    # debt, and async replace() stamped the new generation onto the OLD rules on
+    # Promise creation. This gate drives the REAL wrappers and requires that
+    # every successful mutation sets stylesDirty and arms ONE coalesced
+    # continuation, that replace() invalidates only on fulfillment, returns the
+    # ORIGINAL Promise, treats rejection as a no-op, and preserves native return
+    # values/exceptions; 1000 synchronous mutations must not storm the timer.
+    @{ Name = 'test-perf-cssom.js'; Cmd = 'node "{0}\tools\test-perf-cssom.js"' },
+    # PERF-003 (audit/7.md, SRC-018:R015): suspendRepainter is a COMPLETE
+    # permanent scheduler-state disposal boundary. A page that tripped the
+    # breaker used to keep forceLapDeferredRoots / styleLapDeferredRoots /
+    # activeStyleTask / styleCursorRoot / styleCursorRootIterator alive forever
+    # (no future pass to drain them). This gate drives the REAL suspendRepainter
+    # body, asserts every strong owner is emptied/null and a partial
+    # activeStyleTask cannot continue, and structurally requires a future strong
+    # scheduler Set to be disposed or fail.
+    @{ Name = 'test-perf-suspend.js'; Cmd = 'node "{0}\tools\test-perf-suspend.js"' },
+    # PERF-004 (audit/7.md, SRC-018:R016): GoodEmoji start() installed an
+    # unconditional 2,000 ms body-wide sweep beside a MutationObserver that
+    # already covered the same subtree. This gate proves no fixed interval
+    # exists, 60s idle causes zero global scans, observer intake still covers
+    # added emoji / attribute changes / characterData, a route change coalesces
+    # to ONE bounded scan, and stop()/restart leaves one observer and no orphan
+    # timer. A setInterval trap makes any reintroduced heartbeat throw.
+    @{ Name = 'test-goodemoji.js'; Cmd = 'node "{0}\tools\test-goodemoji.js"' },
+    # Audit wave imp-vacterro-wintage-20260927-2 (Core seat antigravity-01, RUN 1).
+    # These two were previously release-gate-EXISTENCE checks only, so the
+    # regressions they cover shipped inside a green Run-Tests run. They are
+    # registered as executed suites now: test-spa-exclude.js carries the
+    # high-churn-host classification gate (T-325) and the body transparency
+    # check (T-336); test-perf-bounded.js carries the floating-surface media
+    # gate (T-326) and the button-descendant-wipe gate (T-331).
+    @{ Name = 'test-spa-exclude.js'; Cmd = 'node "{0}\tools\test-spa-exclude.js"' },
+    @{ Name = 'test-perf-bounded.js'; Cmd = 'node "{0}\tools\test-perf-bounded.js"' },
+    # PERF-005 (audit/7.md, SRC-018:R017): GoodEmoji matchSrc fell back to
+    # Object.entries(codeToItem) and up to three String.includes per code for
+    # EVERY unmatched image (2,880,000 includes for 1,000 URLs, plus a fresh
+    # ~960-entry array per call). This gate proves matching is now proportional
+    # to URL length, independent of the mapping-table size (with a ~10x mutant
+    # table), preserves every mapped base/tone/variation/gender and legacy
+    # delimiter shape, and adds no substring-prefix false positive.
+    @{ Name = 'test-goodemoji-matchsrc.js'; Cmd = 'node "{0}\tools\test-goodemoji-matchsrc.js"' },
     # R015 / PERF-004 (SRC-007, T-246): portable browser discovery cache and
     # bounded preference scanning. It pins that a warm cache answers a status
     # refresh with ZERO recursive enumeration over the remembered PortableRoot
@@ -742,6 +803,17 @@ $toolSuites = @(
     # live mutation, manifest preserved, backup preserved; genuine legacy whole-file
     # INI is positively identified and dynamic recent-file filter colors are migrated.
     @{ Name = 'test-totalcmd-recovery.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-totalcmd-recovery.ps1"' },
+    # W2-001 (SRC-014): Notepad++ and Cinema 4D first-touch ownership/recovery.
+    # Both targets used an ephemeral rollback snapshot as if it were persistent
+    # ownership evidence: Notepad++ restored only Wintage.xml and wildcard-deleted
+    # every Wintage-*.xml on Revert (user files included), Cinema 4D recursively
+    # deleted whatever occupied schemes\Wintage, and both wrote recovery.json only
+    # after the manifest commit. The gate drives the real installer through
+    # Apply -> repaint -> Revert with byte-exact fixtures and deterministic seams
+    # (alias-write failure, recovery-promotion failure, live-mutation failure,
+    # manifest-commit failure, crash-after-commit) and asserts restoration of the
+    # complete pre-operation set plus persistent recoverability.
+    @{ Name = 'test-first-touch-recovery.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-first-touch-recovery.ps1"' },
     # CORE-003 (SRC-007:R003): Windows theme mutation rollback boundary.
     # Encapsulates helper file creation, AccentColorInactive write, activation,
     # polling/retry, and manifest update inside a unified transaction.
@@ -768,7 +840,118 @@ $toolSuites = @(
     # nonzero with an accurate error while application bytes, manifest and
     # recovery lifecycle stay byte-identical; the retry records preference and
     # manifest; a later resolution without the flag finds the remembered path.
-    @{ Name = 'test-path-preference-ordering.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-path-preference-ordering.ps1"' }
+    @{ Name = 'test-path-preference-ordering.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-path-preference-ordering.ps1"' },
+    # T-250 (HUNT-001): every locale must carry the SAME key set as en.json. The
+    # GUI's T() loader overlays a locale on the English base and silently falls
+    # back to English for any missing key, so a lagging locale renders English
+    # with no crash and no warning -- invisible at runtime. 33 files, 68 keys.
+    @{ Name = 'test-locale-parity.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-locale-parity.ps1"' },
+    @{ Name = 'test-locale-parity.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-locale-parity.ps1" -RedControl' },
+    # T-311: translated desktop READMEs must mirror the English source's
+    # target/section coverage. Uses language-invariant code-literal anchors
+    # (processexplorer/notepadplusplus/cinema4d/terminal-font.json) so a
+    # translated file that lags a new target is caught. Core owns et/ru/ded
+    # (enforced); the 29 producer locales are reported, not failed.
+    @{ Name = 'test-readme-target-parity.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-readme-target-parity.ps1"' },
+    @{ Name = 'test-readme-target-parity.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-readme-target-parity.ps1" -RedControl' },
+    # T-312: accepted-debt record bytes were mutable through the generic journal
+    # CAS, so a record's evidence can drift under it and a rebind can be booked
+    # under an operation name the engine never implemented. The live pass drives
+    # the protocol install's OWN accepted_debt.load_record (schema, integrity
+    # digest, lineage, rule binding) and then re-derives the settled journal
+    # chain -- contiguous before/after links, terminal hash == live bytes, every
+    # writer a real engine operation. Evidence-line drift and unregistered
+    # writers are REPORTED, not fatal: the integrity digest already proves the
+    # record untampered, so drift is LOG rotation, not corruption. The self-test
+    # is the red control -- it tampers with one thing at a time and proves each
+    # check fires.
+    @{ Name = 'accepted-debt-provenance.py'; Cmd = 'python "{0}\tools\accepted-debt-provenance.py" --project-root "{0}"' },
+    @{ Name = 'accepted-debt-provenance.py --self-test'; Cmd = 'python "{0}\tools\accepted-debt-provenance.py" --self-test' },
+    # T-310: key parity says nothing about VALUES. This suite pins two Core-locale
+    # value defects the parity gate cannot see: double-escaped multiline strings
+    # (parsed "\r\n" rendered as literal backslash text) and terminal-font keys
+    # copied verbatim from English. Core owns et/ru/ded; producer locales unchecked.
+    @{ Name = 'test-locale-semantic.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-locale-semantic.ps1"' },
+    @{ Name = 'test-locale-semantic.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-locale-semantic.ps1" -RedControl' },
+    # T-257 (SRC-013): scenario presets are UI state, never a second execution
+    # engine. The suite pins the preset contract in tools/test-presets.ps1:
+    # pack + custom-snapshot round-trip, strict schema (unknown schemaVersion,
+    # unsafe id/path traversal, duplicate ids, incomplete token snapshot), the
+    # unavailable-target-is-retained rule, fail-safe atomic storage (a rejected
+    # save leaves the previous bytes, a failed rename keeps the original), and
+    # the static proof that the preset module launches no child install process.
+    # Its -RedControl is a separate entry: three mutant module copies each
+    # disabled guard and prove the defect passes through.
+    @{ Name = 'test-presets.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-presets.ps1"' },
+    @{ Name = 'test-presets.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-presets.ps1" -RedControl' },
+    # CORE-004 (SRC-018): the GUI-owned remembered-path set was zeroed out while
+    # discovery, selection, persistence and batch forwarding still assumed it was
+    # non-empty, so zcode/notepadplusplus/cinema4d could not be pointed at a
+    # custom folder from the GUI. The gate evaluates the REAL declaration block
+    # and drives the REAL Load/Save/Get-BatchArgs functions against isolated
+    # paths.json fixtures: empty state unresolved, chosen folders survive a
+    # reload, CLI-owned and unknown keys survive byte-for-value, vanished
+    # folders drop on load, and each GUI-owned path forwards under its canonical
+    # install.ps1 parameter.
+    @{ Name = 'test-gui-paths.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-gui-paths.ps1"' },
+    # T-309: MPC-HC OSD face resolved by ONE rule across surfaces. -List used to
+    # hardcode the literal 'Verdana' while apply and health went through
+    # Get-WintageFontFace, so a Verdana_m1 machine read "found, not themed" on
+    # list yet "themed" on apply+health. The gate proves all three surfaces route
+    # through Get-WintageFontFace and agree the verdict in both font worlds; the
+    # RED control reintroduces the literal and confirms the list assertions fail.
+    @{ Name = 'test-mpchc-font-parity.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-mpchc-font-parity.ps1"' },
+    @{ Name = 'test-mpchc-font-parity.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-mpchc-font-parity.ps1" -RedControl' },
+    # T-307: every T('Key') the GUI uses must exist in en.json. T() falls back to
+    # the raw key name (i18n.ps1:41), so a code-used key with no table entry
+    # renders its own name on screen -- exactly how the nine preset-control keys
+    # shipped unlocalised past the parity gate (which only compares locales to
+    # each other). The RED control reintroduces a used-but-absent key.
+    @{ Name = 'test-locale-keys.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-locale-keys.ps1"' },
+    @{ Name = 'test-locale-keys.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-locale-keys.ps1" -RedControl' },
+    @{ Name = 'test-dwm-recovery.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-dwm-recovery.ps1"' },
+    # Audit wave imp-vacterro-wintage-20260927-2 (Core seat antigravity-01, RUN 1):
+    # T-321/T-327/T-328/T-330/T-332/T-333/T-334/T-337/T-338. Registered here
+    # because every defect it guards was invisible to a green Run-Tests run.
+    @{ Name = 'test-audit-20260927-fixes.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-audit-20260927-fixes.ps1"' },
+    @{ Name = 'test-wintage-appdata-root.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-wintage-appdata-root.ps1"' },
+    @{ Name = 'test-tf-lazy-init.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-tf-lazy-init.ps1"' },
+    @{ Name = 'test-tf-async-apply.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-tf-async-apply.ps1"' },
+    @{ Name = 'test-fb-sound-async.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-fb-sound-async.ps1"' },
+    @{ Name = 'test-log-append-bound.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-log-append-bound.ps1"' },
+    # SRC-023 (Process Explorer): the target's owned-value contract must be one
+    # canonical set; its 12-name base list beside a 24-name write map left the
+    # *Dark values unowned, so Revert could never restore them. The suite proves
+    # map == PE_COLOR_VALUES, first-touch recovery captures every owned value,
+    # repaint keeps it, mid-apply failure restores every touched value, Revert
+    # restores pre-existing/absent/unrelated state exactly, health detects drift,
+    # running refusal and -WhatIf are mutation-free, the remembered folder is a
+    # canonical paths.json key, and -Target all includes the target.
+    @{ Name = 'test-processexplorer.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-processexplorer.ps1"' },
+    # T-283 (SRC-026): the TERMINAL FONTS subsystem. One focused suite covers the
+    # catalog (20 bundled families, unique slugs/paths, every file+license exists,
+    # every sha256 matches, one pinned source per family), the preference schema
+    # (missing -> backward-compatible default, round-trip, malformed fails closed
+    # leaving the file untouched, atomic write, range validation), private preview
+    # (a bundled UNINSTALLED face resolves via PrivateFontCollection with ZERO
+    # system registration and measures fixed-pitch), the Windows Terminal helper
+    # (writes the selected family/size/rendering, preserves unrelated settings,
+    # Revert restores the exact owned values, a malformed preference is refused
+    # with zero mutation), the conhost guard (face comes from the preference and
+    # an unusable face is refused before mutation), and the GUI tab (data-driven
+    # three-tab strip, exactly one panel visible, private fonts disposed on
+    # close). -RedControl mutates the catalog hash, the conhost preference
+    # resolution and the single-visible-tab rule and requires each to go red.
+    @{ Name = 'test-terminal-fonts.js'; Cmd = 'node "{0}\tools\test-terminal-fonts.js"' },
+    @{ Name = 'test-terminal-fonts.js --red-control'; Cmd = 'node "{0}\tools\test-terminal-fonts.js" --red-control' },
+    # The tab BEHAVIOUR (not just its presence): AST-extracts the REAL
+    # Update-TabButtons / Set-ActiveTab and the REAL tab table, binds them to
+    # genuine WinForms Controls, and proves three reachable tabs, exactly one
+    # visible panel, a distinct active style, refusal of an unknown key, and a
+    # table that survives switching (no lost selection state).
+    @{ Name = 'test-terminal-fonts-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-terminal-fonts-gui.ps1"' }
+    @{ Name = 'test-tf-apply-results.js'; Cmd = 'node "{0}\tools\test-tf-apply-results.js"' },
+    @{ Name = 'test-tf-apply-results.js --red-control'; Cmd = 'node "{0}\tools\test-tf-apply-results.js" --red-control' }
 )
 foreach ($s in $toolSuites) {
     $invokeLine = ($s.Cmd -f $root)

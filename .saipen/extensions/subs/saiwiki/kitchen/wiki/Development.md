@@ -42,6 +42,10 @@ update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases
   `tools/test-theme-switch.js` — the behavioural harnesses gated into release.
 - `tools/test-shim-payloads.js`, `tools/test-terminal-font.js` — the Electron
   shim payloads parse, and the terminal colour table stays console-consistent.
+- `tools/test-repainter-budget.js`, `tools/test-browser-cache.ps1` — the
+  renderer repainter stays inside its work budgets, and portable browser
+  discovery stays cache-served instead of rescanning the portable root on every
+  status refresh.
 - `tools/check-wiki-mirror.js` — the repository `wiki/` mirror matches the
   maintained wiki source.
 

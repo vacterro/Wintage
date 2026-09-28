@@ -1,0 +1,49 @@
+{
+  "clauses": {
+    "SRC-028:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001: Conhost eligibility validator rejects resolvable proportional faces before registry mutation"
+    },
+    "SRC-028:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002: Invoke-TfApply truthful result aggregation - FAILED/PARTIAL/SUCCESS with failed target names and exit codes, nonzero child cannot emit success"
+    },
+    "SRC-028:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003: Terminal-font Refresh control wired to Refresh-TfFonts; selection preserved by stable entry identity not Format-TfRow"
+    },
+    "SRC-028:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004: Update-TfMetrics Conhost status text agrees with capability/button state - cap.Conhost=true maps to READY, unsupported/unavailable never READY"
+    },
+    "SRC-028:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-005: Font size schema integer 7..24 in both Node and PowerShell; fractional sizes rejected never rounded; shared parity fixtures 7.5/12.5/24.1 reject, 7/13/24 accept"
+    },
+    "SRC-028:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-006: CLI write --file override writes only explicit file; app-data preference untouched; atomic write; round-trips through read --file"
+    },
+    "SRC-028:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-001: Get-BatchArgs exact single-hyphen path switches -ZCodePath/-NotepadPlusPlusPath/-Cinema4DPath/-ProcessExplorerPath once each, zero --*Path tokens, array element assertions"
+    },
+    "SRC-028:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-002: DWM backup/restore recovery pair atomic JSON+provenance publication; existence not validity; successful revert retires both; retry-safe; failed apply/revert retains complete valid pair"
+    }
+  },
+  "derived_at": "2026-09-22T00:14:56Z",
+  "derived_from": "SRC-028",
+  "interpretation_revision": 8,
+  "schema_version": 1,
+  "source_sha256": "4343e6572159a9a5ca05eb68b1aa427609d9a571df62d59dbf4f1871c1c1eb70"
+}

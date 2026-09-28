@@ -121,6 +121,17 @@ const emitted = fs.readFileSync(path.join(packSandbox, 'wintage.user.js'), 'utf8
 const order = [...emitted.matchAll(/^    (\w+): \{$/gm)].map(m => m[1]);
 check('emitted in pack order, not filename order', order, ['golden', 'alpha', 'zeta']);
 
+{
+  const bd = fs.readFileSync(path.join(ROOT, 'desktop', 'targets', 'betterdiscord', 'template.css'), 'utf8');
+  check('BetterDiscord theme name is stable across palettes', /@name Wintage\s/.test(bd) && !/@name Wintage \(/.test(bd), true);
+  for (const name of ['--chat-background-default', '--control-primary-background', '--interactive-hover', '--icon-color-hover', '--border-interactive', '--input-background-default', '--background-base-low']) {
+    check('BetterDiscord maps ' + name, bd.includes(name + ':'), true);
+  }
+  const universal = bd.indexOf('[class*="theme-"] * {');
+  const codeFont = bd.indexOf('font-family: var(--font-code) !important;');
+  check('BetterDiscord code font rule follows the universal font rule', codeFont > universal, true);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(bad ? '\n' + bad + ' failure(s)' : '\ntheme-pack test PASS');
 process.exit(bad ? 1 : 0);

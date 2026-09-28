@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-049:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "AUDAPACK reported 'PACK FAILED (Wintage): [FAILED_INVENTORY] untracked path is not a regular file'; a transient non-regular untracked object must not fail the whole pack"
+    }
+  },
+  "derived_at": "2026-09-27T01:40:44Z",
+  "derived_from": "SRC-049",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "5f17da1c57130edb161d6cf1760889e2c6da84619a85b4bbc3335140f782a7be"
+}

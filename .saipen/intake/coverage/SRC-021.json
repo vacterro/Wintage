@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-021:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-304 closed with verification evidence in LOG: verify -> PASS [target: T-304] conf: high -- reconcile-only zero delta: SRC-021 requested T-268 CORE-006 which is already DONE (E-1195/E-1196; umbrella T-262 DONE E-1324; SRC-018 CLOSED 17/17; audit/7.md consumed E-1335). Current-tree re-proof: tools/test-presets.ps1 83 PASS 0 FAIL incl all CORE-006 dirty-state fixtures; tools/test-locale-parity.ps1 68 PASS 0 FAIL (33/33 locales, en.json 84 keys, ",
+      "text": "J\u00e4tka T-262 audit/7 umbrella: next unresolved clause T-268 CORE-006 preset dirty state",
+      "verification": "the Work this request created reached its own verification gate; see the T-304 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-304"
+    }
+  },
+  "schema_version": 1
+}

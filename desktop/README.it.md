@@ -34,7 +34,7 @@ Apply delega a `install.ps1`. C'è esattamente un percorso di codice che install
 
 ## Cosa ogni target può realmente essere temizzato
 
-| target | meccanismo | sopravvive a un aggiornamento dell'app |
+| obiettivo | meccanismo | sopravvive a un aggiornamento dell'app |
 |---|---|---|
 | `windows` | `.theme` utente: modalità sistema/app scura, ruoli colore accent e classici | sì — installato nella tua cartella locale Temi di Windows |
 | `browsers` | rileva i profili Chromium installati + portatili, prepara il tema chrome scelto e apre le pagine di conferma Tampermonkey/tema di proprietà del browser | sì — dopo un **Load unpacked** per profilo |
@@ -154,4 +154,102 @@ node ..\tools\build-desktop.js --check  # exit 1 se qualcosa è stantio
 
 `release.ps1` esegue il build e ogni gate, quindi una release non può spedire un output che si è allontanato dalle palette.
 
+<!-- T-311 target/section coverage supplement -->
+## Copertura di target e sezioni
+
+Questa sezione rispecchia la copertura Process Explorer, Notepad++, Cinema 4D
+e dei font del terminale del README inglese corrente, così questa localizzazione
+non diventa vecchia in silenzio. I letterali di codice (id dei target, percorsi
+del registro, nomi dei file) sono invarianti per lingua per progetto; il testo
+intorno è tradotto.
+
+### Cosa ogni target può realmente essere temizzato (target aggiunti)
+
+| obiettivo | meccanismo | sopravvive a un aggiornamento dell'app |
+|---|---|---|
+| `notepadplusplus` | XML del tema + alias nella cartella `themes` di Notepad++ dell'utente | sì — vive nel tuo profilo |
+| `cinema4d` | schema colori depositato nella cartella `schemes` di Cinema 4D dell'utente | sì — vive nel tuo profilo |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: colori di evidenziazione righe e sfondi dei grafici, vedi sotto | no — Process Explorer riscrive le sue impostazioni all'uscita; chiudilo e rilancialo |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer conserva i suoi colori in
+`HKCU\Software\Sysinternals\Process Explorer` e riscrive quella chiave
+all'uscita, quindi il target **rifiuta mentre `procexp`, `procexp64` o
+`procexp64a` è in esecuzione** — chiudilo e rilancialo. Temizza le categorie
+di colore configurabili:
+
+- **raggiungibili**: i colori di evidenziazione delle righe di processo
+  (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`,
+  `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`,
+  `ColorDelProc`, `ColorSuspend`) sia nelle varianti a modalità chiara sia
+  `*Dark`, più gli sfondi dei grafici (`ColorGraphBk`, `ColorGraphBkDark`) —
+  24 valori in tutto. Ogni variante viene mescolata verso il polo corrispondente
+  della palette attiva (la tonalità più chiara per il riempimento chiaro,
+  quella più scura per `*Dark`), così i riempimenti delle righe restano nella
+  chiave della palette stessa invece di sbiadire verso un quasi bianco;
+- **non raggiungibili**: la barra del titolo, la barra dei menu, la barra degli
+  strumenti, lo sfondo e i colori del testo della vista a elenco, e i colori
+  delle linee dei grafici — sono compilati dentro `procexp.exe` e non sono
+  esposti da nessun valore di impostazione. Il target temizza le evidenziazioni
+  delle righe e lo sfondo del grafico che possiede davvero, e non pretende
+  nient'altro.
+
+Ogni valore che Apply può mutare viene messo in snapshot prima della mutazione
+(ripristino al primo tocco in
+`%APPDATA%\Wintage\recovery\processexplorer\`) e ripristinato esattamente da
+`-Revert`, incluso se ogni valore era assente e se il marcatore era
+presente-ma-vuoto. Una cartella portatile fuori dalle directory Sysinternals
+standard viene ricordata tramite la chiave canonica `processexplorer` in
+`paths.json` (argomento CLI `-ProcessExplorerPath`; anche la GUI può
+sceglierla).
+
+### Font del terminale (`fonts/terminal/`)
+
+Entrambi i target del terminale leggono UNA sola preferenza tipografica
+canonica in `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`,
+`family`, `size`, `renderingMode`). Quando il file manca, i target mantengono
+il valore predefinito distribuito (Terminus (TTF) per Windows, 12 pt, con
+alias), quindi le macchine esistenti restano invariate. Una preferenza
+malformata fallisce in modo chiuso: non viene sovrascritto nulla e il target
+rifiuta.
+
+`fonts/terminal/catalog.json` è l'unico catalogo dei font: 20 famiglie
+monospaced open source incluse più i due typeface di sistema che Wintage
+nomina ma non distribuisce mai (Terminus (TTF) per Windows, Consolas). Ogni
+voce inclusa porta la sua sorgente upstream, la revisione bloccata, l'id della
+licenza, il file di licenza e lo SHA-256. I file esatti sono vendored in
+`fonts/terminal/files/` con i testi delle licenze in `licenses/`; Wintage in
+esecuzione lavora completamente offline e non scarica mai un font.
+
+`tools/sync-terminal-fonts.ps1` è il downloader riservato ai manutentori.
+Legge `fonts/terminal/sources.json` (un artefatto immutabile per famiglia),
+verifica ogni SHA-256 e rifiuta ogni mismatch. `-VerifyOnly` (predefinito)
+controlla l'albero su disco senza rete; `-Fetch -Write` ripubblica i file. I
+byte dei font scaricati sono trattati come asset binari non fidati — hashati e
+scritti, mai eseguiti. Una sostituzione è documentata: **Fantasque Sans Mono**
+sostituisce Liberation Mono, che non pubblica alcuna release binaria bloccata
+(solo sorgente `.sfd`).
+
+L'installer **sfoglia i font, non li installa.** La scheda TERMINAL FONTS
+carica un typeface incluso in una `PrivateFontCollection` locale al processo
+per un'anteprima dal vivo, e non esegue **nessuna** registrazione di font di
+sistema. Scegliere un font, una dimensione (7–24 pt) o una modalità di
+rendering (aliased/grayscale/cleartype) aggiorna solo l'anteprima e la
+preferenza. Installare un font è un'azione esplicita **INSTALL SELECTED** che
+apre l'installatore di font di Windows stesso; dopo la conferma di Windows
+l'utente riverifica con Refresh. Le modifiche reali al terminale avvengono solo
+con un'azione esplicita **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal viene applicato alla famiglia installata selezionata alla
+dimensione scelta, e la modalità di rendering mappa su
+`profiles.defaults.antialiasingMode`. Il conhost classico è più severo: esegue
+il rendering su una griglia a celle fissa, quindi il typeface selezionato
+viene rifiutato prima di qualunque modifica al registro a meno che Windows non
+lo risolva (il typeface predefinito e il fallback Consolas sono esenti). Health
+e Reapply validano typeface, dimensione e anti-aliasing configurati rispetto
+alla preferenza, così cambiare la preferenza dopo un Apply viene segnalato
+come drift anziché come "sano". Il ciclo di vita dei colori del terminale resta
+intatto: Revert ripristina esattamente i valori posseduti pre-Wintage e non
+rimuove mai un font dalla macchina.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

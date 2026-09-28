@@ -63,6 +63,7 @@ nie, bo archiwum jest w użyciu.
 | `terminal` | schemat Windows Terminal + domyślne dla wszystkich profili, Consolas 12 aliased | yes — ustawienia są w twoim profilu |
 | `conhost` | domyślne `HKCU\Console` + każdy istniejący profil cmd/PowerShell | yes — dokładny snapshot dotkniętych wartości |
 | `obs` | wariant `.ovt` dla OBS 30.2+ + aktywny identyfikator motywu w `user.ini` | yes — żyje w twoim profilu |
+| `qbittorrent` | rozpakowany motyw UI Qt (`config.json` + `stylesheet.qss`) + dwa klucze motywu w `qBittorrent.ini` | yes — żyje w twoim profilu |
 | `antigravity`, `vscode` | rozszerzenie motywu kolorów w `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — żyje w twoim profilu |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electrona, patrz poniżej | no — uruchom ponownie instalator |
 | `claude` | shim Electrona, łatany na miejscu — patrz poniżej | no — aktualizacja tworzy nowy folder `app-<version>` |
@@ -224,6 +225,21 @@ Zamknij OBS przed Apply lub Revert: OBS nadpisuje `user.ini` przy zamykaniu.
 Pierwszy apply robi kopię zapasową zarówno poprzedniego wyboru, jak i każdego
 motywu o tej samej nazwie, bajt po bajcie.
 
+### qBittorrent
+
+`qbittorrent` zapisuje **rozpakowany** motyw interfejsu Qt w `%APPDATA%\qBittorrent\themes\wintage` — plik `config.json` (role `Palette.*` oraz własne kolory kontekstowe qBittorrenta: stany listy transferów, wagi dziennika) i obok niego `stylesheet.qss` (2px fazowania, proste narożniki i Verdana, czego paleta nie potrafi wyrazić) — a następnie kieruje `General\CustomUIThemePath` na ten `config.json` i ustawia `General\UseCustomUITheme=true`.
+Rozpakowany, a nie jako pakiet `.qbtheme` — celowo: `.qbtheme` to plik Qt Resource Collection i do jego wytworzenia potrzebny byłby na maszynie plik `rcc` o zgodnej wersji głównej, czyli zależność od kompilatora dla dwóch plików tekstowych. qBittorrent czyta postać folderu natywnie (`FolderThemeSource`).
+Zamknij qBittorrent przed Apply lub Revert: przy zakończeniu nadpisuje cały `qBittorrent.ini`, więc zmiana wykonana podczas jego pracy przepada przy zamknięciu — cel odmawia działania w tym stanie, zamiast zgłaszać sukces, który zmiecie następne zakończenie. `-Revert` przywraca dwa klucze INI do dokładnych wartości sprzed Wintage (albo je usuwa, jeśli ich nie było) i odkłada z powrotem każdy folder motywu o tej samej nazwie, bajt po bajcie; niezwiązane zmiany w `qBittorrent.ini` wykonane po Apply przetrwają.
+Nieosiągalne: ikony paska narzędzi i zasobnika pochodzą z własnego skompilowanego pakietu zasobów qBittorrenta, więc zachowują oryginalne kolory.
+
+### Czcionki: nazwane, nigdy nie instalowane
+
+Prawo 1 z UI.md wymaga Verdany **bez wygładzania**. Arkusz stylów Qt nie ma na to właściwości, a `OSDFont` w MPC-HC to zwykła nazwa kroju GDI — jedyną dźwignią jest sam krój. `Verdana_m1.ttf` w katalogu głównym repozytorium to kopia Verdany z wstępnie wyrenderowanymi bitmapowymi krojami 1bpp przy 3–30 ppem, których moduł renderujący używa zamiast wygładzania konturu.
+Arkusze stylów `qbittorrent` i `obs` wskazują `Verdana_m1, Verdana`, a `mpchc` wskazuje ten z dwóch, który maszyna faktycznie rozwiąże. **Instalator nigdy nie instaluje ani nie odinstalowuje czcionki** i jest to zamierzone, a nie niedokończone:
+Rodzina czcionek jest rozwiązywana przez parę (rodzina, krój). Zarejestruj Regular + Bold + Italic, a każdy odbiorca rozwiąże ją poprawnie; wyrejestruj **jeden** element, a każdy odbiorca proszący o tę rodzinę wskaże na ocalały element. Na maszynie, która aliasuje `MS Shell Dlg 2` — czcionkę okien dialogowych Windows — do tej rodziny przez `HKLM\...\FontSubstitutes`, usunięcie Regular pochyla **cały pulpit**, łącznie z tytułami okien, które DWM już zbuforował, a przywrócenie wymaga wylogowania. Żadne liczenie odwołań tego nie naprawi: zasięg jest maszynowy, a instalator motywów nie ma tam czego szukać.
+Krój jest więc jednorazowym, wyraźnym działaniem użytkownika: kliknij prawym przyciskiem `Verdana_m1.ttf` → **Install** (dla użytkownika, bez administratora), a potem zastosuj cel ponownie. Jeśli kroju nie ma, cele powiedzą o tym raz, wskażą rozwiązanie i cofną się do zwykłej Verdany — wygładzonej, ale nic nie dzieje się na maszynie za twoimi plecami.
+
+
 ### Aplikacje Electron
 
 `resources/app.asar` jest przenoszone do `resources/app/app.asar` (jego
@@ -313,4 +329,4 @@ node ..\tools\build-desktop.js --check  # wyjście 1, jeśli cokolwiek jest niea
 `release.ps1` uruchamia build i każdą bramkę, więc wydanie nie może dostarczyć
 wyniku, który oddalił się od palet.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

@@ -62,6 +62,7 @@ omdat het archief dan in gebruik is.
 | `terminal` | Windows Terminal-schema + standaardwaarden voor alle profielen, Consolas 12 gealiased | yes — de instellingen staan in je profiel |
 | `conhost` | `HKCU\Console`-standaardwaarden + elk bestaand cmd/PowerShell-profiel | yes — exacte snapshot van aangeraakte waarden |
 | `obs` | OBS 30.2+-`.ovt`-variant + actieve `user.ini`-thema-id | yes — hij leeft in je profiel |
+| `qbittorrent` | uitgepakt Qt UI-thema (`config.json` + `stylesheet.qss`) + de twee themasleutels in `qBittorrent.ini` | yes — hij leeft in je profiel |
 | `antigravity`, `vscode` | kleurthema-extensie in `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — hij leeft in je profiel |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, zie hieronder | no — draai de installer opnieuw |
 | `claude` | Electron-shim, ter plaatse gepatcht — zie hieronder | no — een update maakt een nieuwe map `app-<version>` |
@@ -228,6 +229,21 @@ geselecteerd is. Sluit OBS vóór Apply of Revert: OBS herschrijft `user.ini` bi
 afsluiten. De eerste apply back-upt zowel de vorige selectie als elk thema met
 dezelfde naam byte voor byte.
 
+### qBittorrent
+
+`qbittorrent` schrijft een **uitgepakt** Qt UI-thema naar `%APPDATA%\qBittorrent\themes\wintage` — een `config.json` (de `Palette.*`-rollen plus qBittorrents eigen contextkleuren: statussen van de overdrachtslijst, logboekernst) en ernaast een `stylesheet.qss` (de 2px-afschuiningen, de rechte hoeken en Verdana, wat een palet niet kan uitdrukken) — en wijst daarna `General\CustomUIThemePath` naar die `config.json` en zet `General\UseCustomUITheme=true`.
+Uitgepakt in plaats van een `.qbtheme`-bundel, met opzet: een `.qbtheme` is een Qt Resource Collection-bestand en zou een `rcc`-binair bestand met hetzelfde hoofdversienummer op de machine vereisen, dus een compilerafhankelijkheid voor twee tekstbestanden. qBittorrent leest de mapvorm native (`FolderThemeSource`).
+Sluit qBittorrent voordat je Apply of Revert gebruikt: het herschrijft bij afsluiten de hele `qBittorrent.ini`, dus een wijziging die tijdens het draaien is gemaakt gaat bij het sluiten verloren — het doel weigert in die toestand te werken in plaats van een succes te melden dat de volgende afsluiting wist. `-Revert` zet de twee INI-sleutels terug op hun exacte waarden van vóór Wintage (of verwijdert ze als ze er niet waren) en zet een gelijknamige themamap byte voor byte terug; niet-gerelateerde wijzigingen in `qBittorrent.ini` na Apply blijven bestaan.
+Niet bereikbaar: de pictogrammen in de werkbalk en het systeemvak komen uit qBittorrents eigen gecompileerde bronnenbundel en behouden dus hun oorspronkelijke kleuren.
+
+### Lettertypen: genoemd, nooit geïnstalleerd
+
+Wet 1 van UI.md vraagt om Verdana **zonder antialiasing**. Een Qt-stylesheet heeft daar geen eigenschap voor, en `OSDFont` van MPC-HC is slechts een GDI-lettertypenaam — de enige hefboom is het lettertype zelf. `Verdana_m1.ttf` in de hoofdmap van de repo is een kopie van Verdana met vooraf gerenderde 1bpp-bitmapstrepen op 3–30 ppem, die een renderer verkiest boven het gladstrijken van de omtrek.
+De stylesheets van `qbittorrent` en `obs` noemen `Verdana_m1, Verdana`, en `mpchc` noemt degene die de machine werkelijk resolveert. **De installer installeert of verwijdert nooit een lettertype**, en dat is opzet en niet onaf:
+Een lettertypefamilie wordt geresolveerd op (familie, stijl). Registreer Regular + Bold + Italic en elke gebruiker resolveert correct; deregistreer **één** lid en elke gebruiker die die familie opvraagt, wijst naar een overlevend lid. Op een machine die `MS Shell Dlg 2` — het Windows-dialoogvensterlettertype — via `HKLM\...\FontSubstitutes` aan die familie aliast, zet het verwijderen van Regular **het hele bureaublad cursief**, inclusief venstertitels die de DWM al heeft gecachet, en een afmelding is nodig om dat terug te draaien. Geen enkele referentietelling lost dat op: de schade reikt machinebreed en een thema-installer heeft daar niets te zoeken.
+Het lettertype is daarom een eenmalige, uitdrukkelijke gebruikershandeling: rechtsklik op `Verdana_m1.ttf` → **Install** (per gebruiker, geen beheerder nodig) en pas daarna het doel opnieuw toe. Ontbreekt het lettertype, dan zeggen de doelen dat één keer, noemen de oplossing en vallen terug op standaard-Verdana — gladgestreken, maar er gebeurt niets met de machine achter je rug.
+
+
 ### Electron-apps
 
 `resources/app.asar` wordt verplaatst naar `resources/app/app.asar` (zijn
@@ -317,4 +333,4 @@ node ..\tools\build-desktop.js --check  # exit 1 als iets stale is
 `release.ps1` draait de build en elke gate, dus een release kan geen output
 verzenden die van de paletten is afgedwaald.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { writeAtomic } = require('./write-atomic');
+const { readPreference } = require('./terminal-font-preference');
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -31,20 +32,47 @@ const finalizeRecovery = process.argv.includes('--finalize-recovery');
 // fail-safe stands: a marker still present means the manifest may still claim
 // the item and finalize refuses.
 const manifestCommitted = process.argv.includes('--manifest-committed');
+// T-283 / SRC-026: explicit typography overrides. The GUI writes the canonical
+// preference (tools/terminal-font-preference.js) and then calls Apply; these
+// flags let the caller pass the same values without the helper re-reading, and
+// let tests drive a specific face. When NONE are given the helper reads the
+// canonical preference itself, so the CLI and the GUI agree by construction.
+const faceArg = arg('--face');
+const sizeArg = arg('--font-size');
+const renderingArg = arg('--rendering');
+const preferenceArg = arg('--preference');
 
 if (!settingsPath || (!revert && !finalizeRecovery && !palettePath)) {
-  console.error('Usage: install-terminal.js --settings PATH (--palette PACK | --revert [--keep-recovery] | --finalize-recovery [--manifest-committed]) [--dry-run]');
+  console.error('Usage: install-terminal.js --settings PATH (--palette PACK | --revert [--keep-recovery] | --finalize-recovery [--manifest-committed]) [--dry-run] [--face NAME] [--font-size N] [--rendering aliased|grayscale|cleartype] [--preference PATH]');
   process.exit(2);
 }
 
 const backupPath = `${settingsPath}.wintage.bak`;
 const createdPath = `${settingsPath}.wintage-created`;
 const markerPath = `${settingsPath}.wintage-palette`;
-// Windows Terminal is cell-based: proportional Verdana overlaps neighbouring
-// cells. Terminus (TTF) for Windows is the user's installed bitmap-style
-// monospace (the classic console look) and keeps the requested compact
-// sans-like look without lying to the renderer about glyph width.
-const TERMINAL_FONT = 'Terminus (TTF) for Windows';
+
+// The chosen terminal typography. The preference (or an explicit override) is
+// the SINGLE source of the face/size/rendering; the old hard-coded Terminus is
+// now only the DEFAULT the preference module returns when no file exists.
+// Windows Terminal's own antialiasingMode vocabulary is grayscale/cleartype/
+// aliased -- the preference's renderingMode maps 1:1.
+function resolveTypography() {
+  let pref;
+  try {
+    pref = readPreference(undefined, preferenceArg);
+  } catch (err) {
+    // A malformed preference fails closed: never silently apply a default over
+    // the user's document. The caller (GUI/CLI) surfaces this.
+    throw err;
+  }
+  const face = faceArg || pref.family;
+  const size = sizeArg != null ? Number(sizeArg) : Number(pref.size);
+  const rendering = renderingArg || pref.renderingMode;
+  if (!face) throw new Error('terminal typography: no font face resolved (preference had none and --face was not passed).');
+  if (!Number.isFinite(size) || size < 7 || size > 24) throw new Error(`terminal typography: font size ${sizeArg != null ? sizeArg : pref.size} is outside the supported 7..24 range.`);
+  if (!['aliased', 'grayscale', 'cleartype'].includes(rendering)) throw new Error(`terminal typography: unknown rendering mode '${rendering}'.`);
+  return { face, size, rendering };
+}
 
 // The ONLY fields Wintage owns in settings.json (T-189). Revert merges these
 // back into the CURRENT file and preserves every unrelated key/profile/setting
@@ -466,6 +494,10 @@ for (const key of required) {
 }
 
 const settings = fs.existsSync(settingsPath) ? readJsonc(settingsPath) : {};
+// T-283: the typography this Apply writes, resolved from the canonical
+// preference (or explicit overrides). Resolved BEFORE the snapshot so a
+// malformed preference fails closed with ZERO mutation.
+const typography = resolveTypography();
 // Owned-field snapshot captured from the ORIGINAL file before any mutation, so
 // Revert can restore exactly these fields into whatever the file has become.
 // CORE-001: presence is recorded separately from value, and the two structures
@@ -498,11 +530,11 @@ const oldFont = settings.profiles.defaults.font
   : {};
 settings.profiles.defaults.font = {
   ...oldFont,
-  face: TERMINAL_FONT,
-  size: 12,
+  face: typography.face,
+  size: typography.size,
   weight: 'normal'
 };
-settings.profiles.defaults.antialiasingMode = 'aliased';
+settings.profiles.defaults.antialiasingMode = typography.rendering;
 const curHistory = settings.profiles.defaults.historySize;
 settings.profiles.defaults.historySize = (typeof curHistory === 'number' && curHistory > TERMINAL_SCROLLBACK)
   ? curHistory
@@ -537,7 +569,7 @@ settings.schemes = Array.isArray(settings.schemes)
 settings.schemes.push(scheme);
 
 if (dryRun) {
-  console.log(`Windows Terminal: would apply ${palette.slug} + ${TERMINAL_FONT} to ${settingsPath}`);
+  console.log(`Windows Terminal: would apply ${palette.slug} + ${typography.face} ${typography.size}pt ${typography.rendering} to ${settingsPath}`);
   process.exit(0);
 }
 
@@ -558,4 +590,4 @@ if (!fs.existsSync(backupPath) && !fs.existsSync(createdPath)) {
 }
 replaceFile(settingsPath, `${JSON.stringify(settings, null, 4)}\n`);
 fs.writeFileSync(markerPath, `${palette.slug}\n`, 'utf8');
-console.log(`Windows Terminal: applied ${palette.slug} + ${TERMINAL_FONT}`);
+console.log(`Windows Terminal: applied ${palette.slug} + ${typography.face} ${typography.size}pt ${typography.rendering}`);

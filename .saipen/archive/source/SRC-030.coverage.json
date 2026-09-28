@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-030:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "DUPLICATE",
+      "evidence": "E-1459 + E-1465: CORE-001 verified and closed under T-289; SRC-030 is the orphaned duplicate receipt of T-288 (retired E-1428, never re-implemented)",
+      "text": "CORE-001: Conhost eligibility validator rejects resolvable proportional faces before registry mutation (duplicate projection of the same audit/8 finding already owned by T-289)",
+      "verification": "node tools/test-terminal-fonts.js 70 PASS 0 FAIL (the single proven CORE-001 implementation, not a second one)",
+      "work": "T-289"
+    }
+  },
+  "schema_version": 1
+}

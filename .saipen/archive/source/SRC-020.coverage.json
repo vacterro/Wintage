@@ -1,0 +1,59 @@
+{
+  "requirements": {
+    "SRC-020:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1178",
+      "text": "Repair T-262 umbrella continuity through canonical intake operations so T-262 closure is refused while any audit/7 child T-268,T-269,T-272..T-278 is nonterminal; preserve completed children T-260,T-263..T-267,T-270,T-271; do not hand-edit BOARD/STATE/LOG to make validation green",
+      "verification": "E-1182",
+      "work": "T-279"
+    },
+    "SRC-020:R002": {
+      "actionable": true,
+      "class": "acceptance-criterion",
+      "disposition": "VERIFIED",
+      "evidence": "E-1182",
+      "text": "Prove with a real attempted T-262 closure that it is refused while the remaining audit/7 children are open, and record the exact refusal code and unresolved clause list",
+      "verification": "E-1182",
+      "work": "T-279"
+    },
+    "SRC-020:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1180",
+      "text": "Implement T-269 W2-002 generation/batch lock: one generation consistency model covering explicit -Target, -Target all, -Selected and -Reapply (and the same flows under -Force); acquire generation ownership before build freshness verification and retain it through all generated-byte consumption and manifest/path commits; guaranteed finally release; lock order generation then target then manifest; -Force bypasses freshness only; Reapply is one parent-held generation epoch with WINTAGE_BUILD_LOCK_HELD inherited narrowly by children; do not weaken tools/build-desktop.js acquireGenLock",
+      "verification": "E-1182",
+      "work": "T-279"
+    },
+    "SRC-020:R004": {
+      "actionable": true,
+      "class": "acceptance-criterion",
+      "disposition": "VERIFIED",
+      "evidence": "E-1182",
+      "text": "Behavioral regressions in tools/test-batch-generation.ps1: direct target, target all, selected, reapply, force, failure release, lock order and deadlock, using deterministic barrier files and no long sleeps",
+      "verification": "E-1182",
+      "work": "T-279"
+    },
+    "SRC-020:R005": {
+      "actionable": true,
+      "class": "acceptance-criterion",
+      "disposition": "VERIFIED",
+      "evidence": "E-1182",
+      "text": "Validation: PowerShell parse checks on every changed .ps1; tools/test-batch-generation.ps1 focused PASS; test-genlock-redcontrol.ps1, test-reapply.ps1, test-reapply-intent.ps1, test-transaction-boundary.ps1 PASS; node tools/build-desktop.js --check PASS; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "verification": "E-1182",
+      "work": "T-279"
+    },
+    "SRC-020:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1182",
+      "text": "Return control to T-262 after T-269; the next unresolved audit/7 item in clause order is T-268 CORE-006; do not jump directly to performance work; do not report audit/7 complete while any child remains nonterminal",
+      "verification": "E-1182",
+      "work": "T-279"
+    }
+  },
+  "schema_version": 1
+}

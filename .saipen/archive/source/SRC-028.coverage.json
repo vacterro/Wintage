@@ -1,0 +1,131 @@
+{
+  "requirements": {
+    "SRC-028:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1375 conhost label READY; T-284 terminal fonts repair; targets.ps1:62-74,1526; test-terminal-fonts.js:234,278,281",
+      "text": "CORE-001: Conhost eligibility validator rejects resolvable proportional faces before registry mutation",
+      "verification": "node tools/test-terminal-fonts.js 70 PASS; tools/test-terminal-fonts-gui.ps1 22 PASS",
+      "work": "T-289"
+    },
+    "SRC-028:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "WintageInstaller.ps1:1480-1496 truthful result aggregation;  collects per-target Name/ExitCode/Output;  classified SUCCESS/PARTIAL/FAILED; unconditional 'apply done.' removed",
+      "text": "CORE-002: Invoke-TfApply truthful result aggregation - FAILED/PARTIAL/SUCCESS with failed target names and exit codes, nonzero child cannot emit success",
+      "verification": "node tools/test-tf-apply-results.js 16 PASS; test-tf-apply-results.js --red-control 18 PASS; test-terminal-fonts.js 70 PASS; test-terminal-fonts-gui.ps1 22 PASS; powershell parse OK",
+      "work": "T-290"
+    },
+    "SRC-028:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-284 terminal fonts repair; targets.ps1(btnTfRefresh:1118, Click:1450 preserves prevSlug via Get-TfSelectedRow:1265, Select-TfPreferenceRow:1463, Load-TfFonts clears cache); test-terminal-fonts.js:248,249,289,291,299; test-terminal-fonts-gui.ps1:124,125,133-135",
+      "text": "CORE-003: Terminal-font Refresh control wired to Refresh-TfFonts; selection preserved by stable entry identity not Format-TfRow",
+      "verification": "node tools/test-terminal-fonts.js 70 PASS; tools/test-terminal-fonts-gui.ps1 22 PASS",
+      "work": "T-291"
+    },
+    "SRC-028:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-284 terminal fonts repair; WintageInstaller.ps1:1337 conState maps cap.Conhost=true -> READY, Installed+Conhost=false -> UNSUPPORTED, Preview+Conhost=false -> UNKNOWN, neither -> NOT READY; test-terminal-fonts.js:256,258; test-terminal-fonts-gui.ps1:129,130,141 RED control",
+      "text": "CORE-004: Update-TfMetrics Conhost status text agrees with capability/button state - cap.Conhost=true maps to READY, unsupported/unavailable never READY",
+      "verification": "node tools/test-terminal-fonts.js 70 PASS; tools/test-terminal-fonts-gui.ps1 22 PASS",
+      "work": "T-292"
+    },
+    "SRC-028:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "terminal-font-preference.js:82 Number.isInteger guard; json-doc.ps1:111-114 [int]::TryParse rejects fractional; W2-002 parity: readPreference/readPreference round-trip preserves integer; tools/test-terminal-fonts.js:81 PASS fractional reject + 8 integer accept + 6 parity",
+      "text": "CORE-005: Font size schema integer 7..24 in both Node and PowerShell; fractional sizes rejected never rounded; shared parity fixtures 7.5/12.5/24.1 reject, 7/13/24 accept",
+      "verification": "node tools/test-terminal-fonts.js 81 PASS 0 FAIL; powershell parse json-doc.ps1 OK",
+      "work": "T-293"
+    },
+    "SRC-028:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "terminal-font-preference.js:119 fileOverride param added to writePreference, passed through CLI write cmd:180; tools/test-terminal-fonts.js:86 PASS incl 5 CORE-006 checks + RED control",
+      "text": "CORE-006: CLI write --file override writes only explicit file; app-data preference untouched; atomic write; round-trips through read --file",
+      "verification": "node tools/test-terminal-fonts.js 86 PASS 0 FAIL",
+      "work": "T-294"
+    },
+    "SRC-028:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "WintageInstaller.ps1:2326 Get-BatchArgs appends \\[\\].Param directly (no extra hyphen); tools/test-gui-paths.ps1:34 PASS incl 8 W2-001 exact-token adjacency assertions + zero --*Path + RED control proving extra-hyphen defect",
+      "text": "W2-001: Get-BatchArgs exact single-hyphen path switches -ZCodePath/-NotepadPlusPlusPath/-Cinema4DPath/-ProcessExplorerPath once each, zero --*Path tokens, array element assertions",
+      "verification": "powershell tools/test-gui-paths.ps1 34 PASS 0 FAIL; powershell parse WintageInstaller.ps1 OK",
+      "work": "T-295"
+    },
+    "SRC-028:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "common.ps1 Backup-WindowsInactiveAccent: Write-Utf8Atomic -ValidateJson, existence-not-validity, provenance-failure rollback; Restore retires both data+provenance; targets.ps1:1916 post-revert provenance cleanup; tools/test-dwm-recovery.ps1:11 PASS incl RED",
+      "text": "W2-002: DWM backup/restore recovery pair atomic JSON+provenance publication; existence not validity; successful revert retires both; retry-safe; failed apply/revert retains complete valid pair",
+      "verification": "powershell tools/test-dwm-recovery.ps1 11 PASS 0 FAIL; common.ps1 targets.ps1 PARSE OK",
+      "work": "T-296"
+    },
+    "SRC-028:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "install.ps1:967 Set-ManifestEntry replaces Set-ManifestEntryWithPreference in browser post-child commit; test-path-preference-ordering.ps1:61 PASS incl 6 W2-003 checks + composed-helper traversal + RED control",
+      "text": "W2-003: Browser Apply persists PortableBrowserRoot exactly once pre-mutation; post-child commit via Set-ManifestEntry only, no paths.lock reacquisition post-mutation",
+      "verification": "powershell tools/test-path-preference-ordering.ps1 61 PASS 0 FAIL",
+      "work": "T-297"
+    },
+    "SRC-028:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "WintageInstaller.ps1:353 wintageAppData + pathsFile derive from one WINTAGE_APPDATA-aware root; paths.lock follows via Split-Path parent:429; generation lock already honors override:363; tools/test-wintage-appdata-root.ps1:13 PASS incl RED",
+      "text": "W2-004: One WINTAGE_APPDATA root for GUI+CLI paths.json/paths.lock; no hardcoded APPDATA split; GUI and CLI derive from same root",
+      "verification": "powershell tools/test-wintage-appdata-root.ps1 13 PASS 0 FAIL; WintageInstaller.ps1 PARSE OK",
+      "work": "T-298"
+    },
+    "SRC-028:R011": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "terminal-fonts.ps1: Test-TfFileFixedPitchCached + TfFixedPitchCache keyed by immutable path+size+mtime, Get-TfCapability skips probe for uninstalled bundled, Get-TfMetrics reuses knownCap; WintageInstaller.ps1: lazy TfInitialized, Set-ActiveTab first-entry init, Update-TfMetrics passes row.Cap; tools/test-tf-lazy-init.ps1:15 PASS incl RED",
+      "text": "PERF-001: Lazy terminal font initialization - zero AddFontFile/fixed-pitch probes before Fonts tab; first entry loads only selected bundled face; cache per immutable file identity; dispose at teardown",
+      "verification": "powershell tools/test-tf-lazy-init.ps1 15 PASS 0 FAIL; node test-terminal-fonts.js 86 PASS; test-terminal-fonts-gui.ps1 22 PASS; parse terminal-fonts.ps1 + WintageInstaller.ps1 OK",
+      "work": "T-299"
+    },
+    "SRC-028:R012": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "Invoke-TfApply routes through Start-BatchJob with ONE -Selected terminal,conhost child (never two serial -Target); Disable/Enable-TfApplyUi guard mutation buttons; Save-TfPreference pre-dispatch; Get-BatchFailures + SUCCESS/PARTIAL/FAILED in OnDone callback; tf busy-refuse if batchState active; tools/test-tf-async-apply.ps1 17 PASS",
+      "text": "PERF-002: Async Apply terminal/conhost via one selected-set worker - Apply Both one process with terminal,conhost; UI heartbeat responsive; CORE-002 truthful result model",
+      "verification": "powershell tools/test-tf-async-apply.ps1 17 PASS 0 FAIL; WintageInstaller.ps1 PARSE OK",
+      "work": "T-300"
+    },
+    "SRC-028:R013": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1435",
+      "text": "PERF-003: Async FreeBuff sound preview - async ffmpeg; MediaPlayer event-based with Forms.Timer; no DoEvents; generation ownership; B supersedes A; teardown idempotent",
+      "verification": "powershell tools/test-fb-sound-async.ps1 56 PASS 0 FAIL; focused suites green",
+      "work": "T-301"
+    },
+    "SRC-028:R014": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1440",
+      "text": "PERF-004: Streaming + bounded GUI logs - Start-BatchJob drains progressively; Say-Log/Say-BdLog/Say-TfLog bounded retention; early output before completion; no ScrollToCaret per line",
+      "verification": "powershell tools/test-batch-streaming-gui.ps1 54 PASS 0 FAIL; -RedControl 6/6 PROVEN; tools/test-batch-timer-gui.ps1 45 PASS 0 FAIL + -RedControl A/B/C PROVEN; test-tf-apply-results.js 24 PASS; test-tf-async-apply.ps1 17 PASS",
+      "work": "T-302"
+    }
+  },
+  "schema_version": 1
+}

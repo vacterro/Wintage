@@ -50,6 +50,7 @@ if ($List) {
     Write-Host " 13. baseline pruning stays bounded"
     Write-Host " 14. missing live chime restored from baseline"
     Write-Host " 15. FreeBuff through the -Selected batch/generation-lock path (R009)"
+    Write-Host " 16. T-251 a FAILED baseline prune is reported, not silent (locked residue, patch still completes)"
     exit 0
 }
 
@@ -431,6 +432,68 @@ check 'selected: Revert removes the Wintage app dir' (-not (Test-Path (Join-Path
 check 'selected: Revert restores the stock sound' (-not (Compare-Object $chimeStock15 ([System.IO.File]::ReadAllBytes($chimePath))))
 $mSel3 = Get-Content (Join-Path $fakeAppData 'Wintage\installed.json') -Raw | ConvertFrom-Json
 check 'selected: Revert removes the manifest entry + releases the lock' (-not $mSel3.freebuff -and -not (Test-Path $genLockFile15))
+
+# ---- Test 16: T-251 - a FAILED baseline prune is reported, not silent ----
+# The prune is best-effort (a locked dir must never break the patch), but its
+# failure used to be swallowed by an empty catch: the stale _orig-baseline-* dir
+# stayed in the app's own directory and nothing in the output said so, while a
+# successful prune prints a line. Hold an exclusive handle on a file inside the
+# OLDEST baseline so the next generation's prune hits EPERM/EBUSY.
+Clean-Fixture
+Write-StockFixture
+for ($g = 1; $g -le 3; $g++) {
+    if ($g -gt 1) {
+        [System.IO.File]::WriteAllText($bundlePath, ($BUNDLE + "`n// generation $g build"), $utf8)
+        [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', ($FULL_ORCH + "`n// generation $g"), $utf8)
+    }
+    $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
+    check "prune-fail: seed gen$g apply exits 0" ($r.Code -eq 0)
+}
+$seedBaselines = @(Get-ChildItem $app -Directory -Filter '_orig-baseline-*' | Sort-Object Name -Descending)
+check 'prune-fail: three seed baselines exist before the lock' ($seedBaselines.Count -eq 3)
+$lockedBaseline = $seedBaselines[-1]  # oldest -> the one the next prune targets
+# Lock a PAYLOAD file, never wintage-baseline.json. Locking the meta file makes
+# baselines() unable to parse the dir, so it stops being a prune TARGET at all and
+# the failure is never reached (machine-dependent: Get-ChildItem enumeration order
+# decides which file comes "first"). A locked payload keeps the dir eligible -- the
+# meta still parses and every listed file still exists -- so the next prune really
+# tries the delete and really hits EPERM.
+$lockedFile = @(Get-ChildItem $lockedBaseline.FullName -Recurse -File | Where-Object { $_.Name -ne 'wintage-baseline.json' } | Select-Object -First 1)
+check 'prune-fail: the oldest baseline carries a lockable file' ($lockedFile.Count -eq 1)
+$lockHandle = $null
+try {
+    $lockHandle = [System.IO.File]::Open($lockedFile[0].FullName, 'Open', 'Read', 'None')
+    [System.IO.File]::WriteAllText($bundlePath, ($BUNDLE + "`n// generation 4 build"), $utf8)
+    [System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', ($FULL_ORCH + "`n// generation 4"), $utf8)
+    $r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
+    $lockedOut = ($r.Out | ForEach-Object { "$_" }) -join "`n"
+    check 'prune-fail: the patch still completes (exit 0)' ($r.Code -eq 0)
+    check 'prune-fail: the failed prune is REPORTED' ($lockedOut -match 'could not prune stale baseline')
+    check 'prune-fail: the report names the directory' ($lockedOut -match [regex]::Escape($lockedBaseline.Name))
+    check 'prune-fail: the report carries an error code' ($lockedOut -match 'EPERM|EBUSY|EACCES')
+    check 'prune-fail: the locked residue really stayed (no false alarm)' (Test-Path $lockedBaseline.FullName)
+    check 'prune-fail: the locked file itself survived the failed prune' (Test-Path $lockedFile[0].FullName)
+    check 'prune-fail: no success line claims the failed prune' ($lockedOut -notmatch ('pruned stale baseline ' + [regex]::Escape($lockedBaseline.Name)))
+}
+finally {
+    if ($lockHandle) { $lockHandle.Dispose() }
+}
+# Control: with the lock released, normal pruning still succeeds and prints the
+# unchanged success line. Whether the locked residue is later pruned is NOT
+# asserted: rmSync's recursive order is not contractual (it may delete the
+# locked file's siblings before or after the locked file itself), so the residue
+# is sometimes a complete, still-countable baseline and sometimes an uncountable
+# partial orphan. The only contractual, order-invariant fact -- proven above --
+# is that the FAILED prune was reported while it failed, with no false success
+# line. That is exactly the T-251 defect: the failure used to be silent.
+[System.IO.File]::WriteAllText($bundlePath, ($BUNDLE + "`n// generation 5 build"), $utf8)
+[System.IO.File]::WriteAllText($orchestratorDir + '\orchestrator.js', ($FULL_ORCH + "`n// generation 5"), $utf8)
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--sound', $wavAPath)
+$controlOut = ($r.Out | ForEach-Object { "$_" }) -join "`n"
+check 'prune-fail: unlocked control apply exits 0' ($r.Code -eq 0)
+check 'prune-fail: normal pruning still prints its unchanged success line' ($controlOut -match 'pruned stale baseline _orig-baseline-')
+$r = Run-TestChild node @((Join-Path $root 'desktop\patch-freebuff-ads.js'), '--revert')
+check 'prune-fail: Revert still works afterwards' ($r.Code -eq 0)
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

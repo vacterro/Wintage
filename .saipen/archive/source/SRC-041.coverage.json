@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-041:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1434 + E-1443 full-matrix current-tree run",
+      "text": "PERF-001: Lazy terminal font initialization - zero AddFontFile/fixed-pitch probes before Fonts tab; first entry loads only selected bundled face; cache per immutable file identity (audit/8.md finding PERF-001, projected from SRC-028:R011)",
+      "verification": "powershell tools/test-tf-lazy-init.ps1 15 PASS 0 FAIL (instrumented: AddFontFile=0 probes=0 on open; first entry lazy; cache keyed path+size+mtime; RED control)",
+      "work": "T-299"
+    }
+  },
+  "schema_version": 1
+}

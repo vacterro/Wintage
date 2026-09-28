@@ -204,6 +204,7 @@ return {
   styleLapDeferredRoots,
   bumpStyleElementSheets,
   stripHoverRule,
+  setImp,
   runSweeper,
   requestForceSweep,
   requestLightSweep,
@@ -1305,6 +1306,17 @@ console.log('\n--- Red Controls (Temporary In-Memory Mutants) ---');
   measure('RED B: FIXED traversal rule-index reads in ONE slice of budget 500', fixedReads);
   check('RED B: the fixed traversal honours the rule budget on the same container',
     fixedReads <= 505, true);
+}
+
+{
+  const rep = createRepainterContext();
+  let threw = false;
+  let accepted = false;
+  try { accepted = rep.setImp({ style: {} }, 'color', '#123456'); } catch (e) { threw = true; }
+  check('setImp ignores a non-CSS style object', [threw, accepted], [false, false]);
+  let writes = 0;
+  accepted = rep.setImp({ style: { getPropertyValue: () => '', setProperty: () => { writes++; } } }, 'color', '#123456');
+  check('setImp still writes through a partial CSS style object', [accepted, writes], [true, 1]);
 }
 
 console.log('\n' + (bad === 0 ? 'ALL PASS: test-repainter-budget.js' : bad + ' FAIL(S)'));

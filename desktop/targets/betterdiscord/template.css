@@ -1,5 +1,5 @@
 /**
- * @name Wintage (${label})
+ * @name Wintage
  * @author Wintage Installer
  * @version 1.0.0
  * @description Win95 Dark Golden theme for Discord.
@@ -77,7 +77,123 @@
   --chat-input-container-background: var(--wintage-background) !important;
   --home-background: var(--wintage-backgroundSoft) !important;
   --stage-background: var(--wintage-backgroundSoft) !important;
-  --modal-background: var(--wintage-surface) !important;
+  --background-base: var(--wintage-backgroundSoft) !important;
+  --background-base-low: var(--wintage-background) !important;
+  --background-base-alt: var(--wintage-surface) !important;
+  --background-base-hover: var(--wintage-surfaceAlt) !important;
+  --background-base-active: var(--wintage-surfaceRaised) !important;
+  --background-base-selected: var(--wintage-selection) !important;
+  --background-base-danger: var(--wintage-danger) !important;
+  --background-base-success: var(--wintage-success) !important;
+  --background-base-warning: var(--wintage-warning) !important;
+  --background-backdrop: var(--wintage-background) !important;
+  --background-backdrop-light: var(--wintage-backgroundSoft) !important;
+  --background-modifier-message-hover: var(--wintage-surfaceAlt) !important;
+  --background-modifier-selected-hover: var(--wintage-surfaceAlt) !important;
+  --chat-background-default: var(--wintage-backgroundSoft) !important;
+  --chat-background-secondary: var(--wintage-surface) !important;
+  --chat-background-tertiary: var(--wintage-surfaceRaised) !important;
+  --chat-border-color: var(--wintage-borderDark) !important;
+  --chat-input-background: var(--wintage-background) !important;
+  --chat-input-border: var(--wintage-borderDark) !important;
+  --chat-text-color: var(--wintage-textPrimary) !important;
+  --chat-text-color-muted: var(--wintage-textSecondary) !important;
+  --channel-background: var(--wintage-surface) !important;
+  --channel-border: var(--wintage-borderDark) !important;
+  --channel-text: var(--wintage-textSecondary) !important;
+  --channel-text-muted: var(--wintage-textMuted) !important;
+  --control-primary-background: var(--wintage-surfaceRaised) !important;
+  --control-primary-background-hover: var(--wintage-surfaceAlt) !important;
+  --control-primary-background-active: var(--wintage-surface) !important;
+  --control-primary-text: var(--wintage-textPrimary) !important;
+  --control-primary-text-hover: var(--wintage-textPrimary) !important;
+  --control-primary-text-active: var(--wintage-textPrimary) !important;
+  --control-secondary-background: var(--wintage-surface) !important;
+  --control-secondary-background-hover: var(--wintage-surfaceRaised) !important;
+  --control-secondary-background-active: var(--wintage-surfaceAlt) !important;
+  --control-secondary-text: var(--wintage-textPrimary) !important;
+  --control-brand-text: var(--wintage-accentTeal) !important;
+  --control-brand-text-hover: var(--wintage-accentTeal) !important;
+  --control-brand-text-active: var(--wintage-accentTealDeep) !important;
+  --brand: var(--wintage-accentTeal) !important;
+  --brand-hover: var(--wintage-accentTeal) !important;
+  --brand-text: var(--wintage-link) !important;
+  --brand-link: var(--wintage-link) !important;
+  --brand-icon: var(--wintage-accentTeal) !important;
+  --brand-button-primary: var(--wintage-accentTeal) !important;
+  --brand-button-primary-hover: var(--wintage-accentTealDeep) !important;
+  --brand-button-secondary: var(--wintage-surfaceRaised) !important;
+  --brand-button-secondary-hover: var(--wintage-surfaceAlt) !important;
+  --mention-background: var(--wintage-selection) !important;
+  --mention-background-hover: var(--wintage-surfaceRaised) !important;
+  --mention-foreground: var(--wintage-textPrimary) !important;
+  --event-background: var(--wintage-surface) !important;
+  --event-background-hover: var(--wintage-surfaceAlt) !important;
+  --popover-background: var(--wintage-surface) !important;
+  --popover-foreground: var(--wintage-textPrimary) !important;
+  --menu-background: var(--wintage-surface) !important;
+  --menu-foreground: var(--wintage-textPrimary) !important;
+  --context-menu-background: var(--wintage-surface) !important;
+  --context-menu-foreground: var(--wintage-textPrimary) !important;
+  --input-background-default: var(--wintage-background) !important;
+  --input-background-hover: var(--wintage-surface) !important;
+  --input-background-focused: var(--wintage-background) !important;
+  --input-border: var(--wintage-borderDark) !important;
+  --input-border-hover: var(--wintage-borderHighlight) !important;
+  --input-border-focus: var(--wintage-borderHighlight) !important;
+  --input-text: var(--wintage-textPrimary) !important;
+  --input-text-placeholder: var(--wintage-textMuted) !important;
+  --input-label: var(--wintage-textSecondary) !important;
+  --interactive-normal: var(--wintage-textSecondary) !important;
+  --interactive-hover: var(--wintage-textPrimary) !important;
+  --interactive-active: var(--wintage-textPrimary) !important;
+  --interactive-muted: var(--wintage-textMuted) !important;
+  --interactive-hover-muted: var(--wintage-textSecondary) !important;
+  --interactive-brand: var(--wintage-accentTeal) !important;
+  --interactive-brand-hover: var(--wintage-accentTealDeep) !important;
+  --interactive-brand-active: var(--wintage-accentTealDeep) !important;
+  --interactive-brand-muted: var(--wintage-textMuted) !important;
+  --interactive-link: var(--wintage-link) !important;
+  --interactive-link-hover: var(--wintage-link) !important;
+  --icon-color: var(--wintage-textSecondary) !important;
+  --icon-color-hover: var(--wintage-textPrimary) !important;
+  --icon-color-active: var(--wintage-textPrimary) !important;
+  --icon-color-disabled: var(--wintage-textMuted) !important;
+  --icon-color-brand: var(--wintage-accentTeal) !important;
+  --icon-color-danger: var(--wintage-dangerText) !important;
+  --icon-color-success: var(--wintage-success) !important;
+  --icon-color-warning: var(--wintage-warning) !important;
+  --border-low: var(--wintage-borderDark) !important;
+  --border-normal: var(--wintage-borderMuted) !important;
+  --border-medium: var(--wintage-borderHighlight) !important;
+  --border-high: var(--wintage-borderHighlight) !important;
+  --border-strong: var(--wintage-borderHighlight) !important;
+  --border-subtle: var(--wintage-borderDark) !important;
+  --border-interactive: var(--wintage-borderDark) !important;
+  --border-interactive-hover: var(--wintage-borderHighlight) !important;
+  --border-interactive-active: var(--wintage-borderHighlight) !important;
+  --border-danger: var(--wintage-danger) !important;
+  --border-success: var(--wintage-success) !important;
+  --border-warning: var(--wintage-warning) !important;
+  --border-brand: var(--wintage-accentTeal) !important;
+  --text-color: var(--wintage-textPrimary) !important;
+  --text-color-muted: var(--wintage-textSecondary) !important;
+  --text-color-link: var(--wintage-link) !important;
+  --text-color-header: var(--wintage-textPrimary) !important;
+  --text-color-strong: var(--wintage-textPrimary) !important;
+  --text-color-subtle: var(--wintage-textMuted) !important;
+  --text-color-danger: var(--wintage-dangerText) !important;
+  --text-color-success: var(--wintage-success) !important;
+  --text-color-warning: var(--wintage-warning) !important;
+  --text-color-brand: var(--wintage-link) !important;
+  --text-color-on-accent: var(--wintage-textPrimary) !important;
+  --text-color-inactive: var(--wintage-textMuted) !important;
+  --text-color-disabled: var(--wintage-textMuted) !important;
+  --text-header: var(--wintage-textPrimary) !important;
+  --text-secondary: var(--wintage-textSecondary) !important;
+  --text-tertiary: var(--wintage-textMuted) !important;
+  --text-inactive: var(--wintage-textMuted) !important;
+  --text-disabled: var(--wintage-textMuted) !important;
   --modal-footer-background: var(--wintage-surfaceRaised) !important;
   --profile-body-background-color: var(--wintage-surface) !important;
   --user-profile-overlay-background: var(--wintage-surface) !important;
@@ -126,6 +242,8 @@
   --brand-experiment-500: var(--wintage-accentTeal) !important;
   --brand-experiment-200: var(--wintage-textSecondary) !important;
   --brand-experiment-100: var(--wintage-textSecondary) !important;
+  --brand-experiment-hover: var(--wintage-accentTeal) !important;
+  --brand-experiment-active: var(--wintage-accentTealDeep) !important;
   --brand-100: var(--wintage-textSecondary) !important;
   --brand-130: var(--wintage-textSecondary) !important;
   --brand-160: var(--wintage-textSecondary) !important;
@@ -202,6 +320,8 @@
   --brand-experiment-500: var(--wintage-accentTeal) !important;
   --brand-experiment-200: var(--wintage-textSecondary) !important;
   --brand-experiment-100: var(--wintage-textSecondary) !important;
+  --brand-experiment-hover: var(--wintage-accentTeal) !important;
+  --brand-experiment-active: var(--wintage-accentTealDeep) !important;
   --brand-100: var(--wintage-textSecondary) !important;
   --brand-130: var(--wintage-textSecondary) !important;
   --brand-160: var(--wintage-textSecondary) !important;
@@ -845,6 +965,14 @@ header[class*="header_"]:hover [class*="name_"] {
   -moz-osx-font-smoothing: unset !important;
   font-smooth: never !important;
   text-rendering: optimizeSpeed !important;
+}
+[class*="theme-"] code,
+[class*="theme-"] pre,
+[class*="theme-"] kbd,
+[class*="theme-"] samp,
+[class*="theme-"] [class*="code" i],
+[class*="theme-"] [class*="mono" i] {
+  font-family: var(--font-code) !important;
 }
 
 /* Flat depth: no elevation shadows (UI.md law 2). */

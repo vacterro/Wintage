@@ -55,7 +55,7 @@
     "audit/5.md": {
       "binding": "exact",
       "captured_at": "2026-09-11T08:24:19Z",
-      "closed_at": null,
+      "closed_at": "2026-09-16T17:04:22Z",
       "file_sha256": "0a11cc21412a890213c5ad98e47aa76219bc956adc9b9f99ec44b35cb0a0e991",
       "generation": 1,
       "layer": 5,
@@ -63,7 +63,59 @@
       "receipt_id": "SRC-007",
       "receipt_sha256": "0a11cc21412a890213c5ad98e47aa76219bc956adc9b9f99ec44b35cb0a0e991",
       "size_bytes": 75885,
-      "state": "ACTIVE"
+      "state": "DELETED"
+    },
+    "audit/6.md": {
+      "binding": "exact",
+      "captured_at": "2026-09-16T17:04:45Z",
+      "closed_at": "2026-09-18T11:09:19Z",
+      "file_sha256": "8612182c7ba4e1b3697f1614ae9f4e92b409d76d3913d33d4486bed641c24fe2",
+      "generation": 1,
+      "layer": 6,
+      "linked_work": "T-257",
+      "receipt_id": "SRC-013",
+      "receipt_sha256": "8612182c7ba4e1b3697f1614ae9f4e92b409d76d3913d33d4486bed641c24fe2",
+      "size_bytes": 9818,
+      "state": "DELETED"
+    },
+    "audit/7.md": {
+      "binding": "exact",
+      "captured_at": "2026-09-18T11:09:35Z",
+      "closed_at": "2026-09-20T20:22:25Z",
+      "file_sha256": "9e1cce266b861274f1c2c16e3783c1acd1c76cb9317c215dbe1adf7b28f5f7ea",
+      "generation": 1,
+      "layer": 7,
+      "linked_work": "T-262",
+      "receipt_id": "SRC-018",
+      "receipt_sha256": "9e1cce266b861274f1c2c16e3783c1acd1c76cb9317c215dbe1adf7b28f5f7ea",
+      "size_bytes": 65046,
+      "state": "DELETED"
+    },
+    "audit/8.md": {
+      "binding": "exact",
+      "captured_at": "2026-09-21T20:34:35Z",
+      "closed_at": "2026-09-23T20:08:00Z",
+      "file_sha256": "4343e6572159a9a5ca05eb68b1aa427609d9a571df62d59dbf4f1871c1c1eb70",
+      "generation": 1,
+      "layer": 8,
+      "linked_work": "T-286",
+      "receipt_id": "SRC-028",
+      "receipt_sha256": "4343e6572159a9a5ca05eb68b1aa427609d9a571df62d59dbf4f1871c1c1eb70",
+      "size_bytes": 54815,
+      "state": "DELETED"
+    },
+    "audit/9.md": {
+      "binding": "exact",
+      "captured_at": "2026-09-26T02:47:14Z",
+      "closed_at": "2026-09-27T01:43:28Z",
+      "file_sha256": "5f17da1c57130edb161d6cf1760889e2c6da84619a85b4bbc3335140f782a7be",
+      "generation": 1,
+      "layer": 9,
+      "linked_work": "T-320",
+      "receipt_id": "SRC-049",
+      "receipt_sha256": "5f17da1c57130edb161d6cf1760889e2c6da84619a85b4bbc3335140f782a7be",
+      "size_bytes": 171,
+      "state": "DELETED"
     }
   },
   "schema_version": 1

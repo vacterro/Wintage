@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.36.1] - 2026-09-28
+
+Host-exclusion and installer-locking fixes, plus the generated test surface that
+now covers them.
+
+- The exclusion list no longer treats bot challenges and anti-fraud token
+  providers (Arkose Labs, FunCaptcha, Cloudflare Turnstile, Kasada, PerimeterX)
+  as heavy web apps, so form and reply submissions on X/Twitter and elsewhere are
+  no longer broken by the theme. Five flipbook/reader hosts (Publuu, Issuu,
+  FlipHTML5, Yumpu, Heyzine) join the same list, where a repaint destroys the
+  canvas UI.
+- A local dev server is no longer classified as a high-churn chat SPA. Folding
+  `IS_LOCAL` into `HIGH_CHURN_HOST` silently disabled surface remapping, the
+  floating-panel solidification and the hover surgery on exactly the host most
+  likely to be inspected. `chatgpt.com` and `openai.com` now match by domain
+  rather than by substring.
+- W2-002 (audit/7 T-269): inherited ownership of the cross-runtime build
+  generation lock is now proven rather than declared. The inheritance marker
+  carries the owning acquisition's token and is honoured only while that live
+  holder still owns the lock; a forged, stale or leaked marker acquires normally
+  instead of short-circuiting the lock.
+- W2-005: `processexplorer` is a remembered portable folder (procexp can live
+  anywhere), so it joins `PATHS_KEYS`, the GUI `PATH_TARGETS_MAP` and the single
+  `-ProcessExplorerPath` argument. The two `paths.json` writers now share one
+  strict reader, so a present-but-unreadable document fails closed in both
+  instead of being normalized away in one of them.
+- 33 locale files and the generated Electron payload carried through unchanged.
+- New test surface: `test-transaction-boundary.ps1`, `test-reapply.ps1`,
+  `test-spa-exclude.js`, `test-terminal-font.js`, `test-theme-packs.js`,
+  `test-theme-switch.js`, `test-repainter-budget.js`.
+
 ## [1.36.0] - 2026-09-16
 
 Audit wave: `audit/5.md` (SRC-007) fully executed — all 15 clauses verified

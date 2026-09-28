@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-025:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Process Explorer theme readability fix: remove pure-white text, map to Wintage off-white/golden text tokens, add focused tests, full matrix green"
+    }
+  },
+  "derived_at": "2026-09-20T21:29:22Z",
+  "derived_from": "SRC-025",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "073df728ffef4bec4680549f59c18f9d45862ae05edc345816fb833b481bfbd8"
+}

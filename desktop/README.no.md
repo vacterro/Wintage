@@ -154,4 +154,97 @@ node ..\tools\build-desktop.js --check  # avslutt 1 hvis noe er utdatert
 
 `release.ps1` kjører bygget og hver port, så en utgivelse kan ikke sende utdata som har drevet bort fra palettene.
 
+<!-- T-311 target/section coverage supplement -->
+## Dekning av mål og seksjoner
+
+Denne seksjonen gjenspeiler dekningen av Process Explorer, Notepad++, Cinema
+4D og terminalfonter i den gjeldende engelske README-en, slik at denne
+oversettelsen ikke stille blir foreldet. Kodeliteralene (mål-ID-er,
+registerstier, filnavn) er med vilje språklig uavhengige; teksten rundt er
+oversatt.
+
+### Hva hvert mål faktisk kan tematiseres (nye mål)
+
+| mål | mekanisme | overlever en app-oppdatering |
+|---|---|---|
+| `notepadplusplus` | tema-XML + alias inn i brukerens `themes`-mappe for Notepad++ | ja — det ligger i profilen din |
+| `cinema4d` | fargeskjema lagt i brukerens `schemes`-mappe for Cinema 4D | ja — det ligger i profilen din |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: radmarkeringens farger og grafikkbakgrunner, se nedenfor | nei — Process Explorer skriver om innstillingene sine ved avslutning; lukk og start på nytt |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer beholder fargene sine i
+`HKCU\Software\Sysinternals\Process Explorer` og skriver om den nøkkelen ved
+avslutning, så målet **avviser mens `procexp`, `procexp64` eller `procexp64a`
+kjører** — lukk og start på nytt. Det tematiserer de konfigurerbare
+fargekategoriene:
+
+- **tilgjengelige**: radmarkeringsfargene for prosesser (`ColorOwn`,
+  `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`,
+  `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`,
+  `ColorSuspend`) i både lysmodus- og `*Dark`-varianter, pluss grafikkbakgrunnene
+  (`ColorGraphBk`, `ColorGraphBkDark`) — 24 verdier totalt. Hver variant blandes
+  mot den tilsvarende polen i den aktive paletten (den lysere nyansen til
+  lysmodus-fyllingen, den mørkere til `*Dark`), slik at radfyllene beholder
+  palettens egen nyanse i stedet for å blekne nesten til hvit;
+- **ikke tilgjengelige**: tittelfeltet, menylinjen, verktøylinjen, bakgrunnen
+  og tekstfargene i listevisningen, samt grafikklinjefargene — de er kompilert
+  inn i `procexp.exe` og eksponeres av ingen innstillingsverdi. Målet
+  tematiserer radmarkeringene og grafikkbakgrunnen som det faktisk eier, og
+  gjør ingen større påstander.
+
+Hver verdi som Apply kan endre, tas som øyeblikksbilde før endringen
+(gjenoppretting ved første berøring i
+`%APPDATA%\Wintage\recovery\processexplorer\`) og settes eksakt tilbake av
+`-Revert`, inkludert om hver verdi var fraværende og om markøren var til steds-
+men tom. En bærbar mappe utenfor de vanlige Sysinternals-katalogene huskes via
+den kanoniske `processexplorer`-nøkkelen i `paths.json` (CLI-argument
+`-ProcessExplorerPath`; GUI-en kan også velge den).
+
+### Terminalfonter (`fonts/terminal/`)
+
+Begge terminalmålene leser ÉN kanonisk typografisk innstilling i
+`%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`,
+`renderingMode`). Når filen mangler, beholder målene den utleverte
+standardverdien (Terminus (TTF) for Windows, 12 pt, med alias), så eksisterende
+maskiner forblir uendret. En ugyldig innstilling feiler lukket: ingenting
+skrives over, og målet avviser.
+
+`fonts/terminal/catalog.json` er den eneste skriftkatalogen: 20 medleverte
+open source monospace-familier pluss de to systemtypene Wintage navngir, men
+aldri leverer (Terminus (TTF) for Windows, Consolas). Hver medlevert oppføring
+inneholder sin opprinnelseskilde, pinnet revisjon, lisens-ID, lisensfil og
+SHA-256. De eksakte filene ligger i `fonts/terminal/files/` med
+lisenstekstene i `licenses/`; Wintage i drift jobber helt offline og laster
+aldri ned en skrift.
+
+`tools/sync-terminal-fonts.ps1` er nedlasteren kun for vedlikeholdere. Den
+leser `fonts/terminal/sources.json` (én uforanderlig artefakt per familie),
+verifiserer hver SHA-256 og avviser ved avvik. `-VerifyOnly` (standard)
+sjekker treet på disk uten nettverk; `-Fetch -Write` legger filene inn på nytt.
+Nedlastede skriftbyte behandles som ubetroede binære eiendeler — hasht og
+skrevet, aldri kjørt. Én erstatning er registrert: **Fantasque Sans Mono**
+erstatter Liberation Mono, som ikke publiserer noen pinnet binær utgivelse
+(kun kilde-`.sfd`).
+
+Installatøren **utforsker skrifter, den installerer dem ikke.** Fanen
+TERMINAL FONTS laster en medlevert skrifttype inn i en prosesslokal
+`PrivateFontCollection` for et levende forhåndsbilde, og utfører **null**
+systemregistrering av skrifter. Å velge skrift, størrelse (7–24 pt) eller
+gjengivelsesmodus (aliased/grayscale/cleartype) oppdaterer bare forhåndsbildet
+og innstillingene. Å installere en skrift er en egen **INSTALL SELECTED**
+-handling som åpner Windows sin egen skriftinstallatør; etter Windows sin
+bekreftelse sjekker brukeren på nytt med Refresh. Reelle terminalendringer
+skjer først ved en eksplisitt **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal brukes på den valgte installerte familien i den valgte
+størrelsen, og gjengivelsesmodusen kartlegges til
+`profiles.defaults.antialiasingMode`. Klassisk conhost er strengere: det
+gjengir på et fast cellerutenett, så en valgt skrifttype avvises før enhver
+registerendring med mindre Windows løser den opp (standardtypen og
+Consolas-reserveen er fritatt). Health og Reapply validerer den innstilte
+skrifttypen, størrelsen og kantglattingen mot innstillingen, så en endring av
+innstillingen etter en Apply rapporteres som avvik i stedet for som "frisk".
+Terminalfargenes livssyklus er urørt: Revert gjenoppretter de eksakte verdiene
+som var i Wintages eie før den, og fjerner aldri en skrift fra maskinen.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

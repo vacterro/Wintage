@@ -154,4 +154,99 @@ node ..\tools\build-desktop.js --check  # 1-es kilépési kód, ha valami elavul
 
 A `release.ps1` futtatja a buildet és minden kaput, így egy kiadás nem szállíthat olyan kimenetet, amely eltávolodott a palettáktól.
 
+<!-- T-311 target/section coverage supplement -->
+## Célpontok és szakaszok lefedettsége
+
+Ez a szakasz az aktuális angol README Process Explorer, Notepad++, Cinema 4D
+és terminálbetűtípus lefedettségét tükrözi, hogy ez a nyelv ne legyen csendben
+elavult. A kódszavak (célpont-azonosítók, beállításjegyzék-útvonalak,
+fájlnevek) szándékosan nyelvfüggetlenek; a környező szöveg magyarra van
+fordítva.
+
+### Mit tud ténylegesen temázni az egyes célpont (új célpontok)
+
+| célpont | mechanizmus | túléli az alkalmazásfrissítést |
+|---|---|---|
+| `notepadplusplus` | téma-XML + hivatkozás a felhasználó Notepad++ `themes` mappájába | igen — a saját profiljában él |
+| `cinema4d` | a felhasználó Cinema 4D `schemes` mappájába másolt színséma | igen — a saját profiljában él |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: sor-kiemelési színek és grafikon-háttérek, lásd alább | nem — a Process Explorer kilépéskor felülírja a saját beállításait; zárd be, majd indítsd újra |
+
+### Process Explorer (Sysinternals)
+
+A Process Explorer a színeit a `HKCU\Software\Sysinternals\Process Explorer`
+kulcsban tartja, és kilépéskor felülírja ezt a kulcsot, ezért a célpont
+**nem fut, amíg `procexp`, `procexp64` vagy `procexp64a` fut** — zárd be,
+majd indítsd újra. A beállítható színkategóriákat temazza:
+
+- **elérhetők**: a folyamatok sor-kiemelési színei (`ColorOwn`,
+  `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`,
+  `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`,
+  `ColorSuspend`) világos módú és `*Dark` változataikban, valamint a
+  grafikon-háttérek (`ColorGraphBk`, `ColorGraphBkDark`) — összesen 24 érték.
+  Minden változat a paletta megfelelő pólusa felé keveredik (a világosabb tónus
+  a világos módú kitöltéshez, a sötétebb a `*Dark`-hoz), így a sorok kitöltése
+  a paletta saját kulcsában marad, és nem fakul szinte fehérre;
+- **nem érhetők el**: a címsor, a menüsor, az eszközsor, a lista nézetének
+  háttere és szövegszínei, valamint a grafikonvonalak színei — ezek be vannak
+  égetve a `procexp.exe`-be, és egyetlen beállítási érték sem teszi elérhetővé
+  őket. A célpont csak azokat a sor-kiemeléseket és azt a grafikon-hátteret
+  temazza, amelyeket valóban birtokol, és semmi többet.
+
+Minden Apply által módosítható érték módosítás előtt pillanatképként rögzül
+(első érintésre visszaállítás a `%APPDATA%\Wintage\recovery\processexplorer\`
+mappában), és a `-Revert` pontosan visszaállítja, azt is, hogy egy érték
+hiányzott-e, és hogy a jelzőlétezett-e-üresen. A szokásos Sysinternals
+mappákon kívüli hordozható mappa a kanonikus `paths.json` `processexplorer`
+kulcsán keresztül őrződik meg (CLI argumentum `-ProcessExplorerPath`; a GUI is
+kiválaszthatja).
+
+### Terminálbetűtípusok (`fonts/terminal/`)
+
+Mindkét terminál-célpont EGYetlen kanonikus tipográfiai beállítást olvas a
+`%APPDATA%\Wintage\terminal-font.json` fájlból (`schema`, `fontSlug`,
+`family`, `size`, `renderingMode`). Ha a fájl hiányzik, a célpontok
+megtartják a szállított alapértéket (Terminus (TTF) Windowson, 12 pt,
+aliaszolt), így a meglévő gépek változatlanok maradnak. Hibás beállításnál a
+rendszer zártan leáll: semmi nem íródik felül, és a célpont nem fut.
+
+A `fonts/terminal/catalog.json` az egyetlen betűtípus-katalógus: 20 szállított
+nyílt forráskódú monospaced család plusz a két rendszerbetűtípus, amelyet a
+Wintage megnevez, de nem szállít (Terminus (TTF) Windowson, Consolas).
+Minden szállított bejegyzés hordozza a saját eredeti forrását, a rögzített
+revíziót, a licenc-azonosítót, a licencfájlt és a SHA-256 értéket. A pontos
+fájlok a `fonts/terminal/files/` alatt vannak beágyazva, a licencszövegek a
+`licenses/` könyvtárban; a futó Wintage teljesen offline működik, és soha nem
+tölt le betűtípust.
+
+A `tools/sync-terminal-fonts.ps1` kizárólag a karbantartóknak szóló letöltő. A
+`fonts/terminal/sources.json` fájlt olvassa (családonként egy
+megváltoztathatatlan artefaktum), minden SHA-256 értéket ellenőriz, és
+eltérésnél megtagadja a működést. A `-VerifyOnly` (alapértelmezett) hálózat
+nélkül ellenőrzi a lemezen lévő fát; a `-Fetch -Write` újrabeválogatja a
+fájlokat. A letöltött betűtípus-bájtok megbízhatatlan bináris eszköznek
+számítanak — hashelik és kiírják, soha nem futtatják. Egy helyettesítés
+dokumentált: a **Fantasque Sans Mono** a Liberation Mono-t helyettesíti,
+mert az nem ad ki rögzített bináris kiadást (csak forrás `.sfd`).
+
+A telepítő **böngészi a betűtípusokat, nem telepíti őket.** A TERMINAL FONTS
+lap egy szállított betűtípust folyamatlokális `PrivateFontCollection`-be tölt
+élő előnézetért, ami **nulla** rendszerbetűtípus-regisztrációt végez. A
+betűtípus, a méret (7–24 pt) vagy a renderelési mód
+(aliased/grayscale/cleartype) kiválasztása csak az előnézetet és a beállítást
+frissíti. A betűtípus telepítése külön **INSTALL SELECTED** művelet, amely
+megnyitja a Windows saját betűtípus-telepítőjét; a Windows megerősítése után a
+felhasználó a Refresh gombbal újrapróbálkozik. A tényleges terminálváltozások
+csak explicit **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** után következnek.
+
+A Windows Terminal az adott méretben a kiválasztott telepített családra
+alkalmazódik, a renderelési mód pedig a
+`profiles.defaults.antialiasingMode` értékre képeződik le. A klasszikus
+conhost szigorúbb: fix cellarácsra rajzol, ezért a kiválasztott betűtípust még
+a beállításjegyzék módosítása előtt elutasítja, ha a Windows nem tudja
+feloldani (az alapértelmezett betűtípus és a Consolas tartalék kivétel). A
+Health és a Reapply a beállított betűtípust, méretet és élsimítást a
+beállításhoz mérték, így az Apply utáni beállításváltoztatás eltérésként
+jelenik meg, nem pedig "egészségesként". A terminálszínek életciklusa érintetlen:
+a Revert visszaállítja a pontos, Wintage előtti birtokolt értékeket, és soha
+nem távolít el betűtípust a gépről.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

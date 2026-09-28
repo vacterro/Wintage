@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-021:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "J\u00e4tka T-262 audit/7 umbrella: next unresolved clause T-268 CORE-006 preset dirty state"
+    }
+  },
+  "derived_at": "2026-09-24T01:59:09Z",
+  "derived_from": "SRC-021",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "4fe831d4c342ec154d6871e6a299664940da9ab1ef2ed2fbcae5fc74d18245cb"
+}

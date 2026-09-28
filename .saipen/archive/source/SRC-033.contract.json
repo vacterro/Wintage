@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-033:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003: Terminal-font Refresh control wired to Refresh-TfFonts; selection preserved by stable entry identity not Format-TfRow (audit/8.md finding CORE-003, projected from SRC-028:R003)"
+    }
+  },
+  "derived_at": "2026-09-23T19:47:43Z",
+  "derived_from": "SRC-033",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "4ef12af4f0f79b37b2a099c68011a8dfb6c93fe9717dbb8c938ea928c565933e"
+}

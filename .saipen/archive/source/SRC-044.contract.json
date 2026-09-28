@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-044:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-004: Streaming + bounded GUI logs - Start-BatchJob drains child output progressively before termination; Say-Log/Say-BdLog/Say-TfLog bounded retention; ordinary output marshalled to UI in bounded chunks; machine-result truth separate; O(queue/window) memory; recent text selectable; terminal/failure lines survive trimming (audit/8.md finding PERF-004, projected from SRC-028:R014)"
+    }
+  },
+  "derived_at": "2026-09-23T20:00:36Z",
+  "derived_from": "SRC-044",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "4fe21b2ab218c574f67dde27bc333e3fefa301eb9ef13eb777654ee9a730f993"
+}

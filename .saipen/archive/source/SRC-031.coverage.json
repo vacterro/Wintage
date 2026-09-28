@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-031:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1430 + E-1443 full-matrix current-tree run; targets.ps1 fixed-pitch guard before mutation",
+      "text": "CORE-001: Conhost eligibility validator rejects resolvable proportional faces before registry mutation (audit/8.md finding CORE-001, projected from SRC-028:R001)",
+      "verification": "node tools/test-terminal-fonts.js 70 PASS 0 FAIL; powershell tools/test-terminal-fonts-gui.ps1 22 PASS 0 FAIL (E-1443 full matrix green)",
+      "work": "T-289"
+    }
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-034:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1431 + E-1443 full-matrix current-tree run",
+      "text": "CORE-004: Update-TfMetrics Conhost status text agrees with capability/button state - cap.Conhost=true maps to READY, unsupported/unavailable never READY (audit/8.md finding CORE-004, projected from SRC-028:R004)",
+      "verification": "node tools/test-terminal-fonts.js 70 PASS 0 FAIL (truth-table: Conhost=true READY; Installed/Preview+Conhost=false NOT READY; unavailable NOT READY/UNKNOWN)",
+      "work": "T-292"
+    }
+  },
+  "schema_version": 1
+}

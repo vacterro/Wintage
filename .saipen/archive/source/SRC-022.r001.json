@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-022:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Execute Wintage convergence handoff V:\\_TEMP_\\fastprompter_drag\\Wintage_20260920_2045_2.md"
+    }
+  },
+  "derived_at": "2026-09-20T20:51:33Z",
+  "derived_from": "SRC-022",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "0af2f147860597382238d096877ec16125f368cef7fc22036ebd7e242e80b13f"
+}

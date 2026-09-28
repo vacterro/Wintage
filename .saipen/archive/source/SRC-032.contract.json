@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-032:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002: Invoke-TfApply truthful result aggregation - FAILED/PARTIAL/SUCCESS with failed target names and exit codes, nonzero child cannot emit success (audit/8.md finding CORE-002, projected from SRC-028:R002)"
+    }
+  },
+  "derived_at": "2026-09-23T19:45:23Z",
+  "derived_from": "SRC-032",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "eab9e8f865d2c7454032919c618c4dfc0a9b2afa3aa28aa0659304908193a1e6"
+}

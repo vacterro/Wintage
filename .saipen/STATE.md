@@ -1,30 +1,48 @@
 ---
-phase: REVIEW
-task: T-246
-next_action: "PHASE REVIEW T-246"
+phase: CLEAN
+task: none
+next_action: "PHASE CLEAN"
 blocker: none
 agent: antigravity
 saipen_version: 7
 schema_version: 3
 saipen_home: V:\___VAC\__K\__CODE\_AI_STUFF_AGENTIC\_SAIPEN
 mode: full
-execution_intent: converge
-converge_target: ship
-last_event: 948
+last_event: 2229
 style_contract: ded-4ae736e4
-updated: "2026-09-16T11:22:16Z"
-transition_from: VERIFY
+updated: "2026-09-28T06:34:13Z"
+transition_from: DONE
+execution_intent: goal
+goal_waves: 0
+goal_tickets: 0
 ---
 
 # Active Work
 
-T-246 DOING (SRC-007 / audit/5.md umbrella execution, 15 clauses: 15 verified, 0 open). R009 VERIFIED (E-927: production 71/71 incl. sections 11-17, RED A/B/C mutation-based, T-247/T-248/T-249 closed). R010 VERIFIED (E-928: normal 48/0, deterministic mutant red control A/B/C, git-HEAD oracle removed, both suites canonical). R011 VERIFIED (E-929: prerequisite preference persistence, zero post-success persistence, test-path-preference-ordering 55/0). R012 VERIFIED (E-931/E-932: shipped legacyWidePush/legacyIntake/__wintageTestHooks branches REALLY removed from shim.cjs, scalar-snapshot + intake-vs-render-frame harness semantics, identity-based 250,002/100,002 coverage, lazy-Proxy instrumentation (-72% wall time), red controls rebuilt as temporary source mutants with applied-assertions; full Run-Tests.ps1 ALL TESTS PASSED 2026-09-15). R013 VERIFIED (E-935/E-936: PERF-002 bounded repainter - persistent incremental root cursor replacing `[document, ...piercedRoots]`, explicit root/sheet/rule budgets (STYLE_ROOT_BUDGET 16 / STYLE_SHEET_BUDGET 32 / STYLE_RULE_BUDGET 500) separate from the DOM element budget, iterative persistent-stack CSSOM traversal replacing recursive walkRules, completion-safe sheetSeen generations, budgeted append fast path, FINITE style-lap membership via the registerStyleRoot/stamped-sequence epoch (a root pierced mid-lap is deferred to the next lap instead of joining the running one), root-level stripHoverSheets DELETED from production, lazy STYLE owner-text invalidation with zero querySelectorAll('style'), no unbounded CSSOM primitive left (static guards: no stripHoverSheets, no drainStyleRules(..., Infinity), single registration stamp); tools/test-repainter-budget.js wired into tests/Run-Tests.ps1 (Run-Tests.ps1:727) with 12 behavioural fixtures (250k rules, force-root 25k, STYLE-root 25k, nested CSSOM, DOM/style independence, force mid-lap root, STYLE mid-lap root, same-count replacement, 50k append, throwing CSSOM, STYLE owner text, 5k sheets) plus primitive-level RED A/RED B temporary-mutant controls (mutant 25,001 root advances / 250,000 rule reads vs fixed 63 / 500); full Run-Tests.ps1 ALL TESTS PASSED 2026-09-16). R015 VERIFIED (E-943/E-944/E-945: PERF-004 portable browser discovery cache + bounded preference scan. `tools/browser-discovery.ps1` holds the discovery DECISION in one place: a persistent candidate cache keyed by the case-insensitive PortableRoot, cheap path-existence re-validation of cached candidates (a vanished browser is dropped, never invented), invalidation only on cold/corrupt cache, changed root, an invalidated candidate or an explicit `-Rescan`; the walk itself is streamed (name filter during enumeration, no full-tree list) and keeps the historical shortest-path-first ordering, product validation and NO depth bound; preference matching is a chunked byte search carrying boundary overlap instead of `ReadAllText`, exact for both the escaped-backslash and slash forms; profile health carries an mtime+length fingerprint so an unchanged `Preferences` is never reopened. `tools/install-browsers.ps1` delegates both and publishes `PortableDiscovery` in its listing; `desktop/install.ps1` gained `-RescanBrowsers` (forwarded at the listing and apply call sites, and into re-apply children). Evidence: `tools/test-browser-cache.ps1` 41 PASS / 0 FAIL / 0 SKIP, canonical in `tests/Run-Tests.ps1`; child-process listing run1 discovery=walked, run2 discovery=cache with an identical profile set and zero recursive enumeration, run3 `-Rescan` walked; RED A (cache branch removed) reproduces walk-on-every-refresh and RED B (fingerprint shortcut removed) reproduces the re-read, each asserting the mutation applied; full `tests/Run-Tests.ps1` ALL TESTS PASSED 2026-09-16). Open findings: none. T-250 (locale LanguageLabel backfill) still TODO. T-244/T-243/T-242 shipped/done. T-238 and T-065 stay parked.
+None. phase DONE, no active task. The authoritative state is the frontmatter
+above plus BOARD + LOG. This prose body is agent-owned handoff narrative: the
+canonical STATE rewriter owns ONLY the frontmatter and preserves everything
+after the closing fence byte-for-byte (state.py, T-1003), so NO engine
+operation regenerates it -- recorded as a protocol/reporting defect (a stale
+body advanced alongside a live frontmatter and can mislead a cold-recovery
+reader; frontmatter authority preserved). Do not resurrect T-246 or any
+audit-era Work from prose; only frontmatter + BOARD + LOG are truth.
 
+## Current machine truth (2026-09-24, post-audit/8 blocked-debt reconciliation)
 
+- audit/8 umbrella T-286 DONE; children T-289..T-302 DONE; close-out T-303 DONE (E-1629). T-246 and all audit/5..audit/8 clauses terminal.
+- T-304 (SRC-021, stale "continue audit/7 T-268 CORE-006") reconciled and FINISHED: T-268 was already DONE (E-1195/E-1196); zero product delta.
+- work_closure_evidence debt cured: reverify receipts RV-000004..6 bound for T-243/T-244/T-245 (PASS_WITH_CARRIED_DEBT, strict_gate:core).
+- Parked blockers (the only four):
+  - T-259 BLOCKED: user-cancelled, no recoverable spec (do not reconstruct).
+  - T-250 BLOCKED: deliverable complete as T-254/SRC-010:R001 (locale parity re-proven 2026-09-24: 33/33 files, en.json 84 keys, LanguageLabel present, zero missing/extra); closure impossible because its BOARD row names tombstone SRC-007 (linked_work T-246) and no canonical mechanism rebinds a live ticket's source_receipts (source link: active only; repair-metadata: DONE rows only; supersede: refuses carried receipts; resolve-external: same gate). SOURCE_RECEIPT_MISSING is now a registered clean refusal -- the 16.09 raw-ValueError escape is fixed.
+  - T-238 BLOCKED: guard premise stale (current guard T-1387 admits ordinary .saipen paths; kitchens are not protected namespaces) and all 31 legacy-only kitchen files are proven superseded (canonical strict superset), but the verify clause needs engine-side validate.py repair (reads the legacy kitchen path first; unsatisfiable 64-vs-16-hex digest compare), a fresh saitranslate producer round (SAIT-005: locales/README.ja.md then uk), and extensions/subs/MANIFEST.md registration -- none owned in this project.
+  - T-065 BLOCKED: requires an authenticated YouTube Studio session.
+- Remaining chronic validator problems (carried debt, none curable from here): E-838 missing op marker (historical hand-append), improve report protocol_fingerprint, saihunt OUTBOX write-boundary reference, hunt mark @82178cd naming an unpushed commit (push is user-gated), saitranslate sub STATE next_action + sub BOARD duplicate SAIT-004 (sub-side canonical state with no Core-side writer).
 
-## Full matrix, current (E-900 verify)
+## Full matrix, current
 
-tests/Run-Tests.ps1 ALL TESTS PASSED (2026-09-16, real Windows checkout, exit 0) including the new test-repainter-budget.js (R013) and test-browser-cache.ps1 (R015) entries. Node gates theme-switch, spa-exclude, perf-recovery, perf-lanes, perf-bounded, shim-payloads, electron-shim, electron-state, repainter-polarity, diag-counters, fs-retry, recovery-lifecycle, terminal-font, theme-packs, force-root-budget, check-css, check-wiki-mirror, build-desktop --check all PASS; node --check wintage.user.js PASS. Generated Electron payload (desktop/out/electron/<palette>/shim.cjs) re-proved aligned at E-936: bounded cursor present (drainStyleWork/registerStyleRoot), zero full-root snapshot, zero querySelectorAll('style'), zero recursive walkRules, zero stripHoverSheets, no unbudgeted CSSOM drain.
+tests/Run-Tests.ps1 ALL TESTS PASSED (2026-09-24, real Windows checkout, exit 0), including test-presets.ps1 (-RedControl), test-locale-parity.ps1 (33/33 locales, 84-key parity), repainter-budget, browser-cache and every audit/8 focused gate. Generated Electron payload re-proved aligned at E-936.
 
 ## SAIOPS is refused in this project, deliberately
 

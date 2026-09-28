@@ -154,4 +154,37 @@ node ..\tools\build-desktop.js --check  # 有任何过期内容则 exit 1
 
 `release.ps1` 会运行构建和每一道门禁，因此发布不可能交付偏离调色板的输出。
 
+<!-- T-311 target/section coverage supplement -->
+## 目标与章节覆盖
+
+本节对照当前英文 README 中 Process Explorer、Notepad++、Cinema 4D 和终端字体的覆盖范围，使本语言版本不会在无声中过时。代码字面量（目标 ID、注册表路径、文件名）按设计就是语言无关的；其周围的文字在此已作翻译。
+
+### 每个目标实际能被主题化的内容（新增目标）
+
+| 目标 | 机制 | 是否扛住应用更新 |
+|---|---|---|
+| `notepadplusplus` | 主题 XML + 别名写入你本人的 Notepad++ `themes` 文件夹 | 是 — 它就在你的配置文件中 |
+| `cinema4d` | 颜色方案放入你本人的 Cinema 4D `schemes` 文件夹 | 是 — 它就在你的配置文件中 |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`：行高亮颜色与图表背景，见下文 | 否 — Process Explorer 退出时会重写其设置；关掉它再重新运行 |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer 把颜色保存在 `HKCU\Software\Sysinternals\Process Explorer`，并在退出时重写该键，所以只要 `procexp`、`procexp64` 或 `procexp64a` 还在运行，该目标就**拒绝执行** — 关掉它再运行一次。它主题化那些可配置的颜色类别：
+
+- **够得着**：进程行高亮颜色（`ColorOwn`、`ColorServices`、`ColorRelocatedDlls`、`ColorImmersive`、`ColorPacked`、`ColorJobs`、`ColorNet`、`ColorProtected`、`ColorNewProc`、`ColorDelProc`、`ColorSuspend`）的浅色模式与 `*Dark` 两种变体，外加图表背景（`ColorGraphBk`、`ColorGraphBkDark`）— 一共 24 个值。每个变体都朝当前调色板的对应一极混合（浅色模式填充用更浅的色调，`*Dark` 用更深的色调），因此行填充保持调色板自身的调子，而不是褪成近白的粉彩；
+- **够不着**：标题栏、菜单栏、工具栏、列表视图背景与文字颜色，以及图表线条颜色 — 这些编译在 `procexp.exe` 里，没有任何设置值会暴露它们。该目标主题化行高亮和它真正拥有的图表背景，不多声称任何东西。
+
+Apply 能够改动的每一个值都会在改动前先做快照（位于 `%APPDATA%\Wintage\recovery\processexplorer\` 的首次触碰恢复），并由 `-Revert` 精确还原，包括每个值原本是否缺失，以及该标记是否存在但为空。标准 Sysinternals 目录之外的便携文件夹通过规范的 `paths.json` 键 `processexplorer` 记住（命令行参数 `-ProcessExplorerPath`；GUI 也可以选取）。
+
+### 终端字体（`fonts/terminal/`）
+
+两个终端目标都从 `%APPDATA%\Wintage\terminal-font.json` 读取**同一份**规范排版偏好（`schema`、`fontSlug`、`family`、`size`、`renderingMode`）。文件缺失时，目标保持随附的默认值（Windows 下为 Terminus (TTF)、12 pt、别名渲染），因此现有机器不受影响。格式错误的偏好会封闭失败：不覆盖任何东西，目标直接拒绝。
+
+`fonts/terminal/catalog.json` 是唯一的字体目录：20 个内置开源等宽字族，加上 Wintage 只点名、从不随附的两个系统字面（Windows 下为 Terminus (TTF)、Consolas）。每个内置条目都带有其上游来源、固定版本、许可证 ID、许可证文件和 SHA-256。确切的字体文件以 vendored 形式放在 `fonts/terminal/files/`，许可证文本放在 `licenses/`；运行时的 Wintage 完全离线工作，从不下载字体。
+
+`tools/sync-terminal-fonts.ps1` 是仅限维护者使用的下载器。它读取 `fonts/terminal/sources.json`（每个字族一个不可变构件），校验每个 SHA-256，遇到不匹配就拒绝。`-VerifyOnly`（默认）在无网络的情况下检查磁盘上的目录树；`-Fetch -Write` 重新 vendor。下载的字体字节按不可信二进制资产处理 — 只做哈希和写入，绝不执行。已记录一处替换：**Fantasque Sans Mono** 取代 Liberation Mono，后者不发布任何固定的二进制版本（只有 `.sfd` 源文件）。
+
+安装器**只浏览字体，并不安装它们。** TERMINAL FONTS 标签页把一个内置字面载入进程本地的 `PrivateFontCollection` 以做实时预览，这一步进行**零**次系统字体注册。选择字体、字号（7–24 pt）或渲染模式（aliased/grayscale/cleartype）只更新预览和偏好。安装字体是一个明确的 **INSTALL SELECTED** 动作，它会打开 Windows 自带的字体安装器；在 Windows 确认之后，用户用 Refresh 重新探测。终端的实际变更只发生在明确的 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 动作时。
+
+Windows Terminal 会以选定的字号应用到所选已安装的字族上，渲染模式则映射到 `profiles.defaults.antialiasingMode`。经典 conhost 更严格：它在固定的单元格网格上渲染，因此选中的字面会在任何注册表改动之前被拒绝，除非 Windows 能解析它（默认字面和 Consolas 回退属于既有豁免）。Health 和 Reapply 会拿已配置的字面/字号/抗锯齿与那份偏好对照校验，因此在一次 Apply 之后改动偏好会被报告为漂移，而不是仍算"健康"。终端颜色的生命周期未受影响：Revert 精确还原 Wintage 之前所拥有的值，且绝不从机器上移除任何字体。
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

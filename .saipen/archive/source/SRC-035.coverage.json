@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-035:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1434 + E-1443 full-matrix current-tree run",
+      "text": "CORE-005: Terminal font size schema integer 7..24 in both Node and PowerShell; fractional sizes rejected never rounded; shared parity fixtures (audit/8.md finding CORE-005, projected from SRC-028:R005)",
+      "verification": "node tools/test-terminal-fonts.js 86 PASS 0 FAIL (parity fixtures: 7.5/12.5/24.1 reject, 7/13/24 accept, read/write round-trip preserves integer)",
+      "work": "T-293"
+    }
+  },
+  "schema_version": 1
+}

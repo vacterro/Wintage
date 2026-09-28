@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-023:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-281 closed with verification evidence in LOG: verify -> PASS [target: T-281] conf: high -- post-SHIP re-confirmation: tools\\test-processexplorer.ps1 55 PASS 0 FAIL; full tests\\Run-Tests.ps1 ALL TESTS PASSED exit 0.",
+      "text": "Add Wintage theme support for Sysinternals Process Explorer. The current blue-heavy default appearance does not fit Wintage.",
+      "verification": "the Work this request created reached its own verification gate; see the T-281 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-281"
+    }
+  },
+  "schema_version": 1
+}

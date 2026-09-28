@@ -154,4 +154,37 @@ node ..\tools\build-desktop.js --check  # ukončiť 1, ak je niečo zastarané
 
 `release.ps1` spúšťa build a každú bránu, takže vydanie nemôže odoslať výstup, ktorý sa odchýlil od paliet.
 
+<!-- T-311 target/section coverage supplement -->
+## Pokrytie cieľov a sekcií
+
+Táto sekcia zrkadlí pokrytie aktuálneho anglického README pre Process Explorer, Notepad++, Cinema 4D a písma terminálov, aby táto lokalizácia potichu nezostala zaostarávajúca. Literály kódu (identifikátory cieľov, cesty v registri, názvy súborov) sú jazykovo nezávislé už zo zadania; okolitý text je tu preložený.
+
+### Čo sa z každého cieľa dá skutočne tematizovať (pridané ciele)
+
+| cieľ | mechanizmus | prežije aktualizáciu aplikácie |
+|---|---|---|
+| `notepadplusplus` | XML témy + alias do priečinka `themes` vášho Notepad++ | áno — žije vo vašom profile |
+| `cinema4d` | farebná schéma vložená do priečinka `schemes` vášho Cinema 4D | áno — žije vo vašom profile |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: farby zvýraznenia riadkov a pozadia grafov, viď nižšie | nie — Process Explorer si pri ukončení prepíše nastavenia; zavrite ho a spustite znova |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer si drží farby v `HKCU\Software\Sysinternals\Process Explorer` a pri ukončení tento kľúč prepíše, preto cieľ **odmietne, kým beží `procexp`, `procexp64` alebo `procexp64a`** — zavrite ho a spustite znova. Tematizuje nastaviteľné farebné kategórie:
+
+- **dostupné**: farby zvýraznenia riadkov procesov (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) v svetlom režime aj v ich variantoch `*Dark`, plus pozadia grafov (`ColorGraphBk`, `ColorGraphBkDark`) — spolu 24 hodnôt. Každá varianta sa mieša s zodpovedajúcim pólom aktívnej palety (svetlejší odtieň pre výplň v svetlom režime, tmavší odtieň pre `*Dark`), takže výplne riadkov zostávajú v kľúči samotnej palety namiesto toho, aby sa pastelizovali takmer na bielu;
+- **nedostupné**: titulná lišta, ponuková lišta, lišta nástrojov, pozadie a farby textu v zoznamovom zobrazení a farby čiar grafov — tie sú skompilované do `procexp.exe` a žiadna hodnota nastavenia ich neodhaľuje. Cieľ tematizuje zvýraznenie riadkov a pozadie grafu, ktoré mu naozaj patria, a netvrdí nič viac.
+
+Každá hodnota, ktorú Apply dokáže zmeniť, je uložená ako snímka pred zmenou (obnova pri prvom dotyku v `%APPDATA%\Wintage\recovery\processexplorer\`) a `-Revert` ju obnoví presne, vrátane informácie, či hodnota chýbala a či značka existovala, ale bola prázdna. Prenosný priečinok mimo štandardných adresárov Sysinternals sa pamätá cez kanónický kľúč `paths.json` `processexplorer` (CLI argument `-ProcessExplorerPath`; GUI ho tiež vie vybrať).
+
+### Písma terminálov (`fonts/terminal/`)
+
+Oba terminálové ciele čítajú JEDINÚ kanónickú typografickú preferenciu z `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Keď súbor chýba, ciele si ponechajú dodané predvolené hodnoty (Terminus (TTF) for Windows, 12 pt, aliased), takže existujúce stroje zostávajú nezmenené. Chybná preferencia zlyhá uzavreto: nič sa neprepíše a cieľ odmietne.
+
+`fonts/terminal/catalog.json` je jediný katalóg písiem: 20 zabudovaných open-source monospace rodín plus dva systémové rezy, ktoré Wintage pomenuje, ale nikdy neposiela (Terminus (TTF) for Windows, Consolas). Každá zabudovaná položka nesie svoj upstream zdroj, pripnutú revíziu, ID licencie, súbor licencie a SHA-256. Presné súbory sú vendrované pod `fonts/terminal/files/` a texty licencií pod `licenses/`; Wintage za behu pracuje úplne offline a nikdy nestiahne písmo.
+
+`tools/sync-terminal-fonts.ps1` je sťahovač len pre správcov. Číta `fonts/terminal/sources.json` (jeden nemenný artefakt na rodinu), overí každé SHA-256 a pri nezhodí odmietne. `-VerifyOnly` (predvolene) kontroluje strom na disku bez siete; `-Fetch -Write` ho znovu vendruje. Stiahnuté bajty písiem sa považujú za nedôveryhodné binárne aktíva — hashované a zapísané, nikdy vykonané. Jedna náhrada je zaznamenaná: **Fantasque Sans Mono** nahrádza Liberation Mono, ktorý nepublikuje žiadnu pripnutú binárnu release (iba zdroj `.sfd`).
+
+Inštalátor **prebrowse písma, neinštaluje ich.** Karta TERMINAL FONTS načíta zabudovaný rez do procesne lokálnej `PrivateFontCollection` na živý náhľad, ktorý vykoná **nula** systémových registrácií písem. Voľba písma, veľkosti (7–24 pt) alebo režimu vykresľovania (aliased/grayscale/cleartype) aktualizuje len náhľad a preferenciu. Inštalácia písma je výslovná akcia **INSTALL SELECTED**, ktorá otvorí vlastný inštalačný program písem systému Windows; po potvrdení Windows používateľ znovu zistí stav cez Refresh. Skutočné zmeny terminálu sa dejú len pri výslovnej akcii **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal sa aplikuje na vybranú nainštalovanú rodinu vo vybranej veľkosti a režim vykresľovania sa mapuje na `profiles.defaults.antialiasingMode`. Klasický conhost je prísnejší: vykresľuje na pevnej mriežke buniek, takže vybrané písmo sa odmietne pred akoukoľvek zmenou v registri, pokiaľ ho Windows nerozpozná (predvolený rez a záloha Consolas majú výnimku). Health a Reapply porovnajú nastavený rez/veľkosť/antialiasing s preferenciou, takže zmena preferencie po Apply sa nahlási ako odchýlka, nie ako zdravý stav. Životný cyklus farieb terminálu zostáva nedotknutý: Revert obnoví presné hodnoty vlastnené pred Wintage a nikdy neodstráni písmo zo stroja.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

@@ -41,6 +41,7 @@ Apply gọi ra ngoài `install.ps1`. Chỉ có đúng một đường code cài 
 | `terminal` | scheme Windows Terminal + mặc định mọi profile, Consolas 12 aliased | có — cài đặt nằm trong profile của bạn |
 | `conhost` | mặc định `HKCU\Console` + mọi profile cmd/PowerShell hiện có | có — snapshot chính xác giá trị đã đụng |
 | `obs` | variant OBS 30.2+ `.ovt` + id theme `user.ini` đang dùng | có — nó nằm trong profile của bạn |
+| `qbittorrent` | giao diện Qt chưa đóng gói (`config.json` + `stylesheet.qss`) + hai khóa giao diện trong `qBittorrent.ini` | có — nó nằm trong profile của bạn |
 | `antigravity`, `vscode` | extension theme màu trong `~/.antigravity/extensions` / `~/.vscode/extensions` | **có** — nó nằm trong profile của bạn |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electron, xem bên dưới | không — chạy lại trình cài |
 | `claude` | shim Electron, vá ngay tại chỗ — xem bên dưới | không — bản cập nhật tạo thư mục `app-<version>` mới |
@@ -109,6 +110,21 @@ Chromium cố ý cấm cài extension ngoài store âm thầm trên máy Windows
 
 `obs` sinh một variant OBS 30.2+ trên nền Yami Classic được duy trì, cài vào `%APPDATA%\obs-studio\themes`, và ghi id theme ổn định của nó vào `user.ini`, nên palette Wintage đã chọn được chọn sẵn ở lần khởi động sau. Đóng OBS trước Apply hoặc Revert: OBS tự ghi lại `user.ini` khi thoát. Lần apply đầu sao lưu cả lựa chọn trước đó lẫn mọi theme cùng tên nguyên byte.
 
+### qBittorrent
+
+`qbittorrent` ghi một giao diện Qt **chưa đóng gói** vào `%APPDATA%\qBittorrent\themes\wintage` — một `config.json` (các vai trò `Palette.*` cùng các màu ngữ cảnh riêng của qBittorrent: trạng thái danh sách truyền, mức độ nghiêm trọng của nhật ký) và một `stylesheet.qss` bên cạnh (các góc vát 2px, góc vuông và Verdana, những thứ mà bảng màu không thể diễn đạt) — rồi trỏ `General\CustomUIThemePath` tới `config.json` đó và đặt `General\UseCustomUITheme=true`.
+Chưa đóng gói thay vì gói `.qbtheme`, là cố ý: `.qbtheme` là tệp Qt Resource Collection và để tạo ra nó cần một tệp nhị phân `rcc` cùng phiên bản chính trên máy, tức là phụ thuộc trình biên dịch chỉ vì hai tệp văn bản. qBittorrent đọc dạng thư mục theo cách gốc (`FolderThemeSource`).
+Hãy đóng qBittorrent trước khi Apply hoặc Revert: nó ghi lại toàn bộ `qBittorrent.ini` khi thoát, nên thay đổi thực hiện lúc nó đang chạy sẽ bị bỏ khi đóng — mục tiêu từ chối chạy trong trạng thái đó thay vì báo thành công mà lần thoát kế tiếp sẽ xóa. `-Revert` trả hai khóa INI về đúng giá trị trước Wintage (hoặc xóa chúng nếu trước đó không có) và đặt lại nguyên từng byte thư mục giao diện cùng tên; những sửa đổi không liên quan trong `qBittorrent.ini` thực hiện sau Apply vẫn được giữ.
+Không thể với tới: biểu tượng trên thanh công cụ và khay hệ thống đến từ gói tài nguyên đã biên dịch của chính qBittorrent, nên giữ nguyên màu gốc.
+
+### Phông chữ: gọi tên, không bao giờ cài đặt
+
+Điều luật 1 trong UI.md yêu cầu Verdana **không khử răng cưa**. Bảng kiểu Qt không có thuộc tính cho việc đó, còn `OSDFont` của MPC-HC chỉ là một tên phông GDI — đòn bẩy duy nhất là chính phông chữ. Tệp `Verdana_m1.ttf` ở gốc kho là bản sao của Verdana mang các nét bitmap 1bpp đã kết xuất trước ở 3–30 ppem, mà bộ kết xuất dùng thay vì làm mịn đường viền.
+Bảng kiểu của `qbittorrent` và `obs` ghi `Verdana_m1, Verdana`, còn `mpchc` ghi cái mà máy thực sự phân giải. **Trình cài đặt không bao giờ cài hay gỡ một phông chữ**, và đó là chủ ý chứ không phải việc dở dang:
+Một họ phông được phân giải theo cặp (họ, kiểu). Đăng ký Regular + Bold + Italic thì mọi bên dùng đều phân giải đúng; hủy đăng ký **một** thành viên thì mọi bên yêu cầu họ đó sẽ trỏ sang một thành viên còn lại. Trên máy ánh xạ bí danh `MS Shell Dlg 2` — phông hộp thoại của Windows — sang họ đó qua `HKLM\...\FontSubstitutes`, việc gỡ Regular khiến **toàn bộ màn hình nền thành chữ nghiêng**, kể cả tiêu đề cửa sổ mà DWM đã lưu đệm, và phải đăng xuất mới lấy lại được. Không cách đếm tham chiếu nào sửa được: phạm vi ảnh hưởng toàn máy, và trình cài đặt giao diện không có việc gì ở đó.
+Vì vậy phông chữ là hành động một lần, do người dùng chủ động: nhấp chuột phải vào `Verdana_m1.ttf` → **Install** (theo người dùng, không cần quản trị), rồi áp dụng lại mục tiêu. Nếu thiếu phông, các mục tiêu sẽ nói một lần, chỉ ra cách khắc phục và lùi về Verdana mặc định — có khử răng cưa, nhưng không có gì được làm trên máy sau lưng bạn.
+
+
 ### Ứng dụng Electron
 
 `resources/app.asar` được di chuyển thành `resources/app/app.asar` (anh em `app.asar.unpacked` của nó đi cùng — cặp đó gắn theo tên file, tách nó ra làm hỏng mọi module native), và một `shim.cjs` nhỏ chiếm vị trí `resources/app` để trống. Shim chèn stylesheet rồi tải archive gốc. **Không byte nào của ứng dụng bị viết lại**, chỉ được di dời; `-Revert` chuyển nó thẳng về.
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # exit 1 nếu có gì lỗi thời
 
 `release.ps1` chạy build và mọi cổng, nên một bản phát hành không thể vận chuyển output đã lệch khỏi các palette.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

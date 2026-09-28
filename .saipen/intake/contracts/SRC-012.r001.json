@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-012:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Investigate why T-238/T-250/T-255 are BLOCKED, determine whether each blocker is repairable from inside this project via canonical commands, repair what is repairable, and record a written blocker report."
+    }
+  },
+  "derived_at": "2026-09-16T16:53:21Z",
+  "derived_from": "SRC-012",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "26ba6c09cef184d32b316c0095f312ec8e8de12550fe97ba3031e727d0f8e687"
+}

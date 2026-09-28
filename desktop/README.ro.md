@@ -154,4 +154,37 @@ node ..\tools\build-desktop.js --check  # exit code 1 dacă ceva e vechi
 
 `release.ps1` rulează build-ul și fiecare poartă, deci o lansare nu poate livra output care a derivat de la palete.
 
+<!-- T-311 target/section coverage supplement -->
+## Acoperirea țintelor și a secțiunilor
+
+Această secțiune oglindește acoperirea din README-ul englez actual pentru Process Explorer, Notepad++, Cinema 4D și fonturile de terminal, ca această localizare să nu rămână în tăcere depășită. Literalele de cod (id-uri de țintă, căi de registry, nume de fișiere) sunt invariante de limbă prin proiectare; prosa din jurul lor este tradusă aici.
+
+### Ce poate fi tematizat efectiv din fiecare țintă (ținte adăugate)
+
+| țintă | mecanism | supraviețuiește unei actualizări de aplicație |
+|---|---|---|
+| `notepadplusplus` | XML de temă + alias în dosarul `themes` al Notepad++ al utilizatorului | da — stă în profilul tău |
+| `cinema4d` | schemă de culori pusă în dosarul `schemes` al Cinema 4D al utilizatorului | da — stă în profilul tău |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: culorile de evidențiere a rândurilor și fundalurile graficelor, vezi mai jos | nu — Process Explorer își rescrie setările la ieșire; închide-l și rulează din nou |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer își păstrează culorile în `HKCU\Software\Sysinternals\Process Explorer` și rescrie acea cheie la ieșire, așa că ținta **refuză cât timp rulează `procexp`, `procexp64` sau `procexp64a`** — închide-l și rulează din nou. Ea tematizează categoriile de culori configurabile:
+
+- **accesibile**: culorile de evidențiere a rândurilor de proces (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) atât în variantele de mod luminos, cât și în cele `*Dark`, plus fundalurile graficelor (`ColorGraphBk`, `ColorGraphBkDark`) — 24 de valori în total. Fiecare variantă este amestecată spre polul corespunzător al paletei active (nuanța ei mai deschisă pentru umplerea în modul luminos, nuanța mai închisă pentru `*Dark`), astfel încât umplerile rândurilor rămân în cheia paletei, în loc să devină pasteluri aproape de alb;
+- **inaccesibile**: bara de titlu, bara de meniu, bara de instrumente, fundalul și culorile textului din vizualizarea listă, precum și culorile liniilor din grafice — acestea sunt compilate în `procexp.exe` și nu sunt expuse de nicio valoare de setare. Ținta tematizează doar evidențierea rândurilor și fundalul graficului pe care îl deține cu adevărat, fără să pretindă nimic mai mult.
+
+Fiecare valoare pe care Apply o poate modifica este capturată înainte de modificare (recuperare la prima atingere sub `%APPDATA%\Wintage\recovery\processexplorer\`) și restaurată exact de `-Revert`, inclusiv informația dacă valoarea lipsea și dacă marcajul exista, dar era gol. Un dosar portabil din afara directorilor standard Sysinternals este reținut prin cheia canonică `paths.json` `processexplorer` (argument de CLI `-ProcessExplorerPath`; și GUI-ul îl poate alege).
+
+### Fonturi de terminal (`fonts/terminal/`)
+
+Ambele ținte de terminal citesc O SINGURĂ preferință canonică de tipografie din `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Când fișierul lipsește, țintele păstrează implicitul livrat (Terminus (TTF) for Windows, 12 pt, aliased), așa că mașinile existente rămân neschimbate. O preferință malformată eșuează închis: nu se suprascrie nimic, iar ținta refuză.
+
+`fonts/terminal/catalog.json` este singurul catalog de fonturi: 20 de familii monospațiate open-source incluse, plus cele două fețe de sistem pe care Wintage le numește dar nu le livrează niciodată (Terminus (TTF) for Windows, Consolas). Fiecare intrare inclusă își poartă sursa din amonte, revizia fixată, id-ul licenței, fișierul de licență și SHA-256. Fișierele exacte sunt vendorizate sub `fonts/terminal/files/`, iar textele licențelor sub `licenses/`; la rulare, Wintage funcționează complet offline și nu descarcă niciodată un font.
+
+`tools/sync-terminal-fonts.ps1` este descărcătorul rezervat întreținătorilor. El citește `fonts/terminal/sources.json` (un artefact imuabil per familie), verifică fiecare SHA-256 și refuză orice nepotrivire. `-VerifyOnly` (implicit) verifică arborele de pe disc fără rețea; `-Fetch -Write` re-vendorizează. Octeții de font descărcați sunt considerați active binare de încredere scăzută — hashați și scriși, niciodată executați. O înlocuire este înregistrată: **Fantasque Sans Mono** îl înlocuiește pe Liberation Mono, care nu publică nicio versiune binară fixată (doar sursa `.sfd`).
+
+Instalatorul **navighează fonturi, nu le instalează.** Tabul TERMINAL FONTS încarcă un font inclus într-un `PrivateFontCollection` local procesului pentru o previzualizare vie, care face **zero** înregistrări de fonturi de sistem. Alegerea unui font, a unei dimensiuni (7–24 pt) sau a unui mod de randare (aliased/grayscale/cleartype) actualizează doar previzualizarea și preferința. Instalarea unui font este o acțiune explicită **INSTALL SELECTED** care deschide instalatorul de fonturi al propriului Windows; după confirmarea Windows, utilizatorul reinteroghează cu Refresh. Modificările reale asupra terminalului au loc doar la o acțiune explicită **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal este aplicat familiei instalate selectate, la dimensiunea selectată, iar modul de randare mapează la `profiles.defaults.antialiasingMode`. Conhost clasic este mai strict: randă pe o grilă fixă de celule, așa că un font selectat este refuzat înainte de orice modificare de registry, cu excepția cazului în care Windows îl rezolvă (fontul implicit și rezerva Consolas sunt exceptate). Health și Reapply validează fontul/dimensiunea/anti-aliasing-ul configurat față de preferință, așa că schimbarea preferinței după un Apply este raportată ca deviere, nu ca stare sănătoasă. Ciclul de viață al culorilor terminalului nu este atins: Revert restaurează exact valorile deținute înainte de Wintage și nu elimină niciodată un font de pe mașină.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

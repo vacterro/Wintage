@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-044:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1442/E-1443: tools/test-batch-streaming-gui.ps1 full acceptance 54/0 + -RedControl 6/6 PROVEN; tools/test-log-append-bound.ps1 11/0 + -RedControl PROVEN; metrics received=100005 transportHW=2000/2000 recordHW=7998/7998 appends=34",
+      "text": "PERF-004: Streaming + bounded GUI logs - Start-BatchJob drains child output progressively before termination; Say-Log/Say-BdLog/Say-TfLog bounded retention; ordinary output marshalled to UI in bounded chunks; machine-result truth separate; O(queue/window) memory; recent text selectable; terminal/failure lines survive trimming (audit/8.md finding PERF-004, projected from SRC-028:R014)",
+      "verification": "powershell tools/test-batch-streaming-gui.ps1 54 PASS 0 FAIL; -RedControl 6/6 (whole-run/result-head/stale-counter/missing-eof/late-handlers mutants red); powershell tools/test-log-append-bound.ps1 11 PASS 0 FAIL + RED; full tests/Run-Tests.ps1 ALL TESTS PASSED (E-1443)",
+      "work": "T-302"
+    }
+  },
+  "schema_version": 1
+}

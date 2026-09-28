@@ -154,4 +154,99 @@ node ..\tools\build-desktop.js --check  # exit 1 si quoi que ce soit est obsolè
 
 `release.ps1` exécute le build et chaque gate, donc une release ne peut pas livrer une sortie qui a dérivé des palettes.
 
+<!-- T-311 target/section coverage supplement -->
+## Couverture des cibles et des sections (T-311)
+
+Cette section reprend la couverture Process Explorer, Notepad++, Cinema 4D et les
+polices de terminal du README anglais actuel, pour que cette version linguistique ne
+vieillisse pas en silence. Les littéraux de code (ids de cible, chemins de registre,
+noms de fichiers) ne sont pas traduits par conception ; le texte qui les entoure est
+désormais rédigé dans cette langue.
+
+### Ce que chaque cible peut réellement être thémée (cibles ajoutées)
+
+| target | mécanisme | survit à une mise à jour d'app |
+|---|---|---|
+| `notepadplusplus` | XML de thème + alias dans le dossier `themes` de Notepad++ de l'utilisateur | oui — il vit dans votre profil |
+| `cinema4d` | jeu de couleurs déposé dans le dossier `schemes` de Cinema 4D de l'utilisateur | oui — il vit dans votre profil |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer` : couleurs de surlignage de ligne et fonds de graphique, voir ci-dessous | non — Process Explorer réécrit ses paramètres à la fermeture ; fermez-le et relancez |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer garde ses couleurs dans
+`HKCU\Software\Sysinternals\Process Explorer` et réécrit cette clé quand il se ferme,
+donc la cible **refuse tant que `procexp`, `procexp64` ou `procexp64a` est en cours
+d'exécution** — fermez-le et relancez. Elle thème les catégories de couleur
+configurables :
+
+- **accessible** : les couleurs de surlignage de ligne du processus (`ColorOwn`,
+  `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`,
+  `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`,
+  `ColorSuspend`) dans leur variante claire et dans leur variante `*Dark`, plus les
+  fonds de graphique (`ColorGraphBk`, `ColorGraphBkDark`) — 24 valeurs au total.
+  Chaque variante est mélangée vers le pôle correspondant de la palette active (sa
+  nuance la plus claire pour le remplissage clair, sa nuance la plus sombre pour
+  `*Dark`), afin que les remplissages de ligne restent dans la tonalité propre à la
+  palette au lieu de virer au pastel presque blanc ;
+- **non accessible** : la barre de titre, la barre de menus, la barre d'outils, le
+  fond de la vue en liste et les couleurs de texte, ainsi que les couleurs des
+  lignes du graphique — tout cela est compilé dans `procexp.exe` et n'est exposé par
+  aucune valeur de paramètre. La cible thème les surlignages de ligne et le fond de
+  graphique qu'elle possède réellement, et ne prétend rien de plus.
+
+Chaque valeur qu'Apply peut modifier est capturée avant modification (récupération
+au premier contact sous `%APPDATA%\Wintage\recovery\processexplorer\`) et
+`-Revert` la restaure à l'identique, y compris le fait que la valeur était absente et
+que le marqueur était présent mais vide. Un dossier portable hors des répertoires
+Sysinternals habituels est mémorisé via la clé canonique `processexplorer` de
+`paths.json` (argument de CLI `-ProcessExplorerPath` ; la GUI peut aussi le choisir).
+
+### Polices de terminal (`fonts/terminal/`)
+
+Les deux cibles de terminal lisent UNE seule préférence typographique canonique dans
+`%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`,
+`renderingMode`). Si le fichier est absent, les cibles gardent la valeur par défaut
+livrée (Terminus (TTF) pour Windows, 12 pt, aliased), si bien que les machines
+existantes restent inchangées. Une préférence mal formée échoue en toute sécurité :
+rien n'est écrasé et la cible refuse.
+
+`fonts/terminal/catalog.json` est le catalogue unique des polices : 20 familles
+monospace open source livrées, plus les deux polices système que Wintage nomme sans
+jamais les livrer (Terminus (TTF) pour Windows, Consolas). Chaque entrée livrée porte
+sa source amont, sa révision épinglée, son id de licence, son fichier de licence et
+son SHA-256. Les fichiers exacts sont vendorisés sous `fonts/terminal/files/` avec
+leurs textes de licence sous `licenses/` ; Wintage à l'exécution fonctionne
+intégralement hors ligne et ne télécharge jamais une police.
+
+`tools/sync-terminal-fonts.ps1` est le téléchargeur réservé à la maintenance. Il lit
+`fonts/terminal/sources.json` (un artefact immuable par famille), vérifie chaque
+SHA-256 et refuse toute divergence. `-VerifyOnly` (par défaut) contrôle l'arborescence
+sur disque sans réseau ; `-Fetch -Write` la re-vendorise. Les octets de police
+téléchargés sont traités comme des ressources binaires non fiables — ils sont
+hachés et écrits, jamais exécutés. Un remplacement est consigné :
+**Fantasque Sans Mono** remplace Liberation Mono, qui ne publie aucune version
+binaire épinglée (un `.sfd` source seulement).
+
+L'installeur **parcourt les polices, il ne les installe pas.** L'onglet
+TERMINAL FONTS charge une police livrée dans un `PrivateFontCollection` local au
+processus pour un aperçu en direct, ce qui représente **zéro** enregistrement de
+police système.
+Choisir une police, une taille (7–24 pt) ou un mode de rendu
+(aliased/grayscale/cleartype) ne met à jour que l'aperçu et la préférence. Installer
+une police est une action explicite **INSTALL SELECTED** qui ouvre l'installeur de
+polices de Windows lui-même ; après la confirmation de Windows, l'utilisateur
+redétecte avec Refresh. Les changements réels de terminal n'ont lieu que sur un
+**APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** explicite.
+
+Windows Terminal est appliqué à la famille installée sélectionnée à la taille
+sélectionnée, et le mode de rendu correspond à
+`profiles.defaults.antialiasingMode`. Le conhost classique est plus strict : il rend
+sur une grille de cellules fixe, donc une police sélectionnée est refusée avant
+toute modification du registre sauf si Windows la résout (la police par défaut et le
+repli sur Consolas sont tacitement acceptés). Health et Reapply valident la police,
+la taille et l'anticrénelage configurés par rapport à la préférence, si bien que
+modifier la préférence après un Apply est signalé comme une dérive et non comme
+« sain ». Le cycle de vie des couleurs de terminal reste intact : Revert restaure
+exactement les valeurs que Wintage possédait auparavant et ne retire jamais une
+police de la machine.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

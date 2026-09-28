@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-046:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-306 closed with verification evidence in LOG: verify -> PASS [target: T-306] conf: high -- 6 visual/behavioral defect fixes verified: 1) NNM-Club select:not([multiple]):not([size]) single-row guard allows multiselect height auto min-height 48px; 2) ChatGPT composer background solid plus 96px bottom scroll clearance; 3) Yubico canvas white flash fixed by retaining body backgroundSoft; 4) Grossitoidukaubad flipbook iframes excluded via publuu.c",
+      "text": "# Wintage (Night 24 Aug - 01:37)\n---\n\u2022 ![](file:///V:/___VAC/_PIC/_Clipboard_stuff/clipboard_20260921_233837_e5512d17.png)\n\n\n\u2022 ![](file:///V:/___VAC/_PIC/_Clipboard_stuff/clipboard_20260923_013319_5fcdb35f.png)\n\n\n\u2022 yubico.com \n![](file:///V:/___VAC/__K/__CODE/_PY/_FastPrompter/data/files/code/wintage/paste-20260912_121925.png)\n\ngrossitoidukaubad ![](file:///V:/___VAC/_PIC/_Clipboard_stuff/clipboard_20260913_131838_3f0da1b2.png)\n\nx.com \u043d\u0435 \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u043d\u0438\u0447\u0435\u0433\u043e ![](file:///V:/___VAC/_PIC/_Clipboard_stuff/clipboard_20260913_221740_344b0823.png)\n\ngoogle.com ![](file:///V:/___VAC/_PIC/_Clipboard_stuff/clipboard_20260913_225626_93697da5.png) ![](file:///V:/___VAC/_PIC/_Clipboard_stuff/clipboard_20260915_170102_bc98de38.png)\n\n\nclaude code \n![](file:///V:/___VAC/__K/__CODE/_PY/_FastPrompter/data/files/code/wintage/paste-20260913_231631.png)",
+      "verification": "the Work this request created reached its own verification gate; see the T-306 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-306"
+    }
+  },
+  "schema_version": 1
+}

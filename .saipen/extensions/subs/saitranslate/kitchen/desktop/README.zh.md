@@ -41,6 +41,7 @@ Apply 会向外调用 `install.ps1`。安装主题的代码路径只有一条，
 | `terminal` | Windows Terminal 方案 + 所有配置文件默认值，Consolas 12 别名 | yes — 设置就在你的配置文件中 |
 | `conhost` | `HKCU\Console` 默认值 + 每个现有的 cmd/PowerShell 配置文件 | yes — 精确的已触碰值快照 |
 | `obs` | OBS 30.2+ `.ovt` 变体 + 活动的 `user.ini` 主题 ID | yes — 它存在于你的配置文件中 |
+| `qbittorrent` | 未打包的 Qt 界面主题（`config.json` + `stylesheet.qss`）+ `qBittorrent.ini` 中的两个主题键 | yes — 它存在于你的配置文件中 |
 | `antigravity`, `vscode` | `~/.antigravity/extensions` / `~/.vscode/extensions` 中的颜色主题扩展 | **yes** — 它存在于你的配置文件中 |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim，见下文 | no — 重新运行安装器 |
 | `claude` | Electron shim，就地修补 — 见下文 | no — 更新会生成新的 `app-<version>` 文件夹 |
@@ -109,6 +110,21 @@ Chromium 故意禁止在不受管理的 Windows 机器上静默安装商店外�
 
 `obs` 在维护的 Yami Classic 基础上生成 OBS 30.2+ 变体，安装到 `%APPDATA%\obs-studio\themes`，并把其稳定主题 ID 写入 `user.ini`，这样所选的 Wintage 调色板在下次启动时已被选中。在 Apply 或 Revert 之前关闭 OBS：OBS 退出时会重写 `user.ini`。首次应用会把之前的选项和任何同名主题都逐字节备份。
 
+### qBittorrent
+
+`qbittorrent` 会把一份**未打包**的 Qt 界面主题写入 `%APPDATA%\qBittorrent\themes\wintage`：一个 `config.json`（`Palette.*` 各项角色，加上 qBittorrent 自身的上下文颜色：传输列表状态、日志级别），以及旁边一个 `stylesheet.qss`（2px 斜面、直角边角，以及调色板无法表达的 Verdana）；随后把 `General\CustomUIThemePath` 指向该 `config.json` 并设置 `General\UseCustomUITheme=true`。
+刻意采用未打包形式而非 `.qbtheme` 包：`.qbtheme` 是 Qt Resource Collection 文件，生成它需要机器上有一个主版本号匹配的 `rcc` 可执行文件，为了两个文本文件而引入编译器依赖并不划算。qBittorrent 原生支持读取文件夹形式（`FolderThemeSource`）。
+在 Apply 或 Revert 之前请关闭 qBittorrent：它在退出时会重写整个 `qBittorrent.ini`，因此运行期间所做的修改会在关闭时被丢弃——该目标在此状态下会拒绝执行，而不是报告一个会被下次退出抹掉的“成功”。`-Revert` 会把两个 INI 键恢复为 Wintage 之前的精确值（若原本不存在则删除），并把任何同名主题文件夹按字节原样放回；Apply 之后对 `qBittorrent.ini` 所做的无关修改仍会保留。
+无法覆盖：工具栏与托盘图标来自 qBittorrent 自身已编译的资源包，因此会保持原有配色。
+
+### 字体：只引用名称，从不安装
+
+UI.md 的第一条法则要求 Verdana 且**不做抗锯齿**。Qt 样式表没有对应属性，而 MPC-HC 的 `OSDFont` 只是一个 GDI 字体名——唯一的着力点就是字体本身。仓库根目录的 `Verdana_m1.ttf` 是 Verdana 的副本，带有在 3–30 ppem 预渲染的 1bpp 位图笔画，渲染器会优先使用它而不是平滑轮廓。
+`qbittorrent` 与 `obs` 的样式表写的是 `Verdana_m1, Verdana`，而 `mpchc` 写的是机器实际能解析的那一个。**安装器从不安装或卸载字体**，这是有意为之，而不是尚未完成：
+字体族按（族、字形）进行解析。注册 Regular + Bold + Italic，所有使用方都能正确解析；但只要注销**其中一员**，所有请求该字体族的使用方都会转向仍然存在的那一员。在通过 `HKLM\...\FontSubstitutes` 把 `MS Shell Dlg 2`（Windows 对话框字体）别名到该字体族的机器上，移除 Regular 会让**整个桌面上所有文字变成斜体**，包括 DWM 已经缓存的窗口标题，且必须注销登录才能恢复。任何引用计数都解决不了：影响范围是全机器级别的，主题安装器没有资格涉足那里。
+因此字体是用户一次性、明确的操作：右键 `Verdana_m1.ttf` → **Install**（按用户安装，无需管理员），然后重新应用目标。如果字体缺失，目标会提醒一次、指出解决办法，并回退到系统自带 Verdana——带抗锯齿，但不会在你背后对机器做任何改动。
+
+
 ### Electron 应用
 
 `resources/app.asar` 被移动到 `resources/app/app.asar`（它的 `app.asar.unpacked` 兄弟随之移动 — 该配对基于文件名，拆开它会弄坏每个原生模块），一个小 `shim.cjs` 占据空出的 `resources/app` 插槽。shim 注入样式表，然后加载原始归档。**没有任何应用程序字节被重写**，只是被搬迁；`-Revert` 直接把它移回去。
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # 有任何过期内容则 exit 1
 
 `release.ps1` 会运行构建和每一道门禁，因此发布不可能交付偏离调色板的输出。
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

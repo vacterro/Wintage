@@ -154,4 +154,97 @@ node ..\tools\build-desktop.js --check  # exit 1 jika ada yang basi
 
 `release.ps1` menjalankan build dan setiap gerbang, jadi rilis tidak dapat mengirimkan output yang melenceng dari palet.
 
+<!-- T-311 target/section coverage supplement -->
+## Cakupan target dan bagian
+
+Bagian ini mencerminkan cakupan Process Explorer, Notepad++, Cinema 4D, dan
+font terminal dari README bahasa Inggris yang terbaru, supaya lokalisasi ini
+tidak diam-diam menjadi basi. Literal kode (id target, path registri, nama
+file) memang tidak bergantung pada bahasa; teks di sekitarnya sudah
+diterjemahkan.
+
+### Sejauh mana setiap target dapat diberi tema (target tambahan)
+
+| target | mekanisme | bertahan dari pembaruan aplikasi |
+|---|---|---|
+| `notepadplusplus` | XML tema + alias ke folder `themes` Notepad++ milik pengguna | ya — ia berada di profil Anda |
+| `cinema4d` | skema warna yang disalin ke folder `schemes` Cinema 4D milik pengguna | ya — ia berada di profil Anda |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: warna sorotan baris dan latar grafik, lihat di bawah | tidak — Process Explorer menulis ulang setelannya saat keluar; tutup lalu jalankan lagi |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer menyimpan warnanya di
+`HKCU\Software\Sysinternals\Process Explorer` dan menulis ulang kunci itu
+saat keluar, sehingga target **menolak selama `procexp`, `procexp64`, atau
+`procexp64a` berjalan** — tutup lalu jalankan lagi. Target menata kategori
+warna yang dapat dikonfigurasi:
+
+- **dapat dijangkau**: warna sorotan baris proses (`ColorOwn`, `ColorServices`,
+  `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`,
+  `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`)
+  dalam varian mode terang maupun `*Dark`, ditambah latar grafik
+  (`ColorGraphBk`, `ColorGraphBkDark`) — total 24 nilai. Setiap varian
+  dicampur ke arah kutub palet yang cocok (nada lebih terang untuk isian mode
+  terang, nada lebih gelap untuk `*Dark`), sehingga isian baris tetap pada
+  kunci paletnya sendiri dan tidak memudar jadi nyaris putih;
+- **tidak dapat dijangkau**: bilah judul, bilah menu, bilah alat, latar dan
+  warna teks tampilan daftar, serta warna garis grafik — semuanya terkompilasi
+  di dalam `procexp.exe` dan tidak dibuka oleh nilai setelan apa pun. Target
+  menata sorotan baris dan latar grafik yang benar-benar dimilikinya, dan
+  tidak mengklaim apa pun selain itu.
+
+Setiap nilai yang dapat diubah oleh Apply dicatat sebagai cuplikan sebelum
+diubah (pemulihan sentuhan pertama di
+`%APPDATA%\Wintage\recovery\processexplorer\`) dan dipulihkan persis oleh
+`-Revert`, termasuk apakah setiap nilai memang tidak ada dan apakah penanda
+hadir tetapi kosong. Folder portabel di luar direktori Sysinternals standar
+diingat lewat kunci `processexplorer` pada `paths.json` (argumen CLI
+`-ProcessExplorerPath`; GUI juga bisa memilihnya).
+
+### Font terminal (`fonts/terminal/`)
+
+Kedua target terminal membaca SATU preferensi tipografi kanonik di
+`%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`,
+`renderingMode`). Bila file itu tidak ada, target mempertahankan bawaan yang
+dikirim (Terminus (TTF) untuk Windows, 12 pt, beralias), sehingga mesin yang
+sudah ada tidak berubah. Preferensi yang rusak gagal secara tertutup: tidak
+ada yang ditimpa dan target menolak.
+
+`fonts/terminal/catalog.json` adalah satu-satunya katalog font: 20 keluarga
+monospace sumber terbuka yang dibundel plus dua typeface sistem yang disebut
+Wintage tetapi tidak pernah dikirim (Terminus (TTF) untuk Windows, Consolas).
+Setiap entri yang dibundel membawa sumber aslinya, revisi yang dikunci, id
+lisensi, berkas lisensi, dan SHA-256. Berkasnya sendiri ada di
+`fonts/terminal/files/` dengan teks lisensinya di `licenses/`; Wintage saat
+berjalan bekerja sepenuhnya luring dan tidak pernah mengunduh font.
+
+`tools/sync-terminal-fonts.ps1` adalah pengunduh khusus pemelihara. Ia membaca
+`fonts/terminal/sources.json` (satu artefak immutable per keluarga),
+memverifikasi setiap SHA-256, dan menolak bila tidak cocok. `-VerifyOnly`
+(bawaan) memeriksa pohon di disk tanpa jaringan; `-Fetch -Write` membuat
+salinan baru. Byte font yang diunduh diperlakukan sebagai aset biner tak
+terpercaya — di-hash dan ditulis, tidak pernah dieksekusi. Satu penggantian
+tercatat: **Fantasque Sans Mono** menggantikan Liberation Mono, yang tidak
+menerbitkan rilis biner terkunci (hanya sumber `.sfd`).
+
+Penginstal **menelusuri font, tidak memasangnya.** Tab TERMINAL FONTS memuat
+sebuah typeface terbundel ke dalam `PrivateFontCollection` yang khusus proses
+untuk pratinjau langsung, dan itu melakukan **nol** registrasi font sistem.
+Memilih font, ukuran (7–24 pt), atau mode render
+(aliased/grayscale/cleartype) hanya memperbarui pratinjau dan preferensi.
+Memasang font adalah tindakan **INSTALL SELECTED** tersendiri yang membuka
+penginstal font bawaan Windows; setelah Windows mengonfirmasi, pengguna
+memeriksa ulang dengan Refresh. Perubahan terminal yang sebenarnya hanya
+terjadi setelah **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** yang eksplisit.
+
+Windows Terminal diterapkan ke keluarga terpasang yang dipilih pada ukuran yang
+dipilih, dan mode render dipetakan ke
+`profiles.defaults.antialiasingMode`. Conhost klasik lebih ketat: ia merender
+pada kisi sel tetap, sehingga typeface yang dipilih ditolak sebelum perubahan
+registri apa pun kecuali Windows dapat menyelesaikannya (typeface bawaan dan
+cadangan Consolas dikecualikan). Health dan Reapply memvalidasi
+typeface/ukuran/anti-aliasing yang dikonfigurasi terhadap preferensi, sehingga
+perubahan preferensi setelah Apply dilaporkan sebagai penyimpangan, bukan
+"sehat". Siklus hidup warna terminal tidak disentuh: Revert memulihkan nilai
+milik yang persis sebelum Wintage dan tidak pernah menghapus font dari mesin.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

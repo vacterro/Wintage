@@ -1,0 +1,15 @@
+{
+  "op_id": "scope-5976f4f246ee4fdb8010b6dc40628939",
+  "paths": {
+    ".saipen/BOARD.md": "fba576c8cdee1903266caeacb8ef049a6497dadaf044c545b228fa80674be0ac",
+    ".saipen/LOG.md": "d6029a8b6bacf11217ed343c573121330ee2f9c7467ee762df7c956d32ea9f8e",
+    ".saipen/STATE.md": "58c77bf1885e164c557aa1f7fb90c6f19a324772a94fe961b97893dd77349197"
+  },
+  "project_identity": "v:\\___vac\\__k\\__code\\_tampermonkey\\_win95theme\\wintage",
+  "project_lineage": "lineage-30ee844c69d34eb68605a4563cfdb8ff",
+  "recorded_at": "2026-09-16T11:57:21Z",
+  "schema_version": 2,
+  "source_head": "82178cdfb124ad55f9dccc7cd55ce3a633d51a6c",
+  "source_tree_fingerprint": "git-delta-v1:c66baf69a8306f3b95dfc7badb5f72b088f8de8408e933efadc4d149721a1195",
+  "ticket": "T-246"
+}

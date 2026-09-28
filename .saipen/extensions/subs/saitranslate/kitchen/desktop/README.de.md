@@ -41,6 +41,7 @@ Apply ruft `install.ps1` auf. Es gibt genau einen Codepfad, der ein Theme instal
 | `terminal` | Windows-Terminal-Schema + All-Profil-Standards, Consolas 12 aliased | ja — die Einstellungen liegen in deinem Profil |
 | `conhost` | `HKCU\Console`-Defaults + jedes vorhandene cmd/PowerShell-Profil | ja — exakter Snapshot der berührten Werte |
 | `obs` | OBS-30.2+-`.ovt`-Variante + aktive `user.ini`-Theme-ID | ja — sie lebt in deinem Profil |
+| `qbittorrent` | entpacktes Qt-UI-Theme (`config.json` + `stylesheet.qss`) + die beiden Theme-Schlüssel in `qBittorrent.ini` | ja — sie lebt in deinem Profil |
 | `antigravity`, `vscode` | Farbthemen-Erweiterung in `~/.antigravity/extensions` / `~/.vscode/extensions` | **ja** — sie lebt in deinem Profil |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-Shim, siehe unten | nein — Installer erneut ausführen |
 | `claude` | Electron-Shim, vor Ort gepatcht — siehe unten | nein — ein Update erzeugt einen neuen `app-<version>`-Ordner |
@@ -109,6 +110,21 @@ Chromium verbietet absichtlich die stille Off-Store-Erweiterungsinstallation auf
 
 `obs` erzeugt eine OBS-30.2+-Variante über die gepflegte Yami-Classic-Basis, installiert sie in `%APPDATA%\obs-studio\themes` und schreibt ihre stabile Theme-ID in `user.ini`, also ist die gewählte Wintage-Palette beim nächsten Start bereits ausgewählt. Schließe OBS vor Apply oder Revert: OBS überschreibt `user.ini` beim Beenden. Der erste Apply sichert sowohl die vorherige Auswahl als auch jede gleichnamige Theme bytegenau.
 
+### qBittorrent
+
+`qbittorrent` schreibt ein **entpacktes** Qt-UI-Theme nach `%APPDATA%\qBittorrent\themes\wintage` — eine `config.json` (die `Palette.*`-Rollen plus die eigenen Kontextfarben von qBittorrent: Zustände der Transferliste, Log-Schweregrade) und daneben eine `stylesheet.qss` (die 2px-Fasen, die rechten Ecken und Verdana, was eine Palette nicht ausdrücken kann) — und verweist dann `General\CustomUIThemePath` auf diese `config.json` und setzt `General\UseCustomUITheme=true`.
+Entpackt statt als `.qbtheme`-Paket, und zwar mit Absicht: Eine `.qbtheme` ist eine Qt-Resource-Collection-Datei und bräuchte eine `rcc`-Binärdatei mit passender Hauptversion auf dem Rechner, also eine Compiler-Abhängigkeit für zwei Textdateien. qBittorrent liest die Ordnerform von Haus aus (`FolderThemeSource`).
+Schließe qBittorrent vor Apply oder Revert: Es schreibt beim Beenden die ganze `qBittorrent.ini` neu, eine im laufenden Betrieb gemachte Änderung geht beim Schließen also verloren — das Ziel weigert sich in diesem Zustand zu arbeiten, statt einen Erfolg zu melden, den der nächste Programmende-Vorgang löscht. `-Revert` setzt die beiden INI-Schlüssel auf ihre genauen Werte vor Wintage zurück (oder entfernt sie, wenn sie fehlten) und legt einen gleichnamigen Theme-Ordner byteweise wieder hin; unabhängige Änderungen an `qBittorrent.ini` nach Apply bleiben erhalten.
+Nicht erreichbar: Symbole in Symbolleiste und Infobereich stammen aus dem eigenen kompilierten Ressourcenpaket von qBittorrent und behalten daher ihre Originalfarben.
+
+### Schriftarten: benannt, nie installiert
+
+Gesetz 1 in UI.md verlangt Verdana **ohne Kantenglättung**. Ein Qt-Stylesheet kennt dafür keine Eigenschaft, und `OSDFont` von MPC-HC ist nur ein GDI-Schriftname — der einzige Hebel ist die Schrift selbst. `Verdana_m1.ttf` im Repo-Root ist eine Verdana-Kopie mit vorgerenderten 1bpp-Bitmap-Schnitten bei 3–30 ppem, die ein Renderer dem Glätten der Kontur vorzieht.
+Die Stylesheets von `qbittorrent` und `obs` nennen `Verdana_m1, Verdana`, und `mpchc` nennt diejenige, die der Rechner tatsächlich auflöst. **Der Installer installiert und deinstalliert keine Schriftart**, und das ist Absicht statt Unfertigkeit:
+Eine Schriftfamilie wird über (Familie, Schnitt) aufgelöst. Registriere Regular + Bold + Italic, und jeder Konsument löst korrekt auf; deregistriere **ein** Mitglied, und jeder Konsument, der diese Familie anfragt, zeigt auf ein überlebendes Mitglied. Auf einem Rechner, der `MS Shell Dlg 2` — die Windows-Dialogschrift — über `HKLM\...\FontSubstitutes` auf diese Familie aliasiert, macht das Entfernen von Regular den **gesamten Desktop kursiv**, inklusive der Fenstertitel, die der DWM bereits zwischengespeichert hat, und erst ein Abmelden bringt das zurück. Kein Referenzzählen hilft dagegen: Der Streukreis ist maschinenweit, und ein Theme-Installer hat dort nichts zu suchen.
+Die Schrift ist deshalb eine einmalige, ausdrückliche Nutzeraktion: Rechtsklick auf `Verdana_m1.ttf` → **Install** (pro Benutzer, kein Administrator nötig), dann das Ziel erneut anwenden. Fehlt die Schrift, sagen die Ziele es einmal, benennen die Lösung und fallen auf Standard-Verdana zurück — kantengeglättet, aber auf dem Rechner passiert nichts hinter deinem Rücken.
+
+
 ### Electron-Apps
 
 `resources/app.asar` wird zu `resources/app/app.asar` verschoben (seine `app.asar.unpacked`-Geschwisterdatei zieht mit — diese Paarung läuft über den Dateinamen, und das Trennen bricht jedes native Modul), und ein kleiner `shim.cjs` nimmt den geräumten `resources/app`-Slot. Der Shim injiziert das Stylesheet und lädt dann das Originalarchiv. **Kein Anwendungsbyte wird umgeschrieben**, nur verschoben; `-Revert` verschiebt es direkt zurück.
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # exit 1, wenn etwas stale ist
 
 `release.ps1` führt den Build und jedes Gate aus, also kann ein Release keinen Output liefern, der von den Paletten abgedriftet ist.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

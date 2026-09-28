@@ -37,6 +37,9 @@ $root = Split-Path $here -Parent
 $installer = Join-Path $root 'desktop\install.ps1'
 $targetsSrc = Join-Path $root 'desktop\modules\targets.ps1'
 $commonSrc = Join-Path $root 'desktop\modules\common.ps1'
+$jsonDocSrc = Join-Path $root 'desktop\modules\json-doc.ps1'
+# A dot-source line safe to embed in a generated child: quote the absolute path.
+$dotJsonDoc = '. ' + "'" + $jsonDocSrc + "'"
 $guiSrc = Join-Path $root 'desktop\WintageInstaller.ps1'
 $pass = 0; $fail = 0
 $utf8 = New-Object System.Text.UTF8Encoding($false)
@@ -491,6 +494,8 @@ function Invoke-PathsRace([string]$label, [bool]$cliFirst) {
     [System.IO.File]::WriteAllText($guiChild, (@(
         'param($dir, $goFile)',
         '$ErrorActionPreference = ''Stop''',
+        # W2-005: Save-CustomPaths now routes through the shared strict reader.
+        $dotJsonDoc,
         '$PATH_TARGETS = @(''customtarget'')',
         '$script:pathsFile = Join-Path $dir ''paths.json''',
         '$script:customPaths = @{ ''customtarget'' = ''C:\sv-from-gui'' }',
@@ -552,6 +557,7 @@ $askChild = Join-Path $askDir 'ask.ps1'
 [System.IO.File]::WriteAllText($askChild, (@(
     'param($pathsFile, $picked)',
     '$ErrorActionPreference = ''Stop''',
+    $dotJsonDoc,
     '$PATH_TARGETS = @(''customtarget'')',
     '$PATH_DEFAULTS = @{ ''customtarget'' = ''C:\'' }',
     '$script:pathsFile = $pathsFile',
@@ -575,6 +581,135 @@ $r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
 check 'w2007 ask: a successful save returns TRUE (the gate can distinguish)' ($r.Out -match 'RESULT=True')
 check 'w2007 ask: a successful save remembers the path' ($r.Out -match 'REMEMBERED=True')
 check 'w2007 ask: a successful save actually wrote the file' (Test-Path (Join-Path $askDir 'ok\paths.json'))
+
+# ════ 6. W2-005 (SRC-018:R011): present-but-unreadable paths.json FAILS CLOSED ══
+# Atomic replacement prevents a torn write; it does not make it safe to replace a
+# document that could not be READ. The old policy was `catch { }` -> empty object
+# -> atomic replace, so a malformed/truncated/scalar paths.json was destroyed on
+# the next unrelated save. Both writers must now refuse and preserve bytes.
+check 'w2005: the shared strict reader exists' (Test-Path -LiteralPath $jsonDocSrc)
+
+# The reader itself, driven directly.
+$readerChild = Join-Path $testRoot 'readerdoc.ps1'
+[System.IO.File]::WriteAllText($readerChild, (@(
+    'param($docFile, $path)',
+    '$ErrorActionPreference = ''Stop''',
+    '. $docFile',
+    '$d = Read-OwnedJsonDocument $path',
+    'Write-Host ("EXISTS=" + [bool]$d.Exists)',
+    'Write-Host ("OK=" + [bool]$d.Ok)',
+    'if ($d.Ok -and $d.Exists) { Write-Host ("KEYS=" + (($d.Value.PSObject.Properties.Name | Sort-Object) -join ",")) }',
+    'exit 0'
+) -join "`n"), $utf8)
+$readerCases = @(
+    @{ Name = 'malformed'; Body = '{"zcode": "C:\\x"'; },
+    @{ Name = 'truncated'; Body = '{"portable": "C:\\p", "zcod'; },
+    @{ Name = 'scalar-string'; Body = '"just a string"'; },
+    @{ Name = 'scalar-number'; Body = '42'; },
+    @{ Name = 'array'; Body = '["a","b"]'; },
+    @{ Name = 'null'; Body = 'null' }
+)
+foreach ($case in $readerCases) {
+    $p = Join-Path $testRoot ("reader-" + $case.Name + ".json")
+    [System.IO.File]::WriteAllText($p, $case.Body, $utf8)
+    $r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $readerChild, $jsonDocSrc, $p)
+    check ("w2005 reader {0}: present but invalid -> Exists=true, Ok=false" -f $case.Name) (
+        $r.Out -match 'EXISTS=True' -and $r.Out -match 'OK=False')
+}
+$pAbsent = Join-Path $testRoot 'reader-absent.json'
+$r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $readerChild, $jsonDocSrc, $pAbsent)
+check 'w2005 reader absent: Exists=false, Ok=true (initializes normally)' ($r.Out -match 'EXISTS=False' -and $r.Out -match 'OK=True')
+$pValid = Join-Path $testRoot 'reader-valid.json'
+[System.IO.File]::WriteAllText($pValid, '{"zcode":"C:\\z","futurekey":"C:\\f"}', $utf8)
+$r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $readerChild, $jsonDocSrc, $pValid)
+check 'w2005 reader valid object: Ok=true and all keys visible' ($r.Out -match 'OK=True' -and $r.Out -match 'KEYS=futurekey,zcode')
+
+# The CLI writer (common.ps1 Save-PathPreference) must refuse and leave the
+# damaged-but-authoritative bytes EXACTLY as found, with no temp residue.
+$cliChild2 = Join-Path $testRoot 'w2005cli.ps1'
+[System.IO.File]::WriteAllText($cliChild2, (@(
+    'param($dir, $common)',
+    '$ErrorActionPreference = ''Stop''',
+    '$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)',
+    '$script:Utf8WithBom = New-Object System.Text.UTF8Encoding($true)',
+    '. $common',
+    '$PathsPath = Join-Path $dir ''paths.json''',
+    'try { Save-PathPreference ''portable'' ''C:\new-from-cli'' } catch { Write-Host ("THREW=" + $_.Exception.Message); exit 7 }',
+    'exit 0'
+) -join "`n"), $utf8)
+foreach ($case in @($readerCases[0], $readerCases[2], $readerCases[3], $readerCases[4])) {
+    $dir = Join-Path $testRoot ("w2005cli-" + $case.Name)
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $pf = Join-Path $dir 'paths.json'
+    [System.IO.File]::WriteAllText($pf, $case.Body, $utf8)
+    $before = [System.IO.File]::ReadAllBytes($pf)
+    $r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $cliChild2, $dir, $commonSrc)
+    check ("w2005 cli {0}: Save-PathPreference FAILS closed (nonzero)" -f $case.Name) ($r.Code -ne 0)
+    check ("w2005 cli {0}: original bytes remain EXACT" -f $case.Name) (Same-Bytes $pf $before)
+    $residue = @(Get-ChildItem -LiteralPath $dir -Filter 'paths.json.tmp-*' -ErrorAction SilentlyContinue)
+    check ("w2005 cli {0}: no temporary replacement residue" -f $case.Name) ($residue.Count -eq 0)
+}
+# Absent file still initializes normally (regression guard on the new reader).
+$dirAbsent = Join-Path $testRoot 'w2005cli-absent'
+New-Item -ItemType Directory -Path $dirAbsent -Force | Out-Null
+$r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $cliChild2, $dirAbsent, $commonSrc)
+check 'w2005 cli absent: Save-PathPreference initializes a new file (exit 0)' ($r.Code -eq 0)
+check 'w2005 cli absent: the new document carries the saved key' (
+    ([System.IO.File]::ReadAllText((Join-Path $dirAbsent 'paths.json'), $utf8) | ConvertFrom-Json).portable -eq 'C:\new-from-cli')
+# Valid file with an unknown forward-compatible key: merge, preserve, succeed.
+$dirMerge = Join-Path $testRoot 'w2005cli-merge'
+New-Item -ItemType Directory -Path $dirMerge -Force | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $dirMerge 'paths.json'), '{"futurekey":"C:\\f","codenomad":"C:\\cn"}', $utf8)
+$r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $cliChild2, $dirMerge, $commonSrc)
+check 'w2005 cli merge: valid document saves successfully (exit 0)' ($r.Code -eq 0)
+$merged = [System.IO.File]::ReadAllText((Join-Path $dirMerge 'paths.json'), $utf8) | ConvertFrom-Json
+check 'w2005 cli merge: the new key is written' ($merged.portable -eq 'C:\new-from-cli')
+check 'w2005 cli merge: the unknown forward-compatible key is preserved' ($merged.futurekey -eq 'C:\f')
+check 'w2005 cli merge: the foreign CLI-owned key is preserved' ($merged.codenomad -eq 'C:\cn')
+
+# The GUI writer (WintageInstaller.ps1 Save-CustomPaths) must refuse on the SAME
+# inputs and preserve bytes too, and must NOT retain a stale in-memory "saved"
+# state -- Ask-CustomPath is the caller contract that proves the rollback.
+$guiSaveChild = Join-Path $testRoot 'w2005gui.ps1'
+[System.IO.File]::WriteAllText($guiSaveChild, (@(
+    'param($dir, $gui)',
+    '$ErrorActionPreference = ''Stop''',
+    '. (Join-Path (Split-Path $gui -Parent) ''modules\json-doc.ps1'')',
+    '$PATH_TARGETS = @(''customtarget'')',
+    '$script:pathsFile = Join-Path $dir ''paths.json''',
+    '$script:customPaths = @{ ''customtarget'' = ''C:\gui-new'' }',
+    '$fn = (Get-Content -LiteralPath $gui -Raw)',
+    '$m = [regex]::Match($fn, ''function\s+Save-CustomPaths\b'')',
+    '$open = $fn.IndexOf(''{'', $m.Index)',
+    '$depth = 0',
+    'for ($j = $open; $j -lt $fn.Length; $j++) { if ($fn[$j] -eq ''{'') { $depth++ } elseif ($fn[$j] -eq ''}'') { $depth--; if ($depth -eq 0) { $fn = $fn.Substring($m.Index, $j - $m.Index + 1); break } } }',
+    'function Say-Log($msg) { Write-Host $msg }',
+    'Invoke-Expression $fn',
+    'if (Save-CustomPaths) { Write-Host ''SAVED=True''; exit 0 } else { Write-Host ''SAVED=False''; exit 7 }'
+) -join "`n"), $utf8)
+foreach ($case in @($readerCases[0], $readerCases[2], $readerCases[3], $readerCases[4])) {
+    $dir = Join-Path $testRoot ("w2005gui-" + $case.Name)
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $pf = Join-Path $dir 'paths.json'
+    [System.IO.File]::WriteAllText($pf, $case.Body, $utf8)
+    $before = [System.IO.File]::ReadAllBytes($pf)
+    $r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $guiSaveChild, $dir, $guiSrc)
+    check ("w2005 gui {0}: Save-CustomPaths FAILS closed (nonzero, SAVED=False)" -f $case.Name) (
+        $r.Code -ne 0 -and $r.Out -match 'SAVED=False')
+    check ("w2005 gui {0}: original bytes remain EXACT" -f $case.Name) (Same-Bytes $pf $before)
+    $residue = @(Get-ChildItem -LiteralPath $dir -Filter 'paths.json.tmp-*' -ErrorAction SilentlyContinue)
+    check ("w2005 gui {0}: no temporary replacement residue" -f $case.Name) ($residue.Count -eq 0)
+}
+# GUI valid-merge regression: succeed, preserve foreign + unknown keys.
+$dirGuiMerge = Join-Path $testRoot 'w2005gui-merge'
+New-Item -ItemType Directory -Path $dirGuiMerge -Force | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $dirGuiMerge 'paths.json'), '{"futurekey":"C:\\f","codenomad":"C:\\cn"}', $utf8)
+$r = Run-Child powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $guiSaveChild, $dirGuiMerge, $guiSrc)
+check 'w2005 gui merge: valid document saves successfully' ($r.Code -eq 0 -and $r.Out -match 'SAVED=True')
+$mergedGui = [System.IO.File]::ReadAllText((Join-Path $dirGuiMerge 'paths.json'), $utf8) | ConvertFrom-Json
+check 'w2005 gui merge: the GUI-owned key is written' ($mergedGui.customtarget -eq 'C:\gui-new')
+check 'w2005 gui merge: the unknown key is preserved' ($mergedGui.futurekey -eq 'C:\f')
+check 'w2005 gui merge: the CLI-owned foreign key is preserved' ($mergedGui.codenomad -eq 'C:\cn')
 
 # ---- Summary ----
 Write-Host "`n$pass PASS, $fail FAIL" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })

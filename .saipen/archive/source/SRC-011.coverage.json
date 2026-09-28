@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-011:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-250 locale parity delivered as T-254 (DONE, SRC-010 CLOSED): all 33 locales 68 keys, tools/test-locale-parity.ps1 wired into tests/Run-Tests.ps1 with red control, full matrix ALL TESTS PASSED exit 0",
+      "text": "Reconcile the T-250 locale-parity work: its implementation was executed and closed as T-254, so T-250 must be bound to that implementation and closed rather than re-implemented.",
+      "verification": "T-254 verify (E-989..E-995); tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-255"
+    }
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-042:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-002: Async Apply terminal/conhost via one selected-set worker - Apply Both launches one process with terminal,conhost; UI heartbeat responsive; CORE-002 truthful result model (audit/8.md finding PERF-002, projected from SRC-028:R012)"
+    }
+  },
+  "derived_at": "2026-09-23T19:58:22Z",
+  "derived_from": "SRC-042",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "94946d767c8574dca927f15ab3bcdb17c3abe38b946523f0fcbd14fd510f8ebd"
+}

@@ -60,6 +60,7 @@ už je zatemněná, funguje za běhu; první instalace ne, protože archiv je po
 | `terminal` | schéma Windows Terminal + výchozí pro všechny profily, Consolas 12 aliased | ano — nastavení jsou ve vašem profilu |
 | `conhost` | výchozí `HKCU\Console` + každý existující profil cmd/PowerShell | ano — přesný snímek dotčených hodnot |
 | `obs` | varianta OBS 30.2+ `.ovt` + aktivní ID motivu v `user.ini` | ano — žije ve vašem profilu |
+| `qbittorrent` | rozbalený motiv Qt UI (`config.json` + `stylesheet.qss`) + dva klíče motivu v `qBittorrent.ini` | ano — žije ve vašem profilu |
 | `antigravity`, `vscode` | rozšíření barevného motivu v `~/.antigravity/extensions` / `~/.vscode/extensions` | **ano** — žije ve vašem profilu |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, viz níže | ne — spusťte instalátor znovu |
 | `claude` | Electron shim, záplatován na místě — viz níže | ne — aktualizace vytvoří novou složku `app-<version>` |
@@ -216,6 +217,21 @@ Zavřete OBS před Apply nebo Revert: OBS při ukončení přepíše `user.ini`.
 aplikace zálohuje jak předchozí výběr, tak jakýkoli motiv stejného jména bajt po
 bajtu.
 
+### qBittorrent
+
+`qbittorrent` zapisuje **rozbalený** Qt motiv rozhraní do `%APPDATA%\qBittorrent\themes\wintage` — soubor `config.json` (role `Palette.*` plus vlastní kontextové barvy qBittorrentu: stavy seznamu přenosů, úrovně protokolu) a vedle něj `stylesheet.qss` (2px zkosení, pravé rohy a Verdana, což paleta vyjádřit neumí) — poté nasměruje `General\CustomUIThemePath` na tento `config.json` a nastaví `General\UseCustomUITheme=true`.
+Rozbaleně, a ne jako balíček `.qbtheme` — záměrně: `.qbtheme` je soubor typu Qt Resource Collection a k jeho vytvoření by na stroji bylo potřeba `rcc` se shodnou hlavní verzí, tedy závislost na kompilátoru kvůli dvěma textovým souborům. qBittorrent čte složkovou podobu nativně (`FolderThemeSource`).
+Před Apply nebo Revert qBittorrent zavřete: při ukončení přepisuje celý `qBittorrent.ini`, takže úprava provedená za běhu se při zavření zahodí — cíl v takovém stavu odmítne pracovat, místo aby hlásil úspěch, který příští ukončení smaže. `-Revert` vrátí dva klíče v INI na přesné hodnoty před Wintage (nebo je odstraní, pokud nebyly) a vrátí každou stejnojmennou složku motivu bajt po bajtu; nesouvisející úpravy `qBittorrent.ini` provedené po Apply zůstávají.
+Nedosažitelné: ikony panelu nástrojů a oznamovací oblasti pocházejí z vlastního zkompilovaného zdrojového balíčku qBittorrentu, takže si zachovávají původní barvy.
+
+### Písma: pojmenovaná, nikdy neinstalovaná
+
+První zákon v UI.md žádá Verdanu **bez vyhlazování**. Qt stylesheet pro to nemá vlastnost a `OSDFont` v MPC-HC je jen název GDI řezu — jedinou pákou je sám řez. `Verdana_m1.ttf` v kořeni repozitáře je kopie Verdanу s předvykreslenými 1bpp bitmapovými řezy při 3–30 ppem, které vykreslovací jádro použije před vyhlazením obrysu.
+Stylesheety `qbittorrent` a `obs` uvádějí `Verdana_m1, Verdana` a `mpchc` uvádí ten z obou, který stroj skutečně rozpozná. **Instalátor písmo nikdy nenainstaluje ani neodinstaluje**, a to je záměr, ne nedodělek:
+Rodina písma se rozlišuje podle (rodina, řez). Zaregistrujte Regular + Bold + Italic a každý spotřebitel ji rozpozná správně; odregistrujte **jeden** člen a každý spotřebitel žádající tuto rodinu se přesměruje na přeživší člen. Na stroji, který na tuto rodinu přes `HKLM\...\FontSubstitutes` aliasuje `MS Shell Dlg 2` — dialogové písmo Windows —, přepne odstranění Regularu **celou plochu do kurzívy**, včetně titulků oken, které má DWM už v cache, a zpět to vrátí jen odhlášení. Žádné počítání referencí to nespraví: dopad je v rámci celého stroje a instalační nástroj motivů tam nemá co dělat.
+Řez je tedy jednorázová, výslovná akce uživatele: klikněte pravým tlačítkem na `Verdana_m1.ttf` → **Install** (pro uživatele, bez správce), pak cíl znovu použijte. Pokud řez chybí, cíle to jednou řeknou, pojmenují řešení a vrátí se ke standardní Verdaně — vyhlazené, ale na stroji se nic neděje za vašimi zády.
+
+
 ### Electron aplikace
 
 `resources/app.asar` je přesunut do `resources/app/app.asar` (jeho sourozenec
@@ -301,4 +317,4 @@ node ..\tools\build-desktop.js --check  # exit 1, pokud je něco zastaralé
 `release.ps1` spustí build a každou bránu, takže vydání nemůže dodat výstup, který
 se odchýlil od palet.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

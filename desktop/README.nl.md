@@ -317,4 +317,100 @@ node ..\tools\build-desktop.js --check  # exit 1 als iets stale is
 `release.ps1` draait de build en elke gate, dus een release kan geen output
 verzenden die van de paletten is afgedwaald.
 
+<!-- T-311 target/section coverage supplement -->
+## Dekking van targets en secties
+
+Deze sectie weerspiegelt de dekking van Process Explorer, Notepad++, Cinema
+4D en terminalelettertypen uit de huidige Engelse README, zodat deze
+vertaling niet stilletjes achterloopt. De codeliteralen (target-id's,
+registerpaden, bestandsnamen) zijn bewust taalonafhankelijk; de omringende tekst
+is vertaald.
+
+### Wat elk target daadwerkelijk kan worden gethemed (toegevoegde targets)
+
+| target | mechanisme | overleeft een app-update |
+|---|---|---|
+| `notepadplusplus` | thema-XML + alias naar de `themes`-map van Notepad++ bij de gebruiker | ja — hij zit in je profiel |
+| `cinema4d` | kleurenschema in de `schemes`-map van Cinema 4D bij de gebruiker geplaatst | ja — hij zit in je profiel |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: kleuren van rijmarkering en grafiekachtergronden, zie hieronder | nee — Process Explorer herschrijft zijn instellingen bij afsluiten; sluit hem en draai opnieuw |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer bewaart zijn kleuren in
+`HKCU\Software\Sysinternals\Process Explorer` en herschrijft die sleutel bij
+afsluiten, dus het target **weigert zolang `procexp`, `procexp64` of
+`procexp64a` draait** — sluit hem en draai opnieuw. Het thematiseert de
+instelbare kleurgroepen:
+
+- **bereikbaar**: de kleuren van rijmarkering van processen (`ColorOwn`,
+  `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`,
+  `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`,
+  `ColorSuspend`) in zowel hun lichte-modus- als `*Dark`-variant, plus de
+  grafiekachtergronden (`ColorGraphBk`, `ColorGraphBkDark`) — 24 waarden in
+  totaal. Elke variant wordt gemengd naar de bijbehorende pool van het actieve
+  palet (de lichtere tint voor de lichte vulkleur, de donkere voor `*Dark`),
+  zodat de rijvullingen hun eigen palettoon houden in plaats van bijna wit te
+  vervagen;
+- **niet bereikbaar**: de titelbalk, de menubalk, de werkbalk, de achtergrond
+  en de tekstkleuren van de lijstweergave, en de kleuren van de grafieklijnen —
+  die zitten in `procexp.exe` gecompileerd en worden door geen enkele
+  instellingswaarde blootgesteld. Het target thematiseert de rijmarkeringen
+  en de grafieachtergrond die het werkelijk bezit, en claimt verder niets.
+
+Elke waarde die Apply kan muteren wordt vóór de mutatie vastgelegd (herstel
+bij eerste aanraking in `%APPDATA%\Wintage\recovery\processexplorer\`) en
+wordt door `-Revert` exact teruggezet, inclusief of elke waarde afwezig was en
+of de marker aanwezig-maar-leeg was. Een draagbare map buiten de standaard
+Sysinternals-mappen wordt onthouden via de canonieke `processexplorer`-sleutel
+in `paths.json` (CLI-argument `-ProcessExplorerPath`; de GUI kan hem ook
+kiezen).
+
+### Terminalelettertypen (`fonts/terminal/`)
+
+Beide terminal-targets lezen ÉÉN canonieke typografische voorkeur uit
+`%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`,
+`renderingMode`). Ontbreekt het bestand, dan houden de targets de meegeleverde
+standaard aan (Terminus (TTF) voor Windows, 12 pt, gealiased), zodat
+bestaande machines onveranderd blijven. Een misvormde voorkeur faalt gesloten:
+er wordt niets overschreven en het target weigert.
+
+`fonts/terminal/catalog.json` is de enige lettertypecatalogus: 20 meegeleverde
+open-source monospace families plus de twee systeemlettertypen die Wintage
+noemt maar nooit meelevert (Terminus (TTF) voor Windows, Consolas). Elk
+meegeleverd item draagt zijn upstreambron, de vastgezette revisie, de
+licentie-id, het licentiebestand en de SHA-256. De exacte bestanden staan
+onder `fonts/terminal/files/` met hun licentieteksten onder `licenses/`; de
+actieve Wintage werkt volledig offline en downloadt nooit een lettertype.
+
+`tools/sync-terminal-fonts.ps1` is de downloader voor alleen de beheerders. Het
+leest `fonts/terminal/sources.json` (één onveranderlijk artefact per familie),
+verifieert elke SHA-256 en weigert bij een mismatch. `-VerifyOnly` (standaard)
+controleert de boom op schijf zonder netwerk; `-Fetch -Write` levert de
+bestanden opnieuw. Gedownloade lettertypebytes worden behandeld als
+niet-vertrouwde binaire assets — gehasht en geschreven, nooit uitgevoerd. Eén
+vervanging is vastgelegd: **Fantasque Sans Mono** vervangt Liberation Mono,
+dat geen vastgezette binaire release publiceert (alleen bron-`.sfd`).
+
+De installatie **bladert lettertypen, het installeert ze niet.** Het tabblad
+TERMINAL FONTS laadt een meegeleverd lettertype in een proceslokale
+`PrivateFontCollection` voor een live voorbeeld, en voert **nul**
+systeemlettertyperegistraties uit. Een lettertype, een grootte (7–24 pt) of een
+renderingmodus (aliased/grayscale/cleartype) kiezen werkt alleen het voorbeeld
+en de voorkeur bij. Een lettertype installeren is een aparte
+**INSTALL SELECTED**-actie die de eigen lettertype-installateur van Windows
+opent; na de bevestiging van Windows controleert de gebruiker opnieuw met
+Refresh. Echte terminalwijzigingen gebeuren pas bij een expliciete
+**APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal wordt toegepast op het gekozen geïnstalleerde gezin op de
+gekozen grootte, en de renderingmodus komt overeen met
+`profiles.defaults.antialiasingMode`. Klassiek conhost is strenger: het rendert
+op een vast celrooster, dus een gekozen lettertype wordt geweigerd vóór elke
+registerwijziging tenzij Windows het kan oplossen (het standaardlettertype en
+de Consolas-terugval zijn vrijgesteld). Health en Reapply valideren het
+ingestelde lettertype, de grootte en de antialiasing tegen de voorkeur, dus een
+voorkeurwijziging na een Apply wordt als drift gemeld in plaats van als
+"gezond". De levenscyclus van de terminalkleuren blijft ongewijzigd: Revert zet
+de exacte, vóór Wintage bezette waarden terug en verwijdert nooit een lettertype
+van de machine.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

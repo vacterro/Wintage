@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-032:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1432 + E-1443 full-matrix current-tree run",
+      "text": "CORE-002: Invoke-TfApply truthful result aggregation - FAILED/PARTIAL/SUCCESS with failed target names and exit codes, nonzero child cannot emit success (audit/8.md finding CORE-002, projected from SRC-028:R002)",
+      "verification": "node tools/test-tf-apply-results.js 24 PASS 0 FAIL; --red-control 26 PASS 0 FAIL (E-1443 full matrix green)",
+      "work": "T-290"
+    }
+  },
+  "schema_version": 1
+}

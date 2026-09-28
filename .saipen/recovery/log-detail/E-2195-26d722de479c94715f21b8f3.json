@@ -1,0 +1,19 @@
+{
+  "event_id": "E-2195",
+  "externalization_event": {
+    "operation_id": "checkpoint-7863d83da65c43f09ed1e416c9801dc3",
+    "reason": "new LOG event exceeds the live cap; canonical detail externalization"
+  },
+  "lossless": true,
+  "metadata_path": ".saipen/recovery/log-detail/E-2195-26d722de479c94715f21b8f3.json",
+  "operation": "log_event_externalization",
+  "original_event_bytes": 2020,
+  "original_event_path": ".saipen/recovery/log-detail/E-2195-26d722de479c94715f21b8f3.LOG.md",
+  "original_event_sha256": "26d722de479c94715f21b8f3d918a21ac8a0ff01e0834a41c56fea3cd00b5607",
+  "project_identity": "v:\\___vac\\__k\\__code\\_tampermonkey\\_win95theme\\wintage",
+  "project_lineage": "lineage-30ee844c69d34eb68605a4563cfdb8ff",
+  "schema_version": 1,
+  "source": ".saipen/LOG.md",
+  "status": "COMMITTED",
+  "ticket_id": null
+}

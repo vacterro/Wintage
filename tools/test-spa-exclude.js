@@ -388,5 +388,42 @@ function runBlock(block, initialHref) {
   check('throwing reload: the retry happens', calls.reload, 2);
 }
 
+// ---- Test 12 (T-325): a dev host is not a high-churn chat SPA ----
+// The theme's own @description promises surface remapping, floating-panel
+// solidification and hover surgery. Folding IS_LOCAL into HIGH_CHURN_HOST
+// silently switched all of that off on localhost / 127.0.0.1 / *.local.
+// Evaluated, not regex-proxied: the host predicates are lifted out of the
+// source and run against real hostnames.
+{
+  const src = fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8');
+  const decls = [];
+  for (const line of src.split('\n')) {
+    const d = /^\s*const (IS_[A-Z_]+|HIGH_CHURN_HOST|CSS_ONLY_MODE) = ([^;]+);/.exec(line);
+    if (d) decls.push(d[1] + ' = ' + d[2] + ';');
+  }
+  const names = decls.map((d) => d.split(' = ')[0]);
+  check('the host predicates are liftable', names.indexOf('HIGH_CHURN_HOST') >= 0, true);
+  const classify = (host) => {
+    // eslint-disable-next-line no-new-func
+    return new Function('HOST', decls.join('\n') + '\nreturn CSS_ONLY_MODE;')(
+      String(host).toLowerCase());
+  };
+  for (const host of ['x.com', 'twitter.com', 'chatgpt.com', 'claude.ai', 'gemini.google.com', 'perplexity.ai']) {
+    check('named chat SPA stays CSS-only: ' + host, classify(host), true);
+  }
+  for (const host of ['localhost', '127.0.0.1', 'mybox.local', 'example.com', 'github.com', 'news.ycombinator.com']) {
+    check('ordinary host is NOT CSS-only: ' + host, classify(host), false);
+  }
+}
+
+// ---- Test 13 (T-336): body stays in the transparent-surface rule ----
+// body is painted T.backgroundSoft at its own rule; without body in the later
+// transparent rule a fixed/gradient/animated page backdrop is flattened.
+{
+  const src = fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8');
+  check('body is part of the transparent-surface rule',
+    /body, main, section, article, aside, footer,/.test(src), true);
+}
+
 console.log(bad ? '\n' + bad + ' failure(s)' : '\nspa exclude safety test PASS');
 process.exit(bad ? 1 : 0);

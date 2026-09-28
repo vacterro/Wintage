@@ -45,11 +45,12 @@ function T($key) {
 
 # English is the default face of both surfaces -- never the system culture, which
 # made the GUI come up in an arbitrary language the user never asked for. A GUI
-# language pick is remembered per machine under %APPDATA%\Wintage (same discipline
-# as freebuff-sound.txt: a per-machine preference has no business in the repo) and
-# re-applied here, so the dropdown choice survives relaunches and the CLI follows
-# the same machine-wide choice.
-$script:LangPrefFile = Join-Path $env:APPDATA 'Wintage\language.txt'
+# language pick is remembered per machine under the one Wintage data root
+# (WINTAGE_APPDATA when set, else %APPDATA%\Wintage -- same discipline as
+# paths.json / presets / freebuff-sound.txt: a per-machine preference has no
+# business in the repo) and re-applied here, so the dropdown choice survives
+# relaunches and the CLI follows the same machine-wide choice.
+$script:LangPrefFile = Join-Path $(if ($env:WINTAGE_APPDATA) { $env:WINTAGE_APPDATA } else { Join-Path $env:APPDATA 'Wintage' }) 'language.txt'
 $script:SavedLocale = 'en'
 if (Test-Path $script:LangPrefFile) {
     $saved = (Read-Utf8 $script:LangPrefFile).Trim()

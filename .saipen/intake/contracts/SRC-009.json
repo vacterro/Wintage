@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-009:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Close the T-252 source receipt SRC-008 once its linked Work reached DONE, so the intake hot surface stays clean."
+    }
+  },
+  "derived_at": "2026-09-16T15:04:12Z",
+  "derived_from": "SRC-009",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "eb48050f46d40b1dc28d24d016cb45ff1d773fd15f20d79d120fc03ef6d57ad9"
+}

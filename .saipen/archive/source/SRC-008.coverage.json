@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-008:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-935/E-936 already shipped R013 (bounded repainter, STYLE_ROOT/SHEET/RULE budgets, finite style-lap epoch, stripHoverSheets deleted, 12 fixtures wired) committed in v1.36.0 (82178cd); this pass E-969..E-975 re-proved every acceptance gate on the current checkout (test-repainter-budget ALL PASS with Test 4 consuming all 6000 fake elements 2500/5000/6000, Test 10 STYLE-root 25k first-slice=16, Test 12 sheet first-slice=32, RED A 25001 vs 63, RED B 250000 vs 500) and fixed the sole matrix-red T-251 test-freebuff.ps1 Test 16 harness defect (locked wintage-baseline.json, order-dependent orphan asserts) -> 103 PASS/0 FAIL, full tests/Run-Tests.ps1 ALL TESTS PASSED exit 0 2026-09-16",
+      "text": "Execute T-246 R013/PERF-002 final closure against the supplied mission: fix test-repainter-budget Test 4 fake DOM, wire the suite into Run-Tests.ps1, add style-root cursor and mid-lap style tests, finite style-lap membership epoch, sheet-budget pin, remove the dead stripHoverSheets unbounded helper, strengthen the red controls, and return full R013 closure evidence with T-246 advancing 13/15 -> 14/15.",
+      "verification": "node tools/test-repainter-budget.js ALL PASS; node tools/test-freebuff.ps1 103 PASS/0 FAIL; powershell tests/Run-Tests.ps1 ALL TESTS PASSED exit 0",
+      "work": "T-252"
+    }
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,29 @@
+{
+  "clauses": {
+    "SRC-020:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Repair T-262 umbrella continuity through canonical intake operations so T-262 closure is refused while any audit/7 child T-268,T-269,T-272..T-278 is nonterminal; preserve completed children T-260,T-263..T-267,T-270,T-271; do not hand-edit BOARD/STATE/LOG to make validation green"
+    },
+    "SRC-020:R002": {
+      "actionable": true,
+      "class": "acceptance-criterion",
+      "text": "Prove with a real attempted T-262 closure that it is refused while the remaining audit/7 children are open, and record the exact refusal code and unresolved clause list"
+    },
+    "SRC-020:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Implement T-269 W2-002 generation/batch lock: one generation consistency model covering explicit -Target, -Target all, -Selected and -Reapply (and the same flows under -Force); acquire generation ownership before build freshness verification and retain it through all generated-byte consumption and manifest/path commits; guaranteed finally release; lock order generation then target then manifest; -Force bypasses freshness only; Reapply is one parent-held generation epoch with WINTAGE_BUILD_LOCK_HELD inherited narrowly by children; do not weaken tools/build-desktop.js acquireGenLock"
+    },
+    "SRC-020:R004": {
+      "actionable": true,
+      "class": "acceptance-criterion",
+      "text": "Behavioral regressions in tools/test-batch-generation.ps1: direct target, target all, selected, reapply, force, failure release, lock order and deadlock, using deterministic barrier files and no long sleeps"
+    }
+  },
+  "derived_at": "2026-09-18T18:39:10Z",
+  "derived_from": "SRC-020",
+  "interpretation_revision": 4,
+  "schema_version": 1,
+  "source_sha256": "1d7114eb4c283105348d4bd48f5b64283e12ab05513e39b6ab5fff3301482641"
+}

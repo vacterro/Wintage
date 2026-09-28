@@ -8,8 +8,12 @@
 # tools/test-batch-generation.ps1 pins both.
 #
 # Lock file: <appdata>\build-generation.lock, created EXCLUSIVELY
-# (CreateNew + FileShare.None in PowerShell, 'wx' in Node), so exactly one
-# process owns it and a crashed owner's handle is released by the OS.
+# (CreateNew + FileShare.Read in PowerShell, 'wx' in Node), so exactly one
+# process owns it and a crashed owner's handle is released by the OS. Read
+# sharing is deliberate (W2-002, audit/7 T-269): an inheriting child must be
+# able to READ the owner metadata and prove the marker token below genuinely
+# belongs to the live holder. Writers are still excluded, and exclusive
+# CreateNew still decides ownership.
 #
 # METADATA CONTRACT (single-line JSON, UTF-8, no BOM):
 #   token       - unique ownership token (GUID hex) minted at acquisition
@@ -59,7 +63,19 @@ function Get-GenerationLockStaleMs {
 function Get-GenerationLockState([string]$Path) {
     $raw = $null
     try {
-        $raw = [System.IO.File]::ReadAllText($Path, (New-Object System.Text.UTF8Encoding($false)))
+        # FileShare.ReadWrite is REQUIRED to read a held lock: the holder's
+        # own handle carries Write access, and a reader that offers only
+        # FileShare.Read is refused by the sharing check (the reason a
+        # FileShare.Read holder still classified as 'held' before). Access
+        # stays read-only; only the metadata everyone may see is read.
+        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            $reader = New-Object System.IO.StreamReader($stream, (New-Object System.Text.UTF8Encoding($false)))
+            $raw = $reader.ReadToEnd()
+            $reader.Dispose()
+        } finally {
+            $stream.Dispose()
+        }
     } catch {
         return [pscustomobject]@{ State = 'held'; Meta = $null }
     }
@@ -96,12 +112,36 @@ function Test-GenerationLockOwnerAlive($meta) {
     return 'alive'
 }
 
+# W2-002 (audit/7 T-269): the inherited-ownership contract behind
+# WINTAGE_BUILD_LOCK_HELD. The marker is the owning acquisition's TOKEN, not a
+# boolean: it is accepted only while the live lock file still carries exactly
+# that token and its recorded owner is positively alive. A forged, stale or
+# leaked marker therefore falls through to a REAL acquisition instead of
+# becoming a user-controlled serialization bypass, and a Reapply child skips
+# re-acquisition only because the live parent genuinely retains the lock for
+# the child's whole lifetime.
+function Test-GenerationLockInheritance([string]$AppData, [string]$Marker) {
+    if (-not $Marker) { return $false }
+    $lockPath = Join-Path $AppData 'build-generation.lock'
+    if (-not (Test-Path -LiteralPath $lockPath)) { return $false }
+    $state = Get-GenerationLockState $lockPath
+    if ($state.State -ne 'ok' -or -not $state.Meta) { return $false }
+    if ([string]$state.Meta.token -ne [string]$Marker) { return $false }
+    return (Test-GenerationLockOwnerAlive $state.Meta) -eq 'alive'
+}
+
 # Acquire the cross-runtime generation lock for $AppData.
 # Returns { Stream; Token; Path; MetadataWritten } or throws after the bounded
 # timeout. Self-cleaning: a failed metadata write releases the just-created
 # file before throwing, so an acquisition never returns a lock that cannot
 # later be proven ours.
 function Enter-BuildGenerationLockCore([string]$AppData) {
+    # W2-002 (audit/7 T-269): a consumer lock can be requested before the
+    # Wintage appdata dir exists on a first run (explicit -Target now takes the
+    # lock). Creating it here is idempotent; without it [IO.File]::Open throws
+    # DirectoryNotFoundException, which is an IOException and was misclassified
+    # as lock contention (15s spin, then a false "busy" refusal).
+    if (-not (Test-Path -LiteralPath $AppData)) { [System.IO.Directory]::CreateDirectory($AppData) | Out-Null }
     $lockPath = Join-Path $AppData 'build-generation.lock'
     $timeoutMs = Get-GenerationLockTimeoutMs
     $staleMs = Get-GenerationLockStaleMs
@@ -112,7 +152,11 @@ function Enter-BuildGenerationLockCore([string]$AppData) {
     while ($true) {
         $fs = $null
         try {
-            $fs = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+            # FileShare.Read (not None): the owner metadata stays readable so
+            # Test-GenerationLockInheritance can verify a child's inherited
+            # marker token against the LIVE holder. Ownership is still decided
+            # by exclusive CreateNew + the owner-liveness recovery contract.
+            $fs = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::Read)
         } catch [System.IO.IOException] {
             # Lock exists (or vanished between the attempt and the read).
             if (Test-Path -LiteralPath $lockPath) {
@@ -129,7 +173,12 @@ function Enter-BuildGenerationLockCore([string]$AppData) {
                     } catch { }
                 }
                 if ($steal) {
-                    try { Remove-Item -LiteralPath $lockPath -Force -ErrorAction Stop } catch { $steal = $false }
+                    # -WhatIf:$false: the lock protocol's own recovery/cleanup is
+                    # never a ShouldProcess operation. Under a caller's -WhatIf
+                    # the suppressed delete used to leave the lock handle closed
+                    # but the file present, and the next acquisition either
+                    # leaked the lock or spun on a stale owner.
+                    try { Remove-Item -LiteralPath $lockPath -Force -ErrorAction Stop -WhatIf:$false } catch { $steal = $false }
                 }
                 if ($steal) { continue }
             }
@@ -158,7 +207,7 @@ function Enter-BuildGenerationLockCore([string]$AppData) {
             return [pscustomobject]@{ Stream = $fs; Token = $token; Path = $lockPath; MetadataWritten = $true }
         } catch {
             try { $fs.Close() } catch { }
-            try { Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue } catch { }
+            try { Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue -WhatIf:$false } catch { }
             throw
         }
     }
@@ -182,7 +231,9 @@ function Exit-BuildGenerationLockCore($genLock) {
         if (-not (Test-Path -LiteralPath $genLock.Path)) { return }
         $state = Get-GenerationLockState $genLock.Path
         if ($state.State -eq 'ok' -and [string]$state.Meta.token -eq [string]$genLock.Token) {
-            Remove-Item -LiteralPath $genLock.Path -Force -ErrorAction SilentlyContinue
+            # -WhatIf:$false: releasing OUR OWN lock is protocol cleanup, not a
+            # user-facing mutation; a caller's -WhatIf must never leak it.
+            Remove-Item -LiteralPath $genLock.Path -Force -ErrorAction SilentlyContinue -WhatIf:$false
         }
         # Anything else (foreign token, malformed/empty, held) is left exactly
         # as found: a release that cannot prove ownership never destroys.

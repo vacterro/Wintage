@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-033:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1431 + E-1443 full-matrix current-tree run",
+      "text": "CORE-003: Terminal-font Refresh control wired to Refresh-TfFonts; selection preserved by stable entry identity not Format-TfRow (audit/8.md finding CORE-003, projected from SRC-028:R003)",
+      "verification": "powershell tools/test-terminal-fonts-gui.ps1 22 PASS 0 FAIL incl RED control (E-1443 full matrix green)",
+      "work": "T-291"
+    }
+  },
+  "schema_version": 1
+}

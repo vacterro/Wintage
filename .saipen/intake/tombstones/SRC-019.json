@@ -1,0 +1,13 @@
+{
+  "actionable": 1,
+  "archive_ref": ".saipen/archive/source/SRC-019.md",
+  "closed_at": "2026-09-19T00:14:04Z",
+  "closure_event": null,
+  "linked_work": "T-279",
+  "receipt_id": "SRC-019",
+  "requirements": 1,
+  "schema_version": 1,
+  "source_sha256": "55ae4fd0fe090b8ac3a1e8672c54b6f4428a03ef01eca1b9f34d01f7632571ba",
+  "status": "CLOSED",
+  "unresolved": 0
+}

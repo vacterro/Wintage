@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-029:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-287 closed with verification evidence in LOG: transition to REVIEW -- checkpoint logged: verify -> PASS conf: high",
+      "text": "'saipen ship' --json 2>&1",
+      "verification": "the Work this request created reached its own verification gate; see the T-287 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-287"
+    }
+  },
+  "schema_version": 1
+}

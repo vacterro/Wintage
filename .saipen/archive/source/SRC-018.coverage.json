@@ -1,0 +1,158 @@
+{
+  "requirements": {
+    "SRC-018:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-263 DONE E-1103; VERIFY E-1095/E-1099 tools/test-presets.ps1 37 PASS 0 FAIL; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "CORE-001 preset identity: canonical activation routine keyed by stable preset ID; ComboBox bound to IDs not display names; Save As/Update/Rename/Delete act on the visible selection; fail closed on desync",
+      "verification": "independent REVIEW E-1101 re-ran tools/test-presets.ps1 37 PASS 0 FAIL",
+      "work": "T-263"
+    },
+    "SRC-018:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-264 DONE E-1117; VERIFY E-1107 tools/test-presets.ps1 54 PASS 0 FAIL; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "CORE-002 target selectability: one resolver from Load-Targets rules used by preset loading; only selectable targets checked; unavailable members retained and reported; no folder dialogs from preset selection",
+      "verification": "independent REVIEW E-1115 re-ran tools/test-presets.ps1 54 PASS 0 FAIL",
+      "work": "T-264"
+    },
+    "SRC-018:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-265 DONE E-1128; VERIFY E-1124 tools/test-presets.ps1 56 PASS 0 FAIL incl RED D pre-fix ordering; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "CORE-003 Rename-Preset: acquire presets.lock before source existence check and Read-PresetFile; hold continuously through validate/rename/removal; no stale pre-lock state",
+      "verification": "independent REVIEW E-1126 re-ran tools/test-presets.ps1 56 PASS 0 FAIL",
+      "work": "T-265"
+    },
+    "SRC-018:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-266 DONE E-1140; VERIFY E-1136 tools/test-gui-paths.ps1 25 PASS 0 FAIL; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "CORE-004 PATH_TARGETS: one canonical GUI-owned mapping for zcode/notepadplusplus/cinema4d; reachable folder picker and persistence; CLI-owned keys preserved; preset load never prompts",
+      "verification": "independent REVIEW E-1138 re-ran tools/test-gui-paths.ps1 25 PASS 0 FAIL",
+      "work": "T-266"
+    },
+    "SRC-018:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-267 DONE E-1151; VERIFY E-1147 tools/test-presets.ps1 66 PASS 0 FAIL; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "CORE-005 Test-PresetObject: validate every snapshot token value against canonical six-digit hex; reject whole preset before GUI mutation with token name and reason",
+      "verification": "independent REVIEW E-1149 re-ran tools/test-presets.ps1 66 PASS 0 FAIL",
+      "work": "T-267"
+    },
+    "SRC-018:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1196",
+      "text": "CORE-006 preset dirty state: normalized staged-state snapshot incl custom tokens and sorted target IDs; ItemCheck uses pending NewValue; recapture baseline after load/Save As/Update",
+      "verification": "independent REVIEW re-ran tools/test-presets.ps1 95 PASS 0 FAIL incl -RedControl (RED E/F proven)",
+      "work": "T-268"
+    },
+    "SRC-018:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-260 DONE E-1066; VERIFY E-1062 tools/test-first-touch-recovery.ps1 87 PASS 0 FAIL; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "W2-001 Notepad++ and Cinema 4D persistent first-touch ownership and recovery",
+      "verification": "independent REVIEW E-1064 re-ran tools/test-first-touch-recovery.ps1 87 PASS 0 FAIL",
+      "work": "T-260"
+    },
+    "SRC-018:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1183",
+      "text": "W2-002 generation/batch lock: cover explicit Target, Target all, Selected and Reapply consumers; lock held across check and consumption; Reapply single generation epoch",
+      "verification": "T-279 VERIFY E-1183: tools/test-batch-generation.ps1 112 PASS + test-genlock-redcontrol.ps1 5/5 RED controls; reconciliation E-1214 re-ran batch-generation 112 PASS",
+      "work": "T-269"
+    },
+    "SRC-018:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-270 DONE E-1162; VERIFY E-1158 tools/test-reapply-intent.ps1 68 PASS 0 FAIL incl case-9 zcode; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "W2-003 Reapply ZCodePath: forward explicit -ZCodePath like CodeNomadPath/WorkBuddyPath through the canonical path-bearing parameter map",
+      "verification": "independent REVIEW E-1160 re-ran case-9 15 PASS 0 FAIL",
+      "work": "T-270"
+    },
+    "SRC-018:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-271 DONE E-1173; VERIFY E-1169 tools/test-reapply.ps1 171 PASS 0 FAIL forward-compat; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "text": "W2-004 Reapply unknown manifest targets: separate supported recorded targets from unknown preserved ones; unknown never dispatched, never failed, preserved unchanged, reported",
+      "verification": "independent REVIEW E-1171 re-ran tools/test-reapply.ps1 171 PASS 0 FAIL",
+      "work": "T-271"
+    },
+    "SRC-018:R011": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1216",
+      "text": "W2-005 paths.json fail-closed: file present but unreadable aborts with original bytes preserved in both Save-PathPreference and GUI Save-CustomPaths; absent file initializes; unknown valid keys preserved",
+      "verification": "tools/test-transaction-boundary.ps1 121 PASS 0 FAIL incl W2-005 group 6 + RED controls; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-272"
+    },
+    "SRC-018:R012": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1240",
+      "text": "W2-006 dir-prestate cleanup: success-disposal helper used at every Save-DirPreState call site; no wintage-dirstate-* left after successful apply/revert; failed rollback keeps snapshot",
+      "verification": "tools/test-dir-prestate.ps1 52 PASS 0 FAIL incl W2-006 disposal + structural guard, RED control proven; live cinema4d/vscode apply+revert census unchanged; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-273"
+    },
+    "SRC-018:R013": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1246",
+      "text": "PERF-001 CSSOM invalidation: replaceSync/insertRule/deleteRule set stylesDirty and arm one coalesced continuation; replace() invalidates on Promise fulfillment only and returns original Promise; rejection no-op",
+      "verification": "tools/test-perf-cssom.js ALL PASS (26 checks) + 2 RED controls; test-repainter-budget.js green; build-desktop --check up to date; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-274"
+    },
+    "SRC-018:R014": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1252",
+      "text": "PERF-002 onMutations stylesheet detection: collect O(1) then dedupe connected roots before one retained-root STYLE/LINK query; truncation sets stylesDirty conservatively without tail walk",
+      "verification": "tools/test-perf-lanes.js PERF-002 fixtures ALL PASS + 2 RED controls; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-275"
+    },
+    "SRC-018:R015": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1258",
+      "text": "PERF-003 suspendRepainter disposal: clear forceLapDeferredRoots/styleLapDeferredRoots, null activeStyleTask/styleCursorRoot/styleCursorRootIterator, reset style cursor/debt state; idempotent",
+      "verification": "tools/test-perf-suspend.js ALL PASS (structural owner sweep + behavioral disposal) + RED control; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-276"
+    },
+    "SRC-018:R016": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1264",
+      "text": "PERF-004 GoodEmoji idle sweep: remove unconditional 2s full-body query; keep bootstrap + MutationObserver; bounded adaptive reconciliation only after relevant activity",
+      "verification": "tools/test-goodemoji.js ALL PASS (idle zero-scan, observer intake, coalesced route change, stop/restart) + setInterval trap RED control; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-277"
+    },
+    "SRC-018:R017": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1270",
+      "text": "PERF-005 GoodEmoji matchSrc: resolve unmatched URLs proportional to URL length via parsed candidates and precomputed bounded matcher, never Object.entries x 960 includes per image",
+      "verification": "tools/test-goodemoji-matchsrc.js ALL PASS (mapped fixtures identical, legacy shapes, no false positive, 0 includes/0 entries per unmatched image, table x10 no growth) + RED control; full tests/Run-Tests.ps1 ALL TESTS PASSED",
+      "work": "T-278"
+    }
+  },
+  "schema_version": 1
+}

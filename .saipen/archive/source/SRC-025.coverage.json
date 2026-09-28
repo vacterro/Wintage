@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-025:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-282 closed with verification evidence in LOG: review -> PASS. Scope: desktop/modules/targets.ps1 (new Get-RelativeLuminance; Get-ProcessExplorerThemeMap blends plain fills toward the pack's lighter pole and *Dark fills toward its darker pole instead of literal #FFFFFF/#000000; comment block rewritten) and its doc; tools/test-processexplorer.ps1 readability group; desktop/README.md. Verified: single function definition, PowerShell parse clean,",
+      "text": "Process Explorer theme readability fix: remove pure-white text, map to Wintage off-white/golden text tokens, add focused tests, full matrix green",
+      "verification": "the Work this request created reached its own verification gate; see the T-282 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-282"
+    }
+  },
+  "schema_version": 1
+}

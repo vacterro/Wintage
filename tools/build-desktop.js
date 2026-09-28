@@ -44,8 +44,11 @@ const checkOnly = process.argv.includes('--check');
 //    only after its mtime ages past the stale threshold;
 //  - release is OWNERSHIP-VERIFIED: unlink only when the file still carries
 //    OUR token - a stale/old holder can never unlink a newer generation's lock;
-//  - a holder passes WINTAGE_BUILD_LOCK_HELD=1 to its child node processes for
-//    same-process reentrancy.
+//  - a holder passes WINTAGE_BUILD_LOCK_HELD=<its ownership token> to its child
+//    node processes for same-process reentrancy. W2-002 (audit/7 T-269): the
+//    marker is verified against the live lock before it is honored, so a
+//    forged or stale marker acquires normally instead of becoming a
+//    user-controlled serialization bypass.
 // TEST SEAMS (never set in production):
 //  WINTAGE_TEST_LOCK_TIMEOUT_MS - contention timeout, default 15000
 //  WINTAGE_TEST_LOCK_STALE_MS   - malformed-lock recovery age, default 30000
@@ -85,9 +88,24 @@ function genLockOwnerAlive(meta) {
   }
   return 'alive';
 }
+// W2-002 (audit/7 T-269): inherited ownership is PROVEN, never declared. The
+// marker must be the live holder's ownership token; anything else (forged,
+// stale, leaked) falls through to a real acquisition, so a standalone marker
+// can never create an unlocked consumer path.
+function genLockInheritance(marker) {
+  if (!marker) return false;
+  const st = readGenLockState();
+  if (st.state !== 'ok' || !st.meta) return false;
+  if (String(st.meta.token) !== String(marker)) return false;
+  return genLockOwnerAlive(st.meta) === 'alive';
+}
 function acquireGenLock() {
-  if (process.env.WINTAGE_BUILD_LOCK_HELD) return null;
   if (checkOnly) return null;
+  if (genLockInheritance(process.env.WINTAGE_BUILD_LOCK_HELD)) return null;
+  // W2-002 (audit/7 T-269): mirror the PowerShell core -- a first-run consumer
+  // can request the lock before the Wintage appdata dir exists; without this,
+  // openSync throws ENOENT instead of contending on a real lock.
+  try { fs.mkdirSync(appData, { recursive: true }); } catch (e) {}
   const token = crypto.randomBytes(16).toString('hex');
   const start = Date.now();
   while (true) {

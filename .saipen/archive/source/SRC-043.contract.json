@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-043:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-003: Async FreeBuff sound preview - async ffmpeg, MediaPlayer event-based with Forms.Timer, no DoEvents, generation ownership, B supersedes A, teardown disposes all"
+    }
+  },
+  "derived_at": "2026-09-22T12:21:52Z",
+  "derived_from": "SRC-043",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "a80857020796fb5ea60c57b0b9ff34849d04a44dcff6a7bac959a558bbc542ec"
+}

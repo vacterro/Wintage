@@ -41,6 +41,7 @@ Apply delegira na `install.ps1`. Postoji točno jedna putanja koda koja instalir
 | `terminal` | shema Windows Terminal + zadane postavke svih profila, Consolas 12 s aliasom | da — postavke su u vašem profilu |
 | `conhost` | zadane `HKCU\Console` + svaki postojeći cmd/PowerShell profil | da — točan snimak dodirnutih vrijednosti |
 | `obs` | OBS 30.2+ `.ovt` varijanta + aktivni ID teme u `user.ini` | da — živi u vašem profilu |
+| `qbittorrent` | raspakirani Qt UI motiv (`config.json` + `stylesheet.qss`) + dva ključa motiva u `qBittorrent.ini` | da — živi u vašem profilu |
 | `antigravity`, `vscode` | proširenje teme boja u `~/.antigravity/extensions` / `~/.vscode/extensions` | **da** — živi u vašem profilu |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, pogledajte dolje | ne — ponovno pokrenite instalater |
 | `claude` | Electron shim, zakrpljen na mjestu — pogledajte dolje | ne — ažuriranje stvara novu mapu `app-<verzija>` |
@@ -109,6 +110,21 @@ Chromium namjerno zabranjuje tiho instaliranje proširenja izvan trgovine na neu
 
 `obs` generira varijantu OBS 30.2+ preko održavane baze Yami Classic, instalira je u `%APPDATA%\obs-studio\themes` i upisuje njen stabilni ID teme u `user.ini`, tako da je odabrana Wintage paleta već odabrana pri sljedećem pokretanju. Zatvorite OBS prije Apply ili Revert: OBS prepisuje `user.ini` pri izlasku. Prva primjena sigurnosno kopira i prethodni odabir i bilo koju temu s istim imenom bajt-po-bajt.
 
+### qBittorrent
+
+`qbittorrent` zapisuje **raspakirani** Qt UI motiv u `%APPDATA%\qBittorrent\themes\wintage` — `config.json` (role `Palette.*` plus vlastite kontekstne boje qBittorrenta: stanja popisa prijenosa, ozbiljnosti dnevnika) i uz njega `stylesheet.qss` (2px kosine, pravi kutovi i Verdana, što paleta ne može izraziti) — zatim usmjerava `General\CustomUIThemePath` na taj `config.json` i postavlja `General\UseCustomUITheme=true`.
+Raspakirano, a ne kao `.qbtheme` paket, namjerno: `.qbtheme` je datoteka vrste Qt Resource Collection i za izradu bi na stroju trebao `rcc` s istom glavnom verzijom, dakle ovisnost o prevoditelju zbog dvije tekstualne datoteke. qBittorrent čita oblik mape izvorno (`FolderThemeSource`).
+Zatvorite qBittorrent prije Apply ili Revert: pri izlasku prepisuje cijeli `qBittorrent.ini`, pa se izmjena načinjena dok radi gubi pri zatvaranju — cilj odbija raditi u tom stanju umjesto da prijavi uspjeh koji sljedeći izlazak briše. `-Revert` vraća dva INI ključa na njihove točne vrijednosti prije Wintagea (ili ih uklanja ako nisu postojali) i vraća svaku istoimenu mapu motiva bajt po bajt; nepovezane izmjene `qBittorrent.ini` načinjene nakon Applyja ostaju.
+Nedostupno: ikone alatne trake i sistemske trake dolaze iz vlastitog prevedenog paketa resursa qBittorrenta, pa zadržavaju izvorne boje.
+
+### Fontovi: imenovani, nikad instalirani
+
+Prvi zakon u UI.md traži Verdanu **bez zaglađivanja rubova**. Qt stil nema svojstvo za to, a `OSDFont` u MPC-HC-u samo je naziv GDI pisma — jedina poluga je samo pismo. `Verdana_m1.ttf` u korijenu repozitorija kopija je Verdane s unaprijed iscrtanim 1bpp bitmapnim rezovima pri 3–30 ppem, koje iscrtavač radije koristi od zaglađivanja obrisa.
+Stilovi `qbittorrent` i `obs` navode `Verdana_m1, Verdana`, a `mpchc` navodi ono od dvoga koje stroj doista razriješi. **Instalater nikad ne instalira ni ne uklanja font**, i to je namjerno, a ne nedovršeno:
+Obitelj fonta razrješava se po (obitelj, rez). Registrirajte Regular + Bold + Italic i svaki će je potrošač ispravno razriješiti; odjavite **jednog** člana i svaki potrošač koji traži tu obitelj pokazat će na preostalog člana. Na stroju koji `MS Shell Dlg 2` — Windowsov font dijaloga — preko `HKLM\...\FontSubstitutes` poistovjećuje s tom obitelji, uklanjanje Regularа okreće **cijelu radnu površinu u kurziv**, uključujući naslove prozora koje je DWM već predmemorio, a za povratak je potrebna odjava. Nikakvo brojanje referenci to ne rješava: domet je na cijelom stroju, a instalater motiva ondje nema što raditi.
+Pismo je zato jednokratna, izričita radnja korisnika: desni klik na `Verdana_m1.ttf` → **Install** (po korisniku, bez administratora), zatim ponovno primijenite cilj. Ako pismo nedostaje, ciljevi to kažu jednom, navedu rješenje i vrate se na standardnu Verdanu — zaglađenu, ali na stroju se ništa ne čini iza vaših leđa.
+
+
 ### Electron aplikacije
 
 `resources/app.asar` premješta se u `resources/app/app.asar` (njegov brat `app.asar.unpacked` premješta se s njim — to uparivanje je po nazivu datoteke i razdvajanje razbija svaki nativni modul), a mali `shim.cjs` zauzima oslobođeni slot `resources/app`. Shim ubrizgava stilski list i zatim učitava izvornu arhivu. **Nijedan bajt aplikacije nije prepisan**, samo premješten; `-Revert` ga premješta ravno natrag.
@@ -154,4 +170,4 @@ node ..\tools\build-desktop.js --check  # izađi s 1 ako je nešto zastarjelo
 
 `release.ps1` pokreće izgradnju i svaka vrata, pa izdanje ne može poslati izlaz koji je odlutao od paleta.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

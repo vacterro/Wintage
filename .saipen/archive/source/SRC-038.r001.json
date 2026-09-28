@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-038:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-002: DWM backup/restore recovery pair atomic JSON+provenance publication; existence not validity; successful revert retires both; retry-safe (audit/8.md finding W2-002, projected from SRC-028:R008)"
+    }
+  },
+  "derived_at": "2026-09-23T19:54:03Z",
+  "derived_from": "SRC-038",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "a86d3cd28a5f87688b32d7efa3c591f3afeacfa50242d0e795731fc9edc6000a"
+}

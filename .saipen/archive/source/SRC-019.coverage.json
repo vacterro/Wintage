@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-019:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-279 closed with verification evidence in LOG: verify -> PASS [target: T-279] conf: high -- tools\\\\test-batch-generation.ps1 ALL PASS 112 (direct target, target all, Selected A/B, complete Reapply epoch, -Force, failure release, lock order/no-deadlock, forged-marker fail-closed, cross-runtime PS<->Node contention); test-genlock-redcontrol.ps1 RED CONTROL PROVEN 5/5; test-reapply.ps1 171/0; test-reapply-intent.ps1 70/0; test-transaction-boundar",
+      "text": "J\u00e4tka Wintage audit/7 execution wave: T-262 umbrella continuity repair ja seej\u00e4rel T-269 W2-002 generation/batch lock (drag-fail: V:\\_TEMP_\\fastprompter_drag\\Wintage_20260918_2135.md)",
+      "verification": "the Work this request created reached its own verification gate; see the T-279 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-279"
+    }
+  },
+  "schema_version": 1
+}

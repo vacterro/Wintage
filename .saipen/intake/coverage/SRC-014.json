@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-014:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1048",
+      "text": "Finish T-246 R015 evidence closure per the supplied spec: add a large Preferences bounded-memory fixture, explicit-rescan discovery of a newly added browser, cached-executable replace/invalidate, a live WinForms pre-ShowDialog smoke, cache/profile result parity, extend tools/test-browser-cache.ps1, then mark R015 VERIFIED and T-246 15/15.",
+      "verification": "tools/test-browser-cache.ps1 75 PASS/0 FAIL/0 SKIP (targets A-E, RED C, instrument control); full tests/Run-Tests.ps1 ALL TESTS PASSED exit 0; SRC-007:R015 VERIFIED, T-246 15/15",
+      "work": "T-258"
+    }
+  },
+  "schema_version": 1
+}

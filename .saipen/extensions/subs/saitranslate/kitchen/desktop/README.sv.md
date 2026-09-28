@@ -63,6 +63,7 @@ arkivet är i bruk.
 | `terminal` | Windows Terminal-schema + standardvärden för alla profiler, Consolas 12 aliased | yes — inställningarna finns i din profil |
 | `conhost` | `HKCU\Console`-standardvärden + varje befintlig cmd/PowerShell-profil | yes — exakt snapshot av vidrörda värden |
 | `obs` | OBS 30.2+-`.ovt`-variant + aktiv `user.ini`-temad | yes — den bor i din profil |
+| `qbittorrent` | uppackat Qt-gränssnittstema (`config.json` + `stylesheet.qss`) + de två temanycklarna i `qBittorrent.ini` | yes — den bor i din profil |
 | `antigravity`, `vscode` | färgtemaextension i `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — den bor i din profil |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, se nedan | no — kör installeraren igen |
 | `claude` | Electron-shim, lappad på plats — se nedan | no — en uppdatering skapar en ny `app-<version>`-mapp |
@@ -221,6 +222,21 @@ före Apply eller Revert: OBS skriver om `user.ini` vid avslut. Den första
 appliceringen backar upp både det tidigare valet och alla teman med samma namn
 byte-för-byte.
 
+### qBittorrent
+
+`qbittorrent` skriver ett **uppackat** Qt-gränssnittstema till `%APPDATA%\qBittorrent\themes\wintage` — en `config.json` (rollerna `Palette.*` plus qBittorrents egna kontextfärger: tillstånd i överföringslistan, loggarnas allvarlighetsgrad) och en `stylesheet.qss` bredvid (2px-fasningarna, de raka hörnen och Verdana, som en palett inte kan uttrycka) — och pekar sedan `General\CustomUIThemePath` mot den `config.json` och sätter `General\UseCustomUITheme=true`.
+Uppackat i stället för ett `.qbtheme`-paket, med avsikt: en `.qbtheme` är en Qt Resource Collection-fil och skulle kräva en `rcc`-binär med matchande huvudversion på maskinen för att tillverkas, alltså ett kompilatorberoende för två textfiler. qBittorrent läser mappformen inbyggt (`FolderThemeSource`).
+Stäng qBittorrent före Apply eller Revert: den skriver om hela `qBittorrent.ini` vid avslut, så en ändring gjord medan den körs kastas när den stängs — målet vägrar köra i det tillståndet i stället för att rapportera en framgång som nästa avslut raderar. `-Revert` för tillbaka de två INI-nycklarna till sina exakta värden före Wintage (eller tar bort dem om de saknades) och lägger tillbaka en temamapp med samma namn byte för byte; orelaterade ändringar i `qBittorrent.ini` gjorda efter Apply överlever.
+Inte nåbart: ikonerna i verktygsfältet och i aktivitetsfältet kommer från qBittorrents egen kompilerade resursbunt, så de behåller sina ursprungliga färger.
+
+### Typsnitt: namngivna, aldrig installerade
+
+Lag 1 i UI.md begär Verdana **utan kantutjämning**. Ett Qt-formatmall har ingen egenskap för det, och MPC-HCs `OSDFont` är bara ett GDI-namn — den enda hävstången är själva typsnittet. `Verdana_m1.ttf` i repots rot är en kopia av Verdana med förrenderade 1bpp-bitmapstämplar vid 3–30 ppem, som en renderare föredrar framför att jämna ut konturen.
+Formatmallarna för `qbittorrent` och `obs` anger `Verdana_m1, Verdana`, och `mpchc` anger den av de två som maskinen faktiskt löser upp. **Installationsprogrammet installerar eller avinstallerar aldrig ett typsnitt**, och det är med avsikt snarare än ofärdigt:
+En typsnittsfamilj löses upp efter (familj, snitt). Registrera Regular + Bold + Italic, och varje konsument löser upp rätt; avregistrera **en** medlem och varje konsument som efterfrågar familjen pekar på en överlevande medlem. På en maskin som aliasar `MS Shell Dlg 2` — Windows dialogtypsnitt — till den familjen via `HKLM\...\FontSubstitutes`, gör borttagning av Regular **hela skrivbordet kursivt**, inklusive fönstertitlar som DWM redan cachelagrat, och en utloggning krävs för att få tillbaka det. Ingen referensräkning åtgärdar det: skadeområdet är maskinbrett och ett temainstallationsprogram har inget där att göra.
+Typsnittet är därför en engångs, uttrycklig användaråtgärd: högerklicka på `Verdana_m1.ttf` → **Install** (per användare, ingen administratör), och använd sedan målet igen. Saknas typsnittet säger målen det en gång, namnger lösningen och faller tillbaka på vanliga Verdana — kantutjämnad, men ingenting görs med maskinen bakom din rygg.
+
+
 ### Electron-appar
 
 `resources/app.asar` flyttas till `resources/app/app.asar` (dess
@@ -308,4 +324,4 @@ node ..\tools\build-desktop.js --check  # exit 1 om något är föråldrat
 `release.ps1` kör builden och varje grind, så en release kan inte leverera utdata
 som har drivit bort från paletterna.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

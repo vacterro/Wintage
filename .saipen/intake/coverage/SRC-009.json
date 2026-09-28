@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-009:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "saipen source close SRC-008 returned SOURCE_CLOSED; SRC-008 R001 VERIFIED and linked Work T-252 DONE",
+      "text": "Close the T-252 source receipt SRC-008 once its linked Work reached DONE, so the intake hot surface stays clean.",
+      "verification": "saipen source status SRC-008",
+      "work": "T-253"
+    }
+  },
+  "schema_version": 1
+}

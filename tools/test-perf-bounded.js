@@ -123,5 +123,19 @@ const check = (label, ok) => {
   check('PERF-010: invalidation triggers on length OR generation change', /seen\.gen\s*===\s*gen\s*&&\s*seen\.count\s*===\s*count/.test(src));
 }
 
+{
+  const src = fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8');
+  check('main observer starts from the DOM-ready sweep', /function startObservers\(\)/.test(src) && /function startSweeping\(\)[\s\S]*?startObservers\(\);/.test(src));
+  // T-326: artwork is media this surface does not own. An opaque panel painted
+  // over an img/picture/svg hides the image, so the hit test must skip it.
+  check('floating-surface protection skips static images and icons',
+    /u\.tagName === ['"]IMG['"]/.test(src) && /u\.tagName === ['"]PICTURE['"]/.test(src)
+    && /u\.tagName === ['"]SVG['"]/.test(src) && /video, audio, canvas, img, picture, svg/.test(src));
+  // T-331: the button wipe must reach every depth inside the button; a
+  // direct-child bound leaves site-styled nested markup inside the bevel.
+  check('button descendant wipe is not direct-child bounded',
+    /\[class~="button" i\] \*/.test(src) && !/\[class~="button" i\] > \*/.test(src));
+}
+
 console.log(bad ? '\n' + bad + ' failure(s)' : '\nperformance static + behavioural suite PASS');
 process.exit(bad ? 1 : 0);

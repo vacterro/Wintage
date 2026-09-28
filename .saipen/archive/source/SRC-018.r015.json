@@ -1,0 +1,84 @@
+{
+  "clauses": {
+    "SRC-018:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001 preset identity: canonical activation routine keyed by stable preset ID; ComboBox bound to IDs not display names; Save As/Update/Rename/Delete act on the visible selection; fail closed on desync"
+    },
+    "SRC-018:R002": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-002 target selectability: one resolver from Load-Targets rules used by preset loading; only selectable targets checked; unavailable members retained and reported; no folder dialogs from preset selection"
+    },
+    "SRC-018:R003": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-003 Rename-Preset: acquire presets.lock before source existence check and Read-PresetFile; hold continuously through validate/rename/removal; no stale pre-lock state"
+    },
+    "SRC-018:R004": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004 PATH_TARGETS: one canonical GUI-owned mapping for zcode/notepadplusplus/cinema4d; reachable folder picker and persistence; CLI-owned keys preserved; preset load never prompts"
+    },
+    "SRC-018:R005": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-005 Test-PresetObject: validate every snapshot token value against canonical six-digit hex; reject whole preset before GUI mutation with token name and reason"
+    },
+    "SRC-018:R006": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-006 preset dirty state: normalized staged-state snapshot incl custom tokens and sorted target IDs; ItemCheck uses pending NewValue; recapture baseline after load/Save As/Update"
+    },
+    "SRC-018:R007": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-001 Notepad++ and Cinema 4D persistent first-touch ownership and recovery"
+    },
+    "SRC-018:R008": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-002 generation/batch lock: cover explicit Target, Target all, Selected and Reapply consumers; lock held across check and consumption; Reapply single generation epoch"
+    },
+    "SRC-018:R009": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-003 Reapply ZCodePath: forward explicit -ZCodePath like CodeNomadPath/WorkBuddyPath through the canonical path-bearing parameter map"
+    },
+    "SRC-018:R010": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-004 Reapply unknown manifest targets: separate supported recorded targets from unknown preserved ones; unknown never dispatched, never failed, preserved unchanged, reported"
+    },
+    "SRC-018:R011": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-005 paths.json fail-closed: file present but unreadable aborts with original bytes preserved in both Save-PathPreference and GUI Save-CustomPaths; absent file initializes; unknown valid keys preserved"
+    },
+    "SRC-018:R012": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-006 dir-prestate cleanup: success-disposal helper used at every Save-DirPreState call site; no wintage-dirstate-* left after successful apply/revert; failed rollback keeps snapshot"
+    },
+    "SRC-018:R013": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-001 CSSOM invalidation: replaceSync/insertRule/deleteRule set stylesDirty and arm one coalesced continuation; replace() invalidates on Promise fulfillment only and returns original Promise; rejection no-op"
+    },
+    "SRC-018:R014": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-002 onMutations stylesheet detection: collect O(1) then dedupe connected roots before one retained-root STYLE/LINK query; truncation sets stylesDirty conservatively without tail walk"
+    },
+    "SRC-018:R015": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "PERF-003 suspendRepainter disposal: clear forceLapDeferredRoots/styleLapDeferredRoots, null activeStyleTask/styleCursorRoot/styleCursorRootIterator, reset style cursor/debt state; idempotent"
+    }
+  },
+  "derived_at": "2026-09-18T18:39:41Z",
+  "derived_from": "SRC-018",
+  "interpretation_revision": 15,
+  "schema_version": 1,
+  "source_sha256": "9e1cce266b861274f1c2c16e3783c1acd1c76cb9317c215dbe1adf7b28f5f7ea"
+}

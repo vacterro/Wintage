@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-043:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1435 + E-1443 full-matrix current-tree run: async FreeBuff preview (Convert-ToPlayableWav removed, Start-FbConvertAsync, event-driven MediaPlayer, generation ownership)",
+      "text": "PERF-003: Async FreeBuff sound preview - async ffmpeg, MediaPlayer event-based with Forms.Timer, no DoEvents, generation ownership, B supersedes A, teardown disposes all",
+      "verification": "powershell tools/test-fb-sound-async.ps1 56 PASS 0 FAIL incl behavioural fixtures (current-tree E-1443 full matrix green)",
+      "work": "T-301"
+    }
+  },
+  "schema_version": 1
+}

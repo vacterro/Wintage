@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-027:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "Wintage terminal fonts post-closure repair: execute V:\\_TEMP_\\fastprompter_drag\\Wintage_20260921_2147_2.md"
+    }
+  },
+  "derived_at": "2026-09-21T20:06:53Z",
+  "derived_from": "SRC-027",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "4e0a545e5a189a479fca000e32665e6a4dacfb00684298a4571f60e271d4df31"
+}

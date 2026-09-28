@@ -62,7 +62,7 @@ nie, bo archiwum jest w użyciu.
 | `browsers` | wykrywa zainstalowane + przenośne profile Chromium, przygotowuje wybrany motyw chrome i otwiera należące do przeglądarki strony potwierdzenia Tampermonkey/motywu | yes — po jednym **Load unpacked** na profil |
 | `terminal` | schemat Windows Terminal + domyślne dla wszystkich profili, Consolas 12 aliased | yes — ustawienia są w twoim profilu |
 | `conhost` | domyślne `HKCU\Console` + każdy istniejący profil cmd/PowerShell | yes — dokładny snapshot dotkniętych wartości |
-| `obs` | wariant `.ovt` dla OBS 30.2+ + aktywny identyfikator motywu w `user.ini` | yes — żyje w twoim profilu |
+| `obs` | wariant `.ovt` dla OBS 30.2+ + aktywny identyfikator motywu w `user.ini` | tak — żyje w twoim profilu |
 | `antigravity`, `vscode` | rozszerzenie motywu kolorów w `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — żyje w twoim profilu |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electrona, patrz poniżej | no — uruchom ponownie instalator |
 | `claude` | shim Electrona, łatany na miejscu — patrz poniżej | no — aktualizacja tworzy nowy folder `app-<version>` |
@@ -313,4 +313,37 @@ node ..\tools\build-desktop.js --check  # wyjście 1, jeśli cokolwiek jest niea
 `release.ps1` uruchamia build i każdą bramkę, więc wydanie nie może dostarczyć
 wyniku, który oddalił się od palet.
 
+<!-- T-311 target/section coverage supplement -->
+## Pokrycie targetów i sekcji
+
+Ta sekcja odzwierciedla pokrycie Process Explorer, Notepad++, Cinema 4D i czcionek terminalowych z bieżącego angielskiego README, żeby ta lokalizacja nie została po cichu nieaktualna. Literały kodu (identyfikatory targetów, ścieżki rejestru, nazwy plików) są z założenia niezależne od języka; tekst wokół nich jest przetłumaczony.
+
+### Co z każdego targetu naprawdę da się ostylować (nowe targety)
+
+| target | mechanizm | przetrwa aktualizację aplikacji |
+|---|---|---|
+| `notepadplusplus` | XML motywu + alias do twojego folderu `themes` w Notepad++ | tak — mieszka w twoim profilu |
+| `cinema4d` | schemat kolorów włożony do twojego folderu `schemes` w Cinema 4D | tak — mieszka w twoim profilu |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: kolory podświetlenia wierszy i tła wykresów, zobacz niżej | nie — Process Explorer przepisuje własne ustawienia przy zamykaniu; zamknij go i uruchom ponownie |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer trzyma swoje kolory w `HKCU\Software\Sysinternals\Process Explorer` i przepisuje ten klucz przy zamykaniu, więc target **odmawia, gdy działa `procexp`, `procexp64` lub `procexp64a`** — zamknij go i uruchom ponownie. Ostylowuje on konfigurowalne kategorie kolorów:
+
+- **osiągalne**: kolory podświetlenia wierszy procesów (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) zarówno w wariancie jasnego motywu, jak i w ich wariantach `*Dark`, plus tła wykresów (`ColorGraphBk`, `ColorGraphBkDark`) — łącznie 24 wartości. Każdy wariant jest mieszany z biegunem pasującym do aktywnej palety (jaśniejszy odcień dla wypełnienia w trybie jasnym, ciemniejszy dla `*Dark`), więc wypełnienia wierszy zostają w odcieniu samej palety, zamiast pastelizować się niemal na biel;
+- **nieosiągalne**: pasek tytułu, pasek menu, pasek narzędzi, tło i kolory tekstu w widoku listy oraz kolory linii wykresów — są wbudowane w `procexp.exe` i żadna wartość ustawienia ich nie odsłania. Target ostylowuje podświetlenia wierszy i tło wykresu, które naprawdę posiada, i nie twierdzi nic ponadto.
+
+Każda wartość, którą Apply może zmienić, jest zapisywana jako migawka przed zmianą (odzyskanie przy pierwszym dotknięciu w `%APPDATA%\Wintage\recovery\processexplorer\`) i przywracana co do bajtu przez `-Revert`, wraz z informacją, czy wartość nie istniała i czy znacznik był obecny, ale pusty. Przenośny folder poza standardowymi katalogami Sysinternals jest zapamiętywany przez kanoniczny klucz `paths.json` o nazwie `processexplorer` (argument wiersza poleceń `-ProcessExplorerPath`; GUI potrafi go również wybrać).
+
+### Czcionki terminala (`fonts/terminal/`)
+
+Oba targety terminala czytają JEDNĄ kanoniczną preferencję typograficzną z `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Gdy pliku nie ma, targety zachowują dostarczoną wartość domyślną (Terminus (TTF) for Windows, 12 pt, aliased), więc istniejące maszyny pozostają bez zmian. Uszkodzona preferencja zawodzi w sposób zamknięty: nic nie jest nadpisywane, a target odmawia.
+
+`fonts/terminal/catalog.json` to jedyny katalog czcionek: 20 dołączonych otwartoźródłowych rodzin monospace plus dwa kroje systemowe, które Wintage nazywa, ale nigdy nie dostarcza (Terminus (TTF) for Windows, Consolas). Każdy dołączony wpis niesie swoje źródło upstream, przypiętą rewizję, identyfikator licencji, plik licencji i SHA-256. Dokładne pliki są dostarczone w `fonts/terminal/files/`, a ich teksty licencji w `licenses/`; działający Wintage pracuje w pełni offline i nigdy nie pobiera czcionki.
+
+`tools/sync-terminal-fonts.ps1` to pobieracz zarezerwowany dla utrzymujących. Czyta `fonts/terminal/sources.json` (jeden niezmienny artefakt na rodzinę), weryfikuje każde SHA-256 i odmawia przy niezgodności. `-VerifyOnly` (domyślnie) sprawdza drzewo na dysku bez sieci; `-Fetch -Write` dostarcza pliki ponownie. Pobrane bajty czcionek są traktowane jako niezaufane zasoby binarne — haszowane i zapisywane, nigdy uruchamiane. Jedna podmiana jest zarejestrowana: **Fantasque Sans Mono** zastępuje Liberation Mono, które nie publikuje żadnego przypiętego wydania binarnego (tylko źródłowe `.sfd`).
+
+Instalator **przegląda czcionki, nie instaluje ich.** Zakładka TERMINAL FONTS wczytuje dołączony krój do lokalnej dla procesu kolekcji `PrivateFontCollection` na żywy podgląd, który wykonuje **zero** systemowych rejestracji czcionek. Wybór czcionki, rozmiaru (7–24 pt) lub trybu renderowania (aliased/grayscale/cleartype) aktualizuje tylko podgląd i preferencję. Instalacja czcionki to osobne działanie **INSTALL SELECTED**, które otwiera własny instalator czcionek systemu Windows; po potwierdzeniu przez Windows użytkownik sprawdza ponownie przyciskiem Refresh. Rzeczywiste zmiany terminala zachodzą dopiero przy jawnym **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal jest stosowany do wybranej zainstalowanej rodziny w wybranym rozmiarze, a tryb renderowania mapuje się na `profiles.defaults.antialiasingMode`. Klasyczny conhost jest surowszy: renderuje na stałej siatce komórek, więc wybrany krój zostaje odrzucony przed jakąkolwiek zmianą w rejestrze, chyba że Windows potrafi go rozwiązać (krój domyślny i zapasowy Consolas są zwolnione). Health i Reapply weryfikują skonfigurowany krój, rozmiar i wygładzanie względem preferencji, więc zmiana preferencji po Apply jest raportowana jako odchylenie, a nie jako stan "zdrowy". Cykl życia kolorów terminala pozostaje nietknięty: Revert przywraca dokładne wartości posiadane przed Wintagem i nigdy nie usuwa czcionki z maszyny.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

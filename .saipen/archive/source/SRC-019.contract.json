@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-019:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "J\u00e4tka Wintage audit/7 execution wave: T-262 umbrella continuity repair ja seej\u00e4rel T-269 W2-002 generation/batch lock (drag-fail: V:\\_TEMP_\\fastprompter_drag\\Wintage_20260918_2135.md)"
+    }
+  },
+  "derived_at": "2026-09-19T00:13:41Z",
+  "derived_from": "SRC-019",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "55ae4fd0fe090b8ac3a1e8672c54b6f4428a03ef01eca1b9f34d01f7632571ba"
+}

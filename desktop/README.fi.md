@@ -60,7 +60,7 @@ arkisto on käytössä.
 | `browsers` | tunnistaa asennetut + kannettavat Chromium-profiilit, lavastaa valitun chrome-teeman ja avaa selaimen omat Tampermonkey/teemavahvistussivut | yes yhden **Load unpacked** -vahvistuksen jälkeen profiilia kohti |
 | `terminal` | Windows Terminal -skeema + oletusasetukset kaikkiin profiileihin, Consolas 12 aliasoitu | yes — asetukset ovat profiilissasi |
 | `conhost` | `HKCU\Console`-oletukset + kaikki olemassa olevat cmd/PowerShell-profiilit | yes — täsmällinen kuvakaappaus kosketuista arvoista |
-| `obs` | OBS 30.2+ `.ovt`-variantti + aktiivinen `user.ini`-teema-ID | yes — se on profiilissasi |
+| `obs` | OBS 30.2+ `.ovt`-variantti + aktiivinen `user.ini`-teema-ID | kyllä — se on profiilissasi |
 | `antigravity`, `vscode` | väriteemalaajennus `~/.antigravity/extensions` / `~/.vscode/extensions` -kansiossa | **yes** — se on profiilissasi |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, katso alla | no — aja asentaja uudelleen |
 | `claude` | Electron-shim, paikattu paikan päällä — katso alla | no — päivitys luo uuden `app-<version>`-kansion |
@@ -296,4 +296,37 @@ node ..\tools\build-desktop.js --check  # exit 1, jos mikään on vanhentunutta
 `release.ps1` ajaa rakennuksen ja jokaisen portin, joten julkaisu ei voi toimittaa tulostetta, joka
 on ajautunut erilleen paleteista.
 
+<!-- T-311 target/section coverage supplement -->
+## Kohteiden ja osioiden kattavuus
+
+Tämä osio peilaa nykyisen englanninkielisen README:n Process Explorer-, Notepad++-, Cinema 4D- ja terminaalifonttien kattavuutta, jotta tämä käännös ei jää hiljaa vanhentuneeksi. Koodiliteraalit (kohdetunnisteet, rekisteripolut, tiedostonimet) on suunniteltu kieliriippumattomiksi; niitä ympäröivä teksti on käännetty.
+
+### Mitä kustakin kohteesta oikeasti voi teemoittaa (lisätyt kohteet)
+
+| kohde | mekanismi | selviää sovelluspäivityksestä |
+|---|---|---|
+| `notepadplusplus` | teeman XML + aliias omaan `themes`-kansioosi Notepad++:ssa | kyllä — se sijaitsee omassa profiilissasi |
+| `cinema4d` | väriskeema, joka pudotetaan omaan `schemes`-kansioosi Cinema 4D:ssä | kyllä — se sijaitsee omassa profiilissasi |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: rivien korostusvärit ja kaavioiden taustat, katso alla | ei — Process Explorer kirjoittaa asetuksensa uudelleen sulkiessaan; sulje se ja aja uudelleen |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer säilyttää väreinsä avaimessa `HKCU\Software\Sysinternals\Process Explorer` ja kirjoittaa sen uudelleen poistuessaan, joten kohde **kieltäytyy, kunhan `procexp`, `procexp64` tai `procexp64a` on käynissä** — sulje se ja aja uudelleen. Se teemoittaa määritettävät väriluokat:
+
+- **saavutettavat**: prosessirivien korostusvärit (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) sekä vaalean tilan että niiden `*Dark`-variantteina, plus kaavioiden taustat (`ColorGraphBk`, `ColorGraphBkDark`) — yhteensä 24 arvoa. Jokainen variantti sekoitetaan aktiivisen paletin vastavaan ääripäähän (vaaleampi sävy vaalean tilan täyttöön, tummempi `*Dark`-versioon), joten rivien täytökset pysyvät paletin omassa sävyssä sen sijaan, että ne vaalenoutuisivat lähes valkoisiksi;
+- **ei saavutettavat**: otsikopalkki, valikkopalkki, työkalupalkki, luettelonäkymän tausta ja tekstin värit sekä kaavioviivojen värit — ne on käännetty `procexp.exe`-ohjelmaan eikä mikään asetusarvo paljasta niitä. Kohde teemoittaa rivien korostukset ja sen aidosti omistaman kaaviotaustan eikä väitä omistavansa enempää.
+
+Jokainen arvo, jota Apply voi muuttaa, otetaan tilannekuvaksi ennen muutosta (ensimmäiskosketuksen palautus hakemistossa `%APPDATA%\Wintage\recovery\processexplorer\`) ja palautetaan täsmälleen `-Revert`-toiminnolla, mukaan lukien tieto siitä, oliko arvo poissa ja oliko merkki olemassa mutta tyhjä. Sysinternalsin tavanomaisten hakemistojen ulkopuolinen siirrettävä kansio muistetaan `paths.json`-avaimen `processexplorer` kautta (komentoriviargumentti `-ProcessExplorerPath`; myös käyttöliittymä osaa valita sen).
+
+### Terminaalifontit (`fonts/terminal/`)
+
+Molemmat terminaalikohteet lukevat YHDEN kanonisen typografisen asetuksen tiedostosta `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Kun tiedosto puuttuu, kohteet säilyttävät toimitetun oletuksen (Terminus (TTF) for Windows, 12 pt, aliased), joten nykyiset koneet eivät muutu. Virheellinen asetus epäonnistuu suljetusti: mitään ei ylikirjoiteta ja kohde kieltäytyy.
+
+`fonts/terminal/catalog.json` on ainoa fonttiluettelo: 20 mukana toimitettua avointen lähdekohtien monospace-perhettä plus kaksi järjestelmätyyppiä, jotka Wintage nimeää mutta ei koskaan toimita (Terminus (TTF) for Windows, Consolas). Jokainen mukana toimitettu kohde sisältää upstream-lähteensä, lukitun revisionsa, lisenssitunnuksensa, lisenssitiedostonsa ja SHA-256-todisteensa. Tarkat tiedostot on toimitettu hakemistoon `fonts/terminal/files/` ja niiden lisenssitekstit hakemistoon `licenses/`; ajettavana Wintage toimii täysin offline-tilassa eikä koskaan lataa fonttia.
+
+`tools/sync-terminal-fonts.ps1` on ylläpitäjien latausohjelma. Se lukee tiedoston `fonts/terminal/sources.json` (yksi muuttumaton artefakti perhe), tarkistaa jokaisen SHA-256:n ja kieltäytyy erosta. `-VerifyOnly` (oletus) tarkistaa levyllä olevan puun ilman verkkoa; `-Fetch -Write` toimii uudelleen. Ladatut fonttibytes käsitellään epäluotettuina binääreinä omaisuuksina — lasketaan tiivisteeksi ja kirjoitetaan, ei koskaan suoriteta. Yksi korvike on kirjattu: **Fantasque Sans Mono** korvaa Liberation Monon, joka ei julkaise mitään lukittua binäärijulkaisua (vain lähde `.sfd`).
+
+Asentaja **selaa fontteja, ei asenna niitä.** TERMINAL FONTS -välilehti lataa mukana toimitetun tyypin prosessikohtaiseen `PrivateFontCollection`-kokoelmaan elävää esikatselua varten, joka tekee **nolla** järjestelmäfonttien rekisteröintejä. Fontin, koon (7–24 pt) tai renderöintitilan (aliased/grayscale/cleartype) valinta päivittää vain esikatselun ja asetuksen. Fontin asentaminen on erillinen **INSTALL SELECTED** -toiminto, joka avaa Windowsin oman fonttiasennusohjelman; Windowsin vahvistuksen jälkeen käyttäjä tarkistaa tilanteen uudelleen Refreshillä. Todelliset terminaalimuutokset tapahtuvat vain eksplisiittisellä **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** -toiminnolla.
+
+Windows Terminal sovelletaan valittuun asennettuun perheeseen valitussa koossa, ja renderöintitila kartoitetaan arvoon `profiles.defaults.antialiasingMode`. Klassinen conhost on tiukempi: se renderöi kiinteällä soluristikolla, joten valittu fontti hylätään ennen mitään rekisterimuutosta, ellei Windows pysty ratkaisemaan sitä (oletustyyppi ja Consolas-varatyyppi on vapautettu). Health ja Reapply validoivat määritetyn tyypin, koon ja reunojen pehmennyksen asetusta vasten, joten asetuksen muutos Applyn jälkeen raportoidaan poikkeamana eikä "terveenä" tilana. Terminaalin värien elinkaari jää koskematta: Revert palauttaa täsmälleen ne arvot, jotka Wintage omisti ennen sitä, eikä koskaan poista fonttia koneelta.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

@@ -60,7 +60,7 @@ arhiiv on kasutuses.
 |---|---|---|
 | `windows` | kasutaja `.theme`: tume süsteemi/rakenduse režiim, aktsent ja klassikalised värviosad | yes — paigaldatud sinu lokaalsesse Windows Themes kausta |
 | `browsers` | tuvastab paigaldatud ja kaasaskantavad Chromiumi profiilid, valmistab ette valitud chrome teema ja avab brauseri enda Tampermonkey/teema kinnituslehed | yes pärast üht **Load unpacked** kinnitust profiili kohta |
-| `terminal` | Windows Terminal skeem + kõigi profiilide vaikeseaded, Consolas 12 silumata | yes — seaded on sinu profiilis |
+| `terminal` | Windows Terminal skeem + kõigi profiilide vaikeseaded, Terminus (TTF) Windowsile | yes — seaded on sinu profiilis |
 | `conhost` | `HKCU\Console` vaikeseaded + iga olemasolev cmd/PowerShell profiil | yes — puudutatud väärtuste täpne hetktõmmis |
 | `obs` | OBS 30.2+ `.ovt` variant + aktiivne `user.ini` teema ID | yes — elab sinu profiilis |
 | `antigravity`, `vscode` | värviteema laiendus kaustas `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — elab sinu profiilis |
@@ -70,6 +70,38 @@ arhiiv on kasutuses.
 | `obsidian` | kogukonna teema iga vault-i jaoks, kõik paletid paigaldatud korraga | **yes** — elab sinu vault-is |
 | `discord` | CSS visatud BetterDiscordi enda teemakausta | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` võtmed; olemasolevad hiljutiste failide filtrid kasutavad paleti lingivärvi | yes — see on sinu ini |
+| `notepadplusplus` | teema XML + alias kasutaja Notepad++ `themes` kausta | yes — elab sinu profiilis |
+| `cinema4d` | värviskeem visatud kasutaja Cinema 4D `schemes` kausta | yes — elab sinu profiilis |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: rea-esiletõstu värvid ja graafikute taustad, vaata allpool | no — Process Explorer kirjutab oma seaded väljudes üle; sulge see ja käivita uuesti |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer hoiab oma värve võtmes `HKCU\Software\Sysinternals\Process Explorer`
+ja kirjutab selle võtme väljudes üle, nii et sihtmärk **keeldub, kui `procexp`,
+`procexp64` või `procexp64a` töötab** — sulge see ja käivita uuesti. See teemindab
+seadistatavad värvikategooriad:
+
+- **ligipääsetavad**: protsessirea esiletõstu värvid (`ColorOwn`, `ColorServices`,
+  `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`,
+  `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) nii nende
+  hele-režiimi kui `*Dark` variantides, pluss graafikute taustad (`ColorGraphBk`,
+  `ColorGraphBkDark`) — kokku 24 väärtust. Iga variant segatakse aktiivse paleti
+  vastava pooluse suunas (heledam toon hele-režiimi täite jaoks, tumedam `*Dark`
+  jaoks), nii et rea täited püsivad paleti enda võtmes, mitte ei pleegita
+  peaaegu-valgeks;
+- **mitte ligipääsetavad**: tiitliriba, menüüriba, tööriistariba, loendivaate
+  taust ja tekstivärvid ning graafikute joonevärvid — need on kompileeritud
+  `procexp.exe`-sse ega ole ühegi seadeväärtusega avatud. Sihtmärk teemindab
+  rea-esiletõsted ja graafiku tausta, mis talle tegelikult kuuluvad, ega väida
+  midagi enamat.
+
+Iga väärtus, mida RAKENDA muuta saab, pildistatakse enne mutatsiooni hetktõmmisena
+(esmapuute taaste kaustas `%APPDATA%\Wintage\recovery\processexplorer\`) ja
+`-Revert` taastab selle täpselt, sealhulgas kas iga väärtus puudus ja kas marker
+oli olemas-aga-tühi. Standardsetest Sysinternalsi kaustadest väljaspool olev
+kaasaskantav kaust jäetakse meelde kanoonilise `paths.json` võtme
+`processexplorer` kaudu (CLI argument `-ProcessExplorerPath`; ka GUI oskab selle
+valida).
 
 ### FreeBuffi reklaamide eemaldamine
 
@@ -166,8 +198,11 @@ käivita terminalist `install.ps1 -Target freebuff`), et see jõustuks.
 
 `terminal` kirjutab `Wintage` värviskeemi igasse tuvastatud stabiilsesse, Preview
 või pakendamata Windows Terminal seadefaili ning valib selle `profiles.defaults`
-kaudu koos konsooliohutu Consolas 12 ja silumata tekstiga. Originaalfail
-hoitakse selle kõrval baidibaidi alles ja `-Revert` taastab selle.
+kaudu koos konsooliohutu Terminus (TTF) Windowsi jaoks ja aliasitud tekstiga.
+Kirjutatakse ainult väljad, mis Wintage'ile kuuluvad — kommentaarid, vorming ja
+kõik seotud olematud seaded failis jäävad alles, nii et `-Revert` sulandab
+originaalväärtused tagasi praegusesse dokumenti, selle asemel et taastada
+täisfaili koopia.
 
 `conhost` katab klassikalised `cmd.exe`, Windows PowerShell, Git CMD/Bash
 konsoolprofiilid ja teised olemasolevad `HKCU\Console` alamvõtmed. See kirjutab
@@ -175,6 +210,51 @@ paleti täieliku 16-värvilise tabeli nii juurvaikeseadetesse kui ka igasse
 olemasolevasse ülekirjutusse ning taastab seejärel ainult puudutatud väärtused.
 Ka seal rakendab see Consolas'i, sest proportsionaalne Verdana põrkab kokku
 fikseeritud laiusega lahtrivõrguga, mida mõlemad terminalihostid kasutavad.
+
+### Terminali fondid (`fonts/terminal/`)
+
+Mõlemad terminali-sihtmärgid loevad ÜHT kanoonilist tüpograafiaeelistust
+asukohas `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`,
+`size`, `renderingMode`). Kui fail puudub, hoiavad sihtmärgid tarnitud
+vaikeväärtust (Terminus (TTF) Windowsile, 12 pt, aliasitud), nii et olemasolevad
+masinad jäävad muutumatuks. Vigane eelistus ebaõnnestub suletult: midagi ei
+kirjutata üle ja sihtmärk keeldub.
+
+`fonts/terminal/catalog.json` on ainus fondikataloog: 20 komplekti kuuluvat
+avatud lähtekoodiga monospace-perekonda pluss kaks süsteemifonti, mida Wintage
+nimetab, aga kunagi kaasa ei tarni (Terminus (TTF) Windowsile, Consolas). Iga
+komplekti kuuluv kanne kannab oma ülesvoolu allikat, kinnistatud revisiooni,
+litsentsi id-d, litsentsifaili ja SHA-256-t. Täpsed failid on varutud kausta
+`fonts/terminal/files/` all koos litsentsitekstidega kausta `licenses/` all;
+tööajal töötab Wintage täielikult võrguühenduseta ega laadi kunagi fonti alla.
+
+`tools/sync-terminal-fonts.ps1` on ainult hooldajale mõeldud allalaadija. See
+loeb `fonts/terminal/sources.json`-i (üks muutumatu artefakt perekonna kohta),
+verifitseerib iga SHA-256 ja keeldub mittevastavuse korral. `-VerifyOnly`
+(vaikimisi) kontrollib kettapuu ilma võrguta; `-Fetch -Write` varub uuesti.
+Allalaaditud fondibaite koheldakse usaldamatu binaarvarana — räsitakse ja
+kirjutatakse, kunagi ei käivitata. Üks asendus on kirja pandud: **Fantasque Sans
+Mono** asendab Liberation Mono, mis ei avalda kinnistatud binaarväljalaset
+(ainult lähtekoodi `.sfd`).
+
+Paigaldaja **sirvib fonte, ei paigalda neid.** TERMINAL FONTS vahekaart laadib
+komplekti kuuluva fondi protsessilokaalsesse `PrivateFontCollection`-isse
+reaalajas eelvaate jaoks, mis teeb **null** süsteemi fondiregistreerimist. Fondi,
+suuruse (7–24 pt) või renderdusrežiimi (aliasitud/hallskaala/cleartype) valimine
+uuendab ainult eelvaadet ja eelistust. Fondi paigaldamine on selgesõnaline
+**INSTALL SELECTED** tegevus, mis avab Windowsi enda fondipaigaldaja; pärast
+Windowsi kinnitust re-proovib kasutaja Refresh-iga. Tegelikud terminalimuutused
+toimuvad ainult selgesõnalisel **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**-il.
+
+Windows Terminal rakendatakse valitud paigaldatud perekonnale valitud suurusel
+ja renderdusrežiim kaardistub `profiles.defaults.antialiasingMode`-ile.
+Klassikaline conhost on rangem: see renderdab fikseeritud lahtrivõrgul, nii et
+valitud font keeldutakse enne mis tahes registrimutatsiooni, kui Windows seda ei
+lahenda (vaikefont ja Consolas-varuvariant on grandfather'itud). Health ja
+Reapply valideerivad seadistatud fondi/suuruse/silumisvastasuse eelistuse vastu,
+nii et eelistuse muutmine pärast RAKENDA-t teatatakse triivina, mitte
+"tervena". Terminali-värvi elutsükkel jääb puutumata: Revert taastab täpsed
+Wintage-eelsed omatavad väärtused ega eemalda kunagi fonti masinast.
 
 ### Brauserid ja Tampermonkey
 

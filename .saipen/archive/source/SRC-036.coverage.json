@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-036:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1434 + E-1443 full-matrix current-tree run",
+      "text": "CORE-006: CLI write --file override writes only the explicit file; app-data preference untouched; atomic write; round-trips through read --file (audit/8.md finding CORE-006, projected from SRC-028:R006)",
+      "verification": "node tools/test-terminal-fonts.js 86 PASS 0 FAIL incl 5 CORE-006 checks (WINTAGE_APPDATA isolation, atomic write, round-trip)",
+      "work": "T-294"
+    }
+  },
+  "schema_version": 1
+}

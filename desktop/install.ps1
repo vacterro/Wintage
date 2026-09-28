@@ -18,7 +18,7 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'zcode', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d', 'all')]
+    [ValidateSet('windows', 'browsers', 'antigravity', 'vscode', 'claude', 'freebuff', 'antigravity-app', 'codenomad', 'workbuddy', 'zcode', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d', 'processexplorer', 'all')]
     [string]$Target,
     # PERF-005 (T-240): batch mode for the GUI. A comma-separated selected set
     # (e.g. -Selected "vscode,obs") that feeds the SAME $names dispatcher below
@@ -47,6 +47,10 @@ param(
     [switch]$RescanBrowsers,
     [string]$Cinema4DPath,
     [string]$NotepadPlusPlusPath,
+    # Process Explorer lives wherever the user dropped its portable exe, so a
+    # folder outside the standard Sysinternals dirs is remembered (paths.json,
+    # GUI-owned key) instead of being re-discovered by a disk walk.
+    [string]$ProcessExplorerPath,
     [switch]$Reapply,
     # SRC-006:R005: internal Reapply-only parameter. The parent passes the
     # intent fingerprint of the manifest entry it planned from; the child
@@ -192,6 +196,11 @@ $TERMINAL_DIRS = @(
 # so letters visibly collided. Terminus (TTF) for Windows is the user's installed
 # bitmap-style monospace (the classic console look), monospaced and safe for the
 # fixed cell grid; Consolas remains the bundled fallback if Terminus is absent.
+#
+# T-283 / SRC-026: this is now only the DEFAULT FACE NAME the canonical
+# preference resolves to when no preference exists. The live face/size come from
+# Get-ConhostOwnedFont / Get-TerminalFontPreference (common.ps1) -- conhost and
+# Windows Terminal read the ONE preference, no target hard-codes a face.
 $CONSOLE_FONT = 'Terminus (TTF) for Windows'
 
 # Fixed-name recovery files (conhost-settings.json, windows-dwm-settings.json)
@@ -208,6 +217,12 @@ $WINDOWS_DWM_BACKUP = Join-Path $backupBase 'windows-dwm-settings.json'
 
 $MPC_KEY = 'HKCU:\Software\MPC-HC\MPC-HC\Settings'
 $MPC_REG = 'HKCU\Software\MPC-HC\MPC-HC\Settings'
+
+# Process Explorer persists ALL user settings under HKCU\Software\Sysinternals\
+# Process Explorer; its whole configurable colour surface is the Color*/Color*Dark
+# REG_DWORD COLORREF pairs the Options -> Configure Colors dialog edits. The test
+# seam lets fixtures drive the target against a scratch HKCU key.
+$PE_KEY = if ($env:WINTAGE_TEST_PE_KEY) { $env:WINTAGE_TEST_PE_KEY } else { 'HKCU:\Software\Sysinternals\Process Explorer' }
 
 $OBS_CONFIG = Join-Path $env:APPDATA 'obs-studio'
 $OBS_THEME_ID = 'com.wintage.OBS'
@@ -238,6 +253,7 @@ if (-not $ZCodePath -and $pathsJson.ContainsKey('zcode')) { $ZCodePath = $pathsJ
 if (-not $PortableBrowserRoot -and $pathsJson.ContainsKey('portable')) { $PortableBrowserRoot = $pathsJson['portable'] }
 if (-not $Cinema4DPath -and $pathsJson.ContainsKey('cinema4d')) { $Cinema4DPath = $pathsJson['cinema4d'] }
 if (-not $NotepadPlusPlusPath -and $pathsJson.ContainsKey('notepadplusplus')) { $NotepadPlusPlusPath = $pathsJson['notepadplusplus'] }
+if (-not $ProcessExplorerPath -and $pathsJson.ContainsKey('processexplorer')) { $ProcessExplorerPath = $pathsJson['processexplorer'] }
 
 # PERF-005 (T-240): batch-mode guards, BEFORE any mode branch (-Reapply/-Status
 # exit before the dispatcher, so a conflict rejected only there would never fire).
@@ -262,12 +278,33 @@ if ($ExpectedIntent -and (-not $Target -or $Target -eq 'all' -or $Selected)) {
     throw '-ExpectedIntent is internal to -Reapply and requires exactly one explicit -Target.'
 }
 
+# W2-004 (audit/7.md): the canonical supported-target set must exist BEFORE the
+# Status/Reapply lifecycle branches. Unknown manifest keys are forward-compatible
+# state the schema deliberately preserves; Reapply must not interpret them as
+# executable work (the Target ValidateSet would reject the child anyway) and
+# must not count them as failures. Declared once, here, for both the lifecycle
+# branches and the dispatcher (the $known guard below reuses $SIMPLE).
+$SIMPLE = @('windows', 'browsers', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d', 'processexplorer')
+$supportedTargets = @($TARGETS.Keys) + @($ELECTRON.Keys) + $SIMPLE
+
 # ---- Reapply mode: read manifest, probe TARGET health, re-apply unhealthy targets ----
 # The decision is target health, not just the Wintage payload version (T-189):
 # an application update or a moved install leaves payloadVersion unchanged while
 # the theme is gone, so needsReapply fires on any of payload-outdated, resolved
 # path moved, app version changed, marker/theme state missing, or unresolved.
 if ($Reapply) {
+    # W2-002 (audit/7 T-269): the complete Reapply run is ONE generation epoch.
+    # The parent owns the generation lock BEFORE this health/planning/child
+    # corridor and holds it until every child that can consume generated output
+    # has finished. Children inherit THAT live acquisition (marker = its token),
+    # so they neither deadlock on a lock their waiting parent holds nor consume
+    # a second generation; a forged/stale marker fails the inheritance test in
+    # common.ps1 and the child acquires normally - never a silent unlocked
+    # consumer path.
+    $batchLock = Enter-BatchLock
+    $prevBuildLockHeld = $env:WINTAGE_BUILD_LOCK_HELD
+    if ($batchLock) { $env:WINTAGE_BUILD_LOCK_HELD = [string]$batchLock.GenLock.Token }
+    try {
     $currentVer = Get-PayloadVersion
     try {
         $manifest = Read-Manifest
@@ -294,10 +331,16 @@ if ($Reapply) {
     $passArgs = @{}
     if ($CodeNomadPath) { $passArgs['-CodeNomadPath'] = $CodeNomadPath }
     if ($WorkBuddyPath) { $passArgs['-WorkBuddyPath'] = $WorkBuddyPath }
+    # W2-003 (audit/7.md): ZCodePath is the parent's explicit authority exactly
+    # like CodeNomadPath/WorkBuddyPath; without forwarding the child re-resolved
+    # from paths.json and could mutate a different ZCode installation than the
+    # parent inspected.
+    if ($ZCodePath) { $passArgs['-ZCodePath'] = $ZCodePath }
     if ($TotalCmdIni)  { $passArgs['-TotalCmdIni'] = $TotalCmdIni }
     if ($TotalCmd2Ini) { $passArgs['-TotalCmd2Ini'] = $TotalCmd2Ini }
     if ($Cinema4DPath) { $passArgs['-Cinema4DPath'] = $Cinema4DPath }
     if ($NotepadPlusPlusPath) { $passArgs['-NotepadPlusPlusPath'] = $NotepadPlusPlusPath }
+    if ($ProcessExplorerPath) { $passArgs['-ProcessExplorerPath'] = $ProcessExplorerPath }
     if ($Force) { $passArgs['-Force'] = $Force }
     if ($PortableBrowserRoot) { $passArgs['-PortableBrowserRoot'] = $PortableBrowserRoot }
     if ($BrowserStageRoot) { $passArgs['-BrowserStageRoot'] = $BrowserStageRoot }
@@ -307,6 +350,12 @@ if ($Reapply) {
     $sorted = @($manifest.Keys | Sort-Object)
     foreach ($key in $sorted) {
         $data = $manifest[$key]
+        # W2-004: a key this version does not implement is preserved, never
+        # dispatched and never counted as failed repair work.
+        if ($supportedTargets -notcontains $key) {
+            if (-not $Quiet) { Say "$key`: unsupported by this Wintage version - entry preserved, not re-applied." 'DarkYellow' }
+            continue
+        }
         $health = Test-TargetNeedsReapply $key $data $currentVer
         if (-not $health.Needs) {
             if (-not $Quiet) { Say "$key`: up to date (payload v$($data.payloadVersion), path $($data.path))." 'DarkGray' }
@@ -403,6 +452,15 @@ if ($Reapply) {
         exit 1
     }
     exit 0
+    } finally {
+        # W2-002: release the parent epoch exactly once, and restore the PRIOR
+        # marker state (an outer genuine holder's marker must survive this run).
+        # -WhatIf:$false: the inherited-ownership marker is protocol state, not
+        # a ShouldProcess mutation; a -WhatIf run must not leave it behind.
+        if ($null -eq $prevBuildLockHeld) { Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue -WhatIf:$false }
+        else { $env:WINTAGE_BUILD_LOCK_HELD = $prevBuildLockHeld }
+        if ($batchLock) { try { Exit-BatchLock $batchLock } catch { } }
+    }
 }
 
 if ($RegisterLogonTask) { Register-WintageLogonTask; exit 0 }
@@ -505,9 +563,23 @@ if (-not $Target -and -not $Selected) {
     }
 
     $mpc = if (Test-Path $MPC_KEY) {
-        if ((Get-ItemProperty $MPC_KEY).OSDFont -eq 'Verdana') { 'themed' } else { 'found, not themed' }
+        # One font-state rule: -List resolves the expected OSD face through the
+        # same Get-WintageFontFace apply and health use (Verdana_m1 when the
+        # shipped face is installed, Verdana otherwise). A literal 'Verdana' here
+        # reported a correctly-themed machine as "found, not themed".
+        if ((Get-ItemProperty $MPC_KEY).OSDFont -eq (Get-WintageFontFace)) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
     Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'mpchc', 'MPC-HC (K-Lite)', $mpc, 'n/a - colours are compiled in')
+
+    # Registry evidence (the settings key only exists once Process Explorer has
+    # run here) or the exe found through the supported path model. The palette
+    # column says what the target can and cannot own up front.
+    $peMarker = if (Test-Path $PE_KEY) { (Get-ItemProperty $PE_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette } else { $null }
+    $pe = if ((-not (Test-Path $PE_KEY)) -and (-not (Get-ProcessExplorerPath))) { 'not installed' }
+          elseif ($peMarker) { 'themed' }
+          else { 'found, not themed' }
+    $pePal = if ($peMarker) { $peMarker } else { 'n/a - highlight rows only' }
+    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'processexplorer', 'Process Explorer (Sysinternals)', $pe, $pePal)
 
     $windowsPal = if (Test-Path $WINDOWS_THEME_MARKER) { (Read-Utf8 $WINDOWS_THEME_MARKER).Trim() } else { $null }
     $windows = if ($windowsPal) { 'themed' } else { 'found, not themed' }
@@ -637,41 +709,18 @@ if (-not $Target -and -not $Selected) {
 # dispatch, absent ones SKIP, and unrelated native/source-tree targets execute.
 $BUILD_CONSUMING = @($TARGETS.Keys) + @($ELECTRON.Keys) + @('windows', 'browsers', 'obs', 'discord', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d')
 
-# For an EXPLICIT build-consuming target the global check still applies: the user
-# asked for exactly this target, so an unverifiable build aborts before dispatch.
-if ($Target -in $BUILD_CONSUMING -and $Target -ne 'all') {
-    if ($node) {
-        & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            if (-not $Force) { throw (T 'BuildStale') }
-            Say (T 'BuildStaleForce') 'Yellow'
-        }
-    }
-    elseif (-not $Force) {
-        throw (T 'NodeNotFoundBuild')
-    }
-}
-
-# For `-Target all`, run the build check ONCE and cache it; the dispatch loop
-# applies it per PRESENT build-consuming target (T-190).
-$allBuildCurrent = $null   # $null = unknown (no node), $true/$false = check result
-if ($Target -eq 'all' -and $node) {
-    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
-    $allBuildCurrent = ($LASTEXITCODE -eq 0)
-}
-
 # Every target that is neither a VS Code extension nor an Electron app -- i.e. one
-# with its own Invoke-* handler. Declared ONCE, because the hand-kept version of
-# this list silently dropped five targets: codenomad, discord, totalcmd, totalcmd2
-# and obsidian were all reachable individually but were skipped by `-Target all`,
-# so "everything" quietly meant nine of fourteen.
-$SIMPLE = @('windows', 'browsers', 'mpchc', 'terminal', 'conhost', 'obs', 'discord', 'totalcmd', 'totalcmd2', 'obsidian', 'qbittorrent', 'notepadplusplus', 'cinema4d')
+# with its own Invoke-* handler. Declared ONCE (before the Reapply branch, see
+# W2-004 above), because the hand-kept version of this list silently dropped five
+# targets: codenomad, discord, totalcmd, totalcmd2 and obsidian were all reachable
+# individually but were skipped by `-Target all`, so "everything" quietly meant
+# nine of fourteen.
 
 # And this is the guard that stops it happening a third time: the parameter's own
 # ValidateSet is the definition of what a user may ask for, so anything in it that
 # no dispatch list covers is a target `-Target all` would skip. Checked at startup
 # rather than trusted, because the drift is invisible until someone counts.
-$known = @($TARGETS.Keys) + @($ELECTRON.Keys) + $SIMPLE
+$known = $supportedTargets
 $declared = (Get-Command $PSCommandPath).Parameters['Target'].Attributes |
     Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } |
     Select-Object -First 1 -ExpandProperty ValidValues
@@ -696,24 +745,94 @@ if ($Selected) {
     if ($unknown.Count) { throw "-Selected names unknown target(s): $($unknown -join ', ') (known: $($known -join ', '))." }
 }
 
-$names = if ($Target -eq 'all') { $known } elseif ($selectedList.Count) { $selectedList } else { @($Target) }
+# W2-002 (audit/7 T-269) test seam: a full `-Target all` run on a real host
+# legitimately touches every installed application, so race fixtures narrow the
+# expansion to named SUPPORTED targets. The `-Target all` semantics themselves
+# (one shared cached freshness verdict, per-present-target gating) stay exactly
+# the production ones. Never set outside tests.
+if ($Target -eq 'all' -and $env:WINTAGE_TEST_ALL_TARGETS) {
+    $allNames = @($env:WINTAGE_TEST_ALL_TARGETS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $unknownAll = @($allNames | Where-Object { $known -notcontains $_ })
+    if ($unknownAll.Count) { throw "WINTAGE_TEST_ALL_TARGETS names unknown target(s): $($unknownAll -join ', ') (known: $($known -join ', '))." }
+    $names = $allNames
+} else {
+    $names = if ($Target -eq 'all') { $known } elseif ($selectedList.Count) { $selectedList } else { @($Target) }
+}
+
+# W2-002 (audit/7 T-269): EVERY real mutation flow that can consume generated
+# output owns ONE generation lock covering freshness verification AND all
+# generated-byte consumption: explicit build-consuming `-Target`, `-Target all`,
+# `-Selected`, and (in its own branch above) the complete `-Reapply`. Acquired
+# BEFORE the freshness verdict, retained through every target dispatch and its
+# manifest/path commits, released in the finally below. Informational modes
+# (-Status, logon-task registration) exit before this point and never take it.
+# A `-Revert` consumes NO generated bytes (it restores recovery state and the
+# manifest), so it is not a consumer: it stays lock-free and can still win the
+# plan->child race the intent-token contract exists for. `-Force` bypasses the
+# freshness REJECTION only, never this serialization.
+$consumesGeneratedOutput = -not $Revert -and (
+    ($Target -eq 'all') -or ($selectedList.Count -gt 0) -or
+    ([bool]$Target -and ($BUILD_CONSUMING -contains $Target)))
+$batchLock = $null
+if ($consumesGeneratedOutput) { $batchLock = Enter-BatchLock }
+try {
+
+# For an EXPLICIT build-consuming target the global check still applies: the user
+# asked for exactly this target, so an unverifiable build aborts before dispatch.
+if ($Target -in $BUILD_CONSUMING -and $Target -ne 'all') {
+    if ($node) {
+        # A stale verdict arrives as native stderr; under EAP=Stop that became
+        # a terminating NativeCommandError before `-Force` could inspect it.
+        # Judge the check by $LASTEXITCODE alone (same idiom as the Reapply
+        # child reader below).
+        $prevEapCheck = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
+        $explicitBuildCurrent = ($LASTEXITCODE -eq 0)
+        $ErrorActionPreference = $prevEapCheck
+        if (-not $explicitBuildCurrent) {
+            if (-not $Force) { throw (T 'BuildStale') }
+            Say (T 'BuildStaleForce') 'Yellow'
+        }
+    }
+    elseif (-not $Force) {
+        throw (T 'NodeNotFoundBuild')
+    }
+}
+
+# For `-Target all`, run the build check ONCE and cache it; the dispatch loop
+# applies it per PRESENT build-consuming target (T-190).
+$allBuildCurrent = $null   # $null = unknown (no node), $true/$false = check result
+if ($Target -eq 'all' -and $node) {
+    $prevEapAll = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
+    $allBuildCurrent = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $prevEapAll
+}
 
 # PERF-005 (T-240): a -Selected batch shares ONE build verification across the
 # whole batch, exactly as `-Target all` already does with $allBuildCurrent.
 # The dispatch loop below applies it per PRESENT build-consuming target.
-# W2-004 (T-246:R009): check+dispatch run UNDER the same batch lock, so the
-# verdict describes the generation the batch then consumes. Checked before
+# W2-004 (T-246:R009): check+dispatch run UNDER the same generation lock, so
+# the verdict describes the generation the batch then consumes. Checked before
 # the lock, a Save-Custom could publish B between the check and target 2's
 # read -- one batch would install A and B under one label.
 $selectedBuildCurrent = $null   # $null = unknown (no node), $true/$false = check result
-$batchLock = $null
-if ($selectedList.Count) {
-    $batchLock = Enter-BatchLock
-    if ($node) {
-        & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
-        $selectedBuildCurrent = ($LASTEXITCODE -eq 0)
-    }
-    if ($env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS) { Start-Sleep -Milliseconds ([int]$env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS) }
+if ($selectedList.Count -and $node) {
+    $prevEapSel = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & node (Join-Path $root 'tools/build-desktop.js') --check 2>&1 | Out-Null
+    $selectedBuildCurrent = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $prevEapSel
+}
+
+# W2-002 deterministic publication seam: parks INSIDE the held generation
+# window, after the freshness verdict and before any generated-byte
+# consumption, so a race fixture can attempt a competing publication while the
+# consumer genuinely owns the epoch. Never set outside tests.
+if ($consumesGeneratedOutput -and $env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS) {
+    Start-Sleep -Milliseconds ([int]$env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS)
 }
 
 # Strict-target semantics (T-189): an explicitly-requested target (or a
@@ -727,6 +846,31 @@ $dispatchFailures = @()
 # SRC-006:R005: targets this child declined because the live manifest entry no
 # longer matched the planned -ExpectedIntent. Zero mutation happened for each.
 $staleSkips = @()
+
+# W2-010 / SRC-028:R014 (M6): emit a machine-readable, unambiguous per-target
+# terminal result record that the GUI parses from the live stream. Ordinary
+# human log text stays ordinary prose; these records use a reserved prefix that
+# cannot be mistaken for arbitrary target output. Format:
+#   `wintage-result: {"target":"<name>","status":"SUCCESS"|"FAILED","code":<int>}`
+# One record per dispatched target; failure via PowerShell exception yields a
+# stable logical nonzero code so CORE-002 classification never reads success from
+# a missing record (fail-closed). Defined BEFORE the dispatch loop: PowerShell
+# does not hoist functions, and the loop's `finally` calls this per target.
+function Emit-BatchResult([string]$Name, $Code, [string]$Status) {
+    if ($null -eq $Code) { $Code = 0 }
+    if (-not $Status) {
+        $Status = if ([int]$Code -eq 0) { 'SUCCESS' } else { 'FAILED' }
+    }
+    $rec = [ordered]@{ target = $Name; status = $Status; code = [int]$Code }
+    # Single-line JSON, no whitespace -- robust for line-oriented stream parsing.
+    # No escaping pass is needed or wanted here: ConvertTo-Json already emits a
+    # valid JSON string literal, and the only variable is $Name, which the
+    # caller's ValidateSet constrains. A hand-rolled quote substitution on
+    # already-escaped JSON would corrupt it, and an identity -replace is worse
+    # than nothing because it reads like a sanitiser.
+    $json = $rec | ConvertTo-Json -Compress
+    Say "wintage-result: $json" 'DarkGray'
+}
 
 function Save-FreeBuffPatchState([string]$resources) {
     $orchestrator = Join-Path $resources 'orchestrator\orchestrator.js'
@@ -762,11 +906,16 @@ function Restore-FreeBuffPatchState($state) {
 
 # W2-004 T-246:R009: batch-wide serialization -- the lock already owns
 # check+dispatch as one window; dispatch keeps it until every target and the
-# manifest + paths persistence are done.
+# manifest + paths persistence are done. W2-002: this loop runs inside the
+# single generation-lock scope opened above; that scope's finally releases it.
 
-try {
 foreach ($name in $names) {
     $targetLock = $null
+    # M6/M10: per-target machine result. Defaults to SUCCESS; exception handlers
+    # and stale-skip sites override before `finally` emits exactly one record.
+    $targetResultCode = 0
+    $targetResultStatus = 'SUCCESS'
+    $targetResultEmitted = $false
     try {
         # T-191: the WHOLE DISCOVER..COMMIT for one target lives under a named
         # per-target mutex, so two processes cannot mutate the same target
@@ -844,14 +993,16 @@ foreach ($name in $names) {
             if ($Revert) {
                 Remove-ManifestEntry 'browsers'
             } else {
-                # W2-006 (R011): the browser preference was already persisted
-                # ABOVE (prerequisite ordering, before the stage mutation);
-                # this composition only re-states the key atomically so a
-                # committed manifest is guaranteed to have its preference on
-                # disk. No post-success persistence can fail the target.
-                Set-ManifestEntryWithPreference 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion) 'portable' $PortableBrowserRoot
+                # W2-003: the portable preference was persisted ONCE as the
+                # pre-mutation prerequisite (line 951). After successful child
+                # mutation, commit ONLY the manifest — never re-acquire
+                # paths.lock or rewrite the preference downstream.
+                Set-ManifestEntry 'browsers' $Palette $BrowserStageRoot 'n/a' (Get-PayloadVersion)
             }
         } { Restore-DirPreState $BrowserStageRoot $preStage }
+        # W2-006 (SRC-018:R012): success disposal. The commit above is known
+        # good, so the transaction snapshot is no longer recovery authority.
+        Complete-DirPreState $preStage
         continue
     }
     if ($name -eq 'mpchc') { Invoke-MpcHc -DoRevert:$Revert; continue }
@@ -873,6 +1024,10 @@ foreach ($name in $names) {
     if ($name -eq 'cinema4d') {
         if (-not $Revert -and $Cinema4DPath) { Save-PathPreferenceOrThrow 'cinema4d' $Cinema4DPath }
         Invoke-Cinema4D -DoRevert:$Revert -PaletteSlug $Palette; continue
+    }
+    if ($name -eq 'processexplorer') {
+        if (-not $Revert -and $ProcessExplorerPath) { Save-PathPreferenceOrThrow 'processexplorer' $ProcessExplorerPath }
+        Invoke-ProcessExplorer -DoRevert:$Revert -PaletteSlug $Palette; continue
     }
 
                 # ---- Electron targets ----
@@ -1117,6 +1272,7 @@ foreach ($name in $names) {
                                 Remove-ManifestEntry $name
                             } { Restore-DirPreState $dest $preDest }
                             Say "$($t.Name): restored the pre-Wintage directory from $retiredPristine" 'Green'
+                            Complete-DirPreState $preDest
                             if (Test-Path -LiteralPath $recoveryTombstone) { Remove-Item -LiteralPath $recoveryTombstone -Recurse -Force -ErrorAction SilentlyContinue }
                         } catch {
                             $commitErr = $_
@@ -1138,6 +1294,7 @@ foreach ($name in $names) {
                                 Remove-ManifestEntry $name
                             } { Restore-DirPreState $dest $preDest }
                             Say "$($t.Name): removed $dest (Wintage-created, nothing pre-existed to restore)" 'Green'
+                            Complete-DirPreState $preDest
                             if (Test-Path -LiteralPath $recoveryTombstone) { Remove-Item -LiteralPath $recoveryTombstone -Recurse -Force -ErrorAction SilentlyContinue }
                         } catch {
                             $commitErr = $_
@@ -1163,8 +1320,14 @@ foreach ($name in $names) {
                             Remove-ManifestEntry $name
                         } { Restore-DirPreState $dest $preDest }
                         Say "$($t.Name): removed the verified legacy Wintage extension directory $dest" 'Green'
+                        Complete-DirPreState $preDest
                     } else {
                         Say "$($t.Name): nothing to revert - $dest is not a verified Wintage extension and no recovery state exists; it was left untouched." 'DarkYellow'
+                        # The snapshot at $preDest is still on disk and this arm
+                        # neither restores nor consumes it. Complete it, exactly
+                        # as the four sibling arms do, or every such run strands
+                        # a full recursive copy of the extension tree in TEMP.
+                        Complete-DirPreState $preDest
                     }
                 }
             }
@@ -1231,19 +1394,35 @@ foreach ($name in $names) {
             Say "  Pick one: Ctrl+K Ctrl+T, look for 'Wintage ...'. Restart the app if it does not appear." 'DarkGray'
             Set-ManifestEntry $name $Palette $dest 'n/a' (Get-PayloadVersion)
         } { Restore-DirPreState $dest $preDest }
+        # W2-006 (SRC-018:R012): the Apply committed, so the transaction snapshot
+        # is no longer recovery authority; free it.
+        Complete-DirPreState $preDest
     }
 
-    }
-    catch {
-        # A target that threw must never read as a green run. Record it, keep
-        # applying the remaining siblings, and leave the exit code nonzero.
-        Say "$name`: FAILED - $($_.Exception.Message)" 'Red'
-        $dispatchFailures += $name
-    }
+     }
+     catch {
+         # A target that threw must never read as a green run. Record it, keep
+         # applying the remaining siblings, and leave the exit code nonzero.
+         Say "$name`: FAILED - $($_.Exception.Message)" 'Red'
+         $dispatchFailures += $name
+        $targetResultCode = 1
+         $targetResultStatus = 'FAILED'
+     }
      finally {
-        if ($targetLock) { Exit-TargetLock $targetLock }
-    }
-}
+         if ($targetLock) { Exit-TargetLock $targetLock }
+         # M6/M10: one authoritative machine record per dispatched target on
+         # EVERY terminal path. Stale-skip sites set code 0 SUCCESS explicitly;
+         # success sites set 0 SUCCESS. Exceptions land here with the FAILED
+         # code captured above. No double-emit: guard the flag.
+         if (-not $targetResultEmitted) {
+             if ($targetResultCode -eq 0 -and $targetResultStatus -eq 'SUCCESS') { $targetResultCode = 0; $targetResultStatus = 'SUCCESS' }
+             Emit-BatchResult $name $targetResultCode $targetResultStatus
+         }
+     }
+ }
+
+# PERF-002 / P0#1: the dispatch loop above is the ONLY mutation site; after it
+# the batch lock is released and the process-wide failure summary is emitted.
 } finally {
     if ($batchLock) {
         # W2-004: do not "fix" a committed-target FAILED by rolling the whole

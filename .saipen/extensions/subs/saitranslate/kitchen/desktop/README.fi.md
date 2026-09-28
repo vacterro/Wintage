@@ -61,6 +61,7 @@ arkisto on käytössä.
 | `terminal` | Windows Terminal -skeema + oletusasetukset kaikkiin profiileihin, Consolas 12 aliasoitu | yes — asetukset ovat profiilissasi |
 | `conhost` | `HKCU\Console`-oletukset + kaikki olemassa olevat cmd/PowerShell-profiilit | yes — täsmällinen kuvakaappaus kosketuista arvoista |
 | `obs` | OBS 30.2+ `.ovt`-variantti + aktiivinen `user.ini`-teema-ID | yes — se on profiilissasi |
+| `qbittorrent` | pakkaamaton Qt-käyttöliittymäteema (`config.json` + `stylesheet.qss`) + teeman kaksi avainta tiedostossa `qBittorrent.ini` | yes — se on profiilissasi |
 | `antigravity`, `vscode` | väriteemalaajennus `~/.antigravity/extensions` / `~/.vscode/extensions` -kansiossa | **yes** — se on profiilissasi |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, katso alla | no — aja asentaja uudelleen |
 | `claude` | Electron-shim, paikattu paikan päällä — katso alla | no — päivitys luo uuden `app-<version>`-kansion |
@@ -215,6 +216,21 @@ asentaa sen `%APPDATA%\obs-studio\themes`-kansioon, ja kirjoittaa vakaan teema-I
 Sulje OBS ennen Applya tai Revertiä: OBS kirjoittaa `user.ini`-tiedoston uusiksi lopettaessaan. Ensimmäinen sovellus
 varmuuskopioi sekä aiemman valinnan että kaikki samannimiset teemat tavuilleen.
 
+### qBittorrent
+
+`qbittorrent` kirjoittaa **purkamattoman** Qt-käyttöliittymäteeman hakemistoon `%APPDATA%\qBittorrent\themes\wintage` — `config.json` ( `Palette.*`-roolit sekä qBittorrentin omat kontekstivärit: siirtolistan tilat, lokin vakavuustasot) ja sen viereen `stylesheet.qss` (2px:n viisteet, suorat kulmat ja Verdana, joita paletti ei voi ilmaista) — ja osoittaa sitten `General\CustomUIThemePath`-asetuksen tuohon `config.json`-tiedostoon ja asettaa `General\UseCustomUITheme=true`.
+Purkamattomana eikä `.qbtheme`-pakettina — tarkoituksella: `.qbtheme` on Qt Resource Collection -tiedosto ja sen tuottaminen vaatisi koneelle saman pääversion `rcc`-binäärin, eli kääntäjäriippuvuuden kahden tekstitiedoston takia. qBittorrent lukee kansiomuotoa natiivisti (`FolderThemeSource`).
+Sulje qBittorrent ennen Apply- tai Revert-toimintoa: se kirjoittaa koko `qBittorrent.ini`-tiedoston uudelleen lopetettaessa, joten käynnissä ollessa tehty muokkaus häviää sulkiessa — kohde kieltäytyy toimimasta siinä tilassa sen sijaan, että raportoisi onnistumisesta, jonka seuraava lopetus pyyhkii. `-Revert` palauttaa INI:n kaksi avainta täsmälleen Wintagea edeltäneisiin arvoihin (tai poistaa ne, jos niitä ei ollut) ja palauttaa samannimisen teemakansion tavu tavulta; muut Applyn jälkeen tehdyt `qBittorrent.ini`-muokkaukset säilyvät.
+Ei tavoitettavissa: työkalupalkin ja ilmaisinalueen kuvakkeet tulevat qBittorrentin omasta käännetytystä resurssipaketista, joten ne säilyttävät alkuperäiset värinsä.
+
+### Fontit: nimetty, ei koskaan asennettu
+
+UI.md:n laki 1 vaatii Verdanan **ilman reunojen pehmennystä**. Qt-tyylitiedostossa ei ole sille ominaisuutta, ja MPC-HC:n `OSDFont` on vain GDI-kirjasinten nimi — ainoa vipu on kirjasin itse. Repon juuressa oleva `Verdana_m1.ttf` on Verdana-kopio, jossa on esirenderöidyt 1bpp-bittikarttaleikkaukset 3–30 ppem -koissa, joita renderöijä käyttää ääriviivan pehmennyksen sijaan.
+`qbittorrent`- ja `obs`-tyylitiedostot nimeävät `Verdana_m1, Verdana`, ja `mpchc` nimeää sen kumman kone todella ratkaisee. **Asentaja ei koskaan asenna eikä poista fonttia**, ja se on tarkoituksellista eikä kesken jäänyttä:
+Fonttiperhe ratkaistaan parin (perhe, leikkaus) mukaan. Rekisteröi Regular + Bold + Italic, niin jokainen kuluttaja ratkaisee oikein; poista rekisteröinnistä **yksi** jäsen, niin jokainen kyseistä perhettä pyytävä kuluttaja osoittaa jäljelle jääneeseen jäseneen. Koneella, joka aliaksenoi `MS Shell Dlg 2` — Windowsin valintaikkunafontin — tuohon perheeseen `HKLM\...\FontSubstitutes`-avaimen kautta, Regularin poistaminen kääntää **koko työpöydän kursiiviksi**, mukaan lukien ikkunan otsikot, jotka DWM on jo välimuistiin tallentanut, ja takaisin saaminen vaatii uloskirjautumisen. Mikään viitelaskenta ei korjaa sitä: vaikutusalue on koneenlaajuinen, eikä teema-asentajalla ole sinne asiaa.
+Kirjasin on siis kertaluonteinen, nimenomainen käyttäjän toimi: napsauta `Verdana_m1.ttf` hiiren oikealla → **Install** (käyttäjäkohtaisesti, ei järjestelmänvalvojaa), ja käytä kohde uudelleen. Jos kirjasin puuttuu, kohteet sanovat sen kerran, nimeävät korjauksen ja palaavat tavalliseen Verdanaan — pehmennettynä, mutta koneelle ei tehdä mitään selkäsi takana.
+
+
 ### Electron-sovellukset
 
 `resources/app.asar` siirretään kohtaan `resources/app/app.asar` (sen `app.asar.unpacked`
@@ -296,4 +312,4 @@ node ..\tools\build-desktop.js --check  # exit 1, jos mikään on vanhentunutta
 `release.ps1` ajaa rakennuksen ja jokaisen portin, joten julkaisu ei voi toimittaa tulostetta, joka
 on ajautunut erilleen paleteista.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

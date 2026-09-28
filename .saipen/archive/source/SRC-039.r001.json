@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-039:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "W2-003: Browser Apply persists PortableBrowserRoot exactly once pre-mutation; post-child commit via Set-ManifestEntry only, no paths.lock reacquisition post-mutation (audit/8.md finding W2-003, projected from SRC-028:R009)"
+    }
+  },
+  "derived_at": "2026-09-23T19:55:26Z",
+  "derived_from": "SRC-039",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "a0fe440ac19dd8c3e7a37ba9bab1ef23b23e5ca049c60890e765700e31dccb10"
+}

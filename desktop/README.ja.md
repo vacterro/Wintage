@@ -154,4 +154,37 @@ node ..\tools\build-desktop.js --check  # 何か古ければexit 1
 
 `release.ps1` はビルドとすべてのゲートを実行するので、リリースがパレットから逸脱した出力を出荷することはない。
 
+<!-- T-311 target/section coverage supplement -->
+## 対象とセクションのカバレッジ
+
+このセクションは現在の英語版READMEのProcess Explorer, Notepad++, Cinema 4D, ターミナルフォントのカバレッジを反映しており, このロケーションが黙って古びないようにしている。コードリテラル (対象ID, レジストリパス, ファイル名) は意図的に言語非依存である。周囲の散文は日本語に翻訳済み。
+
+### 各対象が実際にテーマ化できるもの (追加された対象)
+
+| 対象 | 仕組み | アプリの更新を乗り越える |
+|---|---|---|
+| `notepadplusplus` | テーマXML + ユーザーのNotepad++ `themes` フォルダへのエイリアス | はい — あなたのプロファイル内にあります |
+| `cinema4d` | ユーザーのCinema 4D `schemes` フォルダに配置される配色スキーム | はい — あなたのプロファイル内にあります |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: 行ハイライトの色とグラフ背景, 下述参照 | いいえ — Process Explorerは終了時に設定を書き直すため, 閉じて再実行してください |
+
+### Process Explorer (Sysinternals)
+
+Process Explorerは色を `HKCU\Software\Sysinternals\Process Explorer` に保持し, 終了時にそのキーを書き直す。そのため対象は **`procexp`, `procexp64`, `procexp64a` のいずれかが実行中の間は拒否する** — 閉じてから再実行すること。設定可能な色カテゴリをテーマ化する:
+
+- **到達可能**: プロセスの行ハイライト色 (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) のライトモード版と `*Dark` 版の両方, さらにグラフ背景 (`ColorGraphBk`, `ColorGraphBkDark`) — 合計24値。各バリアントは有効なパレットの対応する極方向へ混合される (ライトモードの塗りには明るい調, `*Dark` には暗い調)。そのため行の塗りはほぼ白へ飛び散らず, パレット自身の色调を保つ;
+- **到達不能**: タイトルバー, メニューバー, ツールバー, リストビューの背景と文字色, およびグラフの線の色 — これらは `procexp.exe` にコンパイルされ, どの設定値からも公開されない。対象は実際に所有する行ハイライトとグラフ背景だけをテーマ化し, それ以上は主張しない。
+
+Applyが変更できるすべての値は変更前にスナップショットとして取り込まれる (初回接触時の復元先 `%APPDATA%\Wintage\recovery\processexplorer\`) し, `-Revert` が正確に復元する。各値が元々存在しなかったかどうか, マーカーが存在が空だったかどうかを含めて。標準のSysinternalsディレクトリ外にあるポータブルフォルダは `paths.json` の正規キー `processexplorer` で記憶される (CLI引数 `-ProcessExplorerPath`; GUIでも選択できる)。
+
+### ターミナルフォント (`fonts/terminal/`)
+
+両方のターミナル対象は `%APPDATA%\Wintage\terminal-font.json` にある単一の正規タイポグラフィ設定を読む (`schema`, `fontSlug`, `family`, `size`, `renderingMode`)。ファイルが無い場合, 対象は同梱の既定値 (Windows向けのTerminus (TTF), 12 pt, 別名付き) を維持するため, 既存のマシンは変化しない。破損した設定はフェイルクローズドで処理される: 上書きは一切行われず, 対象は拒否する。
+
+`fonts/terminal/catalog.json` は唯一のフォントカタログである: 同梱のオープンソース等幅フォント20ファミリーに加え, Wintageが名指しするが決して同梱しない2つのシステム書体 (Windows向けのTerminus (TTF), Consolas)。同梱の各エントリは上流のソース, 固定リビジョン, ライセンスID, ライセンスファイル, SHA-256を持つ。正確なファイルは `fonts/terminal/files/` に, ライセンス本文は `licenses/` に置かれている。実行時のWintageは完全オフラインで動作し, フォントを一切ダウンロードしない。
+
+`tools/sync-terminal-fonts.ps1` はメンテナ専用ダウンローダである。`fonts/terminal/sources.json` (ファミリーごとに不変の成果物1つ) を読み, すべてのSHA-256を検証し, 不一致があれば拒否する。`-VerifyOnly` (既定) はネットワークなしでディスク上のツリーを検査し, `-Fetch -Write` は再収録する。ダウンロードしたフォントのバイトは信頼できないバイナリアセットとして扱う — ハッシュして書き込むだけで, 実行はしない。記録された置き換えが1つある: **Fantasque Sans Mono** が Liberation Mono を置き換える。Liberation Mono は固定されたバイナリリリースを公開していない (ソース `.sfd` のみ) ためである。
+
+インストーラーは **フォントを閲覧するのみであり, インストールはしない。** TERMINAL FONTS タブは同梱の書体をプロセス固有の `PrivateFontCollection` に読み込み, ライブプレビューを表示する。これはシステムフォントの登録を **一切** 行わない。フォント, サイズ (7–24 pt), レンダリングモード (aliased/grayscale/cleartype) の選択はプレビューと設定だけを変える。フォントのインストールは明示的な **INSTALL SELECTED** 操作であり, Windows 独自のフォントインストーラーを開く。Windows の確認のあと, ユーザーは Refresh で再検査する。実際のターミナル変更が 일어나るのは, 明示的な **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** のあとだけである。
+
+Windows Terminal には選択したインストール済みファミリーが選択したサイズで適用され, レンダリングモードは `profiles.defaults.antialiasingMode` に対応する。古典的な conhost はより厳しい。固定のセルグリッド上に描画するため, 選択した書体は Windows が解決できない限りレジストリ変更の前に拒否される (既定の書体と Consolas へのフォールバックは対象外)。Health と Reapply は設定済みの書体, サイズ, アンチエイリアシングを設定と突き合わせて検証するため, Apply のあとに設定を変更すると「健全」ではなくずれとして報告される。ターミナルの色のライフサイクルは手つかずのまま: Revert は Wintage 以前の所有値を正確に復元し, マシンからフォントを削除することはない。
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

@@ -68,6 +68,37 @@ in use.
 | `obsidian` | community theme per vault, all palettes installed at once | **yes** — it lives in your vault |
 | `discord` | CSS dropped into BetterDiscord's own theme folder | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` keys; existing recent-file filters use the palette link colour | yes — it is your ini |
+| `notepadplusplus` | theme XML + alias into the user's Notepad++ `themes` folder | yes — it lives in your profile |
+| `cinema4d` | colour scheme dropped into the user's Cinema 4D `schemes` folder | yes — it lives in your profile |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: row-highlight colours and graph backgrounds, see below | no — Process Explorer rewrites its settings on exit; close it and re-run |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer keeps its colours in `HKCU\Software\Sysinternals\Process Explorer`
+and rewrites that key when it exits, so the target **refuses while `procexp`,
+`procexp64` or `procexp64a` is running** — close it and run again. It themes the
+configurable colour categories:
+
+- **reachable**: the process row-highlight colours (`ColorOwn`, `ColorServices`,
+  `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`,
+  `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) in both their
+  light-mode and `*Dark` variants, plus the graph backgrounds (`ColorGraphBk`,
+  `ColorGraphBkDark`) — 24 values in total. Each variant is blended toward the
+  matching pole of the active palette (its lighter tone for the light-mode fill,
+  its darker tone for the `*Dark` one), so the row fills stay in the palette's own
+  key rather than pastelising to near-white;
+- **not reachable**: the title bar, menu bar, toolbar, list-view background and
+  text colours, and the graph line colours — these are compiled into
+  `procexp.exe` and exposed by no settings value. The target themes the row
+  highlights and the graph background it genuinely owns and claims nothing more.
+
+Every value Apply can mutate is snapshotted before mutation (first-touch
+recovery under `%APPDATA%\Wintage\recovery\processexplorer\`) and restored exactly
+by `-Revert`, including whether each value was absent and whether the marker was
+present-but-empty. A portable folder outside the standard Sysinternals
+directories is remembered through the canonical `paths.json` key
+`processexplorer` (CLI argument `-ProcessExplorerPath`; the GUI can pick it too).
+
 
 ### FreeBuff ad removal
 
@@ -168,6 +199,49 @@ profiles, and other existing `HKCU\Console` children. It writes the palette's fu
 16-colour table to both the root defaults and every existing override, then restores
 only the values it touched. It applies Consolas there too, because proportional
 Verdana collides inside the fixed-width cell grid used by both terminal hosts.
+
+### Terminal fonts (`fonts/terminal/`)
+
+Both terminal targets read ONE canonical typography preference at
+`%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`,
+`renderingMode`). When the file is absent the targets keep the shipped default
+(Terminus (TTF) for Windows, 12 pt, aliased), so existing machines are unchanged.
+A malformed preference fails closed: nothing is overwritten and the target refuses.
+
+`fonts/terminal/catalog.json` is the single font catalog: 20 bundled open-source
+monospace families plus the two system faces Wintage names but never ships
+(Terminus (TTF) for Windows, Consolas). Each bundled entry carries its upstream
+source, pinned revision, licence id, licence file and SHA-256. The exact files
+are vendored under `fonts/terminal/files/` with their licence texts under
+`licenses/`; runtime Wintage works fully offline and never downloads a font.
+
+`tools/sync-terminal-fonts.ps1` is the maintainer-only downloader. It reads
+`fonts/terminal/sources.json` (one immutable artifact per family), verifies every
+SHA-256, and refuses a mismatch. `-VerifyOnly` (default) checks the on-disk tree
+with no network; `-Fetch -Write` re-vendors. Downloaded font bytes are treated as
+untrusted binary assets — hashed and written, never executed. One substitution is
+recorded: **Fantasque Sans Mono** replaces Liberation Mono, which publishes no
+pinned binary release (source `.sfd` only).
+
+The installer **browses fonts, it does not install them.** The TERMINAL FONTS tab
+loads a bundled face into a process-local `PrivateFontCollection` for a live
+preview, which performs **zero** system font registration. Choosing a font, size
+(7–24 pt) or rendering mode (aliased/grayscale/cleartype) only updates the
+preview and the preference. Installing a font is an explicit **INSTALL SELECTED**
+action that opens Windows' own font installer; after Windows' confirmation the
+user re-probes with Refresh. Actual terminal changes happen only on an explicit
+**APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal is applied to the selected installed family at the selected size,
+and the rendering mode maps to `profiles.defaults.antialiasingMode`. Classic
+conhost is stricter: it renders on a fixed cell grid, so a selected face is refused
+before any registry mutation unless Windows resolves it (the default face and the
+Consolas fallback are grandfathered). Health and Reapply validate the configured
+face/size/anti-aliasing against the preference, so changing the preference after an
+Apply is reported as drift rather than "healthy". The terminal-colour lifecycle is
+untouched: Revert restores the exact pre-Wintage owned values and never removes a
+font from the machine.
+
 
 ### Browsers and Tampermonkey
 

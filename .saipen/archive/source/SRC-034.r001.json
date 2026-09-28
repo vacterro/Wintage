@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-034:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-004: Update-TfMetrics Conhost status text agrees with capability/button state - cap.Conhost=true maps to READY, unsupported/unavailable never READY (audit/8.md finding CORE-004, projected from SRC-028:R004)"
+    }
+  },
+  "derived_at": "2026-09-23T19:48:34Z",
+  "derived_from": "SRC-034",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "921a8f4b10c7c45721ca59ccf1ace2a1357573d9396439bb5b2ae76f39401089"
+}

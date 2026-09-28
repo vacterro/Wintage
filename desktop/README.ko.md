@@ -154,4 +154,37 @@ node ..\tools\build-desktop.js --check  # 무엇이든 낡았으면 exit 1
 
 `release.ps1` 은 빌드와 모든 게이트를 실행하므로, 릴리스가 팔레트에서 벗어난 출력을 출시할 수 없다.
 
+<!-- T-311 target/section coverage supplement -->
+## 대상과 섹션의 커버리지
+
+이 섹션은 현재 영어 README의 Process Explorer, Notepad++, Cinema 4D, 터미널 글꼴 커버리지를 그대로 옮겨 이 로케일이 조용히 낡아붙지 않게 한다. 코드 리터럴 (대상 ID, 레지스트리 경로, 파일 이름) 은 의도적으로 언어 비종속이다. 그 둘레 산문은 한국어로 번역되어 있다.
+
+### 각 대상이 실제로 테마 처리될 수 있는 것 (추가된 대상)
+
+| 대상 | 메커니즘 | 앱 업데이트를 견딤 |
+|---|---|---|
+| `notepadplusplus` | 테마 XML + 사용자의 Notepad++ `themes` 폴더로의 별칭 | 예 — 당신의 프로필에 있음 |
+| `cinema4d` | 사용자의 Cinema 4D `schemes` 폴더에 놓이는 색상 구성 | 예 — 당신의 프로필에 있음 |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: 행 강조 색상과 그래프 배경, 아래 참조 | 아니요 — Process Explorer 는 종료 시 설정을 다시 쓰므로 닫고 다시 실행할 것 |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer 는 색상을 `HKCU\Software\Sysinternals\Process Explorer` 에 보관하고 종료 시 그 키를 다시 쓴다. 그래서 대상은 **`procexp`, `procexp64`, `procexp64a` 중 하나가 실행 중일 때 거부한다** — 닫고 다시 실행하라. 설정 가능한 색상 범주를 테마 처리한다:
+
+- **도달 가능**: 프로세스 행 강조 색상 (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) 의 라이트 모드 변형과 `*Dark` 변형 양쪽, 그리고 그래프 배경 (`ColorGraphBk`, `ColorGraphBkDark`) — 총 24개 값. 각 변형은 활성 팔레트의 대응 극 쪽으로 혼합된다 (라이트 모드 채움에는 더 밝은 톤, `*Dark` 에는 더 어두운 톤). 그래서 행 채움은 거의 흰색으로 바래지 않고 팔레트 자신의 색조를 유지한다;
+- **도달 불가**: 제목 표시줄, 메뉴 표시줄, 도구 모음, 목록 보기 배경과 본문 색상, 그래프 선 색상 — 이들은 `procexp.exe` 에 컴파일되어 있으며 어떤 설정 값으로도 노출되지 않는다. 대상은 실제로 소유한 행 강조와 그래프 배경만 테마 처리하며 더는 주장하지 않는다.
+
+Apply 가 바꿀 수 있는 모든 값은 바뀌기 전에 스냅샷으로 기록되고 (첫 접촉 시 복구 위치 `%APPDATA%\Wintage\recovery\processexplorer\`) `-Revert` 가 정확히 되돌린다. 각 값이 원래 없었는지, 마커가 존재하지만 비어 있었는지까지 포함해서. 표준 Sysinternals 디렉터리 밖의 휴대용 폴더는 `paths.json` 의 표준 키 `processexplorer` 로 기억된다 (CLI 인자 `-ProcessExplorerPath`; GUI 도 선택할 수 있다).
+
+### 터미널 글꼴 (`fonts/terminal/`)
+
+두 터미널 대상 모두 `%APPDATA%\Wintage\terminal-font.json` 에 있는 단 하나의 표준 조판 설정을 읽는다 (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). 그 파일이 없으면 대상은 동봉된 기본값 (Windows 용 Terminus (TTF), 12 pt, 별명 있음) 을 그대로 유지하므로 기존 머신은 바뀌지 않는다. 깨진 설정은 닫힌 상태로 실패한다: 덮어쓰는 일 없이 대상이 거부한다.
+
+`fonts/terminal/catalog.json` 은 유일한 글꼴 카탈로그다: 동봉된 오픈소스 고정폭 계열 20개에 더해 Wintage 가 이름만 걸고 결코 동봉하지 않는 두 시스템 서체 (Windows 용 Terminus (TTF), Consolas). 동봉된 각 항목은 업스트림 소스, 고정 리비전, 라이선스 ID, 라이선스 파일, SHA-256 을 함께 담는다. 정확한 파일은 `fonts/terminal/files/` 아래에, 라이선스 본문은 `licenses/` 아래에 있다. 실행 중인 Wintage 는 완전히 오프라인으로 동작하며 글꼴을 결코 내려받지 않는다.
+
+`tools/sync-terminal-fonts.ps1` 은 유지 관리자 전용 다운로더다. `fonts/terminal/sources.json` (계열당 불변 산출물 하나) 을 읽고 모든 SHA-256 을 검증하며 불일치하면 거부한다. `-VerifyOnly` (기본값) 는 네트워크 없이 디스크의 트리를 검사하고, `-Fetch -Write` 는 다시 동봉한다. 내려받은 글꼴 바이트는 신뢰할 수 없는 바이너리 자산으로 취급된다 — 해시하여 기록할 뿐 실행하지 않는다. 기록된 교체는 하나다: **Fantasque Sans Mono** 이 Liberation Mono 를 대신한다. 후자는 고정된 바이너리 릴리스를 내놓지 않기 때문이다 (소스 `.sfd` 만).
+
+설치기는 **글꼴을 찾아보지, 설치하지 않는다.** TERMINAL FONTS 탭은 동봉된 서체를 프로세스 전용 `PrivateFontCollection` 에 불러와 즉시 볼 수 있게 하며, 이는 시스템 글꼴 등록을 **전혀** 하지 않는다. 글꼴, 크기 (7–24 pt), 렌더링 모드 (aliased/grayscale/cleartype) 를 고르는 것은 미리보기와 설정만 바꾼다. 글꼴 설치는 Windows 자체 글꼴 설치기를 여는 명시적 **INSTALL SELECTED** 동작이다. Windows 의 확인 뒤에 사용자는 Refresh 로 다시 점검한다. 실제 터미널 변경은 명시적 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 이후에만 일어난다.
+
+Windows Terminal 은 선택한 크기로, 선택한 설치된 계열에 적용되며 렌더링 모드는 `profiles.defaults.antialiasingMode` 에 대응된다. 고전 conhost 는 더 엄격하다. 고정 셀 격자 위에 그리므로 Windows 가 해결하지 못하는 한 레지스트리를 건드리기 전에 선택된 서체가 거부된다 (기본 서체와 Consolas 폴백은 예외). Health 와 Reapply 는 설정된 서체, 크기, 안티앨리어싱을 설정과 대조해 검증하므로 Apply 이후에 설정을 바꾸면 "정상" 이 아니라 어긋남으로 보고된다. 터미널 색상 수명 주기는 건드리지 않는다: Revert 는 Wintage 이전의 소유 값을 정확히 복원하며 머신에서 글꼴을 삭제하는 일은 결코 없다.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

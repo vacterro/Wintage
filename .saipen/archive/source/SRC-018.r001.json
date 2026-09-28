@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-018:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-001 preset identity: canonical activation routine keyed by stable preset ID; ComboBox bound to IDs not display names; Save As/Update/Rename/Delete act on the visible selection; fail closed on desync"
+    }
+  },
+  "derived_at": "2026-09-18T18:39:22Z",
+  "derived_from": "SRC-018",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "9e1cce266b861274f1c2c16e3783c1acd1c76cb9317c215dbe1adf7b28f5f7ea"
+}

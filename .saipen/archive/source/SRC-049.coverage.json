@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-049:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "IMPLEMENTED",
+      "evidence": "E-1860",
+      "text": "AUDAPACK reported 'PACK FAILED (Wintage): [FAILED_INVENTORY] untracked path is not a regular file'; a transient non-regular untracked object must not fail the whole pack",
+      "verification": "python -m pytest tests/test_source_inventory.py -> 33 passed (AUDAPACK); RED control reverts the fix -> test_untracked_non_regular_is_named_omission_not_pack_failure FAILS with the exact SourceInventoryError",
+      "work": "T-320"
+    }
+  },
+  "schema_version": 1
+}

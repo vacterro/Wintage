@@ -827,6 +827,41 @@ try {
     check 'manifest-schema: unknown future target key is readable (Status exits 0)' ($LASTEXITCODE -eq 0)
 } finally { $env:WINTAGE_APPDATA = $prevW30 }
 
+# ---- Test 33 (W2-004/SRC-018): unknown forward-compatible manifest targets ----
+# Test-ManifestSchema treats unknown target keys as valid, PRESERVED state; the
+# Status forward-compat fixture (Test 30) already pins the read half. Reapply
+# must not dispatch a child the Target ValidateSet would reject, must not count
+# the unknown entry as failed repair work, and must still repair a known target
+# beside it. Unknown-only manifests must not make every Reapply fail forever.
+Clean-TestState
+Reset-NppDir
+Write-PathsJson @{ notepadplusplus = $nppDirB }
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Target notepadplusplus -Palette goldendefault 2>&1 | Out-Null
+check 'w2004-fwd: fixture apply exits 0' ($LASTEXITCODE -eq 0)
+$mFwd = Read-TestManifest
+$mFwd.notepadplusplus.payloadVersion = '1.9.0'   # force the known target unhealthy
+$futureEntry = [ordered]@{ palette = 'a'; path = 'C:\future'; appVersion = 'n/a'; payloadVersion = '1.0.0'; applied = '2020-01-01T00:00:00Z' }
+$mFwd['futuretarget'] = $futureEntry
+$mFwd | ConvertTo-Json -Depth 5 | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
+$outFwd = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
+check 'w2004-fwd: Reapply with an unknown entry present exits 0' ($LASTEXITCODE -eq 0)
+check 'w2004-fwd: the known target was actually repaired' ((Read-TestManifest).notepadplusplus.payloadVersion -ne '1.9.0')
+check 'w2004-fwd: no child was reported as FAILED for the unknown entry' (($outFwd -join "`n") -notmatch 'futuretarget.*FAILED')
+check 'w2004-fwd: the unknown entry is reported as unsupported' (($outFwd -join "`n") -match 'futuretarget: unsupported by this Wintage version')
+$mFwd2 = Read-TestManifest
+$kept = $mFwd2['futuretarget']
+check 'w2004-fwd: the unknown entry is preserved field-for-field' (
+    $null -ne $kept -and $kept.palette -eq 'a' -and $kept.path -eq 'C:\future' -and
+    $kept.payloadVersion -eq '1.0.0' -and $kept.applied -eq '2020-01-01T00:00:00Z')
+# Unknown-only manifest: no workable target, no perpetual failure.
+@{ futuretarget = $futureEntry } | ConvertTo-Json -Depth 5 | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appData 'installed.json'), $_, $utf8NoBom) }
+$outOnly = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply 2>&1
+check 'w2004-fwd: unknown-only manifest exits 0 (no perpetual failure)' ($LASTEXITCODE -eq 0)
+$mOnly = Read-TestManifest
+check 'w2004-fwd: unknown-only manifest entry still present' ($mOnly.ContainsKey('futuretarget') -and $mOnly['futuretarget'].path -eq 'C:\future')
+$outQuiet = & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Reapply -Quiet 2>&1
+check 'w2004-fwd: -Quiet stays non-spamming and still exits 0' (($LASTEXITCODE -eq 0) -and (($outQuiet -join "`n") -notmatch 'unsupported'))
+
 # ---- Test 31: conhost scrollback floor - zero-history console profiles get a usable buffer (T-193) ----
 Clean-TestState
 $prevKey31 = $env:WINTAGE_TEST_CONHOST_KEY

@@ -61,6 +61,7 @@ yeniden boyamak çalışırken mümkündür; ilk kurulum değildir, çünkü ar�
 | `terminal` | Windows Terminal şeması + tüm profiller için varsayılanlar, Consolas 12 aliased | evet — ayarlar profilinizde |
 | `conhost` | `HKCU\Console` varsayılanları + mevcut her cmd/PowerShell profili | evet — dokunulan değerlerin tam anlık görüntüsü |
 | `obs` | OBS 30.2+ `.ovt` varyantı + aktif `user.ini` tema kimliği | evet — profilinizde yaşar |
+| `qbittorrent` | paketlenmemiş Qt arayüz teması (`config.json` + `stylesheet.qss`) + `qBittorrent.ini` içindeki iki tema anahtarı | evet — profilinizde yaşar |
 | `antigravity`, `vscode` | `~/.antigravity/extensions` / `~/.vscode/extensions` içinde renk teması eklentisi | **evet** — profilinizde yaşar |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, aşağıya bakın | hayır — yükleyiciyi yeniden çalıştırın |
 | `claude` | Electron shim, yerinde yamalanır — aşağıya bakın | hayır — bir güncelleme yeni bir `app-<version>` klasörü yapar |
@@ -219,6 +220,21 @@ seçili olur. Apply veya Revert'ten önce OBS'yi kapatın: OBS çıkışta `user
 dosyasını yeniden yazar. İlk uygulama hem önceki seçimi hem de aynı adlı temayı
 bayt bayt yedekler.
 
+### qBittorrent
+
+`qbittorrent`, **paketlenmemiş** bir Qt arayüz temasını `%APPDATA%\qBittorrent\themes\wintage` içine yazar — bir `config.json` ( `Palette.*` rolleri ile qBittorrent’in kendi bağlam renkleri: aktarım listesi durumları, günlük önem düzeyleri) ve yanına bir `stylesheet.qss` (2px pah kırıkları, dik köşeler ve bir paletin ifade edemeyeceği Verdana) — ardından `General\CustomUIThemePath` anahtarını bu `config.json` dosyasına yöneltir ve `General\UseCustomUITheme=true` ayarını yapar.
+`.qbtheme` paketi yerine paketlenmemiş, bilerek: `.qbtheme` bir Qt Resource Collection dosyasıdır ve üretilebilmesi için makinede aynı ana sürümde bir `rcc` ikili dosyası gerekirdi; yani iki metin dosyası için derleyici bağımlılığı. qBittorrent klasör biçimini doğrudan okur (`FolderThemeSource`).
+Apply veya Revert öncesi qBittorrent’i kapatın: çıkarken tüm `qBittorrent.ini` dosyasını yeniden yazar, dolayısıyla çalışırken yapılan bir düzenleme kapanışta kaybolur — hedef bu durumda çalışmayı reddeder, bir sonraki çıkışın sileceği bir başarı bildirmez. `-Revert` iki INI anahtarını Wintage öncesi tam değerlerine döndürür (yoklarsa kaldırır) ve aynı adlı tema klasörünü bayt bayt geri koyar; Apply sonrası yapılan ilgisiz `qBittorrent.ini` düzenlemeleri korunur.
+Erişilemez: araç çubuğu ve sistem tepsisi simgeleri qBittorrent’in kendi derlenmiş kaynak paketinden gelir, dolayısıyla özgün renklerini korur.
+
+### Yazı tipleri: adıyla anılır, asla kurulmaz
+
+UI.md’nin 1. yasası Verdana’yı **kenar yumuşatma olmadan** ister. Qt stil sayfasında bunun için bir özellik yoktur ve MPC-HC’nin `OSDFont` değeri düz bir GDI yüz adıdır — tek kaldıraç yüzün kendisidir. Depo kökündeki `Verdana_m1.ttf`, Verdana’nın 3–30 ppem’de önceden oluşturulmuş 1bpp bitmap vuruşları taşıyan bir kopyasıdır; bir oluşturucu bunları dış hattı yumuşatmaya tercih eder.
+`qbittorrent` ve `obs` stil sayfaları `Verdana_m1, Verdana` adını verir, `mpchc` ise makinenin gerçekten çözümlediğini. **Kurulum aracı bir yazı tipini asla kurmaz ya da kaldırmaz** ve bu yarım kalmışlık değil bilinçli bir tercihtir:
+Bir yazı tipi ailesi (aile, stil) çiftiyle çözümlenir. Regular + Bold + Italic kaydedin, her tüketici doğru çözümler; **tek** üyeyi kayıttan düşürün, o aileyi isteyen her tüketici hayatta kalan bir üyeye yönelir. `MS Shell Dlg 2` — Windows iletişim kutusu yazı tipi — adresini `HKLM\...\FontSubstitutes` üzerinden bu aileye takma adla bağlayan bir makinede, Regular’ı kaldırmak DWM’in önbelleğe aldığı pencere başlıkları dahil **tüm masaüstünü italik** yapar ve geri almak için oturumu kapatmak gerekir. Hiçbir başvuru sayımı bunu düzeltmez: etki alanı makine genelindedir ve bir tema kurulum aracının orada işi yoktur.
+Bu yüzden yüz, kullanıcının bir kez yaptığı açık bir eylemdir: `Verdana_m1.ttf` dosyasına sağ tıklayın → **Install** (kullanıcı başına, yönetici gerekmez), sonra hedefi yeniden uygulayın. Yüz yoksa hedefler bunu bir kez söyler, çözümü adlandırır ve stok Verdana’ya döner — yumuşatılmış, ama arkanızdan makinede hiçbir şey yapılmaz.
+
+
 ### Electron uygulamaları
 
 `resources/app.asar`, `resources/app/app.asar` konumuna taşınır (`app.asar.unpacked`
@@ -307,4 +323,4 @@ node ..\tools\build-desktop.js --check  # bir şey bayatlaşmışsa 1 çıkış 
 `release.ps1` derlemeyi ve her kapıyı çalıştırır, bu yüzden bir sürüm paletlerden
 sapmış çıktı gönderemez.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:b77c16d423936045 -->

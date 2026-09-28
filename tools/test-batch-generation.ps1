@@ -61,6 +61,11 @@ if ($List) {
     Write-Host " 15. deterministic A/B fixture: pinned A consumed by a two-target batch while B is refused; then B applies"
     Write-Host " 16. node normal-release: the REAL direct build-desktop leaves NO lock, twice, then acquires again"
     Write-Host " 17. T-249 metadata asymmetry contract: Node ownerCreated null + liveness, PS StartTime reuse guard"
+    Write-Host " 18. W2-002 direct target: explicit -Target owns one generation epoch; competing publication refused"
+    Write-Host " 19. W2-002 -Target all: one epoch across two generated-output consumers; one generation only"
+    Write-Host " 20. W2-002 -Reapply: one parent-held epoch across planning+children; inherited children never deadlock"
+    Write-Host " 21. W2-002 -Force: freshness policy only; serialization is still enforced"
+    Write-Host " 22. W2-002 failure release + forged marker: lock released after failure; marker cannot bypass locking"
     Write-Host "  -RedControl: reintroduce age-only stealing (and the \$pid assignment) and prove the gates go red"
     exit 0
 }
@@ -877,7 +882,11 @@ try {
         $custom = Join-Path $iso 'pub-custom.json'
         [System.IO.File]::WriteAllText($custom, $jsonB, (New-Object System.Text.UTF8Encoding($false)))
         $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $out = & powershell -NoProfile -ExecutionPolicy Bypass -Command ". '$commonPath'; try { `$l = Enter-BatchLock; [System.IO.File]::WriteAllText((Join-Path '$rootDir' 'themes/custom.json'), (Get-Content '$custom' -Raw), (New-Object System.Text.UTF8Encoding(`$false))); & node (Join-Path '$rootDir' 'tools/apply-themes.js') | Out-Null; if (`$LASTEXITCODE -ne 0) { throw 'apply-themes failed' }; & node (Join-Path '$rootDir' 'tools/build-desktop.js') | Out-Null; if (`$LASTEXITCODE -ne 0) { throw 'build-desktop failed' }; Exit-BatchLock `$l; Write-Output 'PUBLISHED' } catch { Write-Output ('BLOCKED ' + `$_.Exception.Message) }" 2>&1
+        # The probe must bind the SAME app-data root the batch holds (common.ps1
+        # reads $WintageAppData, not the environment) and bail out on contention
+        # fast, so BLOCKED is a REAL lock verdict rather than an unbound-variable
+        # script error - the shape that made this gate vacuous before.
+        $out = & powershell -NoProfile -ExecutionPolicy Bypass -Command "`$env:WINTAGE_TEST_LOCK_TIMEOUT_MS = '1500'; `$WintageAppData = `$env:WINTAGE_APPDATA; `$ManifestPath = 'x'; . '$commonPath'; try { `$g = Enter-BuildGenerationLockCore `$env:WINTAGE_APPDATA; [System.IO.File]::WriteAllText((Join-Path '$rootDir' 'themes/custom.json'), (Get-Content '$custom' -Raw), (New-Object System.Text.UTF8Encoding(`$false))); & node (Join-Path '$rootDir' 'tools/apply-themes.js') | Out-Null; if (`$LASTEXITCODE -ne 0) { throw 'apply-themes failed' }; & node (Join-Path '$rootDir' 'tools/build-desktop.js') | Out-Null; if (`$LASTEXITCODE -ne 0) { throw 'build-desktop failed' }; Exit-BuildGenerationLockCore `$g; Write-Output 'PUBLISHED' } catch { Write-Output ('BLOCKED ' + `$_.Exception.Message) }" 2>&1
         $code = $LASTEXITCODE
         $ErrorActionPreference = $prev
         [pscustomobject]@{ Out = @($out | ForEach-Object { "$_" }); Code = $code }
@@ -886,7 +895,7 @@ try {
     $pubBRes = Receive-Job $pubB
     Remove-Job $pubB -Force -ErrorAction SilentlyContinue
     $pubBText = ($pubBRes.Out -join ' ')
-    check 'A/B fixture: Custom B publication REFUSED while batch A holds the generation' ($pubBText -match 'BLOCKED')
+    check 'A/B fixture: Custom B publication REFUSED while batch A holds the generation (real contention verdict)' ($pubBText -match 'BLOCKED' -and $pubBText -match 'generation lock contended')
     check 'A/B fixture: custom.json still carries generation A after the refused publish' (((Get-Content $digestFile -Raw | ConvertFrom-Json).tokens.background) -eq '#A0B0C0')
     # Steps 7-9: complete batch A; both targets consumed A and record digest A.
     Wait-Job $batchA -Timeout 120 | Out-Null
@@ -1030,6 +1039,315 @@ try {
     if ($env:WINTAGE_TEST_LOCK_TIMEOUT_MS) { Remove-Item Env:WINTAGE_TEST_LOCK_TIMEOUT_MS -ErrorAction SilentlyContinue }
     Remove-Item Env:WINTAGE_APPDATA -ErrorAction SilentlyContinue
     Remove-Item $isoT249 -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# W2-002 (audit/7 T-269) behavioural regressions 18-22: every real
+# generated-output consumer owns ONE generation epoch around freshness
+# verification AND consumption. A competing publication probe binds the SAME
+# app-data root (common.ps1 reads $WintageAppData, not the environment) and
+# uses a short bounded contention timeout, so CONTENDED is a genuine lock
+# verdict, never an incidental script error.
+# ═════════════════════════════════════════════════════════════════════════════
+$W2002_UTF8 = New-Object System.Text.UTF8Encoding($false)
+$PUBLICATION_PROBE_CMD = @'
+$ErrorActionPreference = 'Stop'
+$env:WINTAGE_APPDATA = '__ISO__'
+$env:WINTAGE_TEST_LOCK_TIMEOUT_MS = '1500'
+Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+$WintageAppData = '__ISO__'
+$ManifestPath = Join-Path '__ISO__' 'installed.json'
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+. '__COMMON__'
+try {
+    # A publication takes the cross-runtime FILE lock (the same lock
+    # build-desktop.js acquireGenLock and the GUI take); the PS named mutex is
+    # a PS-PS serialization layer and would mask the file-lock verdict with its
+    # own fixed 15s timeout.
+    $g = Enter-BuildGenerationLockCore $env:WINTAGE_APPDATA
+    Write-Output 'ACQUIRED'
+    Exit-BuildGenerationLockCore $g
+} catch {
+    Write-Output ('CONTENDED ' + $_.Exception.Message)
+}
+'@
+function Invoke-PublicationProbe([string]$iso) {
+    $cmd = $PUBLICATION_PROBE_CMD.Replace('__ISO__', $iso).Replace('__COMMON__', $common)
+    $file = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-pubprobe-' + [guid]::NewGuid().ToString('N') + '.ps1')
+    try {
+        [System.IO.File]::WriteAllText($file, $cmd, $W2002_UTF8)
+        $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $file 2>&1
+        $ErrorActionPreference = $prev
+        return (($out | ForEach-Object { "$_" }) -join ' ')
+    } finally {
+        Remove-Item $file -Force -ErrorAction SilentlyContinue
+    }
+}
+function Start-W2002InstallJob([string[]]$installArgs) {
+    Start-Job -ScriptBlock {
+        param($innerArgs)
+        $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        $out = & powershell @innerArgs 2>&1; $code = $LASTEXITCODE
+        $ErrorActionPreference = $prev
+        [pscustomobject]@{ Out = @($out | ForEach-Object { "$_" }); Code = $code }
+    } -ArgumentList (, $installArgs)
+}
+function Wait-W2002LockSeen([string]$appData, [int]$iterations = 240) {
+    for ($i = 0; $i -lt $iterations; $i++) {
+        if (Test-Path (Join-Path $appData 'build-generation.lock')) { return $true }
+        Start-Sleep -Milliseconds 50
+    }
+    return $false
+}
+function Get-W2002CustomBackground {
+    return (Get-Content (Join-Path $root 'themes/custom.json') -Raw | ConvertFrom-Json).tokens.background
+}
+function Set-W2002CustomGeneration([string]$background) {
+    $pack = [System.IO.File]::ReadAllText((Join-Path $root 'themes/custom.json'), $script:Utf8NoBom) | ConvertFrom-Json
+    $pack.tokens.background = $background
+    ($pack | ConvertTo-Json -Depth 5) | Set-Content -LiteralPath (Join-Path $root 'themes/custom.json') -Encoding UTF8
+    & node (Join-Path $root 'tools/apply-themes.js') 2>&1 | Out-Null
+    & node $builder 2>&1 | Out-Null
+}
+
+# ── 18. DIRECT TARGET: explicit -Target owns one generation epoch ─────────────
+$isoDT = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-directtarget-' + [guid]::NewGuid().ToString('N'))
+$homeDT = Join-Path $isoDT 'home'
+$appDT = Join-Path $isoDT 'Wintage'
+New-Item -ItemType Directory -Path (Join-Path $homeDT '.vscode\extensions'), $appDT -Force | Out-Null
+$prevAppDT = $env:APPDATA; $prevWintageDT = $env:WINTAGE_APPDATA; $prevHomeDT = $env:HOME; $prevProfileDT = $env:USERPROFILE
+$digestBackupDT = [System.IO.File]::ReadAllBytes((Join-Path $root 'themes/custom.json'))
+try {
+    $env:APPDATA = $isoDT; $env:WINTAGE_APPDATA = $appDT; $env:HOME = $homeDT; $env:USERPROFILE = $homeDT
+    Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+    Set-W2002CustomGeneration '#A0B0C0'
+    $digestA18 = Get-CustomContentDigest -Palette 'custom'
+    $env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS = '6000'
+    $jobDT = Start-W2002InstallJob @('-NoProfile','-ExecutionPolicy','Bypass','-File', $installer, '-Target', 'vscode', '-Palette', 'custom')
+    check 'direct target: explicit -Target run reached its held generation window (barrier)' (Wait-W2002LockSeen $appDT)
+    $dtProbe = Invoke-PublicationProbe $appDT
+    check 'direct target: competing publication REFUSED by real lock contention while -Target consumes' ($dtProbe -match 'CONTENDED' -and $dtProbe -match 'generation lock contended')
+    check 'direct target: custom.json still carries generation A after the refused publish' ((Get-W2002CustomBackground) -eq '#A0B0C0')
+    Wait-Job $jobDT -Timeout 120 | Out-Null
+    $dtRes = Receive-Job $jobDT
+    Remove-Job $jobDT -Force -ErrorAction SilentlyContinue
+    check 'direct target: run completed successfully (exit 0, no deadlock)' ($dtRes.Code -eq 0)
+    check 'direct target: generation lock released after success' (-not (Test-Path (Join-Path $appDT 'build-generation.lock')))
+    $mfDT = (Get-Content (Join-Path $appDT 'installed.json') -Raw | ConvertFrom-Json)
+    check 'direct target: manifest records generation digest A' ($mfDT.vscode.contentDigest -eq $digestA18)
+    check 'direct target: the installed extension carries generation A theme bytes' (Test-Path (Join-Path $homeDT '.vscode\extensions\wintage-themes\themes'))
+} finally {
+    Remove-Item Env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS -ErrorAction SilentlyContinue
+    [System.IO.File]::WriteAllBytes((Join-Path $root 'themes/custom.json'), $digestBackupDT)
+    & node (Join-Path $root 'tools/apply-themes.js') 2>&1 | Out-Null
+    & node $builder 2>&1 | Out-Null
+    $env:APPDATA = $prevAppDT; $env:WINTAGE_APPDATA = $prevWintageDT; $env:HOME = $prevHomeDT; $env:USERPROFILE = $prevProfileDT
+    Remove-Item $isoDT -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ── 19. TARGET ALL: one epoch across two generated-output consumers ───────────
+$isoTA = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-targetall-' + [guid]::NewGuid().ToString('N'))
+$homeTA = Join-Path $isoTA 'home'
+$appTA = Join-Path $isoTA 'Wintage'
+New-Item -ItemType Directory -Path (Join-Path $homeTA '.vscode\extensions'), (Join-Path $homeTA '.antigravity\extensions'), $appTA -Force | Out-Null
+$prevAppTA = $env:APPDATA; $prevWintageTA = $env:WINTAGE_APPDATA; $prevHomeTA = $env:HOME; $prevProfileTA = $env:USERPROFILE
+$digestBackupTA = [System.IO.File]::ReadAllBytes((Join-Path $root 'themes/custom.json'))
+try {
+    $env:APPDATA = $isoTA; $env:WINTAGE_APPDATA = $appTA; $env:HOME = $homeTA; $env:USERPROFILE = $homeTA
+    Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+    Set-W2002CustomGeneration '#A0B0C0'
+    $digestA19 = Get-CustomContentDigest -Palette 'custom'
+    $env:WINTAGE_TEST_ALL_TARGETS = 'vscode,antigravity'
+    $env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS = '6000'
+    $jobTA = Start-W2002InstallJob @('-NoProfile','-ExecutionPolicy','Bypass','-File', $installer, '-Target', 'all', '-Palette', 'custom')
+    check 'target all: the run reached its held generation window (barrier)' (Wait-W2002LockSeen $appTA)
+    $taProbe = Invoke-PublicationProbe $appTA
+    check 'target all: competing publication REFUSED for the complete batch epoch' ($taProbe -match 'CONTENDED' -and $taProbe -match 'generation lock contended')
+    Wait-Job $jobTA -Timeout 120 | Out-Null
+    $taRes = Receive-Job $jobTA
+    Remove-Job $jobTA -Force -ErrorAction SilentlyContinue
+    check 'target all: run completed successfully (exit 0, no deadlock)' ($taRes.Code -eq 0)
+    check 'target all: generation lock released after success' (-not (Test-Path (Join-Path $appTA 'build-generation.lock')))
+    $mfTA = (Get-Content (Join-Path $appTA 'installed.json') -Raw | ConvertFrom-Json)
+    check 'target all: first consumer records generation digest A' ($mfTA.vscode.contentDigest -eq $digestA19)
+    check 'target all: later consumer records the SAME generation digest A (no A/B mixture)' ($mfTA.antigravity.contentDigest -eq $digestA19)
+    check 'target all: both generated-output consumers installed' (
+        (Test-Path (Join-Path $homeTA '.vscode\extensions\wintage-themes\themes')) -and
+        (Test-Path (Join-Path $homeTA '.antigravity\extensions\wintage-themes\themes')))
+} finally {
+    Remove-Item Env:WINTAGE_TEST_ALL_TARGETS -ErrorAction SilentlyContinue
+    Remove-Item Env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS -ErrorAction SilentlyContinue
+    [System.IO.File]::WriteAllBytes((Join-Path $root 'themes/custom.json'), $digestBackupTA)
+    & node (Join-Path $root 'tools/apply-themes.js') 2>&1 | Out-Null
+    & node $builder 2>&1 | Out-Null
+    $env:APPDATA = $prevAppTA; $env:WINTAGE_APPDATA = $prevWintageTA; $env:HOME = $prevHomeTA; $env:USERPROFILE = $prevProfileTA
+    Remove-Item $isoTA -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ── 20. REAPPLY: one parent-held epoch across planning + children ─────────────
+$isoRA = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-reapplyepoch-' + [guid]::NewGuid().ToString('N'))
+$homeRA = Join-Path $isoRA 'home'
+$appRA = Join-Path $isoRA 'Wintage'
+$seamRA = Join-Path $isoRA 'seam'
+New-Item -ItemType Directory -Path (Join-Path $homeRA '.vscode\extensions'), (Join-Path $homeRA '.antigravity\extensions'), $appRA, $seamRA -Force | Out-Null
+$prevAppRA = $env:APPDATA; $prevWintageRA = $env:WINTAGE_APPDATA; $prevHomeRA = $env:HOME; $prevProfileRA = $env:USERPROFILE; $prevSeamRA = $env:WINTAGE_TEST_REAPPLY_PARENT_SEAM
+$digestBackupRA = [System.IO.File]::ReadAllBytes((Join-Path $root 'themes/custom.json'))
+try {
+    $env:APPDATA = $isoRA; $env:WINTAGE_APPDATA = $appRA; $env:HOME = $homeRA; $env:USERPROFILE = $homeRA
+    Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+    Set-W2002CustomGeneration '#A0B0C0'
+    $digestA20 = Get-CustomContentDigest -Palette 'custom'
+    $manifestRA = @{
+        antigravity = @{ palette = 'custom'; path = (Join-Path $homeRA '.antigravity\extensions\wintage-themes'); appVersion = 'n/a'; payloadVersion = '0.0.1'; applied = '2026-01-01T00:00:00Z'; contentDigest = $digestA20 }
+        vscode      = @{ palette = 'custom'; path = (Join-Path $homeRA '.vscode\extensions\wintage-themes'); appVersion = 'n/a'; payloadVersion = '0.0.1'; applied = '2026-01-01T00:00:00Z'; contentDigest = $digestA20 }
+    }
+    ($manifestRA | ConvertTo-Json -Depth 5) | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $appRA 'installed.json'), $_, $W2002_UTF8) }
+    $env:WINTAGE_TEST_REAPPLY_PARENT_SEAM = "vscode|$seamRA"
+    $jobRA = Start-W2002InstallJob @('-NoProfile','-ExecutionPolicy','Bypass','-File', $installer, '-Reapply')
+    # Barrier: the parent planned the FIRST child, it finished, and the parent now
+    # waits between the first and the later child (seam before the vscode child).
+    $seamSeen = $false
+    for ($i = 0; $i -lt 480 -and -not $seamSeen; $i++) {
+        Start-Sleep -Milliseconds 50
+        $seamSeen = (Test-Path (Join-Path $seamRA 'planned')) -and (Test-Path (Join-Path $appRA 'build-generation.lock'))
+    }
+    check 'reapply: parent holds the generation epoch between the first and later child (barrier)' $seamSeen
+    if ($seamSeen) {
+        $raProbe = Invoke-PublicationProbe $appRA
+        check 'reapply: competing publication REFUSED for the complete Reapply epoch' ($raProbe -match 'CONTENDED' -and $raProbe -match 'generation lock contended')
+        check 'reapply: custom.json still carries generation A inside the epoch' ((Get-W2002CustomBackground) -eq '#A0B0C0')
+        [System.IO.File]::WriteAllText((Join-Path $seamRA 'resume'), 'resume', $W2002_UTF8)
+    }
+    Wait-Job $jobRA -Timeout 120 | Out-Null
+    $raRes = Receive-Job $jobRA
+    Remove-Job $jobRA -Force -ErrorAction SilentlyContinue
+    check 'reapply: inherited children completed without deadlock (parent exit 0)' ($raRes.Code -eq 0)
+    check 'reapply: generation lock released after the complete run' (-not (Test-Path (Join-Path $appRA 'build-generation.lock')))
+    $mfRA = (Get-Content (Join-Path $appRA 'installed.json') -Raw | ConvertFrom-Json)
+    check 'reapply: first repaired target records generation A' ($mfRA.antigravity.contentDigest -eq $digestA20)
+    check 'reapply: later repaired target records the SAME generation A' ($mfRA.vscode.contentDigest -eq $digestA20)
+    check 'reapply: both children actually re-applied (payload version refreshed)' ($mfRA.vscode.payloadVersion -ne '0.0.1' -and $mfRA.antigravity.payloadVersion -ne '0.0.1')
+    # B may publish only after Reapply releases: the lock is free and a real
+    # publication of generation B succeeds and is what the next Apply sees.
+    $raFreeProbe = Invoke-PublicationProbe $appRA
+    check 'reapply: generation lock is free after the run (subsequent real publisher can acquire)' ($raFreeProbe -match 'ACQUIRED')
+    Set-W2002CustomGeneration '#B0C0D0'
+    check 'reapply: generation B publishes only after the Reapply epoch released' ((Get-W2002CustomBackground) -eq '#B0C0D0')
+} finally {
+    Remove-Item Env:WINTAGE_TEST_REAPPLY_PARENT_SEAM -ErrorAction SilentlyContinue
+    [System.IO.File]::WriteAllBytes((Join-Path $root 'themes/custom.json'), $digestBackupRA)
+    & node (Join-Path $root 'tools/apply-themes.js') 2>&1 | Out-Null
+    & node $builder 2>&1 | Out-Null
+    if ($null -eq $prevSeamRA) { Remove-Item Env:WINTAGE_TEST_REAPPLY_PARENT_SEAM -ErrorAction SilentlyContinue } else { $env:WINTAGE_TEST_REAPPLY_PARENT_SEAM = $prevSeamRA }
+    $env:APPDATA = $prevAppRA; $env:WINTAGE_APPDATA = $prevWintageRA; $env:HOME = $prevHomeRA; $env:USERPROFILE = $prevProfileRA
+    Remove-Item $isoRA -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ── 21. FORCE: freshness policy only, never serialization ────────────────────
+$isoFO = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-force-' + [guid]::NewGuid().ToString('N'))
+$homeFO = Join-Path $isoFO 'home'
+$appFO = Join-Path $isoFO 'Wintage'
+New-Item -ItemType Directory -Path (Join-Path $homeFO '.vscode\extensions'), $appFO -Force | Out-Null
+$prevAppFO = $env:APPDATA; $prevWintageFO = $env:WINTAGE_APPDATA; $prevHomeFO = $env:HOME; $prevProfileFO = $env:USERPROFILE
+$digestBackupFO = [System.IO.File]::ReadAllBytes((Join-Path $root 'themes/custom.json'))
+try {
+    $env:APPDATA = $isoFO; $env:WINTAGE_APPDATA = $appFO; $env:HOME = $homeFO; $env:USERPROFILE = $homeFO
+    Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+    Set-W2002CustomGeneration '#A0B0C0'
+    # Make the freshness verdict genuinely FAIL: change custom.json WITHOUT
+    # regenerating, so -Force must bypass a real stale verdict.
+    $packStale = [System.IO.File]::ReadAllText((Join-Path $root 'themes/custom.json'), $script:Utf8NoBom) | ConvertFrom-Json
+    $packStale.tokens.background = '#D0E0F0'
+    ($packStale | ConvertTo-Json -Depth 5) | Set-Content -LiteralPath (Join-Path $root 'themes/custom.json') -Encoding UTF8
+    $digestA21 = Get-CustomContentDigest -Palette 'custom'
+    $prevEapFO = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    & node $builder --check 2>&1 | Out-Null
+    $staleCodeFO = $LASTEXITCODE
+    $ErrorActionPreference = $prevEapFO
+    check 'force: the freshness verdict really fails before the run (stale build)' ($staleCodeFO -ne 0)
+    $env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS = '6000'
+    $jobFO = Start-W2002InstallJob @('-NoProfile','-ExecutionPolicy','Bypass','-File', $installer, '-Target', 'vscode', '-Palette', 'custom', '-Force')
+    check 'force: -Force run reached its held generation window (barrier)' (Wait-W2002LockSeen $appFO)
+    $foProbe = Invoke-PublicationProbe $appFO
+    check 'force: competing publication REFUSED while -Force consumes (serialization not bypassed)' ($foProbe -match 'CONTENDED' -and $foProbe -match 'generation lock contended')
+    Wait-Job $jobFO -Timeout 120 | Out-Null
+    $foRes = Receive-Job $jobFO
+    Remove-Job $jobFO -Force -ErrorAction SilentlyContinue
+    check 'force: run completed successfully (exit 0)' ($foRes.Code -eq 0)
+    check 'force: generation lock released after success' (-not (Test-Path (Join-Path $appFO 'build-generation.lock')))
+    $mfFO = (Get-Content (Join-Path $appFO 'installed.json') -Raw | ConvertFrom-Json)
+    check 'force: manifest records the generation the -Force run accepted under the lock' ($mfFO.vscode.contentDigest -eq $digestA21)
+} finally {
+    Remove-Item Env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS -ErrorAction SilentlyContinue
+    [System.IO.File]::WriteAllBytes((Join-Path $root 'themes/custom.json'), $digestBackupFO)
+    & node (Join-Path $root 'tools/apply-themes.js') 2>&1 | Out-Null
+    & node $builder 2>&1 | Out-Null
+    $env:APPDATA = $prevAppFO; $env:WINTAGE_APPDATA = $prevWintageFO; $env:HOME = $prevHomeFO; $env:USERPROFILE = $prevProfileFO
+    Remove-Item $isoFO -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ── 22. FAILURE RELEASE + FORGED MARKER: ownership is proven, never declared ─
+$isoFR = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-failrelease-' + [guid]::NewGuid().ToString('N'))
+$homeFR = Join-Path $isoFR 'home'
+$appFR = Join-Path $isoFR 'Wintage'
+New-Item -ItemType Directory -Path (Join-Path $homeFR '.vscode\extensions'), $appFR -Force | Out-Null
+$prevAppFR = $env:APPDATA; $prevWintageFR = $env:WINTAGE_APPDATA; $prevHomeFR = $env:HOME; $prevProfileFR = $env:USERPROFILE
+$digestBackupFR = [System.IO.File]::ReadAllBytes((Join-Path $root 'themes/custom.json'))
+try {
+    $env:APPDATA = $isoFR; $env:WINTAGE_APPDATA = $appFR; $env:HOME = $homeFR; $env:USERPROFILE = $homeFR
+    Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+    Set-W2002CustomGeneration '#A0B0C0'
+    # 22a. deterministic in-target failure while generation ownership is held.
+    $env:WINTAGE_TEST_FAIL_AFTER_EXT_COPY = '1'
+    $frJob = Start-W2002InstallJob @('-NoProfile','-ExecutionPolicy','Bypass','-File', $installer, '-Target', 'vscode', '-Palette', 'custom')
+    Wait-Job $frJob -Timeout 120 | Out-Null
+    $frRes = Receive-Job $frJob
+    Remove-Job $frJob -Force -ErrorAction SilentlyContinue
+    Remove-Item Env:WINTAGE_TEST_FAIL_AFTER_EXT_COPY -ErrorAction SilentlyContinue
+    check 'failure: the failing target run exits NONZERO' ($frRes.Code -ne 0)
+    check 'failure: generation lock RELEASED after the failure' (-not (Test-Path (Join-Path $appFR 'build-generation.lock')))
+    check 'failure: no manifest entry was committed' (-not (Test-Path (Join-Path $appFR 'installed.json')))
+    check 'failure: rollback left no Wintage themes in the destination' (-not (Test-Path (Join-Path $homeFR '.vscode\extensions\wintage-themes\themes')))
+    $prevEapFR = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    & node $builder 2>&1 | Out-Null
+    $frNodeCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEapFR
+    check 'failure: a subsequent real publisher acquires the released lock (node build exit 0)' ($frNodeCode -eq 0 -and -not (Test-Path (Join-Path $appFR 'build-generation.lock')))
+    # 22b. inheritance is proven: a genuine token from a LIVE lock is honored...
+    . ([scriptblock]::Create((Get-GuiFunctionAst 'Enter-BatchLockShared')))
+    . ([scriptblock]::Create((Get-GuiFunctionAst 'Exit-BatchLock')))
+    $holdFR = Enter-BatchLockShared
+    $env:WINTAGE_BUILD_LOCK_HELD = [string]$holdFR.GenLock.Token
+    $inheritedFR = Enter-BatchLockShared
+    check 'marker: a genuine live-lock token is accepted as inherited ownership (no re-acquisition)' ($null -eq $inheritedFR)
+    Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+    Exit-BatchLock $holdFR
+    check 'marker: genuine holder releases its lock' (-not (Test-Path (Join-Path $appFR 'build-generation.lock')))
+    # ...while a forged marker with no live holder ACQUIRES the real lock.
+    $env:WINTAGE_BUILD_LOCK_HELD = 'forged-marker'
+    $forgedFR = Enter-BatchLockShared
+    check 'marker: forged marker ACQUIRES the real lock instead of bypassing it' ($null -ne $forgedFR)
+    Exit-BatchLock $forgedFR
+    # A real batch under a forged marker still serializes against a publisher.
+    $env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS = '2500'
+    $frBatch = Start-W2002InstallJob @('-NoProfile','-ExecutionPolicy','Bypass','-File', $installer, '-Target', 'vscode', '-Palette', 'custom')
+    check 'marker: forged-marker batch still acquires the generation lock (barrier)' (Wait-W2002LockSeen $appFR)
+    $frProbe = Invoke-PublicationProbe $appFR
+    check 'marker: forged-marker batch still REFUSES a competing publication' ($frProbe -match 'CONTENDED' -and $frProbe -match 'generation lock contended')
+    Wait-Job $frBatch -Timeout 120 | Out-Null
+    $frBatchRes = Receive-Job $frBatch
+    Remove-Job $frBatch -Force -ErrorAction SilentlyContinue
+    check 'marker: forged-marker batch completed and released (exit 0)' ($frBatchRes.Code -eq 0 -and -not (Test-Path (Join-Path $appFR 'build-generation.lock')))
+} finally {
+    Remove-Item Env:WINTAGE_TEST_BATCH_LOCK_DELAY_MS -ErrorAction SilentlyContinue
+    Remove-Item Env:WINTAGE_TEST_FAIL_AFTER_EXT_COPY -ErrorAction SilentlyContinue
+    Remove-Item Env:WINTAGE_BUILD_LOCK_HELD -ErrorAction SilentlyContinue
+    [System.IO.File]::WriteAllBytes((Join-Path $root 'themes/custom.json'), $digestBackupFR)
+    & node (Join-Path $root 'tools/apply-themes.js') 2>&1 | Out-Null
+    & node $builder 2>&1 | Out-Null
+    $env:APPDATA = $prevAppFR; $env:WINTAGE_APPDATA = $prevWintageFR; $env:HOME = $prevHomeFR; $env:USERPROFILE = $prevProfileFR
+    Remove-Item $isoFR -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host ""

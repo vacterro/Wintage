@@ -35,6 +35,7 @@ Command line:
 .\desktop\install.ps1 -Target all -Palette goldendefault # everything
 .\desktop\install.ps1 -Target all -WhatIf              # say what would change, touch nothing
 .\desktop\install.ps1 -Target freebuff -Revert         # undo one
+.\desktop\install.ps1 -RescanBrowsers                  # re-scan the remembered portable browser root
 ```
 
 See [Desktop](Desktop) for what each target can and cannot reach.

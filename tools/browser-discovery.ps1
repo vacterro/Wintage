@@ -91,7 +91,13 @@ function Test-FileContainsAnyBounded {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Needles,
-        [int]$ChunkBytes = 0
+        [int]$ChunkBytes = 0,
+        # R015 / PERF-004 instrumentation: when supplied, the scanner reports the
+        # working-buffer cardinality the bounded-memory contract is about -- the
+        # input chunk cap, the overlap actually carried, the largest decoded
+        # window, and total bytes read. Inert (no allocation, no extra work) when
+        # omitted, so the production path pays nothing for it.
+        [hashtable]$Stats
     )
     $wanted = @()
     $maxLen = 0
@@ -101,9 +107,18 @@ function Test-FileContainsAnyBounded {
         $n = [System.Text.Encoding]::UTF8.GetByteCount($needle)
         if ($n -gt $maxLen) { $maxLen = $n }
     }
+    if ($Stats) {
+        $Stats.MaxChunkBytes = $ChunkBytes
+        $Stats.MaxOverlapBytes = 0
+        $Stats.MaxWindowBytes = 0
+        $Stats.TotalBytesRead = 0
+        $Stats.Chunks = 0
+        $Stats.OverlapBound = [Math]::Max(0, $maxLen - 1)
+    }
     if (-not $wanted.Count) { return $false }
     if ($ChunkBytes -le 0) { $ChunkBytes = $script:BROWSER_PREF_CHUNK }
     if ($ChunkBytes -lt $maxLen) { $ChunkBytes = $maxLen }
+    if ($Stats) { $Stats.MaxChunkBytes = $ChunkBytes }
 
     $stream = $null
     try {
@@ -116,6 +131,12 @@ function Test-FileContainsAnyBounded {
             $window = New-Object byte[] ($tail.Length + $read)
             [Array]::Copy($tail, 0, $window, 0, $tail.Length)
             [Array]::Copy($buffer, 0, $window, $tail.Length, $read)
+            if ($Stats) {
+                if ($tail.Length -gt $Stats.MaxOverlapBytes) { $Stats.MaxOverlapBytes = $tail.Length }
+                if ($window.Length -gt $Stats.MaxWindowBytes) { $Stats.MaxWindowBytes = $window.Length }
+                $Stats.TotalBytesRead += $read
+                $Stats.Chunks++
+            }
             # The window is decoded (bounded: one chunk plus the overlap) and
             # matched with the ordinal IndexOf primitive. A byte-at-a-time
             # comparison in managed code was exact but O(window x needle), which
@@ -236,7 +257,29 @@ function Get-BrowserPortableCandidates {
     $candidates
 }
 
-$script:BROWSER_DEFAULT_ENUMERATOR = { param([string]$PortableRoot) Get-BrowserPortableCandidates -PortableRoot $PortableRoot }
+# R015 / PERF-004 test seam: a real recursive portable walk must never run on the
+# ordinary (cache-served) status path. The D-feature smoke needs a walker that
+# WOULD be slow, so the shipped tool exposes (a) a counter that every real walk
+# increments and (b) a deliberate sleep the smoke can arm. Both are inert unless
+# a fixture opts in, and neither changes the discovery decision.
+$script:BROWSER_WALK_COUNT = 0
+$script:BROWSER_WALK_COUNT_FILE = $env:WINTAGE_TEST_WALK_COUNT_FILE
+$script:BROWSER_WALK_SLOW_MS = if ($env:WINTAGE_TEST_WALK_SLOW_MS) { [int]$env:WINTAGE_TEST_WALK_SLOW_MS } else { 0 }
+function Add-BrowserWalkCount {
+    $script:BROWSER_WALK_COUNT++
+    if ($script:BROWSER_WALK_COUNT_FILE) {
+        try { Set-Content -LiteralPath $script:BROWSER_WALK_COUNT_FILE -Value $script:BROWSER_WALK_COUNT -ErrorAction SilentlyContinue } catch { }
+    }
+}
+function Get-BrowserWalkCount { return $script:BROWSER_WALK_COUNT }
+function Invoke-BrowserWalkDelay { if ($script:BROWSER_WALK_SLOW_MS -gt 0) { Start-Sleep -Milliseconds $script:BROWSER_WALK_SLOW_MS } }
+
+$script:BROWSER_DEFAULT_ENUMERATOR = {
+    param([string]$PortableRoot)
+    Add-BrowserWalkCount
+    Invoke-BrowserWalkDelay
+    Get-BrowserPortableCandidates -PortableRoot $PortableRoot
+}
 
 function Read-PortableRootEntry($Data, [string]$PortableRoot) {
     if (-not $Data -or -not $Data.portable) { return $null }

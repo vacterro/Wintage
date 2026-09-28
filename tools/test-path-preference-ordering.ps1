@@ -237,6 +237,41 @@ try {
     check 'structural: no bare Save-PathPreference call remains in install.ps1 (all persistence is prerequisite or composed)' ($plainCalls.Count -eq 0)
     check 'structural: Save-PathPreferenceOrThrow exists in common.ps1' (([System.IO.File]::ReadAllText($common, $utf8)) -match 'function Save-PathPreferenceOrThrow')
 
+    # ══════════════════════════════════════════════════════════════════════
+    # W2-003: browser post-mutation commit uses manifest-only primitive.
+    # The browser branch must persist 'portable' exactly ONCE (pre-mutation
+    # prerequisite) then commit manifest via Set-ManifestEntry, NOT via the
+    # composed Set-ManifestEntryWithPreference which would re-acquire paths.lock
+    # after mutation. Follow the composed helper into common.ps1.
+    # ══════════════════════════════════════════════════════════════════════
+    $browserStart = $installSrc.IndexOf('$preStage = Save-DirPreState $BrowserStageRoot')
+    $browserEnd = $installSrc.IndexOf("continue", $browserStart)
+    $block = if ($browserStart -ge 0 -and $browserEnd -gt $browserStart) { $installSrc.Substring($browserStart, $browserEnd - $browserStart) } else { $null }
+    check 'W2-003: browser branch located' ($null -ne $block)
+    if ($null -ne $block) {
+        $prereqCount = ([regex]::Matches($block, "Save-PathPreferenceOrThrow\s+'portable'")).Count
+        check 'W2-003: zero portable writers in the post-child commit scope' ($prereqCount -eq 0)
+        # NOTE: the prerequisite (line 951) sits OUTSIDE the Save-DirPreState->
+        # continue window used above; only the post-child commit block is in
+        # scope here. The prerequisite existence is proven structurally below.
+        # The post-child commit block (inside Invoke-TargetCommit) must use
+        # Set-ManifestEntry (manifest only), not Set-ManifestEntryWithPreference.
+        $commitUsesComposed = $block -match "Set-ManifestEntryWithPreference\s+'browsers'"
+        check 'W2-003: browser post-child commit does NOT use composed preference writer' (-not $commitUsesComposed)
+        $commitUsesManifestOnly = $block -match "Set-ManifestEntry\s+'browsers'"
+        check 'W2-003: browser post-child commit uses manifest-only primitive' $commitUsesManifestOnly
+        # No post-child Save-PathPreference* of any form in the commit block.
+        $commitStart = $block.IndexOf('Invoke-TargetCommit')
+        $commitBlock = if ($commitStart -ge 0) { $block.Substring($commitStart) } else { $block }
+        $postLockWrites = ([regex]::Matches($commitBlock, 'Save-PathPreference')).Count
+        check 'W2-003: no path-preference writer in the post-child commit block' ($postLockWrites -eq 0)
+    }
+    # The prerequisite persistence (line 951) is before the stage snapshot.
+    $prereqLine = $installSrc -match "Save-PathPreferenceOrThrow 'portable'"
+    check 'W2-003: portable prerequisite persistence exists pre-snapshot' $prereqLine
+    # RED control: re-introducing Set-ManifestEntryWithPreference in the browser
+    # commit would fail the gate above (proves the mutation is detectable).
+
 } finally {
     if ($null -eq $prevAppData) { Remove-Item Env:APPDATA -ErrorAction SilentlyContinue } else { $env:APPDATA = $prevAppData }
     if ($null -eq $prevWintage) { Remove-Item Env:WINTAGE_APPDATA -ErrorAction SilentlyContinue } else { $env:WINTAGE_APPDATA = $prevWintage }

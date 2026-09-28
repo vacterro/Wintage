@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-017:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-261 closed with verification evidence in LOG: verify -> PASS [target: T-261] conf: high -- post-SHIP re-confirmation: SRC-018 CLOSED 17/17; T-262 DONE; audit/7.md consumed; tools/test-processexplorer.ps1 55 PASS / 0 FAIL. Zero implementation delta; reconcile-only.",
+      "text": "audit all",
+      "verification": "the Work this request created reached its own verification gate; see the T-261 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-261"
+    }
+  },
+  "schema_version": 1
+}

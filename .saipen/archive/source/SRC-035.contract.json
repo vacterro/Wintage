@@ -1,0 +1,14 @@
+{
+  "clauses": {
+    "SRC-035:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "text": "CORE-005: Terminal font size schema integer 7..24 in both Node and PowerShell; fractional sizes rejected never rounded; shared parity fixtures (audit/8.md finding CORE-005, projected from SRC-028:R005)"
+    }
+  },
+  "derived_at": "2026-09-23T19:49:26Z",
+  "derived_from": "SRC-035",
+  "interpretation_revision": 1,
+  "schema_version": 1,
+  "source_sha256": "54fde77829b7cce54c78cc55dea52416d25cfe07686fcddea40a276dc33948fe"
+}

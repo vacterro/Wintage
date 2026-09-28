@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-037:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1434 + E-1443 full-matrix current-tree run",
+      "text": "W2-001: Get-BatchArgs exact single-hyphen path switches -ZCodePath/-NotepadPlusPlusPath/-Cinema4DPath/-ProcessExplorerPath once each, zero --*Path tokens (audit/8.md finding W2-001, projected from SRC-028:R007)",
+      "verification": "powershell tools/test-gui-paths.ps1 34 PASS 0 FAIL (array-element adjacency assertions, exact token once, zero --*Path, RED control proves extra-hyphen defect)",
+      "work": "T-295"
+    }
+  },
+  "schema_version": 1
+}

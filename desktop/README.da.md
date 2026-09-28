@@ -62,7 +62,7 @@ arkivet er i brug.
 | `browsers` | registrerer installerede + bærbare Chromium-profiler, stiller det valgte chrome-tema op og åbner browserens egne Tampermonkey/tema-bekræftelsessider | yes efter én **Load unpacked** pr. profil |
 | `terminal` | Windows Terminal-skema + standarder for alle profiler, Consolas 12 aliaseret | yes — indstillingerne ligger i din profil |
 | `conhost` | `HKCU\Console`-standarder + enhver eksisterende cmd/PowerShell-profil | yes — eksakt snapshot af berørte værdier |
-| `obs` | OBS 30.2+ `.ovt`-variant + aktiv `user.ini`-tema-ID | yes — det ligger i din profil |
+| `obs` | OBS 30.2+ `.ovt`-variant + aktiv `user.ini`-tema-ID | ja — det ligger i din profil |
 | `antigravity`, `vscode` | farvetema-udvidelse i `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — det ligger i din profil |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, se nedenfor | no — kør installatøren igen |
 | `claude` | Electron-shim, patch'et på stedet — se nedenfor | no — en opdatering laver en ny `app-<version>`-mappe |
@@ -297,4 +297,37 @@ node ..\tools\build-desktop.js --check  # exit 1, hvis noget er forældet
 `release.ps1` kører bygningen og hver port, så en release ikke kan sende output, der
 har drevet væk fra paletterne.
 
+<!-- T-311 target/section coverage supplement -->
+## Dækning af mål og sektioner
+
+Denne sektion spejler dækningen af Process Explorer, Notepad++, Cinema 4D og terminalskrifterne i den nuværende engelske README, så denne oversættelse ikke bliver stille forældet. Kodeliteralerne (mål-id'er, registre-stier, filnavne) er med vilje sprog-uafhængige; teksten omkring dem er oversat.
+
+### Hvad hvert mål faktisk kan tematisere (tilføjede mål)
+
+| mål | mekanisme | overlever en app-opdatering |
+|---|---|---|
+| `notepadplusplus` | tema-XML + alias ind i din `themes`-mappe for Notepad++ | ja — det ligger i din egen profil |
+| `cinema4d` | farveskema lagt i din `schemes`-mappe for Cinema 4D | ja — det ligger i din egen profil |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: rækkefremhævningsfarver og grafikbaggrunde, se nedenfor | nej — Process Explorer skriver sine egne indstillinger om, når det afslutter; luk det og kør igen |
+
+### Process Explorer (Sysinternals)
+
+Process Explorer gemmer farverne i `HKCU\Software\Sysinternals\Process Explorer` og skriver den nøgle om, når programmet lukker, så målet **nægter, mens `procexp`, `procexp64` eller `procexp64a` kører** — luk det og kør igen. Det tematiserer de konfigurerbare farvekategorier:
+
+- **tilgængelige**: rækkefremhævningsfarverne for processer (`ColorOwn`, `ColorServices`, `ColorRelocatedDlls`, `ColorImmersive`, `ColorPacked`, `ColorJobs`, `ColorNet`, `ColorProtected`, `ColorNewProc`, `ColorDelProc`, `ColorSuspend`) i både lysmodus- og `*Dark`-varianter, plus grafikbaggrundene (`ColorGraphBk`, `ColorGraphBkDark`) — 24 værdier i alt. Hver variant blandes mod den tilsvarende pol i den aktive palet (dets lysere nuance til lysmodus-udfyldningen, den mørkere til `*Dark`), så rækkefyldningerne beholder palettens egen nuance frem for at blegne næsten til hvid;
+- **ikke tilgængelige**: titellinjen, menulinjen, værktøjslinjen, baggrunden og tekstfarverne i listevisningen samt graflinjernes farver — de er kompileret ind i `procexp.exe` og afsløres af ingen indstillingsværdi. Målet tematiserer rækkefremhævningerne og den grafikbaggrund, det virkelig ejer, og påstår intet mere.
+
+Hver værdi, Apply kan ændre, tages som et øjeblikssnapshot før ændringen (gendannelse ved første berøring under `%APPDATA%\Wintage\recovery\processexplorer\`) og sættes nøjagtigt tilbage af `-Revert`, inklusive om hver værdi var fraværende, og om markøren var til stede, men tom. En transportabel mappe uden for de almindelige Sysinternals-kataloger huskes via den kanoniske `paths.json`-nøgle `processexplorer` (CLI-argumentet `-ProcessExplorerPath`; GUI'en kan også vælge den).
+
+### Terminalskrifter (`fonts/terminal/`)
+
+Begge terminalmål læser ÉN kanonisk typografisk indstilling i `%APPDATA%\Wintage\terminal-font.json` (`schema`, `fontSlug`, `family`, `size`, `renderingMode`). Når filen mangler, beholder målene den udleverede standardværdi (Terminus (TTF) for Windows, 12 pt, aliased), så eksisterende maskiner forbliver uændrede. En ugyldig indstilling fejler lukket: intet overskrives, og målet nægter.
+
+`fonts/terminal/catalog.json` er det ene skriftkatalog: 20 indbundne open source-monospace-familier plus de to systemtyper, Wintage navngiver men aldrig udleverer (Terminus (TTF) for Windows, Consolas). Hver indbundet post indeholder sin upstream-kilde, fastlåste revision, licens-id, licensfil og SHA-256. De præcise filer ligger i `fonts/terminal/files/` med deres licenstekster i `licenses/`; Wintage under drift arbejder helt offline og henter aldrig en skrift.
+
+`tools/sync-terminal-fonts.ps1` er downloaderen kun for vedligeholdere. Den læser `fonts/terminal/sources.json` (én uforanderlig artefakt pr. familie), verificerer hver SHA-256 og nægter ved afvigelse. `-VerifyOnly` (standard) kontrollerer træet på disken uden netværk; `-Fetch -Write` leverer filerne ind igen. Downloadede skriftbytes behandles som utroværdige binære aktiver — hashet og skrevet, aldrig kørt. Én udskiftning er registreret: **Fantasque Sans Mono** erstatter Liberation Mono, som ikke udgiver nogen fastlåst binær udgivelse (kun kilden `.sfd`).
+
+Installatøren **gennemser skrifter, den installerer dem ikke.** Fanen TERMINAL FONTS indlæser en indbundet skrifttype i en proceslokal `PrivateFontCollection` til en live forhåndsvisning, som foretager **nul** systemregistreringer af skrifter. At vælge en skrift, en størrelse (7–24 pt) eller en gengivelsestilstand (aliased/grayscale/cleartype) opdaterer kun forhåndsvisningen og indstillingen. At installere en skrift er en eksplicit **INSTALL SELECTED**-handling, der åbner Windows' egen skriftinstallatør; efter Windows' bekræftelse må brugeren tjekke igen med Refresh. Reelle terminalændringer sker kun ved en eksplicit **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
+
+Windows Terminal anvendes på den valgte installerede familie i den valgte størrelse, og gengivelsestilstanden kortlægges til `profiles.defaults.antialiasingMode`. Klassisk conhost er strengere: den gengiver på et fast cellenet, så en valgt skrifttype nægtes før nogen ændring af registret, medmindre Windows kan opløse den (standardtypen og Consolas-reserven er undtaget). Health og Reapply validerer den konfigurerede skrifttype, størrelse og antialiasing mod indstillingen, så en ændring af indstillingen efter et Apply rapporteres som en afvigelse i stedet for som "sund". Terminalfarvernes livscyklus er urørt: Revert gendanner de præcise værdier, der var ejet af Wintage før, og fjerner aldrig en skrift fra maskinen.
 <!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->

@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-040:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "E-1434 + E-1443 full-matrix current-tree run",
+      "text": "W2-004: One WINTAGE_APPDATA root for GUI+CLI paths.json/paths.lock; no hardcoded APPDATA split (audit/8.md finding W2-004, projected from SRC-028:R010)",
+      "verification": "powershell tools/test-wintage-appdata-root.ps1 13 PASS 0 FAIL (APPDATA=A WINTAGE_APPDATA=B: GUI+CLI both write B, A untouched, both serialize B/paths.lock)",
+      "work": "T-298"
+    }
+  },
+  "schema_version": 1
+}

@@ -39,7 +39,7 @@ const check = (label, got, want) => {
   if (!ok) bad++;
 };
 
-function run({ gm, stored, isTop, isX, isReddit, isGoogle }) {
+function run({ gm, stored, isTop, isX, isReddit, isGoogle, isChatgpt }) {
   const painted = {}, attrs = {}, menu = [];
   let reloads = 0, wrote = null;
   const el = {
@@ -53,6 +53,7 @@ function run({ gm, stored, isTop, isX, isReddit, isGoogle }) {
     IS_X: !!isX,
     IS_REDDIT: !!isReddit,
     IS_GOOGLE: !!isGoogle,
+    IS_CHATGPT: !!isChatgpt,
     console
   };
   if (gm) {
@@ -140,7 +141,7 @@ for (const need of ['// @grant        GM_getValue', '// @grant        GM_setValu
 }
 check('no leftover @grant none', /@grant\s+none/.test(src), false);
 
-// 8. host-specific data attributes — X, Reddit, ordinary hosts
+// 8. host-specific data attributes — X, Reddit, ChatGPT, Google, ordinary hosts
 r = run({ gm: true, stored: DEFAULT_THEME, isTop: true, isX: true });
 check('X host -> data-w95-x', r.attrs['data-w95-x'], '1');
 check('X host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false);
@@ -150,10 +151,14 @@ check('Reddit host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
 r = run({ gm: true, stored: DEFAULT_THEME, isTop: true, isGoogle: true });
 check('Google host -> data-w95-google', r.attrs['data-w95-google'], '1');
 check('Google host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
+r = run({ gm: true, stored: DEFAULT_THEME, isTop: true, isChatgpt: true });
+check('ChatGPT host -> data-w95-chatgpt', r.attrs['data-w95-chatgpt'], '1');
+check('ChatGPT host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
 r = run({ gm: true, stored: DEFAULT_THEME, isTop: true });
 check('ordinary host -> no data-w95-x', 'data-w95-x' in r.attrs, false);
 check('ordinary host -> no data-w95-reddit', 'data-w95-reddit' in r.attrs, false);
 check('ordinary host -> no data-w95-google', 'data-w95-google' in r.attrs, false);
+check('ordinary host -> no data-w95-chatgpt', 'data-w95-chatgpt' in r.attrs, false);
 
 // 9. CORE-014: a refused reload must not leave a silent split brain.
 //    The write lands before the navigation, so a blocked reload leaves storage on

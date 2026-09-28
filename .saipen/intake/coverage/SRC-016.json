@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-016:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "T-260 closed with verification evidence in LOG: RUN: VERIFY -- PowerShell parse targets.ps1/test-first-touch-recovery.ps1/Run-Tests.ps1 0 errors; tools\\test-first-touch-recovery.ps1 87 PASS 0 FAIL exit 0; test-recovery-consumption 19/0; test-transaction-boundary 78/0; test-dir-prestate 43/0; test-reapply 162/0; test-path-preference-ordering 55/0; test-atomic-recovery 19/0; test-vscode-recovery 54/0; test-reapply-intent 63/0; full tests\\Run-Test",
+      "text": "W2-001 implement Notepad++ and Cinema 4D persistent first-touch ownership and recovery from audit/7.md",
+      "verification": "the Work this request created reached its own verification gate; see the T-260 VERIFY cycle in .saipen/LOG.md",
+      "work": "T-260"
+    }
+  },
+  "schema_version": 1
+}

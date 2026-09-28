@@ -1,0 +1,14 @@
+{
+  "requirements": {
+    "SRC-010:R001": {
+      "actionable": true,
+      "class": "requirement",
+      "disposition": "VERIFIED",
+      "evidence": "31 locales gained 19 keys each (LanguageLabel + 18 BD keys), ru.json gained LanguageLabel; every file now 68 keys, set-equal to en.json; byte audit 0 existing-value changes",
+      "text": "Backfill the missing locale keys so every desktop locale file carries the same key set as en.json (LanguageLabel plus the BetterDiscord tab/status/description keys), and pin key parity with a dedicated gate wired into the Windows matrix.",
+      "verification": "tools/test-locale-parity.ps1 68 PASS/0 FAIL, red control exits 1 on a mutated locale, tests/Run-Tests.ps1 ALL TESTS PASSED exit 0",
+      "work": "T-254"
+    }
+  },
+  "schema_version": 1
+}
