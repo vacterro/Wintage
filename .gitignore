@@ -2,8 +2,23 @@ desktop/backup/
 
 # Generated output -- rebuilt by node tools/build-desktop.js (README documents it)
 desktop/out/
+# T-396: the generation is rendered into desktop/out.staging and installed from
+# there, so the live tree is never written while the generation is still being
+# built. It is transient by construction -- every build removes it -- but a build
+# killed mid-install leaves it behind, and T-350 is precisely the ticket filed
+# about an untracked file appearing outside .saipen/. Ignored for the same reason
+# desktop/out is: generated, and never something to commit.
+desktop/out.staging/
 scratch*.py
 *_old.js
+
+# AUDAPACK export manifest: a 484-line description of a generated archive
+# (file inventory, sizes, a full copy of the SAIPEN evidence citation map).
+# Generated, machine-specific and rebuilt on every export, so it belongs beside
+# desktop/out/ rather than in source control -- untracked AND unignored it showed
+# up in every `git status` and was one `git add -A` from being committed next to
+# genuinely-needed files (T-348).
+_AUDAPACK_MANIFEST.json
 
 # Chrome writes this next to an unpacked theme when loaded
 Cached Theme.pak
@@ -28,6 +43,12 @@ Cached Theme.pak
 .saipen/locks/
 .saipen/recovery/ops/
 .saipen/recovery/settled/
+
+# Per-run test transcripts (T-414): the retained output of the last
+# tests/Run-Tests.ps1 run, kept so a red run can be read after the fact. It is
+# evidence about one run on one tree, not release content, and it must never
+# appear in the worktree fingerprint that identifies the tree it described.
+.saipen/logs/
 
 # SAIPEN conformance receipts -- transient per-run engine records; the durable
 # result is the RUN: validate.py -> PASS/FAIL line in LOG, not the receipt json.
@@ -63,3 +84,11 @@ desktop/*.log
 gui_parse_check.txt
 wb_inspect.txt
 .workbuddy-ai/
+
+# AUDAPACK export evidence: a generated source inventory (machine-specific, and
+# git_dirty at export time) plus the raw page dumps the export was cut from.
+# Same class as _AUDAPACK_MANIFEST.json above. Left untracked and unignored these
+# nine files moved the source_tree_fingerprint on their own, which is the defect
+# T-350 was filed about -- any untracked file outside .saipen/ is a fingerprint
+# input, so a generated export directory in the root is a standing tripwire.
+.audapack/

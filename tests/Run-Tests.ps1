@@ -4,13 +4,90 @@ Set-StrictMode -Version Latest
 $root = Split-Path $PSScriptRoot -Parent
 $script:errors = 0
 
+# T-414: the verdict of this file was not reproducible and a red run lost the
+# name of what failed. One tree, two runs, two verdicts -- the browser-cache live
+# smoke failed under full-suite load and passed twice standalone -- and the
+# second run could not be compared with the first because nothing recorded which
+# tree each had judged. The tail of a red run said 'TESTS FAILED (1 errors)' and
+# the failing assertion's name existed only in the part of the output the reader
+# had already let scroll away.
+#
+# So: identify the tree before judging it, keep the transcript, and re-print
+# every failing check at the exit. The identity is the head commit plus a
+# fingerprint of the worktree delta -- the dirty path list AND the diff text,
+# because a name list cannot tell an edited file from an untouched one -- with
+# ignored files excluded, so two runs can be compared without trusting that the
+# tree was untouched. It is computed BEFORE the run and never after: the run
+# itself writes (this transcript, .saipen/locks), and a fingerprint taken at the
+# end would report those writes as if the tree had moved.
+$script:failures = @()
+$script:runHead = 'no-git'
+$script:runFingerprint = 'no-git'
+$script:transcript = $null
+try {
+    $prevEapId = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $headOut = @(& git -C $root rev-parse --short HEAD 2>$null)
+    $headCode = $LASTEXITCODE
+    $porcelain = @(& git -C $root status --porcelain=v1 -uall 2>$null)
+    $statusCode = $LASTEXITCODE
+    # Paths are not enough: git status names which files are dirty and never
+    # what changed inside them, so an edit to an already-dirty file would leave
+    # the identity untouched and two different trees would compare equal. The
+    # diff text is the content half of the fingerprint. Measured on this tree:
+    # 3.4 MB in 0.8s, which is why it is the whole-diff form and not a per-file
+    # hash of five hundred files.
+    $diffText = (& git -C $root diff HEAD 2>$null | Out-String)
+    $diffCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEapId
+    if ($headCode -eq 0 -and $statusCode -eq 0 -and $diffCode -eq 0 -and $headOut.Count -gt 0) {
+        $script:runHead = "$headOut".Trim()
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $payload = ($porcelain -join "`n") + "`n--diff--`n" + $diffText
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
+        $hex = ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join ''
+        $script:runFingerprint = "$($hex.Substring(0, 12))/$($porcelain.Count)path/$([int]($diffText.Length / 1024))k"
+    }
+} catch {
+    # A checkout without git still runs; it just cannot claim an identity.
+}
+$logDir = Join-Path $root '.saipen\logs'
+$logPath = Join-Path $logDir 'run-tests-last.txt'
+if ($env:WINTAGE_TEST_NO_TRANSCRIPT -ne '1') {
+    # Never fatal: a locked or unwritable log must not decide the verdict.
+    try {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        Start-Transcript -Path $logPath -Force | Out-Null
+        $script:transcript = $logPath
+    } catch { }
+}
+
 function Assert-True($condition, $message) {
     if (-not $condition) {
         Write-Host "[FAIL] $message" -ForegroundColor Red
         $script:errors++
+        $script:failures += $message
     } else {
         Write-Host "[PASS] $message" -ForegroundColor Green
     }
+}
+
+# One exit for every way this file can end, so the identity, the transcript and
+# the list of failing checks are the same shape whichever door the run leaves
+# by. The two verdict strings are load-bearing and stay literal.
+function Exit-Suite([int]$code) {
+    if ($script:errors -gt 0) {
+        Write-Host "failing checks ($($script:failures.Count)):" -ForegroundColor Red
+        foreach ($f in $script:failures) { Write-Host "  - $f" -ForegroundColor Red }
+    }
+    Write-Host "SUITE VERDICT: head=$($script:runHead) worktree=$($script:runFingerprint) exit=$code errors=$($script:errors) log=$($script:transcript)"
+    if ($script:errors -gt 0) {
+        Write-Host "TESTS FAILED ($script:errors errors)" -ForegroundColor Red
+    } else {
+        Write-Host "ALL TESTS PASSED!" -ForegroundColor Green
+    }
+    if ($script:transcript) { try { Stop-Transcript | Out-Null } catch { } }
+    exit $code
 }
 
 Write-Host "
@@ -36,8 +113,8 @@ if ($freshCode -ne 0) {
     }
     Write-Host "       Fix: node tools/build-desktop.js   (then re-run this file)" -ForegroundColor Red
     Write-Host "
-TESTS FAILED ($script:errors errors)" -ForegroundColor Red
-    exit 1
+======================="
+    Exit-Suite 1
 }
 
 Write-Host "
@@ -1126,6 +1203,16 @@ $toolSuites = @(
     # derives that transitive edge from the file's own source rather than trusting
     # this comment, so deleting the invocation is caught.
 )
+# T-414 red control: one suite that cannot pass, added from the environment, so
+# the exit reporting of failing check names can be proved on demand without
+# breaking a real gate. Off in every ordinary run -- it exists only when the
+# caller sets WINTAGE_TEST_INJECT_RED=<a name>, which is how the red half of
+# this ticket was verified. The name carries no tool extension on purpose: a
+# suite leaf would also be demanded of git by the structural check below, and
+# this entry deliberately is not a file.
+if ($env:WINTAGE_TEST_INJECT_RED) {
+    $toolSuites = @($toolSuites) + @{ Name = $env:WINTAGE_TEST_INJECT_RED; Cmd = "cmd /c echo $($env:WINTAGE_TEST_INJECT_RED) injected red control & exit 7" }
+}
 foreach ($s in $toolSuites) {
     $invokeLine = ($s.Cmd -f $root)
     $prevEap = $ErrorActionPreference
@@ -1262,10 +1349,4 @@ Assert-True ($releaseTestGates.Count -ge 10) "the release gate set was actually 
 
 Write-Host "
 ======================="
-if ($script:errors -gt 0) {
-    Write-Host "TESTS FAILED ($script:errors errors)" -ForegroundColor Red
-    exit 1
-} else {
-    Write-Host "ALL TESTS PASSED!" -ForegroundColor Green
-    exit 0
-}
+if ($script:errors -gt 0) { Exit-Suite 1 } else { Exit-Suite 0 }

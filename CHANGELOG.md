@@ -4,6 +4,24 @@
 
 ### Added
 
+- **The suite says which tree it judged and what failed (T-414).**
+  `tests/Run-Tests.ps1` printed a verdict that could not be compared with
+  another run's and, when red, a bare count: one tree produced two verdicts
+  (the browser-cache live smoke red under full-suite load, green twice
+  standalone) and the failing check's name existed only in output the reader had
+  already let scroll away. The run now identifies itself before judging:
+  `SUITE VERDICT: head=<sha> worktree=<sha256 of `git status --porcelain
+  -uall` plus `git diff HEAD`>/<paths>/<diff KB> exit=<code> errors=<n>
+  log=<path>` -- the fingerprint covers the dirty paths *and* their diff text
+  (a path list cannot tell an edited file from an untouched one), excludes
+  ignored files, and is taken before the run, since the run itself writes.
+  Every failing check's name is collected in `Assert-True` and re-printed at all
+  three exits, and the transcript is retained at
+  `.saipen/logs/run-tests-last.txt` (git-ignored;
+  `WINTAGE_TEST_NO_TRANSCRIPT=1` turns it off). The red half is provable on
+  demand with `WINTAGE_TEST_INJECT_RED=<name>`, which adds one suite that cannot
+  pass.
+
 - **README digest stamping step (T-415).** `tools/stamp-readme-digests.ps1`
   rewrites the `<!-- source-digest: README.md sha256:<hex> -->` marker in the 64
   locale READMEs from one literal per set, then runs
