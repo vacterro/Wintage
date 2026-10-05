@@ -1083,6 +1083,15 @@ $toolSuites = @(
     # scratch-repo control that proves a green run cannot be vacuous.
     @{ Name = 'test-commit-scope.ps1 -ExpectReject c528ef3'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-commit-scope.ps1" -Ticket T-413 -Commit c528ef3 -ExpectReject' },
     @{ Name = 'test-commit-scope.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-commit-scope.ps1" -RedControl' },
+    # T-417: the T-413 delivery report listed an npm test/test:bd script repair in
+    # `package.json`, a file .gitignore:60 excludes and no release archive carries,
+    # so the recipient could not open the claim and read it as stale narration.
+    # check-delivery-claims.ps1 resolves every path-shaped token of the delivery
+    # text against the artifact (index or HEAD) and names the ones that resolve
+    # nowhere. The scratch control proves both directions: an ignored file the
+    # report claims is caught with the rule that excluded it, while the tracked
+    # file in the same sentence still resolves.
+    @{ Name = 'check-delivery-claims.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\check-delivery-claims.ps1" -RedControl' },
     # T-387: these nine ran at RELEASE and nowhere else. The block below proved
     # every gate release.ps1 invokes exists as a file, and then executed nine
     # fewer of them than it had just proved present -- so 'Run-Tests.ps1 exits 0'

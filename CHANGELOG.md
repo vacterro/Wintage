@@ -13,6 +13,16 @@
   proves in a scratch repository that it names a foreign journal and a foreign
   `LOG.md` line.
 
+- **Delivery-claim resolver (T-417).** `tools/check-delivery-claims.ps1` reads the
+  delivery text (`.saipen/kitchen/digest.md` by default) and resolves every
+  path-shaped token in it against the artifact — present in `HEAD`, or staged for
+  the commit being written — naming the ones that resolve nowhere, with the
+  `git check-ignore` rule for a file that exists only in the working copy. The
+  2026-10-05 T-413 report claimed an npm `test` script repair in `package.json`,
+  which `.gitignore:60` excludes and no archive carries; that claim now scores
+  unverifiable, and the gate's `-RedControl` proves the same in a scratch
+  repository.
+
 ### Removed
 
 - **Duplicated BetterDiscord plugin distribution (T-413).** The standalone plugin

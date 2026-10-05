@@ -1,9 +1,10 @@
 # BOARD
 
 ## DOING
-- [/] T-418 [P3] a ticket-scoped commit must not sweep in unrelated memory directories | verify: git show --stat on a ticket commit lists only that ticket's product paths plus the memory writes it produced | owner: saipen-cli | claim_time: 2026-10-05T18:57:56Z
+- [/] T-417 [P3] delivery claims must name paths the artifact contains (no ignored-file evidence) | verify: a claim built from the report text resolves in the published archive | owner: saipen-cli | claim_time: 2026-10-05T19:53:21Z
 
 ## DONE
+- [x] T-418 [P3] a ticket-scoped commit must not sweep in unrelated memory directories | verify: git show --stat on a ticket commit lists only that ticket's product paths plus the memory writes it produced | owner: saipen-cli | claim_time: 2026-10-05T19:27:05Z | closure_mode: own_patch
 - [x] T-413 [P2] Remove duplicated BetterDiscord plugin system, delegate to canonical repo | verify: the requested change is present and demonstrated against the user own description of it | request_witness: model_supplied | source_receipts: SRC-064 | owner: saipen-cli | claim_time: 2026-10-05T17:45:21Z | closure_mode: own_patch
 - [x] T-412 [P1] Refresh the four stale BetterDiscord plugins so a future T-376 live pass tests current code instead of the 2026-09-11 copies | verify: sha256 of each of HideEmbeds, RemoveGIFS, RemoveStickers and GoodEmoji under %APPDATA%\\BetterDiscord\\plugins matches the same-named file under desktop/targets/betterdiscord/plugins, and node --check passes on all four | owner: saipen-cli | claim_time: 2026-10-05T10:27:55Z | closure_mode: own_patch
 - [x] T-411 [P1] Machine-wide Vintage theme drift: ~15 installed targets sit at 1.35.0/1.35.1/1.36.0 while the repo ships 1.36.6; redeploy needs a deliberate operator run | verify: after install.ps1 -Target all -Palette goldendefault runs, every entry in %APPDATA%\\Wintage\\installed.json reports payloadVersion 1.36.6, and the vscode and antigravity extension directories diff clean against... [detail_ref: .saipen/recovery/board-compaction/T-411/T-411-a61d3ad3f3e4426b7b19289b.json] | owner: saipen-cli | claim_time: 2026-10-05T10:20:56Z | detail_ref: .saipen/recovery/board-compaction/T-411/T-411-a61d3ad3f3e4426b7b19289b.json | closure_mode: own_patch
@@ -176,7 +177,6 @@
 - [x] T-241 [P1] Execute external audit inbox layer audit/3.md (SRC-005, the 2026-09-04 quick3 campaign, 17 findings across 3 waves; baseline v1.31.0@eebcacb, 26 changed files). SHIPPED v1.34.0 (b4dc74e): all 17 findings terminal with evidence -- R001/R002/R003/R005/R007/R010 E-872, R009 E-877, R006 E-879, R008 E-880, R004 E-881, R011-R017 via v1.32.0/v1.33.0. SRC-005 CLOSED E-882 (archived + tombstoned, 17/17 actionable, 0 unresolved), audit/3.md consumed. | verify: every actionable clause of SRC-005 is terminal with evidence; saipen source close SRC-005 succeeded (E-882); audit/3.md consumed by the journaled audit inbox cleanup; tests/Run-Tests.ps1 stays green | owner: opencode | claim_time: 2026-09-05T17:24:38Z
 
 ## TODO
-- [ ] T-417 [P3] delivery claims must name paths the artifact contains (no ignored-file evidence) | verify: a claim built from the report text resolves in the published archive
 - [ ] T-416 [P3] Run-Tests.ps1 must assert every suite entry resolves to a file tracked by git | verify: delete or untrack one referenced test file and the suite's structural check fails with the file named
 - [ ] T-415 [P3] the digest re-stamp step must run test-readme-target-parity.ps1 before it finishes | verify: stamp the 64 locale markers, then test-readme-target-parity.ps1 exits 0 on the result
 - [ ] T-414 [P2] tests/Run-Tests.ps1 verdict is not reproducible and a red run loses the failing suite name | verify: run the suite twice on one unchanged head and compare the verdict; a red run must print the failing suite in the retained transcript

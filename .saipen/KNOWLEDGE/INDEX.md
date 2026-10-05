@@ -19,3 +19,4 @@ Legacy KNOWLEDGE documents (path and title only; no structured metadata):
 - ADR-006.md | legacy | title: ADR-006 — Sweep rate must have a floor, and CSS cannot enforce UI.md on its own
 - ADR-007.md | legacy | title: ADR-007 — BetterDiscord plugins are maintained outside this repository
 - ADR-008.md | legacy | title: ADR-008 — A ticket commit carries only that ticket's scope
+- ADR-009.md | legacy | title: ADR-009 — A delivery claim names a path the artifact contains
