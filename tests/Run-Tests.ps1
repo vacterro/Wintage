@@ -1191,6 +1191,42 @@ foreach ($s in $toolSuites) {
     if ($s.Cmd -notlike "*$leaf*") { $unbackedNames += $leaf }
 }
 Assert-True ($unbackedNames.Count -eq 0) "every suite Name is backed by its own Cmd, not standing in for it (unbacked: $($unbackedNames -join ', '))"
+# T-416: strings in this file are not the deliverable -- the FILES are. The T-413
+# wave ran ten test files that had zero commits: they existed only in that working
+# tree, so a fresh clone ran a suite whose structural check above (Name backed by
+# Cmd) was satisfied by strings while the files it named were absent from the
+# repository, and the same dependency lived in an ignored manifest. Every tool
+# file the suite runs must therefore be carried by git -- in HEAD, or in the index
+# for the commit being written -- which also covers absence from disk, since
+# neither is shipped. Both halves are needed: this wave commits through a private
+# index so the checkout's own large pre-staged set is never disturbed, and a
+# HEAD-only check would then report files this repository HAS already shipped.
+# Falsifiable on demand -- `git rm --cached tools/<one of them>` turns this red
+# with the file named, proved against a private index -- and the predicate is
+# proved non-vacuous in the second assertion against a file that exists in this
+# working copy but is in neither (package.json, .gitignore:60; if that file is
+# ever tracked, move the probe, not the check).
+function Get-UntrackedToolFile([string[]]$names) {
+    $out = @()
+    foreach ($n in $names) {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & git -C $root ls-files --error-unmatch -- "tools/$n" 2>$null | Out-Null
+        $onIndex = $LASTEXITCODE -eq 0
+        if (-not $onIndex) {
+            & git -C $root cat-file -e "HEAD:tools/$n" 2>$null | Out-Null
+            $onIndex = $LASTEXITCODE -eq 0
+        }
+        $ErrorActionPreference = $prevEap
+        if (-not $onIndex) { $out += $n }
+    }
+    , $out
+}
+$suiteToolLeaves = @($executed | Where-Object { $_ -match '\.(?:js|cjs|mjs|ps1|py)$' } | Sort-Object)
+$untrackedTool = Get-UntrackedToolFile $suiteToolLeaves
+Assert-True ($untrackedTool.Count -eq 0) "every tool file the suite runs is carried by git ($($suiteToolLeaves.Count) files; not tracked: $($untrackedTool -join ', '))"
+$probeUntracked = Get-UntrackedToolFile @('package.json')
+Assert-True ($probeUntracked.Count -eq 1 -and $probeUntracked[0] -eq 'package.json') "the tracked-file check names a file that exists here but is in neither HEAD nor the index (probe: $($probeUntracked -join ', '))"
 foreach ($e in @($executed)) {
     $src = "$root\tools\$e"
     if (-not (Test-Path $src)) { continue }

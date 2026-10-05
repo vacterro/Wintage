@@ -4,6 +4,25 @@
 
 ### Added
 
+- **Suite files must be tracked (T-416).** `tests/Run-Tests.ps1` now asserts that
+  every tool file its entries run is carried by git -- in `HEAD`, or in the index
+  of the commit being written: the T-413 wave ran ten test files that had zero
+  commits and existed only in that working tree, so a fresh clone ran a suite
+  whose structural check was satisfied by strings while the files it named were
+  absent from the repository. The assertion also covers absence from disk, since
+  neither is shipped, and a second assertion proves the predicate non-vacuous by
+  flagging `package.json`, which exists here and is in neither. The check is
+  falsifiable on demand (`git rm --cached tools/<a suite file>` turns it red with
+  the file named, proved against a private index), and it immediately found six
+  more suite gates shipped by no commit -- `tools/test-build-desktop-publish.js`,
+  `test-chatgpt-viewport-coverage.js`, `test-generation-handover.js`,
+  `test-inject-wintage-web.js`, `test-manifest-forward-compat.ps1` and
+  `test-release-rollback-split.ps1`, referenced from `$toolSuites` at
+  `tests/Run-Tests.ps1` lines 633, 639, 647, 828, 844 and 853 -- which are now
+  committed. Both halves of the predicate are needed: this wave commits through a
+  private index so the checkout's own pre-staged set is never disturbed, and a
+  HEAD-only rule would report the files this repository has already shipped.
+
 - **Commit-scope gate (T-418).** `tools/test-commit-scope.ps1` refuses a commit
   whose scope is wider than one ticket: product paths plus the standard memory
   surfaces plus only the per-event `LOG.md` journals that commit's own lines
