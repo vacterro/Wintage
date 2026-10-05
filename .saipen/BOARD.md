@@ -1,9 +1,9 @@
 # BOARD
 
 ## DOING
-- [/] T-414 [P2] tests/Run-Tests.ps1 verdict is not reproducible and a red run loses the failing suite name | verify: run the suite twice on one unchanged head and compare the verdict; a red run must print the failing suite in the retained transcript | owner: saipen-cli | claim_time: 2026-10-05T20:57:50Z
 
 ## DONE
+- [x] T-414 [P2] tests/Run-Tests.ps1 verdict is not reproducible and a red run loses the failing suite name | verify: run the suite twice on one unchanged head and compare the verdict; a red run must print the failing suite in the retained transcript | owner: saipen-cli | claim_time: 2026-10-05T22:35:15Z | closure_mode: own_patch
 - [x] T-415 [P3] the digest re-stamp step must run test-readme-target-parity.ps1 before it finishes | verify: stamp the 64 locale markers, then test-readme-target-parity.ps1 exits 0 on the result | owner: saipen-cli | claim_time: 2026-10-05T20:56:04Z | closure_mode: own_patch
 - [x] T-416 [P3] Run-Tests.ps1 must assert every suite entry resolves to a file tracked by git | verify: delete or untrack one referenced test file and the suite's structural check fails with the file named | owner: saipen-cli | claim_time: 2026-10-05T20:36:47Z | closure_mode: own_patch
 - [x] T-417 [P3] delivery claims must name paths the artifact contains (no ignored-file evidence) | verify: a claim built from the report text resolves in the published archive | owner: saipen-cli | claim_time: 2026-10-05T19:55:52Z | closure_mode: own_patch
