@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Commit-scope gate (T-418).** `tools/test-commit-scope.ps1` refuses a commit
+  whose scope is wider than one ticket: product paths plus the standard memory
+  surfaces plus only the per-event `LOG.md` journals that commit's own lines
+  attribute to that ticket. The 2026-10-05 T-413 commit `c528ef3` carried 256
+  unrelated journals beside its 102 product paths; that commit is now a
+  regression clause in `tests/Run-Tests.ps1`, and the gate's `-RedControl`
+  proves in a scratch repository that it names a foreign journal and a foreign
+  `LOG.md` line.
+
 ### Removed
 
 - **Duplicated BetterDiscord plugin distribution (T-413).** The standalone plugin

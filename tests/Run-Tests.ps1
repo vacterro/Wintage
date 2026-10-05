@@ -1073,6 +1073,16 @@ $toolSuites = @(
     # run cannot be vacuous.
     @{ Name = 'test-bd-architecture.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-bd-architecture.ps1"' },
     @{ Name = 'test-bd-architecture.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-bd-architecture.ps1" -RedControl' },
+    # T-418: the 2026-10-05 T-413 commit c528ef3 carried 372 paths, 256 of them
+    # per-event journals for E-2335..E-3237 left over from earlier waves, because a
+    # directory-scoped add takes a backlog as a unit and SHIP's 6b.5 'prove the index
+    # equals the intended scope' had no mechanical form. This gate supplies it: a
+    # ticket commit may carry product paths, the standard memory surfaces, and only
+    # journals for events its own LOG.md lines attribute to it. The first entry is the
+    # regression clause -- the real violator must stay caught -- and the second is the
+    # scratch-repo control that proves a green run cannot be vacuous.
+    @{ Name = 'test-commit-scope.ps1 -ExpectReject c528ef3'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-commit-scope.ps1" -Ticket T-413 -Commit c528ef3 -ExpectReject' },
+    @{ Name = 'test-commit-scope.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-commit-scope.ps1" -RedControl' },
     # T-387: these nine ran at RELEASE and nowhere else. The block below proved
     # every gate release.ps1 invokes exists as a file, and then executed nine
     # fewer of them than it had just proved present -- so 'Run-Tests.ps1 exits 0'

@@ -1,7 +1,7 @@
 <!-- SAIPEN KNOWLEDGE INDEX v1; generated projection; not authority -->
-source-digest: sha256:f14448129379f876ec34491ea1864234a2675b3a8d1d681662429e02c29e9c32
+source-digest: sha256:03fa2a3715cb88190fc4622a9ef2dc90da8b61fdba039eccb8f33f9464956752
 cards: 0
-legacy: 7
+legacy: 8
 
 # Knowledge index
 
@@ -18,3 +18,4 @@ Legacy KNOWLEDGE documents (path and title only; no structured metadata):
 - ADR-005.md | legacy | title: ADR-005 — Observing `style` is correct, but self-write suppression must be by identity
 - ADR-006.md | legacy | title: ADR-006 — Sweep rate must have a floor, and CSS cannot enforce UI.md on its own
 - ADR-007.md | legacy | title: ADR-007 — BetterDiscord plugins are maintained outside this repository
+- ADR-008.md | legacy | title: ADR-008 — A ticket commit carries only that ticket's scope

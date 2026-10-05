@@ -1,6 +1,7 @@
 # BOARD
 
 ## DOING
+- [/] T-418 [P3] a ticket-scoped commit must not sweep in unrelated memory directories | verify: git show --stat on a ticket commit lists only that ticket's product paths plus the memory writes it produced | owner: saipen-cli | claim_time: 2026-10-05T18:57:56Z
 
 ## DONE
 - [x] T-413 [P2] Remove duplicated BetterDiscord plugin system, delegate to canonical repo | verify: the requested change is present and demonstrated against the user own description of it | request_witness: model_supplied | source_receipts: SRC-064 | owner: saipen-cli | claim_time: 2026-10-05T17:45:21Z | closure_mode: own_patch
@@ -175,6 +176,10 @@
 - [x] T-241 [P1] Execute external audit inbox layer audit/3.md (SRC-005, the 2026-09-04 quick3 campaign, 17 findings across 3 waves; baseline v1.31.0@eebcacb, 26 changed files). SHIPPED v1.34.0 (b4dc74e): all 17 findings terminal with evidence -- R001/R002/R003/R005/R007/R010 E-872, R009 E-877, R006 E-879, R008 E-880, R004 E-881, R011-R017 via v1.32.0/v1.33.0. SRC-005 CLOSED E-882 (archived + tombstoned, 17/17 actionable, 0 unresolved), audit/3.md consumed. | verify: every actionable clause of SRC-005 is terminal with evidence; saipen source close SRC-005 succeeded (E-882); audit/3.md consumed by the journaled audit inbox cleanup; tests/Run-Tests.ps1 stays green | owner: opencode | claim_time: 2026-09-05T17:24:38Z
 
 ## TODO
+- [ ] T-417 [P3] delivery claims must name paths the artifact contains (no ignored-file evidence) | verify: a claim built from the report text resolves in the published archive
+- [ ] T-416 [P3] Run-Tests.ps1 must assert every suite entry resolves to a file tracked by git | verify: delete or untrack one referenced test file and the suite's structural check fails with the file named
+- [ ] T-415 [P3] the digest re-stamp step must run test-readme-target-parity.ps1 before it finishes | verify: stamp the 64 locale markers, then test-readme-target-parity.ps1 exits 0 on the result
+- [ ] T-414 [P2] tests/Run-Tests.ps1 verdict is not reproducible and a red run loses the failing suite name | verify: run the suite twice on one unchanged head and compare the verdict; a red run must print the failing suite in the retained transcript
 
 ## BLOCKED
 - [ ] T-376 [P2] LIVE BetterDiscord acceptance for T-371: load the four plugins into a signed-in Discord + BetterDiscord, toggle Hide rich link preview cards / blurred preview / session... | verify: operator-owned signed-in Discord reachable with BetterDiscord installed; the four plugins load from desktop/targets/betterdiscord/plugins with no console error; toggling each of the three settings from the... [detail_ref: .saipen/recovery/board-compaction/T-376/T-376-3bcc2a10c096aeafd1412255.json] | blocker: T-376 BLOCKED, NARROWED to two sub-clauses that need the operator, both because producing the input is an outward-facing action. RESOLVED since the last blocker: the CDP endpoint the previous... | blocker_scope: ticket | detail_ref: .saipen/recovery/board-compaction/T-376/T-376-3bcc2a10c096aeafd1412255.json
