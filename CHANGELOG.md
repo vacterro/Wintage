@@ -4,6 +4,20 @@
 
 ### Added
 
+- **README digest stamping step (T-415).** `tools/stamp-readme-digests.ps1`
+  rewrites the `<!-- source-digest: README.md sha256:<hex> -->` marker in the 64
+  locale READMEs from one literal per set, then runs
+  `tools/test-readme-target-parity.ps1` and exits with that gate's code, so the
+  step cannot finish on a stamp the consumer cannot read. The T-413 wave had
+  hand-written the marker with an escaped path (`README\.md`) that the gate's
+  `source-digest:\s*README\.md\s*sha256:` never matched: 32 root and 32 desktop
+  READMEs reported the stamp red, and only the live gate caught it. `-Verify`
+  reports without writing, `-WhatIf` names the files it would touch, and
+  `-RedControl` proves on a scratch tree that the escaped spelling is repaired,
+  that the live source digest lands in the marker, and that a second run writes
+  nothing. On this tree both sets are already canonical, so the default run
+  writes nothing and the gate exits 0 with 395 PASS.
+
 - **Suite files must be tracked (T-416).** `tests/Run-Tests.ps1` now asserts that
   every tool file its entries run is carried by git -- in `HEAD`, or in the index
   of the commit being written: the T-413 wave ran ten test files that had zero

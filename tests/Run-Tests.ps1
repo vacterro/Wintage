@@ -1092,6 +1092,16 @@ $toolSuites = @(
     # report claims is caught with the rule that excluded it, while the tracked
     # file in the same sentence still resolves.
     @{ Name = 'check-delivery-claims.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\check-delivery-claims.ps1" -RedControl' },
+    # T-415: the T-413 wave rewrote all 64 locale stamps by hand and escaped the
+    # path inside the marker ('README\.md') while test-readme-target-parity.ps1
+    # matches 'source-digest:\s*README\.md\s*sha256:'. Neither set matched, so 32
+    # root and 32 desktop READMEs reported the stamp red and only the live gate
+    # caught it -- the stamping step had no way to fail. stamp-readme-digests.ps1
+    # is that step: it writes the marker in the one canonical form and finishes by
+    # running the consuming gate, exiting with its code. The scratch control takes
+    # the real T-413 spelling, proves the repair, and proves a second run writes
+    # nothing; the default run leaves an already-canonical set byte-identical.
+    @{ Name = 'stamp-readme-digests.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\stamp-readme-digests.ps1" -RedControl' },
     # T-387: these nine ran at RELEASE and nowhere else. The block below proved
     # every gate release.ps1 invokes exists as a file, and then executed nine
     # fewer of them than it had just proved present -- so 'Run-Tests.ps1 exits 0'
