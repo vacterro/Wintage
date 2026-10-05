@@ -211,10 +211,9 @@ function Initialize-BatchGlobals {
     $global:completeCalls = 0
 }
 
-foreach ($name in @('New-BatchQueueItem', 'Set-BatchResultMalformed', 'Add-BatchMachineResult', 'Add-BatchMachineResultFromPayload', 'Enqueue-BatchItem', 'Drain-BatchQueue', 'Add-BoundedLogText', 'Say-Log', 'Say-BdLog', 'Say-TfLog', 'Start-BatchJob', 'Complete-BatchWorker', 'Classify-BatchResult', 'Test-BatchCloseSafe')) {
+foreach ($name in @('New-BatchQueueItem', 'Set-BatchResultMalformed', 'Add-BatchMachineResult', 'Add-BatchMachineResultFromPayload', 'Enqueue-BatchItem', 'Drain-BatchQueue', 'Add-BoundedLogText', 'Say-Log', 'Say-TfLog', 'Start-BatchJob', 'Complete-BatchWorker', 'Classify-BatchResult', 'Test-BatchCloseSafe')) {
     $functionText = (Get-SubjectFunctionText $name).Replace('$script:', '$global:')
     if ($name -eq 'Say-Log') { $functionText = [regex]::Replace($functionText, '(?<![\w:])\$log\b', '$global:log') }
-    if ($name -eq 'Say-BdLog') { $functionText = [regex]::Replace($functionText, '(?<![\w:])\$txtBdLog\b', '$global:txtBdLog') }
     if ($name -eq 'Say-TfLog') { $functionText = [regex]::Replace($functionText, '(?<![\w:])\$txtTfLog\b', '$global:txtTfLog') }
     if ($name -eq 'Add-BoundedLogText') {
         foreach ($variable in @('LogCharCap', 'LogLowWater', 'LogMaxChunk')) {
@@ -569,60 +568,26 @@ function Run-LogSurfaceProbe {
     $bd = New-Object System.Windows.Forms.TextBox
     $tf = New-Object System.Windows.Forms.TextBox
     foreach ($box in @($bd, $tf)) { $box.Multiline = $true; $box.MaxLength = [Int32]::MaxValue }
-    $global:txtBdLog = $bd; $global:txtTfLog = $tf
+    $oldLogForProbe = $global:log; $global:log = $bd; $global:txtTfLog = $tf
     try {
         for ($i = 0; $i -lt 5; $i++) {
-            Say-BdLog ('bd-' + ('b' * 10000))
+            Say-Log ('bd-' + ('b' * 10000))
             Say-TfLog ('tf-' + ('t' * 10000))
         }
-        Say-BdLog 'BD-LATEST-ERROR'
+        Say-Log 'MAIN-LATEST-ERROR'
         Say-TfLog 'TF-LATEST-ERROR'
-        check 'BD log retention remains within its cap and keeps newest error' ($bd.TextLength -le $global:LogCharCap -and $bd.Text.Contains('BD-LATEST-ERROR'))
+        check 'MAIN log retention remains within its cap and keeps newest error' ($bd.TextLength -le $global:LogCharCap -and $bd.Text.Contains('MAIN-LATEST-ERROR'))
         check 'TF log retention remains within its cap and keeps newest error' ($tf.TextLength -le $global:LogCharCap -and $tf.Text.Contains('TF-LATEST-ERROR'))
         foreach ($box in @($bd, $tf)) {
             $box.SelectionStart = 0
             $box.SelectionLength = [Math]::Min(12, $box.TextLength)
-            if ([object]::ReferenceEquals($box, $bd)) { check 'BD retained text remains selectable/copyable' ($box.SelectedText.Length -gt 0) }
+            if ([object]::ReferenceEquals($box, $bd)) { check 'MAIN retained text remains selectable/copyable' ($box.SelectedText.Length -gt 0) }
             else { check 'TF retained text remains selectable/copyable' ($box.SelectedText.Length -gt 0) }
         }
     } finally {
         $global:LogCharCap = $oldCaps[0]; $global:LogLowWater = $oldCaps[1]; $global:LogMaxChunk = $oldCaps[2]
+        $global:log = $oldLogForProbe
         $bd.Dispose(); $tf.Dispose()
-    }
-}
-
-function Run-RedProbe([string]$probeName) {
-    switch ($probeName) {
-        'result-head' { Run-QueueProbes; return }
-        'counter' {
-            Initialize-BatchGlobals
-            $global:BatchQueueMax = 10; $global:BatchDrainLineBudget = 10; $global:BatchDrainCharBudget = 200
-            $global:BatchQueueRecordCharMax = 198
-            foreach ($i in 1..3) { Enqueue-BatchItem (New-BatchQueueItem 'out' ("counter-$i")) }
-            $null = Drain-BatchQueue $global:BatchOutputQueue
-            check 'queue occupancy returns to zero after drain' ($global:BatchQueueLines -eq 0 -and $global:BatchOutputQueue.Count -eq 0)
-            return
-        }
-        'whole-run' {
-            $ctx = Run-ProcessScenario 'success' @('fixture-alpha','fixture-beta') 0 'SUCCESS' $true $false
-            check 'early marker is visible before the child exits' $ctx.ProgressiveBeforeExit
-            check 'live transport stays beneath shipped line cap' ($ctx.TransportHighWaterObserved -le (Get-Setting $baselineSource 'BatchQueueMax'))
-            check 'active close guard canceled close and preserved the running child' ($ctx.CloseAttempted -and -not $ctx.CloseSafeAtAttempt -and $ctx.ShippedCancelledAtAttempt -and $ctx.CloseRefused -and $ctx.CloseProcessAlive)
-            return
-        }
-        'eof' {
-            $ctx = Run-ProcessScenario 'eof' @('fixture-alpha') 0 'SUCCESS' $false $false
-            $finalPresent = $ctx.LogText.Contains('FINAL-BEFORE-EXIT') -and $ctx.StateAtDone -and $ctx.StateAtDone.StdoutEof -and $ctx.StateAtDone.StderrEof -and $ctx.StateAtDone.ResultChannelSettled
-            check 'final output and machine result survive EOF delivery' $finalPresent
-            if (-not $finalPresent) { Write-Host ("EOF DIAGNOSTIC: log={0}; appends={1}; queued={2}; state={3}" -f $ctx.LogText, $global:mainAppendCalls, $global:ordinaryReceived, ($ctx.StateAtDone | Format-List * | Out-String)) -ForegroundColor DarkYellow }
-            return
-        }
-        'handlers' {
-            $ctx = Run-ProcessScenario 'handlers' @('fixture-alpha') 0 'SUCCESS' $false $false
-            check 'early marker arrives through pre-attached async handlers' ($ctx.LogText.Contains('EARLY-MARKER') -and $ctx.ProgressiveBeforeExit)
-            return
-        }
-        default { throw "unknown RED probe: $probeName" }
     }
 }
 
@@ -652,6 +617,13 @@ if ($Probe) {
         } elseif ($Probe -eq 'handlers') {
             $ctx = Run-ProcessScenario 'handlers' @('fixture-alpha') 0 'SUCCESS' $false $false
             check 'early marker arrives through pre-attached async handlers' ($ctx.LogText.Contains('EARLY-MARKER') -and $ctx.ProgressiveBeforeExit)
+        } else {
+            # The dispatch used to end here without a branch, so a typo'd -Probe name
+            # ran none of the five probes, printed no assertion and still exited 0:
+            # a probe gate that cannot fail on a value it does not recognise is the
+            # T-377 tautology in a switch costume. This is the guard the dead switch
+            # dispatcher used to provide, now on the code that actually runs.
+            throw "unknown RED probe: $Probe"
         }
     } finally {
         $fullTemp = [System.IO.Path]::GetFullPath($global:fixtureRoot)
@@ -679,7 +651,7 @@ try {
     check 'struct: completion requires both stream EOFs, result settlement, idle callbacks and drained channels' ($startText -match 'StdoutEof' -and $startText -match 'StderrEof' -and $startText -match 'ResultChannelSettled' -and $startText -match 'CallbacksInFlight' -and $startText -match 'OutputQueueCount')
     check 'struct: machine results bypass ordinary queue and malformed records fail closed' ($startText -match 'Add-BatchMachineResultFromPayload' -and $startText -notmatch "Enqueue-BatchItem\s*\(New-BatchQueueItem 'result'")
     check 'struct: transport caps records and per-tick characters; ordinary occupancy decrements on drain' ($startText -match 'recordMax' -and $startText -match 'charBudget' -and $enqueueText -match 'BatchQueueRecordCharMax' -and $drainText -match 'charBudget' -and $drainText -match 'BatchQueueLines--')
-    check 'struct: all three log surfaces use one bounded helper and one scroll per chunk' ($subjectSource -match 'function Say-Log[\s\S]{0,320}Add-BoundedLogText' -and $subjectSource -match 'function Say-BdLog[\s\S]{0,320}Add-BoundedLogText' -and $subjectSource -match 'function Say-TfLog[\s\S]{0,320}Add-BoundedLogText' -and ([regex]::Matches($boundedText, '\.ScrollToCaret\s*\(').Count -eq 1))
+    check 'struct: all three log surfaces use one bounded helper and one scroll per chunk' ($subjectSource -match 'function Say-Log[\s\S]{0,320}Add-BoundedLogText' -and $subjectSource -match 'function Say-TfLog[\s\S]{0,320}Add-BoundedLogText' -and ([regex]::Matches($boundedText, '\.ScrollToCaret\s*\(').Count -eq 1))
     check 'struct: shipped FormClosing event uses the batch lifecycle guard and cancels active close' ($subjectSource -match '\$form\.Add_FormClosing\(\{[\s\S]{0,400}Test-BatchCloseSafe[\s\S]{0,160}\$e\.Cancel\s*=\s*\$true')
 
     Run-QueueProbes

@@ -103,4 +103,4 @@ Wintage는 더 이상 단일 팔레트가 아니다. 여섯 개는 UI.md 자체�
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:886c5e27060e7b30 -->
+<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->

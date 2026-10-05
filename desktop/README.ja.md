@@ -41,6 +41,7 @@ Applyは `install.ps1` にシェルアウトする。テーマをインストー
 | `terminal` | Windows Terminalスキーム+全プロファイル既定値、Consolas 12エイリアス | yes — 設定はプロファイルにある |
 | `conhost` | `HKCU\Console` 既定値+既存のすべてのcmd/PowerShellプロファイル | yes — 触れた値の正確なスナップショット |
 | `obs` | OBS 30.2+ `.ovt` バリアント+アクティブな `user.ini` テーマID | yes — プロファイルにある |
+| `qbittorrent` | 未パッケージの Qt UI テーマ（`config.json` + `stylesheet.qss`）+ `qBittorrent.ini` の 2 つのテーマキー | yes — プロファイルにある |
 | `antigravity`, `vscode` | `~/.antigravity/extensions` / `~/.vscode/extensions` のカラーテーマ拡張 | **yes** — プロファイルにある |
 | `freebuff`, `antigravity-app`, `codenomad` | Electronシム、下記参照 | no — インストーラーを再実行 |
 | `claude` | Electronシム、その場でパッチ — 下記参照 | no — 更新が新しい `app-<version>` フォルダを作る |
@@ -108,6 +109,20 @@ Chromiumは、管理されていないWindowsマシンでのオフストア拡�
 ### OBS Studio
 
 `obs` は、維持されているYami Classicベースの上にOBS 30.2+バリアントを生成し、`%APPDATA%\obs-studio\themes` にインストールし、安定テーマIDを `user.ini` に書き込む。選択したWintageパレットが次回起動時にすでに選択されているように。ApplyまたはRevertの前にOBSを閉じること: OBSは終了時に `user.ini` を書き直す。初回の適用は、以前の選択と同名のテーマの両方をバイト単位でバックアップする。
+
+### qBittorrent
+
+`qbittorrent` は**展開済み**の Qt UI テーマを `%APPDATA%\qBittorrent\themes\wintage` に書き込みます — `config.json`（`Palette.*` の役割に加え、qBittorrent 自身の文脈色：転送リストの状態、ログの重要度）と、その隣の `stylesheet.qss`（2px の面取り、直角の角、そしてパレットでは表現できない Verdana）です — その後 `General\CustomUIThemePath` をその `config.json` に向け、`General\UseCustomUITheme=true` を設定します。
+あえて `.qbtheme` バンドルではなく展開形式にしています。`.qbtheme` は Qt Resource Collection ファイルで、生成するには同じメジャーバージョンの `rcc` バイナリがマシンに必要となり、テキストファイル 2 つのためにコンパイラ依存を持ち込むことになります。qBittorrent はフォルダ形式をネイティブに読み込みます（`FolderThemeSource`）。
+Apply や Revert の前に qBittorrent を終了してください。終了時に `qBittorrent.ini` 全体を書き直すため、起動中に行った編集は終了時に破棄されます — このターゲットはその状態での実行を拒否し、次回の終了で消える「成功」を報告したりはしません。`-Revert` は 2 つの INI キーを Wintage 以前の正確な値に戻し（存在しなかった場合は削除し）、同名のテーマフォルダをバイト単位で復元します。Apply 後に加えた無関係な `qBittorrent.ini` の編集は残ります。
+到達不可：ツールバーとトレイのアイコンは qBittorrent 自身のコンパイル済みリソースバンドル由来なので、標準の色のままです。
+
+### フォント: 名前を持つだけで、インストールはしない
+
+UI.md の第一法則は Verdana を**アンチエイリアシング無し**で要求する。Qt のスタイルシートにそのプロパティは無く、MPC-HC の `OSDFont` は単なる GDI のフォント名だ——つまり唯一のレバーはフォントそのものにある。リポジトリルートにある `Verdana_m1.ttf` は Verdana の複製で、3〜30 ppem の 1bpp ビットマップ打面がレンダリング済みで、レンダラーは輪郭を滑らかにするよりこちらを選ぶ。
+`qbittorrent` と `obs` のスタイルシートは `Verdana_m1, Verdana` と名指しし、`mpchc` はそのうち機械が実際に解決した方を名指しする。**インストーラはフォントをインストールも削除もしない**。これは未完成ではなく、意図的な設計だ:
+フォントファミリーは（ファミリー, スタイル）で解決される。Regular + Bold + Italic を登録すればあらゆる利用者が正しく解決するが、**一つ**のメンバーを解除すると、そのファミリーを要求するすべての利用者は残るメンバーへ向け直される。`HKLM\...\FontSubstitutes` を通じて `MS Shell Dlg 2`（Windows のダイアログフォント）をそのファミリーにエイリアスしている機械では、Regular を外すと**デスクトップ全体がイタリック**になり、すでに DWM がキャッシュしたウィンドウタイトルまで巻き込んで、戻すにはログオフが必要だ。参照カウントのいかなる工夫も直らない。被害範囲は機械全体で、テーマのインストーラが踏み込むところではない。
+したがってフォントは一度きりの明示的なユーザー操作である。`Verdana_m1.ttf` を右クリック → **インストール**（ユーザーごと、管理者権限は不要）、その後ターゲットを再適用する。フォントが無い場合、ターゲットは一度だけその旨を述べ、修正名を挙げ、標準の Verdana へフォールバックする——アンチエイリアシングは付くが、あなたの背後で機械に何もしない。
 
 ### Electron アプリ
 
@@ -187,4 +202,4 @@ Applyが変更できるすべての値は変更前にスナップショットと
 インストーラーは **フォントを閲覧するのみであり, インストールはしない。** TERMINAL FONTS タブは同梱の書体をプロセス固有の `PrivateFontCollection` に読み込み, ライブプレビューを表示する。これはシステムフォントの登録を **一切** 行わない。フォント, サイズ (7–24 pt), レンダリングモード (aliased/grayscale/cleartype) の選択はプレビューと設定だけを変える。フォントのインストールは明示的な **INSTALL SELECTED** 操作であり, Windows 独自のフォントインストーラーを開く。Windows の確認のあと, ユーザーは Refresh で再検査する。実際のターミナル変更が 일어나るのは, 明示的な **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** のあとだけである。
 
 Windows Terminal には選択したインストール済みファミリーが選択したサイズで適用され, レンダリングモードは `profiles.defaults.antialiasingMode` に対応する。古典的な conhost はより厳しい。固定のセルグリッド上に描画するため, 選択した書体は Windows が解決できない限りレジストリ変更の前に拒否される (既定の書体と Consolas へのフォールバックは対象外)。Health と Reapply は設定済みの書体, サイズ, アンチエイリアシングを設定と突き合わせて検証するため, Apply のあとに設定を変更すると「健全」ではなくずれとして報告される。ターミナルの色のライフサイクルは手つかずのまま: Revert は Wintage 以前の所有値を正確に復元し, マシンからフォントを削除することはない。
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

@@ -60,6 +60,7 @@ už je zatemněná, funguje za běhu; první instalace ne, protože archiv je po
 | `terminal` | schéma Windows Terminal + výchozí pro všechny profily, Consolas 12 aliased | ano — nastavení jsou ve vašem profilu |
 | `conhost` | výchozí `HKCU\Console` + každý existující profil cmd/PowerShell | ano — přesný snímek dotčených hodnot |
 | `obs` | varianta OBS 30.2+ `.ovt` + aktivní ID motivu v `user.ini` | ano — žije ve vašem profilu |
+| `qbittorrent` | rozbalený motiv Qt UI (`config.json` + `stylesheet.qss`) + dva klíče motivu v `qBittorrent.ini` | ano — žije ve vašem profilu |
 | `antigravity`, `vscode` | rozšíření barevného motivu v `~/.antigravity/extensions` / `~/.vscode/extensions` | **ano** — žije ve vašem profilu |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, viz níže | ne — spusťte instalátor znovu |
 | `claude` | Electron shim, záplatován na místě — viz níže | ne — aktualizace vytvoří novou složku `app-<version>` |
@@ -216,6 +217,20 @@ Zavřete OBS před Apply nebo Revert: OBS při ukončení přepíše `user.ini`.
 aplikace zálohuje jak předchozí výběr, tak jakýkoli motiv stejného jména bajt po
 bajtu.
 
+### qBittorrent
+
+`qbittorrent` zapisuje **rozbalený** Qt motiv rozhraní do `%APPDATA%\qBittorrent\themes\wintage` — soubor `config.json` (role `Palette.*` plus vlastní kontextové barvy qBittorrentu: stavy seznamu přenosů, úrovně protokolu) a vedle něj `stylesheet.qss` (2px zkosení, pravé rohy a Verdana, což paleta vyjádřit neumí) — poté nasměruje `General\CustomUIThemePath` na tento `config.json` a nastaví `General\UseCustomUITheme=true`.
+Rozbaleně, a ne jako balíček `.qbtheme` — záměrně: `.qbtheme` je soubor typu Qt Resource Collection a k jeho vytvoření by na stroji bylo potřeba `rcc` se shodnou hlavní verzí, tedy závislost na kompilátoru kvůli dvěma textovým souborům. qBittorrent čte složkovou podobu nativně (`FolderThemeSource`).
+Před Apply nebo Revert qBittorrent zavřete: při ukončení přepisuje celý `qBittorrent.ini`, takže úprava provedená za běhu se při zavření zahodí — cíl v takovém stavu odmítne pracovat, místo aby hlásil úspěch, který příští ukončení smaže. `-Revert` vrátí dva klíče v INI na přesné hodnoty před Wintage (nebo je odstraní, pokud nebyly) a vrátí každou stejnojmennou složku motivu bajt po bajtu; nesouvisející úpravy `qBittorrent.ini` provedené po Apply zůstávají.
+Nedosažitelné: ikony panelu nástrojů a oznamovací oblasti pocházejí z vlastního zkompilovaného zdrojového balíčku qBittorrentu, takže si zachovávají původní barvy.
+
+### Písmo: pojmenovaná, nikdy se neinstalují
+
+Zákon 1 z UI.md žádá Verdana **bez antialiasingu**. Stylysheet Qt nemá vlastnost, která by to umožnila, a `OSDFont` v MPC-HC je prostý název GDI písma — jedinou pákou je tedy samo písmo. `Verdana_m1.ttf` v kořeni repozitáře je kopie Verdany s předem vykreslenými 1bpp bitmapovými řezy od 3 do 30 ppem, které vykreslování použije před hladkým obrysem.
+Stylysheety `qbittorrent` a `obs` uvádějí `Verdana_m1, Verdana` a `mpchc` uvádí ten z obou, který stroj skutečně vyřeší. **Instalátor nikdy písmo neinstaluje ani neodinstalovává** a to je záměr, ne nedokončenost:
+Rodina písma se řeší podle (rodina, styl). Zaregistrujte Regular + Bold + Italic a každý spotřebitel se vyřeší správně; odeberte **jeden** člen a každý spotřebitel žádající tuto rodinu se přesměruje na přeživší člen. Na stroji, který aliasuje `MS Shell Dlg 2` — písmo dialogů Windows — na tuto rodinu přes `HKLM\...\FontSubstitutes`, odebrání Regular natočí **celou plochu kurzivně**, včetně titulků oken, které DWM už cacheoval, a k obnově je potřeba odhlášení. Žádné počítání referencí to neopraví: dopad je celo-strojový a instalátor motivu do toho nemá co říkat.
+Písmo je tedy jednorázový výslovný krok uživatele: pravý klik na `Verdana_m1.ttf` → **Instalovat** (pro uživatele, bez práv správce), pak znovu aplikujte cíl. Pokud písmo chybí, cíle to řeknou jednou, pojmenují opravu a vrátí se ke stock Verdana — s antialiasingem, ale bez toho, aby se cokoli dělalo na vašem stroji za vašimi zády.
+
 ### Electron aplikace
 
 `resources/app.asar` je přesunut do `resources/app/app.asar` (jeho sourozenec
@@ -334,4 +349,4 @@ Oba cílové terminály čtou JEDINOU kanonickou typografickou preferenci z `%AP
 Instalátor **prohlíží písma, neinstaluje je.** Karta TERMINAL FONTS načte zabudovaný řez do `PrivateFontCollection` lokálního pro proces pro živou ukázku, která provede **nulovou** systémovou registraci písem. Volba písma, velikosti (7–24 pt) nebo režimu vykreslování (aliased/grayscale/cleartype) aktualizuje jen ukázku a preferenci. Instalace písma je výslovná akce **INSTALL SELECTED**, která otevře vlastní instalační program písem systému Windows; po potvrzení systémem Windows uživatel znovu zjišťuje stav tlačítkem Refresh. Skutečné změny terminálu se dějí pouze při výslovné akci **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal se aplikuje na vybranou nainstalovanou rodinu ve vybrané velikosti a režim vykreslování se mapuje na `profiles.defaults.antialiasingMode`. Klasický conhost je přísnější: vykresluje na pevné mřížce buněk, takže vybrané písmo se odmítne před jakoukoli změnou registru, pokud ho Windows nerozpozná (výchozí řez a záložní Consolas mají výjimku). Health a Reapply porovnají nastavený řez, velikost a vyhlazování s preferencí, takže změna preference po Apply se nahlásí jako odchylka, a ne jako stav "zdravý". Životní cyklus barev terminálu zůstává nedotčený: Revert obnoví přesné hodnoty vlastněné před Wintagem a nikdy neodebere písmo ze stroje.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

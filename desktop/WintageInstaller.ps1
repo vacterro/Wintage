@@ -1,4 +1,4 @@
-# Wintage Theme Installer - a small Win95-looking GUI over the command-line tools.
+﻿# Wintage Theme Installer - a small Win95-looking GUI over the command-line tools.
 #
 # WinForms on purpose. The alternative (an Electron or web UI) would mean shipping a
 # browser to configure a theme, and this window has to LOOK like the thing it
@@ -1123,62 +1123,19 @@ $lblPresetState = New-Object Windows.Forms.Label
 $lblPresetState.Location = '462,569'; $lblPresetState.Size = '390,18'; $lblPresetState.Font = $FONT
 
 # ---- BETTERDISCORD TAB CONTROLS ----
+# Navigation page only (T-413): Wintage ships the BetterDiscord THEME; the
+# standalone BetterDiscord plugins are maintained in a separate repository and
+# are never copied, enabled or state-recorded by this installer.
 $lblBdTitle = New-Object Windows.Forms.Label
 $lblBdTitle.Text = (T 'BdPlugins'); $lblBdTitle.Location = '12,10'; $lblBdTitle.Size = '400,18'; $lblBdTitle.Font = $FONTB
 
-$lblBdStatus = New-Object Windows.Forms.Label
-$lblBdStatus.Location = '12,32'; $lblBdStatus.Size = '820,18'; $lblBdStatus.Font = $FONT
+$lblBdDesc = New-Object Windows.Forms.Label
+$lblBdDesc.Text = (T 'BdRepoDesc'); $lblBdDesc.Location = '12,44'; $lblBdDesc.Size = '820,18'; $lblBdDesc.Font = $FONT
 
-$lblBdList = New-Object Windows.Forms.Label
-$lblBdList.Text = 'AVAILABLE PLUGINS'; $lblBdList.Location = '12,56'; $lblBdList.Size = '360,16'; $lblBdList.Font = $FONTB
-
-$clbBdPlugins = New-Object Windows.Forms.CheckedListBox
-$clbBdPlugins.Location = '12,74'; $clbBdPlugins.Size = '360,226'; $clbBdPlugins.Font = $FONT
-$clbBdPlugins.BorderStyle = 'FixedSingle'; $clbBdPlugins.CheckOnClick = $true; $clbBdPlugins.IntegralHeight = $false
-
-$btnBdSelectAll = New-Object Windows.Forms.Button
-$btnBdSelectAll.Text = (T 'SelectAll'); $btnBdSelectAll.Location = '12,306'; $btnBdSelectAll.Size = '96,24'; $btnBdSelectAll.Font = $FONT
-$btnBdSelectAll.FlatStyle = 'Flat'; $btnBdSelectAll.FlatAppearance.BorderSize = 0
-
-$btnBdSelectNone = New-Object Windows.Forms.Button
-$btnBdSelectNone.Text = (T 'SelectNone'); $btnBdSelectNone.Location = '116,306'; $btnBdSelectNone.Size = '96,24'; $btnBdSelectNone.Font = $FONT
-$btnBdSelectNone.FlatStyle = 'Flat'; $btnBdSelectNone.FlatAppearance.BorderSize = 0
-
-$lblBdDetails = New-Object Windows.Forms.Label
-$lblBdDetails.Text = 'PLUGIN INFO'; $lblBdDetails.Location = '388,56'; $lblBdDetails.Size = '446,16'; $lblBdDetails.Font = $FONTB
-
-$txtBdDetails = New-Object Windows.Forms.TextBox
-$txtBdDetails.Location = '388,74'; $txtBdDetails.Size = '446,256'; $txtBdDetails.Font = $FONT
-$txtBdDetails.Multiline = $true; $txtBdDetails.ReadOnly = $true; $txtBdDetails.ScrollBars = 'Vertical'
-$txtBdDetails.BorderStyle = 'FixedSingle'
-
-$btnBdApply = New-Object Windows.Forms.Button
-$btnBdApply.Text = (T 'BdInstallSelected'); $btnBdApply.Location = '12,338'; $btnBdApply.Size = '180,30'; $btnBdApply.Font = $FONTB
-$btnBdApply.FlatStyle = 'Flat'; $btnBdApply.FlatAppearance.BorderSize = 0
-
-$btnBdUninstall = New-Object Windows.Forms.Button
-$btnBdUninstall.Text = (T 'BdUninstallSelected'); $btnBdUninstall.Location = '198,338'; $btnBdUninstall.Size = '140,30'; $btnBdUninstall.Font = $FONT
-$btnBdUninstall.FlatStyle = 'Flat'; $btnBdUninstall.FlatAppearance.BorderSize = 0
-
-$btnBdOpenFolder = New-Object Windows.Forms.Button
-$btnBdOpenFolder.Text = (T 'BdOpenFolder'); $btnBdOpenFolder.Location = '388,338'; $btnBdOpenFolder.Size = '180,30'; $btnBdOpenFolder.Font = $FONT
-$btnBdOpenFolder.FlatStyle = 'Flat'; $btnBdOpenFolder.FlatAppearance.BorderSize = 0
-
-$btnBdRefresh = New-Object Windows.Forms.Button
-$btnBdRefresh.Text = (T 'BdRefresh'); $btnBdRefresh.Location = '576,338'; $btnBdRefresh.Size = '130,30'; $btnBdRefresh.Font = $FONT
-$btnBdRefresh.FlatStyle = 'Flat'; $btnBdRefresh.FlatAppearance.BorderSize = 0
-
-$lblBdLog = New-Object Windows.Forms.Label
-$lblBdLog.Text = 'LOG'; $lblBdLog.Location = '12,376'; $lblBdLog.Size = '200,16'; $lblBdLog.Font = $FONTB
-
-$txtBdLog = New-Object Windows.Forms.TextBox
-$txtBdLog.Location = '12,394'; $txtBdLog.Size = '822,136'; $txtBdLog.Font = $FONT
-$txtBdLog.Multiline = $true; $txtBdLog.ReadOnly = $true; $txtBdLog.ScrollBars = 'Vertical'
-$txtBdLog.BorderStyle = 'FixedSingle'
-
-$script:bdPluginsSourceDir = Join-Path $root 'desktop\targets\betterdiscord\plugins'
-$script:bdPluginsInstallDir = Join-Path $env:APPDATA 'BetterDiscord\plugins'
-$script:bdPluginsJsonPath = Join-Path $env:APPDATA 'BetterDiscord\data\stable\plugins.json'
+$btnBdOpenRepo = New-Object Windows.Forms.Button
+$btnBdOpenRepo.Text = (T 'BdRepoOpen'); $btnBdOpenRepo.Location = '12,76'; $btnBdOpenRepo.Size = '260,30'; $btnBdOpenRepo.Font = $FONTB
+$btnBdOpenRepo.FlatStyle = 'Flat'; $btnBdOpenRepo.FlatAppearance.BorderSize = 0
+$btnBdOpenRepo.Add_Click({ Start-Process 'https://github.com/vacterro/BetterDiscord_vac34_plugins' })
 
 # ---- TERMINAL FONTS TAB CONTROLS (T-283 / SRC-026) ----
 # A small terminal typography laboratory: searchable catalog (left), large live
@@ -1328,87 +1285,6 @@ function Add-BoundedLogText([System.Windows.Forms.TextBox]$box, [string]$text) {
     $box.SelectionStart = $box.Text.Length
     $box.ScrollToCaret()
 }
-
-function Say-BdLog([string]$msg) {
-    if (-not $txtBdLog) { return }
-    $line = (Get-Date -Format 'HH:mm:ss') + ' ' + $msg
-    $sep = if ($txtBdLog.Text) { [Environment]::NewLine } else { '' }
-    Add-BoundedLogText $txtBdLog ($sep + $line)
-}
-
-function Get-BdPluginDescription([string]$pluginName) {
-    switch ($pluginName) {
-        'GoodEmoji' { return (T 'BdGoodEmojiDesc') }
-        'RemoveStickers' { return (T 'BdRemoveStickersDesc') }
-        'RemoveGIFS' { return (T 'BdRemoveGIFSDesc') }
-        default { return "Plugin: $pluginName" }
-    }
-}
-
-function Load-BdPlugins {
-    $selectedName = $null
-    if ($clbBdPlugins.SelectedIndex -ge 0) {
-        $selectedName = ($clbBdPlugins.Items[$clbBdPlugins.SelectedIndex] -split '\s+')[0]
-    }
-
-    $clbBdPlugins.Items.Clear()
-    $installed = @{}
-    if (Test-Path $script:bdPluginsInstallDir) {
-        Get-ChildItem $script:bdPluginsInstallDir -Filter '*.plugin.js' -ErrorAction SilentlyContinue | ForEach-Object {
-            $pluginName = $_.BaseName -replace '\.plugin$', ''
-            $installed[$pluginName] = $_.FullName
-        }
-    }
-
-    $sourceFiles = @()
-    if (Test-Path $script:bdPluginsSourceDir) {
-        $sourceFiles = @(Get-ChildItem $script:bdPluginsSourceDir -Filter '*.plugin.js' -ErrorAction SilentlyContinue)
-    }
-
-    $tagInst = T 'BdInstalled'
-    $tagAvail = T 'BdAvailable'
-    $selectIdx = -1
-    foreach ($f in $sourceFiles) {
-        $name = $f.BaseName -replace '\.plugin$', ''
-        $isInst = $installed.ContainsKey($name)
-        $label = if ($isInst) { "$name ($tagInst)" } else { "$name ($tagAvail)" }
-        [void]$clbBdPlugins.Items.Add($label)
-        $idx = $clbBdPlugins.Items.Count - 1
-        if ($isInst) {
-            $clbBdPlugins.SetItemChecked($idx, $true)
-        }
-        if ($selectedName -and $name -eq $selectedName) {
-            $selectIdx = $idx
-        }
-    }
-
-    if ($selectIdx -ge 0) {
-        $clbBdPlugins.SelectedIndex = $selectIdx
-    } elseif ($clbBdPlugins.Items.Count -gt 0) {
-        $clbBdPlugins.SelectedIndex = 0
-    }
-
-    $bdExists = Test-Path $script:bdPluginsInstallDir
-    if ($bdExists) {
-        $lblBdStatus.Text = [string]::Format((T 'BdStatusReady'), $script:bdPluginsInstallDir)
-    } else {
-        $lblBdStatus.Text = [string]::Format((T 'BdStatusNotFound'), $script:bdPluginsInstallDir)
-    }
-
-    if ($clbBdPlugins.SelectedIndex -ge 0) {
-        $activeName = ($clbBdPlugins.Items[$clbBdPlugins.SelectedIndex] -split '\s+')[0]
-        $txtBdDetails.Text = Get-BdPluginDescription $activeName
-    } else {
-        $txtBdDetails.Text = ''
-    }
-}
-
-$clbBdPlugins.Add_SelectedIndexChanged({
-    $idx = $clbBdPlugins.SelectedIndex
-    if ($idx -lt 0) { return }
-    $pluginName = ($clbBdPlugins.Items[$idx] -split '\s+')[0]
-    $txtBdDetails.Text = Get-BdPluginDescription $pluginName
-})
 
 # ---- TERMINAL FONTS TAB LOGIC (T-283 / SRC-026) ----
 function Say-TfLog([string]$msg) {
@@ -1809,104 +1685,6 @@ function Refresh-TfFonts {
 }
 
 
-$btnBdSelectAll.Add_Click({
-    for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) { $clbBdPlugins.SetItemChecked($i, $true) }
-})
-
-$btnBdSelectNone.Add_Click({
-    for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) { $clbBdPlugins.SetItemChecked($i, $false) }
-})
-
-$btnBdApply.Add_Click({
-    try {
-        if (-not (Test-Path $script:bdPluginsInstallDir)) {
-            New-Item -ItemType Directory -Force -Path $script:bdPluginsInstallDir | Out-Null
-        }
-
-        $pluginsJsonData = $null
-        if (Test-Path $script:bdPluginsJsonPath) {
-            try { $pluginsJsonData = (Read-Utf8 $script:bdPluginsJsonPath) | ConvertFrom-Json } catch { }
-        }
-        if (-not $pluginsJsonData) { $pluginsJsonData = [pscustomobject]@{} }
-
-        for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) {
-            $itemText = $clbBdPlugins.Items[$i]
-            $pluginName = ($itemText -split '\s+')[0]
-            $isChecked = $clbBdPlugins.GetItemChecked($i)
-            $srcFile = Join-Path $script:bdPluginsSourceDir "$pluginName.plugin.js"
-            $destFile = Join-Path $script:bdPluginsInstallDir "$pluginName.plugin.js"
-
-            if ($isChecked) {
-                if (Test-Path $srcFile) {
-                    Copy-Item $srcFile $destFile -Force
-                    $pluginsJsonData | Add-Member -NotePropertyName $pluginName -NotePropertyValue $true -Force
-                    Say-BdLog "Installed: $pluginName -> $destFile (Enabled in BetterDiscord)"
-                }
-            } else {
-                if (Test-Path $destFile) {
-                    Remove-Item $destFile -Force -ErrorAction SilentlyContinue
-                    $pluginsJsonData | Add-Member -NotePropertyName $pluginName -NotePropertyValue $false -Force
-                    Say-BdLog "Removed: $pluginName from $destFile"
-                }
-            }
-        }
-
-        if (Test-Path (Split-Path $script:bdPluginsJsonPath -Parent)) {
-            $jsonStr = $pluginsJsonData | ConvertTo-Json
-            [System.IO.File]::WriteAllText($script:bdPluginsJsonPath, $jsonStr, (New-Object System.Text.UTF8Encoding $false))
-        }
-
-        Load-BdPlugins
-        Say-BdLog "BetterDiscord plugins applied successfully."
-        $status.Text = "BetterDiscord plugins updated."
-    } catch {
-        Say-BdLog ("FAILED to apply plugins: " + $_.Exception.Message)
-        $status.Text = "Failed to apply plugins - see log."
-    }
-})
-
-$btnBdUninstall.Add_Click({
-    try {
-        for ($i = 0; $i -lt $clbBdPlugins.Items.Count; $i++) {
-            $itemText = $clbBdPlugins.Items[$i]
-            $pluginName = ($itemText -split '\s+')[0]
-            $destFile = Join-Path $script:bdPluginsInstallDir "$pluginName.plugin.js"
-            if (Test-Path $destFile) {
-                Remove-Item $destFile -Force -ErrorAction SilentlyContinue
-                Say-BdLog "Uninstalled: $pluginName"
-            }
-        }
-        if (Test-Path $script:bdPluginsJsonPath) {
-            try {
-                $pluginsJsonData = (Read-Utf8 $script:bdPluginsJsonPath) | ConvertFrom-Json
-                $pluginsJsonData | Add-Member -NotePropertyName 'GoodEmoji' -NotePropertyValue $false -Force
-                $pluginsJsonData | Add-Member -NotePropertyName 'RemoveStickers' -NotePropertyValue $false -Force
-                $pluginsJsonData | Add-Member -NotePropertyName 'RemoveGIFS' -NotePropertyValue $false -Force
-                $jsonStr = $pluginsJsonData | ConvertTo-Json
-                [System.IO.File]::WriteAllText($script:bdPluginsJsonPath, $jsonStr, (New-Object System.Text.UTF8Encoding $false))
-            } catch { }
-        }
-        Load-BdPlugins
-        Say-BdLog "All Wintage BetterDiscord plugins uninstalled."
-        $status.Text = "BetterDiscord plugins uninstalled."
-    } catch {
-        Say-BdLog ("FAILED to uninstall plugins: " + $_.Exception.Message)
-    }
-})
-
-$btnBdOpenFolder.Add_Click({
-    if (Test-Path $script:bdPluginsInstallDir) {
-        [System.Diagnostics.Process]::Start('explorer.exe', $script:bdPluginsInstallDir) | Out-Null
-    } else {
-        Say-BdLog "BetterDiscord folder does not exist yet ($script:bdPluginsInstallDir)"
-    }
-})
-
-$btnBdRefresh.Add_Click({
-    Load-BdPlugins
-    Say-BdLog (T 'BdStatusRefreshed')
-})
-
 # ---- LANGUAGE ----
 # English by default (i18n.ps1), the machine's saved pick preselected. A switch
 # re-strings every translatable control live -- no relaunch, no second code path.
@@ -1958,14 +1736,8 @@ function Update-GuiStrings {
     $chkLogonTask.Text = (T 'LogonTask'); $btnFbSoundCopy.Text = (T 'FbSoundCopy')
     $status.Text = (T 'StatusHint')
     $lblBdTitle.Text = (T 'BdPlugins')
-    $lblBdList.Text = (T 'BdAvailablePlugins')
-    $lblBdDetails.Text = (T 'BdPluginInfo')
-    $lblBdLog.Text = (T 'BdLog')
-    $btnBdApply.Text = (T 'BdInstallSelected')
-    $btnBdUninstall.Text = (T 'BdUninstallSelected')
-    $btnBdOpenFolder.Text = (T 'BdOpenFolder')
-    $btnBdRefresh.Text = (T 'BdRefresh')
-    $btnBdSelectAll.Text = (T 'SelectAll'); $btnBdSelectNone.Text = (T 'SelectNone')
+    $lblBdDesc.Text = (T 'BdRepoDesc')
+    $btnBdOpenRepo.Text = (T 'BdRepoOpen')
     $btnTabFonts.Text = (T 'TabFonts')
     $lblTfTitle.Text = (T 'TabFonts')
     $lblTfSearch.Text = (T 'TfSearch')
@@ -1984,7 +1756,6 @@ function Update-GuiStrings {
     $btnTfLicense.Text = (T 'TfLicense')
     $btnTfRefresh.Text = (T 'TfRefresh')
     Update-FbSoundButton
-    Load-BdPlugins
 }
 
 $cmbLanguage.Add_SelectedIndexChanged({
@@ -1997,8 +1768,7 @@ $pnlThemes.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $
         $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $chkLogonTask, $btnFbSound, $btnFbSoundCopy, $log,
         $lblPreset, $cmbPreset, $btnPresetSave, $btnPresetUpdate, $btnPresetRename, $btnPresetDelete, $lblPresetState))
 
-$pnlBetterDiscord.Controls.AddRange(@($lblBdTitle, $lblBdStatus, $lblBdList, $clbBdPlugins, $btnBdSelectAll, $btnBdSelectNone, $lblBdDetails, $txtBdDetails,
-        $btnBdApply, $btnBdUninstall, $btnBdOpenFolder, $btnBdRefresh, $lblBdLog, $txtBdLog))
+$pnlBetterDiscord.Controls.AddRange(@($lblBdTitle, $lblBdDesc, $btnBdOpenRepo))
 
 $pnlFonts.Controls.AddRange(@($lblTfTitle, $lblTfSearch, $txtTfSearch, $lstTfFonts, $lblTfMetrics,
         $lblTfPreview, $pnlTfPreview, $lblTfControls, $lblTfFamily, $lblTfFamilyValue, $lblTfSize, $numTfSize,
@@ -3399,19 +3169,19 @@ function Skin-Self {
     Update-TabButtons
 
     foreach ($c in @($lblThemes, $lblMyApps, $lblPopularApps, $lblPreview, $lblTokens, $lblInfo, $lblLanguage, $status,
-                    $chkLogonTask, $lblBdTitle, $lblBdStatus, $lblBdList, $lblBdDetails, $lblBdLog,
+                    $chkLogonTask, $lblBdTitle, $lblBdDesc,
                     $lblTfTitle, $lblTfSearch, $lblTfPreview, $lblTfControls, $lblTfFamily, $lblTfFamilyValue,
                     $lblTfSize, $lblTfRendering, $lblTfState, $lblTfLog, $lblTfMetrics,
                     $lblPreset, $lblPresetState)) {
         $c.BackColor = C $t.background; $c.ForeColor = C $t.textPrimary
     }
-    foreach ($c in @($lstThemes, $clbMyApps, $clbPopularApps, $log, $cmbLanguage, $clbBdPlugins, $txtBdDetails, $txtBdLog, $cmbPreset,
+    foreach ($c in @($lstThemes, $clbMyApps, $clbPopularApps, $log, $cmbLanguage, $cmbPreset,
                     $txtTfSearch, $lstTfFonts, $txtTfLog, $cmbTfRendering, $numTfSize)) {
         $c.BackColor = C $t.compareBack; $c.ForeColor = C $t.textPrimary
     }
     $pnlTfPreview.BackColor = C $t.background
     foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnSelectAll, $btnSelectNone,
-                    $btnBdApply, $btnBdUninstall, $btnBdOpenFolder, $btnBdRefresh, $btnBdSelectAll, $btnBdSelectNone,
+                    $btnBdOpenRepo,
                     $btnTfInstall, $btnTfApplyTerminal, $btnTfApplyConhost, $btnTfApplyBoth, $btnTfRestore, $btnTfSource, $btnTfLicense, $btnTfRefresh,
                     $btnPresetSave, $btnPresetUpdate, $btnPresetRename, $btnPresetDelete)) {
         $b.BackColor = C $t.surfaceRaised; $b.ForeColor = C $t.textPrimary
@@ -3423,7 +3193,6 @@ function Skin-Self {
 }
 
 Load-Targets
-Load-BdPlugins
 # PERF-001: terminal-font initialization is LAZY. Do NOT call Initialize-TfTab
 # before ShowDialog — that eagerly loads all 20 bundled font files into private
 # GDI+ collections and runs fixed-pitch probes before first paint. Set-ActiveTab

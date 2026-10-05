@@ -72,6 +72,10 @@ in use.
 | `cinema4d` | colour scheme dropped into the user's Cinema 4D `schemes` folder | yes — it lives in your profile |
 | `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: row-highlight colours and graph backgrounds, see below | no — Process Explorer rewrites its settings on exit; close it and re-run |
 
+
+BetterDiscord plugins are maintained separately:
+https://github.com/vacterro/BetterDiscord_vac34_plugins
+
 ### Process Explorer (Sysinternals)
 
 Process Explorer keeps its colours in `HKCU\Software\Sysinternals\Process Explorer`

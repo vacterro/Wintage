@@ -41,6 +41,7 @@ Apply 会向外调用 `install.ps1`。安装主题的代码路径只有一条，
 | `terminal` | Windows Terminal 方案 + 所有配置文件默认值，Consolas 12 别名 | yes — 设置就在你的配置文件中 |
 | `conhost` | `HKCU\Console` 默认值 + 每个现有的 cmd/PowerShell 配置文件 | yes — 精确的已触碰值快照 |
 | `obs` | OBS 30.2+ `.ovt` 变体 + 活动的 `user.ini` 主题 ID | yes — 它存在于你的配置文件中 |
+| `qbittorrent` | 未打包的 Qt 界面主题（`config.json` + `stylesheet.qss`）+ `qBittorrent.ini` 中的两个主题键 | yes — 它存在于你的配置文件中 |
 | `antigravity`, `vscode` | `~/.antigravity/extensions` / `~/.vscode/extensions` 中的颜色主题扩展 | **yes** — 它存在于你的配置文件中 |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim，见下文 | no — 重新运行安装器 |
 | `claude` | Electron shim，就地修补 — 见下文 | no — 更新会生成新的 `app-<version>` 文件夹 |
@@ -108,6 +109,20 @@ Chromium 故意禁止在不受管理的 Windows 机器上静默安装商店外�
 ### OBS Studio
 
 `obs` 在维护的 Yami Classic 基础上生成 OBS 30.2+ 变体，安装到 `%APPDATA%\obs-studio\themes`，并把其稳定主题 ID 写入 `user.ini`，这样所选的 Wintage 调色板在下次启动时已被选中。在 Apply 或 Revert 之前关闭 OBS：OBS 退出时会重写 `user.ini`。首次应用会把之前的选项和任何同名主题都逐字节备份。
+
+### qBittorrent
+
+`qbittorrent` 会把一份**未打包**的 Qt 界面主题写入 `%APPDATA%\qBittorrent\themes\wintage`：一个 `config.json`（`Palette.*` 各项角色，加上 qBittorrent 自身的上下文颜色：传输列表状态、日志级别），以及旁边一个 `stylesheet.qss`（2px 斜面、直角边角，以及调色板无法表达的 Verdana）；随后把 `General\CustomUIThemePath` 指向该 `config.json` 并设置 `General\UseCustomUITheme=true`。
+刻意采用未打包形式而非 `.qbtheme` 包：`.qbtheme` 是 Qt Resource Collection 文件，生成它需要机器上有一个主版本号匹配的 `rcc` 可执行文件，为了两个文本文件而引入编译器依赖并不划算。qBittorrent 原生支持读取文件夹形式（`FolderThemeSource`）。
+在 Apply 或 Revert 之前请关闭 qBittorrent：它在退出时会重写整个 `qBittorrent.ini`，因此运行期间所做的修改会在关闭时被丢弃——该目标在此状态下会拒绝执行，而不是报告一个会被下次退出抹掉的“成功”。`-Revert` 会把两个 INI 键恢复为 Wintage 之前的精确值（若原本不存在则删除），并把任何同名主题文件夹按字节原样放回；Apply 之后对 `qBittorrent.ini` 所做的无关修改仍会保留。
+无法覆盖：工具栏与托盘图标来自 qBittorrent 自身已编译的资源包，因此会保持原有配色。
+
+### 字体：只命名，从不安装
+
+UI.md 第一条法则要求 Verdana **关闭抗锯齿**。Qt 样式表没有对应属性，MPC-HC 的 `OSDFont` 也只是一个普通的 GDI 字体名——所以唯一的杠杆就是字体本身。仓库根目录下的 `Verdana_m1.ttf` 是 Verdana 的副本，携带 3 到 30 ppem 预先渲染的 1bpp 点阵字形，渲染器会优先使用它们，而不是对轮廓做平滑处理。
+`qbittorrent` 与 `obs` 的样式表都写明 `Verdana_m1, Verdana`，而 `mpchc` 写的是这两者中机器实际解析出的那一个。**安装程序从不安装或卸载字体**，这是有意为之，而非未竟之事：
+字体族按（字体族，样式）解析。注册 Regular + Bold + Italic 后，每个使用者都能正确解析；而只要注销**其中任意一个**成员，所有请求该字体族的使用者就会转向仍然存在的成员。在通过 `HKLM\...\FontSubstitutes` 把 `MS Shell Dlg 2`（Windows 对话框字体）映射到该字体族的机器上，移除 Regular 会让**整个桌面变成斜体**，连 DWM 早已缓存的窗口标题也一并波及，并且需要注销才能恢复。再怎么引用计数也修不好这一点：影响范围是整台机器，主题安装程序不该伸手到那里。
+因此字体是一次性的、由用户明确执行的操作：右键点击 `Verdana_m1.ttf` → **安装**（按用户安装，无需管理员权限），然后重新应用目标。如果字体缺失，各目标只会提示一次，说明修复办法，并回退到系统自带的 Verdana——带抗锯齿，但没有在你的机器背后动任何手脚。
 
 ### Electron 应用
 
@@ -187,4 +202,4 @@ Apply 能够改动的每一个值都会在改动前先做快照（位于 `%APPDA
 安装器**只浏览字体，并不安装它们。** TERMINAL FONTS 标签页把一个内置字面载入进程本地的 `PrivateFontCollection` 以做实时预览，这一步进行**零**次系统字体注册。选择字体、字号（7–24 pt）或渲染模式（aliased/grayscale/cleartype）只更新预览和偏好。安装字体是一个明确的 **INSTALL SELECTED** 动作，它会打开 Windows 自带的字体安装器；在 Windows 确认之后，用户用 Refresh 重新探测。终端的实际变更只发生在明确的 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 动作时。
 
 Windows Terminal 会以选定的字号应用到所选已安装的字族上，渲染模式则映射到 `profiles.defaults.antialiasingMode`。经典 conhost 更严格：它在固定的单元格网格上渲染，因此选中的字面会在任何注册表改动之前被拒绝，除非 Windows 能解析它（默认字面和 Consolas 回退属于既有豁免）。Health 和 Reapply 会拿已配置的字面/字号/抗锯齿与那份偏好对照校验，因此在一次 Apply 之后改动偏好会被报告为漂移，而不是仍算"健康"。终端颜色的生命周期未受影响：Revert 精确还原 Wintage 之前所拥有的值，且绝不从机器上移除任何字体。
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

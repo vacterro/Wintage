@@ -61,6 +61,7 @@ arkisto on käytössä.
 | `terminal` | Windows Terminal -skeema + oletusasetukset kaikkiin profiileihin, Consolas 12 aliasoitu | yes — asetukset ovat profiilissasi |
 | `conhost` | `HKCU\Console`-oletukset + kaikki olemassa olevat cmd/PowerShell-profiilit | yes — täsmällinen kuvakaappaus kosketuista arvoista |
 | `obs` | OBS 30.2+ `.ovt`-variantti + aktiivinen `user.ini`-teema-ID | kyllä — se on profiilissasi |
+| `qbittorrent` | pakkaamaton Qt-käyttöliittymäteema (`config.json` + `stylesheet.qss`) + teeman kaksi avainta tiedostossa `qBittorrent.ini` | yes — se on profiilissasi |
 | `antigravity`, `vscode` | väriteemalaajennus `~/.antigravity/extensions` / `~/.vscode/extensions` -kansiossa | **yes** — se on profiilissasi |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, katso alla | no — aja asentaja uudelleen |
 | `claude` | Electron-shim, paikattu paikan päällä — katso alla | no — päivitys luo uuden `app-<version>`-kansion |
@@ -215,6 +216,20 @@ asentaa sen `%APPDATA%\obs-studio\themes`-kansioon, ja kirjoittaa vakaan teema-I
 Sulje OBS ennen Applya tai Revertiä: OBS kirjoittaa `user.ini`-tiedoston uusiksi lopettaessaan. Ensimmäinen sovellus
 varmuuskopioi sekä aiemman valinnan että kaikki samannimiset teemat tavuilleen.
 
+### qBittorrent
+
+`qbittorrent` kirjoittaa **purkamattoman** Qt-käyttöliittymäteeman hakemistoon `%APPDATA%\qBittorrent\themes\wintage` — `config.json` ( `Palette.*`-roolit sekä qBittorrentin omat kontekstivärit: siirtolistan tilat, lokin vakavuustasot) ja sen viereen `stylesheet.qss` (2px:n viisteet, suorat kulmat ja Verdana, joita paletti ei voi ilmaista) — ja osoittaa sitten `General\CustomUIThemePath`-asetuksen tuohon `config.json`-tiedostoon ja asettaa `General\UseCustomUITheme=true`.
+Purkamattomana eikä `.qbtheme`-pakettina — tarkoituksella: `.qbtheme` on Qt Resource Collection -tiedosto ja sen tuottaminen vaatisi koneelle saman pääversion `rcc`-binäärin, eli kääntäjäriippuvuuden kahden tekstitiedoston takia. qBittorrent lukee kansiomuotoa natiivisti (`FolderThemeSource`).
+Sulje qBittorrent ennen Apply- tai Revert-toimintoa: se kirjoittaa koko `qBittorrent.ini`-tiedoston uudelleen lopetettaessa, joten käynnissä ollessa tehty muokkaus häviää sulkiessa — kohde kieltäytyy toimimasta siinä tilassa sen sijaan, että raportoisi onnistumisesta, jonka seuraava lopetus pyyhkii. `-Revert` palauttaa INI:n kaksi avainta täsmälleen Wintagea edeltäneisiin arvoihin (tai poistaa ne, jos niitä ei ollut) ja palauttaa samannimisen teemakansion tavu tavulta; muut Applyn jälkeen tehdyt `qBittorrent.ini`-muokkaukset säilyvät.
+Ei tavoitettavissa: työkalupalkin ja ilmaisinalueen kuvakkeet tulevat qBittorrentin omasta käännetytystä resurssipaketista, joten ne säilyttävät alkuperäiset värinsä.
+
+### Fontit: nimetettyjä, ei koskaan asennettuja
+
+UI.md sääntö 1 vaatii Verdanaa **ilman reunanpyöristystä**. Qt-tyylitiedostolla ei ole sille ominaisuutta, ja MPC-HC:n `OSDFont` on pelkkä GDI-fontin nimi — ainoa vipu on siis itse fontti. Repon juuressa oleva `Verdana_m1.ttf` on Verdana-kopio, jossa on valmiiksi renderöidyt 1 bpp bittikarttaleikkeet välillä 3–30 ppem, ja renderöijä käyttää niitä mieluummin kuin ääriviivan tasoittamiseen.
+`qbittorrent` ja `obs` -tyylitiedostot nimeävät `Verdana_m1, Verdana`, ja `mpchc` nimeää sen kahdesta, jonka kone oikeasti ratkaisee. **Asentaja ei koskaan asenna eikä poista fonttia**, ja tämä on tarkoituksellista, keskeneräistä ei ole:
+Fonttiperhe ratkaistaan avaimella (perhe, tyyli). Rekisteröi Regular + Bold + Italic, niin jokainen kuluttaja ratkaistuu oikein; poista **yksi** jäsen, niin jokainen kuluttaja, joka kysyy tuota perhettä, ohjautuu jäljelle jääneeseen jäseneen. Koneella, joka aliastaa `MS Shell Dlg 2` — Windowsin valintaikkunan fontin — tuolle perheelle polun `HKLM\...\FontSubstitutes` kautta, Regularin poisto tekee **koko työpöydän vinoviivaiseksi**, myös DWM:n jo välimuistiin tallentamat ikkunoiden otsikot, ja takaisin saamiseksi on kirjauduttava ulos. Mikään viittausten laskenta ei korjaa tätä: vaikutus ulottuu koko koneelle eikä teema-asentajalla ole siellä asiaa.
+Fontti on siis kerran tehtävä käyttäjän tietoinen teko: napsauta `Verdana_m1.ttf` hiirellä oikean → **Asenna** (käyttäjäkohtaisesti, ei ylläpitäjän oikeuksia) ja sovella sitten kohde uudelleen. Jos fontti puuttuu, kohteet sanovat sen kerran, nimeävät korjauksen ja palaavat tehdas-Verdanaan — reunanpyöristyksin, mutta mitään ei tehdä koneellesi selkäsi takana.
+
 ### Electron-sovellukset
 
 `resources/app.asar` siirretään kohtaan `resources/app/app.asar` (sen `app.asar.unpacked`
@@ -329,4 +344,4 @@ Molemmat terminaalikohteet lukevat YHDEN kanonisen typografisen asetuksen tiedos
 Asentaja **selaa fontteja, ei asenna niitä.** TERMINAL FONTS -välilehti lataa mukana toimitetun tyypin prosessikohtaiseen `PrivateFontCollection`-kokoelmaan elävää esikatselua varten, joka tekee **nolla** järjestelmäfonttien rekisteröintejä. Fontin, koon (7–24 pt) tai renderöintitilan (aliased/grayscale/cleartype) valinta päivittää vain esikatselun ja asetuksen. Fontin asentaminen on erillinen **INSTALL SELECTED** -toiminto, joka avaa Windowsin oman fonttiasennusohjelman; Windowsin vahvistuksen jälkeen käyttäjä tarkistaa tilanteen uudelleen Refreshillä. Todelliset terminaalimuutokset tapahtuvat vain eksplisiittisellä **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** -toiminnolla.
 
 Windows Terminal sovelletaan valittuun asennettuun perheeseen valitussa koossa, ja renderöintitila kartoitetaan arvoon `profiles.defaults.antialiasingMode`. Klassinen conhost on tiukempi: se renderöi kiinteällä soluristikolla, joten valittu fontti hylätään ennen mitään rekisterimuutosta, ellei Windows pysty ratkaisemaan sitä (oletustyyppi ja Consolas-varatyyppi on vapautettu). Health ja Reapply validoivat määritetyn tyypin, koon ja reunojen pehmennyksen asetusta vasten, joten asetuksen muutos Applyn jälkeen raportoidaan poikkeamana eikä "terveenä" tilana. Terminaalin värien elinkaari jää koskematta: Revert palauttaa täsmälleen ne arvot, jotka Wintage omisti ennen sitä, eikä koskaan poista fonttia koneelta.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

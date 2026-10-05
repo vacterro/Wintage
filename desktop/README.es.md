@@ -41,6 +41,7 @@ Apply delega en `install.ps1`. Hay exactamente una ruta de código que instala u
 | `terminal` | esquema de Windows Terminal + valores por defecto de todos los perfiles, Consolas 12 con alias | sí — los ajustes están en tu perfil |
 | `conhost` | valores por defecto de `HKCU\Console` + cada perfil cmd/PowerShell existente | sí — instantánea exacta de los valores tocados |
 | `obs` | variante OBS 30.2+ `.ovt` + ID de tema activo en `user.ini` | sí — vive en tu perfil |
+| `qbittorrent` | tema de interfaz Qt desempaquetado (`config.json` + `stylesheet.qss`) + las dos claves de tema en `qBittorrent.ini` | sí — vive en tu perfil |
 | `antigravity`, `vscode` | extensión de tema de color en `~/.antigravity/extensions` / `~/.vscode/extensions` | **sí** — vive en tu perfil |
 | `freebuff`, `antigravity-app`, `codenomad` | shim de Electron, ver abajo | no — re-ejecuta el instalador |
 | `claude` | shim de Electron, parcheado en el lugar — ver abajo | no — una actualización crea una carpeta `app-<version>` nueva |
@@ -108,6 +109,20 @@ Chromium prohíbe deliberadamente la instalación silenciosa de extensiones fuer
 ### OBS Studio
 
 `obs` genera una variante OBS 30.2+ sobre la base mantenida de Yami Classic, la instala en `%APPDATA%\obs-studio\themes`, y escribe su ID de tema estable en `user.ini`, así la paleta de Wintage elegida ya está seleccionada en el siguiente arranque. Cierra OBS antes de Apply o Revert: OBS reescribe `user.ini` al salir. El primer apply respalda tanto la selección anterior como cualquier tema homónimo byte por byte.
+
+### qBittorrent
+
+`qbittorrent` escribe un tema de interfaz Qt **desempaquetado** en `%APPDATA%\qBittorrent\themes\wintage` — un `config.json` (los roles `Palette.*` más los colores de contexto propios de qBittorrent: estados de la lista de transferencias, gravedades del registro) y un `stylesheet.qss` junto a él (los biseles de 2px, las esquinas rectas y Verdana, que una paleta no puede expresar) — y luego apunta `General\CustomUIThemePath` a ese `config.json` y establece `General\UseCustomUITheme=true`.
+Desempaquetado en lugar de un paquete `.qbtheme`, a propósito: un `.qbtheme` es un archivo Qt Resource Collection y necesitaría un binario `rcc` de versión mayor coincidente en la máquina para producirlo, es decir, una dependencia de compilador para dos archivos de texto. qBittorrent lee la forma de carpeta de forma nativa (`FolderThemeSource`).
+Cierra qBittorrent antes de Apply o Revert: reescribe todo `qBittorrent.ini` al salir, así que una edición hecha mientras se ejecuta se descarta al cerrar — el objetivo se niega a ejecutarse en ese estado en lugar de informar de un éxito que el siguiente cierre borra. `-Revert` devuelve las dos claves del INI a sus valores exactos anteriores a Wintage (o las elimina si no estaban) y repone cualquier carpeta de tema con el mismo nombre byte a byte; las ediciones no relacionadas de `qBittorrent.ini` hechas después de Apply sobreviven.
+No alcanzable: los iconos de la barra de herramientas y de la bandeja proceden del propio paquete de recursos compilado de qBittorrent, así que conservan sus colores originales.
+
+### Tipografías: con nombre, nunca instaladas
+
+La ley 1 de UI.md pide Verdana **sin suavizado**. Una hoja de estilo Qt no tiene ninguna propiedad para eso, y el `OSDFont` de MPC-HC es un simple nombre de fuente GDI — así que la única palanca es la propia tipografía. El `Verdana_m1.ttf` en la raíz del repositorio es una copia de Verdana con trazos de mapa de bits de 1 bpp prerenderizados de 3 a 30 ppem, que el renderizador prefiere antes que suavizar el contorno.
+Las hojas de estilo de `qbittorrent` y `obs` nombran `Verdana_m1, Verdana`, y `mpchc` nombra la que la máquina resuelve de verdad. **El instalador nunca instala ni desinstala una tipografía**, y eso es deliberado, no incompleto:
+Una familia tipográfica se resuelve por (familia, estilo). Registra Regular + Bold + Italic y todos los consumidores se resolverán correctamente; si das de baja **un** miembro, todos los consumidores que piden esa familia se reapuntan a un miembro superviviente. En una máquina que asigna `MS Shell Dlg 2` —la tipografía de diálogos de Windows— a esa familia mediante `HKLM\...\FontSubstitutes`, quitar Regular pone **todo el escritorio en cursiva**, incluidos los títulos de ventana que el DWM ya tenía en caché, y hace falta cerrar sesión para recuperarlo. Ninguna cantidad de recuento de referencias lo arregla: el radio de impacto es de toda la máquina y un instalador de temas no tiene nada que hacer ahí.
+Así que la tipografía es una acción única y explícita del usuario: clic derecho en `Verdana_m1.ttf` → **Instalar** (por usuario, sin necesidad de administrador) y luego vuelve a aplicar el objetivo. Si la tipografía falta, los objetivos lo dicen una vez, nombran la solución y recurren a la Verdana original: con suavizado, pero sin hacer nada a tu máquina a tus espaldas.
 
 ### Apps de Electron
 
@@ -248,4 +263,4 @@ cambiar la preferencia después de un Apply se informa como desviación y no com
 "sano". El ciclo de vida de los colores de terminal queda intacto: Revert restaura
 exactamente los valores que eran propiedad de Wintage antes y nunca quita una
 fuente de la máquina.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

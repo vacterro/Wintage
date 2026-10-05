@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $root = Split-Path $PSScriptRoot -Parent
@@ -11,6 +11,33 @@ function Assert-True($condition, $message) {
     } else {
         Write-Host "[PASS] $message" -ForegroundColor Green
     }
+}
+
+Write-Host "
+--- Testing Generated Build Freshness (T-344) ---" -ForegroundColor Cyan
+# The whole node gate layer (the $toolSuites loop, ~40 suites including
+# test-chatgpt-2026.js) lives at the BOTTOM of this file. The -WhatIf isolation
+# test at :273 needs a fresh desktop/out, so a large wintage.user.js change used
+# to make this file die 500 lines short with "desktop/out is out of date" -- a
+# message that never mentions a single skipped suite. The run then read as
+# "mostly green with one unrelated failure", and a gate that had never executed
+# looked like a gate that had passed (TEST-105 S5).
+# So check it FIRST, and say what is being skipped when it is stale.
+$prevEapFresh = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$freshOut = (& node "$root\tools\build-desktop.js" --check 2>&1 | Out-String)
+$freshCode = $LASTEXITCODE
+$ErrorActionPreference = $prevEapFresh
+Assert-True ($freshCode -eq 0) 'generated desktop/out is fresh (node tools/build-desktop.js --check)'
+if ($freshCode -ne 0) {
+    Write-Host "       SKIPPING EVERY TOOL SUITE below -- they all read desktop/out and would report on stale output:" -ForegroundColor Red
+    foreach ($line in @($freshOut -split "`r?`n" | Where-Object { $_ -match 'STALE|out of date' } | Select-Object -First 5)) {
+        Write-Host "       $line" -ForegroundColor Red
+    }
+    Write-Host "       Fix: node tools/build-desktop.js   (then re-run this file)" -ForegroundColor Red
+    Write-Host "
+TESTS FAILED ($script:errors errors)" -ForegroundColor Red
+    exit 1
 }
 
 Write-Host "
@@ -592,7 +619,32 @@ Write-Host "
 # suite must be reachable from here or a release can ship a broken transaction
 # path while the theme gates stay green.
 $toolSuites = @(
+    # T-394/T-395 (SRC-063 CORE-001/CORE-002): the red controls for the
+    # release-gate derivation itself. Every case is a source STRING, so this
+    # gate can be proven to bite without ever editing release.ps1.
+    @{ Name = 'test-release-gate-audit.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tests\test-release-gate-audit.ps1"' },
+    # T-398 (SRC-063 W2-003): a release that died between the desktop generation
+    # and the commit rolled back only the TRACKED store, leaving the ignored
+    # desktop/out tree holding the failed run's N+1 payload. This gate builds a
+    # throwaway git repo, walks it into the failed-release state, and runs the
+    # SHIPPED rollback text (lifted out of release.ps1 with the AST) against it.
+    # The RED control re-runs the identical scenario against the verbatim
+    # pre-repair rollback and requires the same self-consistency check to fail.
+    @{ Name = 'test-release-rollback-split.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-release-rollback-split.ps1"' },
+    # T-396 (SRC-063 W2-002): desktop/out is published by swapping a staged
+    # generation, so a late target failure cannot leave the tree mixed. This gate
+    # builds the real CLI into a throwaway tree twice -- once clean, once with a
+    # forced late failure -- and requires that not one target moves. It builds
+    # nothing inside the repository.
+    @{ Name = 'test-build-desktop-publish.js'; Cmd = 'node "{0}\tools\test-build-desktop-publish.js"' },
     @{ Name = 'test-reapply.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-reapply.ps1"' },
+    # W2-004 (SRC-063): the read side preserved unknown manifest keys but the
+    # write path rebuilt each entry from nothing, so an older build silently
+    # deleted fields a newer one had written. Carries a RED control that splices
+    # the verbatim pre-repair Set-ManifestEntry into a COPY of the module
+    # directory -- beside its siblings, so the revert is a real one -- and
+    # requires the same assertion to fail with the field gone.
+    @{ Name = 'test-manifest-forward-compat.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-manifest-forward-compat.ps1"' },
     @{ Name = 'test-freebuff.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-freebuff.ps1"' },
     @{ Name = 'test-ownership.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-ownership.ps1"' },
     @{ Name = 'test-electron-state.js'; Cmd = 'node "{0}\tools\test-electron-state.js"' },
@@ -761,15 +813,7 @@ $toolSuites = @(
     # activeStyleTask cannot continue, and structurally requires a future strong
     # scheduler Set to be disposed or fail.
     @{ Name = 'test-perf-suspend.js'; Cmd = 'node "{0}\tools\test-perf-suspend.js"' },
-    # PERF-004 (audit/7.md, SRC-018:R016): GoodEmoji start() installed an
-    # unconditional 2,000 ms body-wide sweep beside a MutationObserver that
-    # already covered the same subtree. This gate proves no fixed interval
-    # exists, 60s idle causes zero global scans, observer intake still covers
-    # added emoji / attribute changes / characterData, a route change coalesces
-    # to ONE bounded scan, and stop()/restart leaves one observer and no orphan
-    # timer. A setInterval trap makes any reintroduced heartbeat throw.
-    @{ Name = 'test-goodemoji.js'; Cmd = 'node "{0}\tools\test-goodemoji.js"' },
-    # Audit wave imp-vacterro-wintage-20260927-2 (Core seat antigravity-01, RUN 1).
+        # Audit wave imp-vacterro-wintage-20260927-2 (Core seat antigravity-01, RUN 1).
     # These two were previously release-gate-EXISTENCE checks only, so the
     # regressions they cover shipped inside a green Run-Tests run. They are
     # registered as executed suites now: test-spa-exclude.js carries the
@@ -777,16 +821,58 @@ $toolSuites = @(
     # check (T-336); test-perf-bounded.js carries the floating-surface media
     # gate (T-326) and the button-descendant-wipe gate (T-331).
     @{ Name = 'test-spa-exclude.js'; Cmd = 'node "{0}\tools\test-spa-exclude.js"' },
+    # T-397: a generation loaded over an older one must own the page. Pairs with
+    # test-spa-exclude.js, which proves the guard installs ONCE per document;
+    # this proves the surviving wrapper then belongs to the NEWEST generation
+    # rather than to whichever one installed it.
+    @{ Name = 'test-generation-handover.js'; Cmd = 'node "{0}\tools\test-generation-handover.js"' },
+    # ChatGPT Web September 2026 shell contract: semantic tokens and stable
+    # data hooks replace the retired broad composer / sticky-bottom selectors.
+    @{ Name = 'test-chatgpt-2026.js'; Cmd = 'node "{0}\tools\test-chatgpt-2026.js"' },
+    @{ Name = 'test-chatgpt-perf-css.js'; Cmd = 'node "{0}\tools\test-chatgpt-perf-css.js"' },
+    # T-373 viewport-owner coverage. The two gates above read RULES: they prove
+    # the October contracts are present in the sheet ChatGPT actually receives.
+    # They cannot see the defect this one exists for, because the defect is not a
+    # missing selector -- it is PARENT THEMED / CHILD VIEWPORT OWNER OPAQUE
+    # STOCK, where every ancestor contract is present and matching and the page
+    # is still stock charcoal. So this one drives real Chromium, injects the
+    # resolved sheet AFTER a stock sheet that reproduces the shell, and asks what
+    # colour a user actually sees in the centre of the viewport. Four red
+    # controls, each cutting one anchored rule out of the shipped sheet and
+    # requiring these same assertions to go red. It proves the TOOL and the CSS;
+    # acceptance against a signed-in chatgpt.com tab is still a human step.
+    @{ Name = 'test-chatgpt-viewport-coverage.js'; Cmd = 'node "{0}\tools\test-chatgpt-viewport-coverage.js"' },
+    @{ Name = 'test-inspect-web.js'; Cmd = 'node "{0}\tools\test-inspect-web.js"' },
+    @{ Name = 'test-inspect-web-mutations.js'; Cmd = 'node "{0}\tools\test-inspect-web-mutations.js"' },
+    # T-359: the injector that puts the product's own CHATGPT_FAST_CSS on a live
+    # ChatGPT tab without Tampermonkey, plus the two live defects it exists to make
+    # reachable -- <html> held to the token paintRoot actually writes inline, and the
+    # composer root judged together with its sibling. All three were found on a live
+    # page and none of them is visible in the shipped source, so all three need bite
+    # controls or a future edit can undo them silently.
+    @{ Name = 'test-inject-wintage-web.js'; Cmd = 'node "{0}\tools\test-inject-wintage-web.js"' },
+    # The shared CDP transport is the one place a diagnostic can hang forever,
+    # and no offline suite ever notices: an unbounded Promise only misbehaves
+    # when the browser dies mid-command, which is exactly when the operator is
+    # not watching.
+    @{ Name = 'test-cdp-client.js'; Cmd = 'node "{0}\tools\test-cdp-client.js"' },
+    # ...and the transport is unproven against a REAL browser, which is exactly
+    # what test-cdp-client.js cannot show: it stubs the socket, so a wrong
+    # /json/list shape or a Runtime.evaluate that never returns passes it and
+    # only fails an operator, mid-session, with no account to hand. This one
+    # launches a headless Chrome on a throwaway profile with no cookies and
+    # drives the real inspect-web CLI over real CDP against a local fixture.
+    # It proves the TOOL, never the product: T-359's acceptance pass against a
+    # signed-in chatgpt.com tab is still a human step.
+    @{ Name = 'test-inspect-web-cdp-live.js'; Cmd = 'node "{0}\tools\test-inspect-web-cdp-live.js"' },
+    # T-065: every chart family the theme names must carry a visibility
+    # guard. The Studio report was unauthenticated-only for months while the
+    # bar family sat guarded and its siblings did not, so the failure class was
+    # still open for everything the bar guard did not name -- and that is
+    # visible from the source, with no Studio session required.
+    @{ Name = 'test-chart-guard-coverage.js'; Cmd = 'node "{0}\tools\test-chart-guard-coverage.js"' },
     @{ Name = 'test-perf-bounded.js'; Cmd = 'node "{0}\tools\test-perf-bounded.js"' },
-    # PERF-005 (audit/7.md, SRC-018:R017): GoodEmoji matchSrc fell back to
-    # Object.entries(codeToItem) and up to three String.includes per code for
-    # EVERY unmatched image (2,880,000 includes for 1,000 URLs, plus a fresh
-    # ~960-entry array per call). This gate proves matching is now proportional
-    # to URL length, independent of the mapping-table size (with a ~10x mutant
-    # table), preserves every mapped base/tone/variation/gender and legacy
-    # delimiter shape, and adds no substring-prefix false positive.
-    @{ Name = 'test-goodemoji-matchsrc.js'; Cmd = 'node "{0}\tools\test-goodemoji-matchsrc.js"' },
-    # R015 / PERF-004 (SRC-007, T-246): portable browser discovery cache and
+        # R015 / PERF-004 (SRC-007, T-246): portable browser discovery cache and
     # bounded preference scanning. It pins that a warm cache answers a status
     # refresh with ZERO recursive enumeration over the remembered PortableRoot
     # and the identical candidate set; that a walk happens only on a cold or
@@ -803,6 +889,10 @@ $toolSuites = @(
     # live mutation, manifest preserved, backup preserved; genuine legacy whole-file
     # INI is positively identified and dynamic recent-file filter colors are migrated.
     @{ Name = 'test-totalcmd-recovery.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-totalcmd-recovery.ps1"' },
+    # -RedControl proves the pre-fix implementation is still caught. It was never
+    # invoked by any suite entry, so the control existed only as a mode someone
+    # could type by hand.
+    @{ Name = 'test-totalcmd-recovery.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-totalcmd-recovery.ps1" -RedControl' },
     # W2-001 (SRC-014): Notepad++ and Cinema 4D first-touch ownership/recovery.
     # Both targets used an ephemeral rollback snapshot as if it were persistent
     # ownership evidence: Notepad++ restored only Wintage.xml and wildcard-deleted
@@ -820,11 +910,20 @@ $toolSuites = @(
     # Rollback restores registry and theme files on mid-write, accent write failure,
     # activation dispatch throw, activation timeout, or manifest commit failure.
     @{ Name = 'test-windows-theme-boundary.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-windows-theme-boundary.ps1"' },
+    # Its red control adds one check (33 by default, 34 here): the pre-fix code
+    # must leave orphaned files on an accent write failure.
+    @{ Name = 'test-windows-theme-boundary.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-windows-theme-boundary.ps1" -RedControl' },
     # W2-004 (SRC-007:R009): Custom batch generation race.
     # The batch must own check+dispatch as one window and every custom publish
     # must own the same mutex; emitted files must be staged so no reader sees
     # a half-published tree.
     @{ Name = 'test-batch-generation.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-batch-generation.ps1"' },
+    # Its -RedControl entry is new because the control only started working when
+    # T-378 staged json-doc.ps1 beside the red common.ps1. Before that, both red
+    # probes died on CommandNotFoundException and the gate exited 1 claiming a
+    # gate had stayed green on defective source -- a claim about probes that had
+    # never executed. It exits 0 only when all three reproduce their defects.
+    @{ Name = 'test-batch-generation.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-batch-generation.ps1" -RedControl' },
     # W2-004 (SRC-007:R009) red-control suite. A regression matrix that cannot
     # prove its own gates still fail defective source is documentation, not a
     # gate: this suite reintroduces each historical release defect onto a
@@ -854,6 +953,15 @@ $toolSuites = @(
     # (enforced); the 29 producer locales are reported, not failed.
     @{ Name = 'test-readme-target-parity.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-readme-target-parity.ps1"' },
     @{ Name = 'test-readme-target-parity.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-readme-target-parity.ps1" -RedControl' },
+    # T-366: the sibling doc gate was orphaned. test-readme-contract.ps1 enforces
+    # the three contracts T-211/CORE-012 caught drifting -- terminal font, the
+    # terminal Revert merge model, and electron fuse defusing -- and it reads the
+    # LIVE code, not just the prose, so it catches a code change that leaves the
+    # README asserting the old behaviour. It was referenced by nothing:
+    # release.ps1 only calls this file, and this file never called it, so a
+    # fourth drift would have shipped silently. Parity above checks that every
+    # target is DOCUMENTED; this one checks the documentation is TRUE.
+    @{ Name = 'test-readme-contract.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-readme-contract.ps1"' },
     # T-312: accepted-debt record bytes were mutable through the generic journal
     # CAS, so a record's evidence can drift under it and a rebind can be booked
     # under an operation name the engine never implemented. The live pass drives
@@ -919,6 +1027,9 @@ $toolSuites = @(
     @{ Name = 'test-tf-async-apply.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-tf-async-apply.ps1"' },
     @{ Name = 'test-fb-sound-async.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-fb-sound-async.ps1"' },
     @{ Name = 'test-log-append-bound.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-log-append-bound.ps1"' },
+    # Its red control runs the retention gate against the unbounded appender and
+    # expects assertions 1/2/4 to go red, exiting 0 only when they do.
+    @{ Name = 'test-log-append-bound.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-log-append-bound.ps1" -RedControl' },
     # SRC-023 (Process Explorer): the target's owned-value contract must be one
     # canonical set; its 12-name base list beside a 24-name write map left the
     # *Dark values unowned, so Revert could never restore them. The suite proves
@@ -949,9 +1060,42 @@ $toolSuites = @(
     # genuine WinForms Controls, and proves three reachable tabs, exactly one
     # visible panel, a distinct active style, refusal of an unknown key, and a
     # table that survives switching (no lost selection state).
-    @{ Name = 'test-terminal-fonts-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-terminal-fonts-gui.ps1"' }
+    @{ Name = 'test-terminal-fonts-gui.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-terminal-fonts-gui.ps1"' },
     @{ Name = 'test-tf-apply-results.js'; Cmd = 'node "{0}\tools\test-tf-apply-results.js"' },
-    @{ Name = 'test-tf-apply-results.js --red-control'; Cmd = 'node "{0}\tools\test-tf-apply-results.js" --red-control' }
+    @{ Name = 'test-tf-apply-results.js --red-control'; Cmd = 'node "{0}\tools\test-tf-apply-results.js" --red-control' },
+    # T-413: the architecture gate. Wintage owns the BetterDiscord THEME and a
+    # link to the canonical plugin repository -- never standalone plugin
+    # payloads, never a plugin manager in the installer. It fails if a
+    # *.plugin.js payload, the removed manager symbols or a BetterDiscord
+    # plugin-install write reappears anywhere in the ACTIVE tree, and it
+    # requires the canonical repository URL. Its -RedControl plants each
+    # violation in a scratch tree and requires the gate to catch it, so a green
+    # run cannot be vacuous.
+    @{ Name = 'test-bd-architecture.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-bd-architecture.ps1"' },
+    @{ Name = 'test-bd-architecture.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-bd-architecture.ps1" -RedControl' },
+    # T-387: these nine ran at RELEASE and nowhere else. The block below proved
+    # every gate release.ps1 invokes exists as a file, and then executed nine
+    # fewer of them than it had just proved present -- so 'Run-Tests.ps1 exits 0'
+    # covered 287 entries while nine release gates were not among them. Measured
+    # combined cost of closing that gap: 1.9s.
+    @{ Name = 'test-diag-counters.js'; Cmd = 'node "{0}\tools\test-diag-counters.js"' },
+    @{ Name = 'test-electron-shim.js'; Cmd = 'node "{0}\tools\test-electron-shim.js"' },
+    @{ Name = 'test-fs-retry.js'; Cmd = 'node "{0}\tools\test-fs-retry.js"' },
+    @{ Name = 'test-repainter-polarity.js'; Cmd = 'node "{0}\tools\test-repainter-polarity.js"' },
+    @{ Name = 'test-shim-payloads.js'; Cmd = 'node "{0}\tools\test-shim-payloads.js"' },
+    @{ Name = 'test-terminal-font.js'; Cmd = 'node "{0}\tools\test-terminal-font.js"' },
+    @{ Name = 'test-theme-packs.js'; Cmd = 'node "{0}\tools\test-theme-packs.js"' },
+    @{ Name = 'test-theme-switch.js'; Cmd = 'node "{0}\tools\test-theme-switch.js"' },
+    # The gate convention here is test-* OR check-*, and the second half matters:
+    # check-wiki-mirror.js is a gate -- its own header says 'exit 0 = pass, 1 =
+    # fail' and it aborts with a named page and a diff -- but a test-* filter
+    # would have classified it as a tool and let it keep running only at release.
+    @{ Name = 'check-wiki-mirror.js'; Cmd = 'node "{0}\tools\check-wiki-mirror.js"' }
+    # test-electron-repaint-probe.cjs is the eleventh release gate the suite used
+    # to skip; it needs no entry of its own because test-electron-repaint.ps1
+    # (already wired above) invokes it. The completeness assertion after the loop
+    # derives that transitive edge from the file's own source rather than trusting
+    # this comment, so deleting the invocation is caught.
 )
 foreach ($s in $toolSuites) {
     $invokeLine = ($s.Cmd -f $root)
@@ -973,13 +1117,83 @@ foreach ($s in $toolSuites) {
 $releaseCode = [System.IO.File]::ReadAllText("$root\release.ps1")
 Assert-True ($releaseCode -notmatch 'git\s+-C\s+[$]PSScriptRoot\s+checkout\s+--\s+\.') 'release rollback does not discard worktree from mutable HEAD'
 Assert-True ($releaseCode -match 'stash create') 'release snapshots the pre-release tracked state'
-Assert-True ($releaseCode -match 'restore "--source=[$]snapshotWorktree" --worktree') 'release rollback restores worktree from immutable snapshot'
-Assert-True ($releaseCode -match 'restore "--source=[$]snapshotIndex" --staged') 'release rollback restores index from immutable snapshot'
-$gateRefs = [regex]::Matches($releaseCode, "Join-Path [$]PSScriptRoot '([^']+\.js)'") |
-    ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-foreach ($g in $gateRefs) {
-    Assert-True (Test-Path "$root\$g") "release gate exists: $g"
+# T-398 factored the rollback into Restore-PreReleaseState(worktreeRef, indexRef,
+# generated) so the GENERATED store could be re-derived too. The immutability
+# property is unchanged -- the call site still hands it the snapshot refs and
+# never HEAD -- so these pin the handoff and the restore, not the identifiers.
+Assert-True ($releaseCode -match 'Restore-PreReleaseState [$]snapshotWorktree [$]snapshotIndex') 'release rollback restores worktree from immutable snapshot'
+Assert-True ($releaseCode -match 'restore "--source=[$]worktreeRef" --worktree' -and $releaseCode -match 'restore "--source=[$]indexRef" --staged') 'release rollback restores index from immutable snapshot'
+# Every tools/ path release.ps1 actually hands to node, derived from the AST
+# rather than from a spelling. T-390 widened a regex to cover two more spellings
+# and the external audit was right that this is still convention inference: a
+# nested Join-Path or a variable-bound tools directory derived nothing at all
+# (SRC-063 CORE-002). The checker parses, resolves and takes SOURCE TEXT, which
+# is also what lets every red control for it be a string rather than an edit to
+# the live release entrypoint (SRC-063 CORE-001, T-394).
+. (Join-Path $root 'tests\lib\ReleaseGateAudit.ps1')
+$coverage = Get-ReleaseGateCoverage -Source $releaseCode -Root $root -Executed @()
+$gateRefs = $coverage.Paths
+foreach ($g in $coverage.Missing) {
+    Assert-True $false "release gate exists: $g"
 }
+Assert-True ($coverage.Missing.Count -eq 0) "every release gate exists on disk (missing: $($coverage.Missing -join ', '))"
+
+# Do the SUITE run them? Existence is the weaker half of the same question. The
+# block above knows every gate release.ps1 invokes, and before T-387 the suite
+# executed nine fewer of them than it had just proved present: a green
+# Run-Tests.ps1 said nothing about the theme-switch, terminal-font, shim-payload
+# and four other release gates. Nine entries close today's gap; this assertion is
+# what stops the tenth gate from repeating it, and it is falsifiable on demand --
+# add a reference to a gate release.ps1 does not run and this goes red.
+#
+# The executed set is derived, not listed: every tool file named by an entry in
+# $toolSuites, plus the tool files those files themselves invoke (one level).
+# That second hop is why test-electron-repaint-probe.cjs needs no entry of its
+# own -- it is reached through test-electron-repaint.ps1, and the edge is read
+# from that file's source rather than trusted from a comment.
+$executed = New-Object 'System.Collections.Generic.HashSet[string]'
+# One separator or more: the Cmd strings live in single-quoted PowerShell, so an
+# entry written as "{0}\\tools\\x.ps1" carries a DOUBLE backslash that a
+# single-separator pattern silently skipped -- one release gate's executed
+# attribution was being dropped for a typo nobody could see.
+foreach ($s in $toolSuites) {
+    foreach ($m in [regex]::Matches($s.Cmd, 'tools[\\]+([A-Za-z0-9._-]+)')) {
+        $null = $executed.Add($m.Groups[1].Value)
+    }
+}
+# The Name field is the suite's display label, not a claim about what runs, and
+# it used to be seeded into $executed before Cmd was read. A record whose Name
+# said gate A while Cmd ran gate B therefore satisfied completeness for A
+# without ever executing it (SRC-063 CORE-002). It is now proven decorative
+# instead of trusted: every Name leaf must already be covered by Cmd.
+$unbackedNames = @()
+foreach ($s in $toolSuites) {
+    $leaf = ($s.Name -split ' ')[0]
+    if ($s.Cmd -notlike "*$leaf*") { $unbackedNames += $leaf }
+}
+Assert-True ($unbackedNames.Count -eq 0) "every suite Name is backed by its own Cmd, not standing in for it (unbacked: $($unbackedNames -join ', '))"
+foreach ($e in @($executed)) {
+    $src = "$root\tools\$e"
+    if (-not (Test-Path $src)) { continue }
+    foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($src), 'tools[\\/]([A-Za-z0-9._-]+\.(?:js|cjs|mjs|ps1))')) {
+        $null = $executed.Add($m.Groups[1].Value)
+    }
+}
+# The steps release.ps1 runs that GENERATE or IMPORT product bytes instead of
+# asserting anything. They were previously excused by a file-name prefix
+# (test-/check-), which also silently excused any future gate named verify-*.js
+# or audit-*.js -- an existence check that reads as coverage but proves nothing
+# is executed (T-390). Naming the four steps is a smaller, falsifiable list
+# than a naming convention, and each entry is checked below to still be invoked.
+$releaseNonGates = Get-ReleaseNonGatePaths
+foreach ($n in $coverage.DroppedNonGates) {
+    Assert-True $false "release non-gate is still invoked by release.ps1: $n"
+}
+Assert-True ($coverage.DroppedNonGates.Count -eq 0) "every BUILD_IMPORT step is still invoked by release.ps1 (dropped: $($coverage.DroppedNonGates -join ', '))"
+$releaseTestGates = @($coverage.MustRun | ForEach-Object { Split-Path $_ -Leaf })
+$unrun = @($releaseTestGates | Where-Object { -not $executed.Contains($_) })
+Assert-True ($unrun.Count -eq 0) "every test gate release.ps1 runs is executed by this suite (not run here: $($unrun -join ', '))"
+Assert-True ($releaseTestGates.Count -ge 10) "the release gate set was actually derived, not empty ($($releaseTestGates.Count) gates)"
 
 Write-Host "
 ======================="

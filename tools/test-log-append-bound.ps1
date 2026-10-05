@@ -12,7 +12,7 @@
 #   5. the trimmed buffer never starts mid-line (no partial leading line);
 #   6. exactly ONE ScrollToCaret per call (bounded UI work, never per source line);
 #   7. retained recent text stays selectable/copyable;
-#   8. Say-Log / Say-BdLog / Say-TfLog all route through this ONE helper.
+#   8. Say-Log / Say-TfLog route through this ONE helper.
 #   RED control: restoring an unbounded appender (no cap / no chunk truncation)
 #   makes the retention assertions go red.
 #
@@ -44,7 +44,7 @@ if ($List) {
     Write-Host "  5. trimmed buffer never starts mid-line"
     Write-Host "  6. exactly one ScrollToCaret per call"
     Write-Host "  7. retained recent text is selectable/copyable"
-    Write-Host "  8. Say-Log/Say-BdLog/Say-TfLog share the one helper"
+    Write-Host "  8. Say-Log/Say-TfLog share the one helper"
     Write-Host "  RED control: an unbounded appender fails the retention gate"
     exit 0
 }
@@ -157,11 +157,9 @@ try {
     check '7. retained recent text is selectable/copyable' ($box3.SelectedText.Length -gt 0)
 } finally { $box3.Dispose() }
 
-# ---- 8: all three log surfaces route through the one bounded helper ----------
+# ---- 8: both remaining log surfaces route through the one bounded helper -----
 check '8. Say-Log routes through Add-BoundedLogText' (
     $guiText -match 'function Say-Log[\s\S]{0,320}Add-BoundedLogText')
-check '8. Say-BdLog routes through Add-BoundedLogText' (
-    $guiText -match 'function Say-BdLog[\s\S]{0,320}Add-BoundedLogText')
 check '8. Say-TfLog routes through Add-BoundedLogText' (
     $guiText -match 'function Say-TfLog[\s\S]{0,320}Add-BoundedLogText')
 

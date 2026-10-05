@@ -61,6 +61,7 @@ yeniden boyamak çalışırken mümkündür; ilk kurulum değildir, çünkü ar�
 | `terminal` | Windows Terminal şeması + tüm profiller için varsayılanlar, Consolas 12 aliased | evet — ayarlar profilinizde |
 | `conhost` | `HKCU\Console` varsayılanları + mevcut her cmd/PowerShell profili | evet — dokunulan değerlerin tam anlık görüntüsü |
 | `obs` | OBS 30.2+ `.ovt` varyantı + aktif `user.ini` tema kimliği | evet — profilinizde yaşar |
+| `qbittorrent` | paketlenmemiş Qt arayüz teması (`config.json` + `stylesheet.qss`) + `qBittorrent.ini` içindeki iki tema anahtarı | evet — profilinizde yaşar |
 | `antigravity`, `vscode` | `~/.antigravity/extensions` / `~/.vscode/extensions` içinde renk teması eklentisi | **evet** — profilinizde yaşar |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, aşağıya bakın | hayır — yükleyiciyi yeniden çalıştırın |
 | `claude` | Electron shim, yerinde yamalanır — aşağıya bakın | hayır — bir güncelleme yeni bir `app-<version>` klasörü yapar |
@@ -219,6 +220,20 @@ seçili olur. Apply veya Revert'ten önce OBS'yi kapatın: OBS çıkışta `user
 dosyasını yeniden yazar. İlk uygulama hem önceki seçimi hem de aynı adlı temayı
 bayt bayt yedekler.
 
+### qBittorrent
+
+`qbittorrent`, **paketlenmemiş** bir Qt arayüz temasını `%APPDATA%\qBittorrent\themes\wintage` içine yazar — bir `config.json` ( `Palette.*` rolleri ile qBittorrent’in kendi bağlam renkleri: aktarım listesi durumları, günlük önem düzeyleri) ve yanına bir `stylesheet.qss` (2px pah kırıkları, dik köşeler ve bir paletin ifade edemeyeceği Verdana) — ardından `General\CustomUIThemePath` anahtarını bu `config.json` dosyasına yöneltir ve `General\UseCustomUITheme=true` ayarını yapar.
+`.qbtheme` paketi yerine paketlenmemiş, bilerek: `.qbtheme` bir Qt Resource Collection dosyasıdır ve üretilebilmesi için makinede aynı ana sürümde bir `rcc` ikili dosyası gerekirdi; yani iki metin dosyası için derleyici bağımlılığı. qBittorrent klasör biçimini doğrudan okur (`FolderThemeSource`).
+Apply veya Revert öncesi qBittorrent’i kapatın: çıkarken tüm `qBittorrent.ini` dosyasını yeniden yazar, dolayısıyla çalışırken yapılan bir düzenleme kapanışta kaybolur — hedef bu durumda çalışmayı reddeder, bir sonraki çıkışın sileceği bir başarı bildirmez. `-Revert` iki INI anahtarını Wintage öncesi tam değerlerine döndürür (yoklarsa kaldırır) ve aynı adlı tema klasörünü bayt bayt geri koyar; Apply sonrası yapılan ilgisiz `qBittorrent.ini` düzenlemeleri korunur.
+Erişilemez: araç çubuğu ve sistem tepsisi simgeleri qBittorrent’in kendi derlenmiş kaynak paketinden gelir, dolayısıyla özgün renklerini korur.
+
+### Yazı tipleri: adlandırılır, asla kurulmaz
+
+UI.md'nin 1. kuralı Verdana'yı **kenar yumuşatma olmadan** ister. Bir Qt stil sayfasının buna karşılık bir özelliği yoktur ve MPC-HC'nin `OSDFont`u sadece sıradan bir GDI yazı tipi adıdır — yani tek kaldıraç yazı tipinin kendisidir. Depo kökündeki `Verdana_m1.ttf`, Verdana'nın 3 ile 30 ppem arasında önceden işlenmiş 1bpp bitmap kesitlerini taşıyan bir kopyasıdır ve işleyici, konturu yumuşatmak yerine bunları kullanır.
+`qbittorrent` ve `obs` stil sayfaları `Verdana_m1, Verdana` adını verir; `mpchc` ise ikisinden makinenin fiilen çözdüğünü adlandırır. **Kurulum programı asla bir yazı tipi kurmaz ve kaldırmaz** ve bu bilinçlidir, eksik değil:
+Bir yazı tipi ailesi (aile, biçim) ile çözülür. Regular + Bold + Italic'i kaydederseniz her tüketici doğru çözülür; **bir** üyeyi kaydı silerseniz, o aileyi isteyen her tüketici kalan bir üyeye yönlendirilir. `MS Shell Dlg 2`'yi — Windows'un iletişim kutusu yazı tipini — `HKLM\...\FontSubstitutes` üzerinden o aileye diğer ad olarak bağlayan bir makinede, Regular'i kaldırmak **masanın tamamını italik** yapar; DWM'nin zaten önbelleğe aldığı pencere başlıkları dahil, ve bunu geri almak için oturumu kapatmak gerekir. Hiçbir referans sayma bunu düzeltmez: etki alanı makine genelidir ve bir tema kurulum programının orada işi yoktur.
+Yani yazı tipi tek seferlik ve açık bir kullanıcı eylemidir: `Verdana_m1.ttf` üzerinde sağ tıklayın → **Kur** (kullanıcı başına, yönetici gerekmez), ardından hedefi yeniden uygulayın. Yazı tipi yoksa hedefler bunu bir kez söyler, düzeltmeyi adlandırır ve stok Verdana'ya geri döner — kenar yumuşatmayla birlikte, ama arkanızda makinede hiçbir şey yapılmadan.
+
 ### Electron uygulamaları
 
 `resources/app.asar`, `resources/app/app.asar` konumuna taşınır (`app.asar.unpacked`
@@ -340,4 +355,4 @@ Her iki terminal hedefi de `%APPDATA%\Wintage\terminal-font.json` dosyasındaki 
 Kurulum sihirbazı **yazı tiplerine göz atar, onları kurmaz.** TERMINAL FONTS sekmesi, canlı önizleme için gömülü bir yüzü süreç yerel `PrivateFontCollection` içine yükler; bu **sıfır** sistem yazı tipi kaydı yapar. Yazı tipi, boyut (7–24 pt) veya işleme kipi (aliased/grayscale/cleartype) seçimi yalnızca önizlemeyi ve tercihi günceller. Yazı tipi kurmak, Windows'un kendi yazı tipi kurulum sihirbazını açan açık bir **INSTALL SELECTED** işlemidir; Windows'un onayından sonra kullanıcı Refresh ile yeniden yoklar. Gerçek terminal değişiklikleri yalnızca açık bir **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** işleminde olur.
 
 Windows Terminal, seçilen boyutta seçili kurulu aileye uygulanır ve işleme kipi `profiles.defaults.antialiasingMode` değerine eşlenir. Klasik conhost daha katıdır: sabit bir hücre ızgarasında çizer, bu yüzden seçilen yüz, Windows onu çözebiliyorsa (varsayılan yüz ve Consolas yedeği muaf tutulur) aksi halde herhangi bir kayıt defteri mutasyonundan önce reddedilir. Health ve Reapply, yapılandırılmış yüz/boyut/kenar yumuşatmayı tercihle karşılaştırır, böylece bir Apply'den sonra tercihi değiştirmek sağlıklı olmaktan çıkıp sapma olarak bildirilir. Terminal renkleri yaşam döngüsüne dokunulmaz: Revert, Wintage öncesi sahiplenilen değerleri birebir geri yükler ve makineden asla bir yazı tipi kaldırmaz.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

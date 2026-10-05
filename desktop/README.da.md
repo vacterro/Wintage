@@ -63,6 +63,7 @@ arkivet er i brug.
 | `terminal` | Windows Terminal-skema + standarder for alle profiler, Consolas 12 aliaseret | yes — indstillingerne ligger i din profil |
 | `conhost` | `HKCU\Console`-standarder + enhver eksisterende cmd/PowerShell-profil | yes — eksakt snapshot af berørte værdier |
 | `obs` | OBS 30.2+ `.ovt`-variant + aktiv `user.ini`-tema-ID | ja — det ligger i din profil |
+| `qbittorrent` | udpakket Qt-uitema (`config.json` + `stylesheet.qss`) + de to temanøgler i `qBittorrent.ini` | yes — det ligger i din profil |
 | `antigravity`, `vscode` | farvetema-udvidelse i `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — det ligger i din profil |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-shim, se nedenfor | no — kør installatøren igen |
 | `claude` | Electron-shim, patch'et på stedet — se nedenfor | no — en opdatering laver en ny `app-<version>`-mappe |
@@ -216,6 +217,20 @@ installerer den i `%APPDATA%\obs-studio\themes`, og skriver dens stabile tema-ID
 Luk OBS før Apply eller Revert: OBS omskriver `user.ini` ved afslutning. Første anvendelse
 sikkerhedskopierer både det tidligere valg og ethvert tema med samme navn byte-for-byte.
 
+### qBittorrent
+
+`qbittorrent` skriver et **udpakket** Qt-uitema ned i `%APPDATA%\qBittorrent\themes\wintage` — en `config.json` (rollerne `Palette.*` plus qBittorrents egne kontekstfarver: tilstande i overførselslisten, logalvorligheder) og en `stylesheet.qss` ved siden af (2px-fasningerne, de rette hjørner og Verdana, som en palet ikke kan udtrykke) — og peger derefter `General\CustomUIThemePath` på den `config.json` og sætter `General\UseCustomUITheme=true`.
+Udpakket frem for en `.qbtheme`-pakke, med vilje: en `.qbtheme` er en Qt Resource Collection-fil og ville kræve en `rcc`-binær med matchende major-version på maskinen for at blive lavet — en compilerafhængighed for to tekstfiler. qBittorrent læser mappeformen oprindeligt (`FolderThemeSource`).
+Luk qBittorrent før Apply eller Revert: den omskriver hele `qBittorrent.ini` ved afslutning, så en ændring foretaget mens den kører, kasseres ved lukning — målet nægter at køre i den tilstand frem for at rapportere en succes, som næste afslutning sletter. `-Revert` fører de to INI-nøgler tilbage til deres nøjagtige værdier før Wintage (eller fjerner dem, hvis de ikke fandtes) og lægger en eventuel temamappe med samme navn tilbage byte for byte; uvedkommende ændringer i `qBittorrent.ini` efter Apply overlever.
+Ikke muligt: værktøjslinje- og bakkeikoner kommer fra qBittorrents egen kompilerede ressourcepakke, så de beholder deres oprindelige farver.
+
+### Skrifttyper: navngivet, installeres aldrig
+
+Lov 1 i UI.md beder om Verdana **uden antialiasing**. En Qt-stylesheet har ingen egenskab til det, og MPC-HC's `OSDFont` er bare et GDI-skriftnavn — så det eneste greb er selve skriften. `Verdana_m1.ttf` i repo-roden er en kopi af Verdana med forudrenderede 1bpp-bitemap-snit fra 3 til 30 ppem, som rendereren bruger frem for at udjævne konturen.
+Stylesheets'erne for `qbittorrent` og `obs` navngiver `Verdana_m1, Verdana`, og `mpchc` navngiver den af de to, maskinen faktisk opløser. **Installeren installerer eller fjerner aldrig en skrift**, og det er bevidst, ikke ufuldstændigt:
+En skriftfamilie opløses efter (familie, stil). Registrér Regular + Bold + Italic, så opløser alle forbrugere korrekt; fjern **ét** medlem, så omdirigerer alle forbrugere, der beder om den familie, til et overlevende medlem. På en maskine, der aliasserer `MS Shell Dlg 2` — Windows' dialogfont — til den familie via `HKLM\...\FontSubstitutes`, gør fjernelse af Regular **hele skrivebordet kursiv**, også vinduestitler, som DWM allerede har cachelagt, og en logoff er nødvendig for at få det tilbage. Ingen mængde referencetælling retter det: virkningsområdet er maskinbredt, og en temainstaller har ikke noget at gøre der.
+Så skriften er en engangs, eksplicit brugerhandling: højreklik på `Verdana_m1.ttf` → **Installér** (per bruger, ingen admin nødvendig), og anvend derefter målet igen. Er skriften fraværende, siger målene det én gang, navngiver rettelsen og falder tilbage på standard-Verdana — med antialiasing, men uden at der gøres noget ved maskinen bag din ryg.
+
 ### Electron-apps
 
 `resources/app.asar` flyttes til `resources/app/app.asar` (dets `app.asar.unpacked`-
@@ -330,4 +345,4 @@ Begge terminalmål læser ÉN kanonisk typografisk indstilling i `%APPDATA%\Wint
 Installatøren **gennemser skrifter, den installerer dem ikke.** Fanen TERMINAL FONTS indlæser en indbundet skrifttype i en proceslokal `PrivateFontCollection` til en live forhåndsvisning, som foretager **nul** systemregistreringer af skrifter. At vælge en skrift, en størrelse (7–24 pt) eller en gengivelsestilstand (aliased/grayscale/cleartype) opdaterer kun forhåndsvisningen og indstillingen. At installere en skrift er en eksplicit **INSTALL SELECTED**-handling, der åbner Windows' egen skriftinstallatør; efter Windows' bekræftelse må brugeren tjekke igen med Refresh. Reelle terminalændringer sker kun ved en eksplicit **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal anvendes på den valgte installerede familie i den valgte størrelse, og gengivelsestilstanden kortlægges til `profiles.defaults.antialiasingMode`. Klassisk conhost er strengere: den gengiver på et fast cellenet, så en valgt skrifttype nægtes før nogen ændring af registret, medmindre Windows kan opløse den (standardtypen og Consolas-reserven er undtaget). Health og Reapply validerer den konfigurerede skrifttype, størrelse og antialiasing mod indstillingen, så en ændring af indstillingen efter et Apply rapporteres som en afvigelse i stedet for som "sund". Terminalfarvernes livscyklus er urørt: Revert gendanner de præcise værdier, der var ejet af Wintage før, og fjerner aldrig en skrift fra maskinen.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

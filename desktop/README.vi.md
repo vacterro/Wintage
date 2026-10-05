@@ -41,6 +41,7 @@ Apply gọi ra ngoài `install.ps1`. Chỉ có đúng một đường code cài 
 | `terminal` | scheme Windows Terminal + mặc định mọi profile, Consolas 12 aliased | có — cài đặt nằm trong profile của bạn |
 | `conhost` | mặc định `HKCU\Console` + mọi profile cmd/PowerShell hiện có | có — snapshot chính xác giá trị đã đụng |
 | `obs` | variant OBS 30.2+ `.ovt` + id theme `user.ini` đang dùng | có — nó nằm trong profile của bạn |
+| `qbittorrent` | giao diện Qt chưa đóng gói (`config.json` + `stylesheet.qss`) + hai khóa giao diện trong `qBittorrent.ini` | có — nó nằm trong profile của bạn |
 | `antigravity`, `vscode` | extension theme màu trong `~/.antigravity/extensions` / `~/.vscode/extensions` | **có** — nó nằm trong profile của bạn |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electron, xem bên dưới | không — chạy lại trình cài |
 | `claude` | shim Electron, vá ngay tại chỗ — xem bên dưới | không — bản cập nhật tạo thư mục `app-<version>` mới |
@@ -108,6 +109,20 @@ Chromium cố ý cấm cài extension ngoài store âm thầm trên máy Windows
 ### OBS Studio
 
 `obs` sinh một variant OBS 30.2+ trên nền Yami Classic được duy trì, cài vào `%APPDATA%\obs-studio\themes`, và ghi id theme ổn định của nó vào `user.ini`, nên palette Wintage đã chọn được chọn sẵn ở lần khởi động sau. Đóng OBS trước Apply hoặc Revert: OBS tự ghi lại `user.ini` khi thoát. Lần apply đầu sao lưu cả lựa chọn trước đó lẫn mọi theme cùng tên nguyên byte.
+
+### qBittorrent
+
+`qbittorrent` ghi một giao diện Qt **chưa đóng gói** vào `%APPDATA%\qBittorrent\themes\wintage` — một `config.json` (các vai trò `Palette.*` cùng các màu ngữ cảnh riêng của qBittorrent: trạng thái danh sách truyền, mức độ nghiêm trọng của nhật ký) và một `stylesheet.qss` bên cạnh (các góc vát 2px, góc vuông và Verdana, những thứ mà bảng màu không thể diễn đạt) — rồi trỏ `General\CustomUIThemePath` tới `config.json` đó và đặt `General\UseCustomUITheme=true`.
+Chưa đóng gói thay vì gói `.qbtheme`, là cố ý: `.qbtheme` là tệp Qt Resource Collection và để tạo ra nó cần một tệp nhị phân `rcc` cùng phiên bản chính trên máy, tức là phụ thuộc trình biên dịch chỉ vì hai tệp văn bản. qBittorrent đọc dạng thư mục theo cách gốc (`FolderThemeSource`).
+Hãy đóng qBittorrent trước khi Apply hoặc Revert: nó ghi lại toàn bộ `qBittorrent.ini` khi thoát, nên thay đổi thực hiện lúc nó đang chạy sẽ bị bỏ khi đóng — mục tiêu từ chối chạy trong trạng thái đó thay vì báo thành công mà lần thoát kế tiếp sẽ xóa. `-Revert` trả hai khóa INI về đúng giá trị trước Wintage (hoặc xóa chúng nếu trước đó không có) và đặt lại nguyên từng byte thư mục giao diện cùng tên; những sửa đổi không liên quan trong `qBittorrent.ini` thực hiện sau Apply vẫn được giữ.
+Không thể với tới: biểu tượng trên thanh công cụ và khay hệ thống đến từ gói tài nguyên đã biên dịch của chính qBittorrent, nên giữ nguyên màu gốc.
+
+### Phông chữ: được đặt tên, không bao giờ cài đặt
+
+Luật 1 trong UI.md yêu cầu Verdana **không khử răng cưa**. Một stylesheet Qt không có thuộc tính nào cho điều đó, và `OSDFont` của MPC-HC chỉ là tên phông GDI thông thường — nên đòn bẩy duy nhất chính là bộ phông. `Verdana_m1.ttf` ở thư mục gốc kho lưu trữ là bản sao của Verdana mang các nét bitmap 1bpp được kết xuất trước ở dải 3–30 ppem, mà bộ kết xuất ưu tiên hơn việc làm mượt đường viền chữ.
+Stylesheet của `qbittorrent` và `obs` nêu tên `Verdana_m1, Verdana`, còn `mpchc` nêu tên cái mà máy thực sự phân giải được. **Trình cài đặt không bao giờ cài hay gỡ một phông chữ**, và đó là cố ý chứ không phải còn dang dở:
+Một họ phông được phân giải theo (họ, kiểu). Đăng ký Regular + Bold + Italic thì mọi bên tiêu thụ đều phân giải đúng; hủy đăng ký **một** thành viên thì mọi bên tiêu thụ yêu cầu họ đó sẽ chuyển hướng sang thành viên còn lại. Trên máy ánh xạ `MS Shell Dlg 2` — phông hộp thoại của Windows — sang họ đó qua `HKLM\...\FontSubstitutes`, việc gỡ bỏ Regular khiến **toàn bộ màn hình nền nghiêng**, kể cả tiêu đề cửa sổ mà DWM đã lưu đệm, và cần đăng xuất mới lấy lại được. Không lượng tham chiếu nào sửa được điều đó: phạm vi ảnh hưởng là toàn máy, và trình cài đặt giao diện không nên can thiệp ở đó.
+Vì vậy phông chữ là một hành động rõ ràng, một lần duy nhất của người dùng: nhấp phải vào `Verdana_m1.ttf` → **Cài đặt** (theo người dùng, không cần quyền quản trị), rồi áp dụng lại mục tiêu. Nếu thiếu phông, các mục tiêu nói điều đó đúng một lần, nêu cách khắc phục rồi quay về Verdana gốc — có khử răng cưa, nhưng không có gì động vào máy sau lưng bạn.
 
 ### Ứng dụng Electron
 
@@ -187,4 +202,4 @@ Cả hai target terminal đọc MỘT tuỳ chọn kiểu chữ chuẩn duy nh�
 Trình cài **duyệt font, không cài chúng.** Tab TERMINAL FONTS nạp một mặt font đi kèm vào `PrivateFontCollection` cục bộ tiến trình để xem trước trực tiếp, việc này thực hiện **không** đăng ký font hệ thống nào. Chọn font, cỡ (7–24 pt) hay chế độ vẽ (aliased/grayscale/cleartype) chỉ cập nhật bản xem trước và tuỳ chọn. Cài một font là hành động **INSTALL SELECTED** rõ ràng, mở trình cài font sẵn có của Windows; sau khi Windows xác nhận, người dùng dò lại bằng Refresh. Thay đổi terminal thật sự chỉ xảy ra ở hành động rõ ràng **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal được áp cho họ font đã cài mà bạn chọn ở cỡ đã chọn, và chế độ vẽ ánh xạ tới `profiles.defaults.antialiasingMode`. conhost cổ điển khắt khe hơn: nó vẽ trên lưới ô cố định, nên một mặt font được chọn sẽ bị từ chối trước mọi thay đổi registry trừ khi Windows tự phân giải được nó (mặt font mặc định và dự phòng Consolas được miễn trừ). Health và Reapply kiểm tra mặt font/cỡ/khoá antialiasing đã cấu hình so với tuỳ chọn, nên đổi tuỳ chọn sau một Apply được báo là trôi lệch chứ không phải còn khoẻ. Vòng đời màu terminal không bị đụng: Revert khôi phục đúng các giá trị thuộc sở hữu trước Wintage và không bao giờ gỡ font khỏi máy.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

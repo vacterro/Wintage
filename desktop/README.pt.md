@@ -41,6 +41,7 @@ Apply delega para `install.ps1`. Há exatamente um caminho de código que instal
 | `terminal` | esquema do Windows Terminal + predefinições de todos os perfis, Consolas 12 com aliasing | sim — as definições estão no seu perfil |
 | `conhost` | predefinições de `HKCU\Console` + todos os perfis cmd/PowerShell existentes | sim — instantâneo exato dos valores tocados |
 | `obs` | variante `.ovt` do OBS 30.2+ + ID de tema ativo no `user.ini` | sim — vive no seu perfil |
+| `qbittorrent` | tema de interface Qt desempacotado (`config.json` + `stylesheet.qss`) + as duas chaves de tema no `qBittorrent.ini` | sim — vive no seu perfil |
 | `antigravity`, `vscode` | extensão de tema de cores em `~/.antigravity/extensions` / `~/.vscode/extensions` | **sim** — vive no seu perfil |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electron, ver abaixo | não — re-execute o instalador |
 | `claude` | shim Electron, corrigido no lugar — ver abaixo | não — uma atualização cria uma nova pasta `app-<version>` |
@@ -108,6 +109,20 @@ O Chromium proíbe deliberadamente a instalação silenciosa de extensões fora 
 ### OBS Studio
 
 `obs` gera uma variante OBS 30.2+ sobre a base mantida Yami Classic, instala-a em `%APPDATA%\obs-studio\themes` e escreve o seu ID de tema estável no `user.ini`, para que a paleta Wintage escolhida já esteja selecionada no próximo arranque. Feche o OBS antes de Apply ou Revert: o OBS reescreve o `user.ini` ao sair. O primeiro apply faz backup tanto da seleção anterior como de qualquer tema com o mesmo nome byte-por-byte.
+
+### qBittorrent
+
+`qbittorrent` escreve um tema de interface Qt **desempacotado** em `%APPDATA%\qBittorrent\themes\wintage` — um `config.json` (as funções `Palette.*` mais as cores de contexto do próprio qBittorrent: estados da lista de transferências, gravidades do registro) e um `stylesheet.qss` ao lado (os biséis de 2px, os cantos retos e a Verdana, que uma paleta não consegue expressar) — e depois aponta `General\CustomUIThemePath` para esse `config.json` e define `General\UseCustomUITheme=true`.
+Desempacotado em vez de um pacote `.qbtheme`, de propósito: um `.qbtheme` é um arquivo Qt Resource Collection e exigiria um binário `rcc` de versão principal correspondente na máquina para ser produzido, ou seja, uma dependência de compilador para dois arquivos de texto. O qBittorrent lê a forma de pasta nativamente (`FolderThemeSource`).
+Feche o qBittorrent antes de Apply ou Revert: ele reescreve todo o `qBittorrent.ini` ao sair, então uma edição feita enquanto ele roda é descartada ao fechar — o alvo se recusa a rodar nesse estado em vez de relatar um sucesso que a próxima saída apaga. `-Revert` devolve as duas chaves do INI aos seus valores exatos de antes do Wintage (ou as remove, se não existiam) e recoloca qualquer pasta de tema de mesmo nome byte a byte; edições não relacionadas no `qBittorrent.ini` feitas depois do Apply sobrevivem.
+Não alcançável: os ícones da barra de ferramentas e da bandeja vêm do próprio pacote de recursos compilado do qBittorrent, então mantêm as cores originais.
+
+### Tipos de letra: nomeados, nunca instalados
+
+A lei 1 do UI.md pede Verdana **sem suavização**. Uma folha de estilo Qt não tem nenhuma propriedade para isso, e o `OSDFont` do MPC-HC é apenas um nome de tipo de letra GDI — a única alavanca é o próprio tipo de letra. O `Verdana_m1.ttf` na raiz do repositório é uma cópia da Verdana com traços de bitmap de 1 bpp pré-renderizados de 3 a 30 ppem, que o renderizador prefere a alisar o contorno.
+As folhas de estilo de `qbittorrent` e `obs` nomeiam `Verdana_m1, Verdana`, e `mpchc` nomeia aquela que a máquina realmente resolve. **O instalador nunca instala nem desinstala um tipo de letra**, e isso é deliberado, não inacabado:
+Uma família de tipos é resolvida por (família, estilo). Registe Regular + Bold + Italic e cada consumidor resolve-se corretamente; anule **um** membro e cada consumidor que peça essa família é redirecionado para um membro sobrevivente. Numa máquina que faz alias de `MS Shell Dlg 2` — o tipo de letra das caixas de diálogo do Windows — para essa família através de `HKLM\...\FontSubstitutes`, remover Regular torna **todo o ambiente de trabalho itálico**, incluindo os títulos das janelas que o DWM já tinha em cache, e é preciso terminar sessão para recuperar. Nenhuma contagem de referências resolve isto: o raio de alcance é a máquina inteira e um instalador de temas não tem ali nada a fazer.
+Assim, o tipo de letra é uma acção única e explícita do utilizador: clique direito em `Verdana_m1.ttf` → **Instalar** (por utilizador, sem direitos de administrador) e depois volte a aplicar o alvo. Se o tipo de letra faltar, os alvos dizem-no uma vez, nomeiam a correcção e regressam à Verdana de origem — com suavização, mas sem que nada seja feito à sua máquina pelas suas costas.
 
 ### Aplicações Electron
 
@@ -187,4 +202,4 @@ Ambos os alvos de terminal lêem UMA preferência tipográfica canónica de `%AP
 O instalador **navega nas fontes, não as instala.** O separador TERMINAL FONTS carrega um tipo incluído para uma `PrivateFontCollection` local ao processo para pré-visualização ao vivo, que executa **zero** registos de fontes de sistema. Escolher uma fonte, um tamanho (7–24 pt) ou um modo de renderização (aliased/grayscale/cleartype) atualiza apenas a pré-visualização e a preferência. Instalar uma fonte é uma ação explícita **INSTALL SELECTED** que abre o instalador de fontes do próprio Windows; depois da confirmação do Windows, o utilizador volta a sondar com Refresh. As alterações reais ao terminal só acontecem com uma ação explícita **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 O Windows Terminal é aplicado à família instalada selecionada no tamanho selecionado, e o modo de renderização mapeia-se para `profiles.defaults.antialiasingMode`. O conhost clássico é mais estrito: renderiza numa grelha fixa de células, por isso um tipo selecionado é recusado antes de qualquer mutação no registo, a menos que o Windows o resolva (o tipo predefinido e a reserva Consolas estão isentos). O Health e o Reapply validam o tipo, o tamanho e o suavizado configurados face à preferência, pelo que alterar a preferência depois de um Apply é reportado como desvio e não como "saudável". O ciclo de vida das cores do terminal fica intocado: o Revert repõe os valores exatos possuídos antes do Wintage e nunca remove uma fonte da máquina.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

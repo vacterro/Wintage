@@ -103,4 +103,4 @@ Zvýší číslo `@version` (patch) (hlavička Tampermonkey a razítko `W95_VERS
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:886c5e27060e7b30 -->
+<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->

@@ -41,6 +41,7 @@ A `-Palette` alapértelmezése a `goldendefault` (**Golden Default**). A GUI ugy
 | `terminal` | Windows Terminal séma + minden profil alapértelmezései, Consolas 12 aliasolt | igen — a beállítások a profilodban vannak |
 | `conhost` | `HKCU\Console` alapértelmezések + minden meglévő cmd/PowerShell profil | igen — az érintett értékek pontos pillanatképe |
 | `obs` | OBS 30.2+ `.ovt` változat + aktív `user.ini` témaazonosító | igen — a profilodban él |
+| `qbittorrent` | kicsomagolt Qt felületi téma (`config.json` + `stylesheet.qss`) + a két témakulcs a `qBittorrent.ini`-ben | igen — a profilodban él |
 | `antigravity`, `vscode` | színtéma-kiterjesztés a `~/.antigravity/extensions` / `~/.vscode/extensions` mappában | **igen** — a profilodban él |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron shim, lásd lentebb | nem — futtasd újra az telepítőt |
 | `claude` | Electron shim, helyben javítva — lásd lentebb | nem — egy frissítés új `app-<version>` mappát készít |
@@ -108,6 +109,20 @@ A `windows` telepíti és azonnal aktiválja a tartalom-címzett `%LOCALAPPDATA%
 ### OBS Studio
 
 A `obs` egy OBS 30.2+ változatot generál a karbantartott Yami Classic alapra, a `%APPDATA%\obs-studio\themes` mappába telepíti, és a stabil témaazonosítóját a `user.ini`-be írja, így a kiválasztott Wintage-paletta a következő indításkor már ki van választva. Az Apply vagy Revert előtt zárd be az OBS-t: az OBS kilépéskor felülírja a `user.ini` fájlt. Az első alkalmazás bájtonként menti az előző kijelölést és minden azonos nevű témát.
+
+### qBittorrent
+
+A `qbittorrent` egy **kicsomagolt** Qt felületi témát ír a `%APPDATA%\qBittorrent\themes\wintage` mappába — egy `config.json`-t (a `Palette.*` szerepek, valamint a qBittorrent saját kontextusszínei: átviteli lista állapotai, naplósúlyosságok), mellé pedig egy `stylesheet.qss`-t (a 2px-es ferde élek, a derékszögű sarkok és a Verdana, amit egy paletta nem tud kifejezni) — majd a `General\CustomUIThemePath` kulcsot erre a `config.json`-ra állítja, és bekapcsolja a `General\UseCustomUITheme=true` értéket.
+Kicsomagolva, nem `.qbtheme` csomagként — szándékosan: a `.qbtheme` Qt Resource Collection fájl, előállításához egyező főverziójú `rcc` bináris kellene a gépre, azaz fordítófüggőség két szövegfájl kedvéért. A qBittorrent a mappás formát natívan olvassa (`FolderThemeSource`).
+Apply vagy Revert előtt zárja be a qBittorrentet: kilépéskor az egész `qBittorrent.ini`-t újraírja, így a futás közben végzett módosítás bezáráskor elveszik — a cél inkább megtagadja a működést ebben az állapotban, mint hogy olyan sikert jelentsen, amelyet a következő kilépés töröl. A `-Revert` visszaállítja a két INI-kulcsot a Wintage előtti pontos értékére (vagy eltávolítja őket, ha nem voltak), és bájtpontosan visszatesz minden azonos nevű témamappát; az Apply után végzett, nem kapcsolódó `qBittorrent.ini`-módosítások megmaradnak.
+Nem érhető el: az eszköztár- és tálcaikonok a qBittorrent saját fordított erőforráscsomagjából származnak, ezért megtartják eredeti színeiket.
+
+### Betűtípusok: nevekre vett, soha nem telepített
+
+A UI.md 1. törvénye Verdanát kéri **antialiasing nélkül**. Egy Qt stíluslapnak nincs ehhez tulajdonsága, az MPC-HC `OSDFont` pedig puszta GDI betűtípusnév — így az egyetlen fogantyú maga a betűtípus. A repó gyökerében lévő `Verdana_m1.ttf` a Verdana másolata, amely 3–30 ppem tartományban előre renderelt 1bpp bittérképes metszeteket hordoz, és ezeket a renderelő a kontúr simítása helyett használja.
+A `qbittorrent` és az `obs` stíluslapok a `Verdana_m1, Verdana` nevet adják meg, az `mpchc` pedig azt a kettő közül, amelyet a gép tényleg felold. **A telepítő soha nem telepít és nem távolít el betűtípust**, és ez szándékos, nem befejezetlen:
+Egy betűtípuscsalád (család, stílus) alapján oldódik fel. Regisztráld a Regular + Bold + Italic fájlokat, és minden fogyasztó helyesen oldódik fel; ha **egy** tagot visszavonsz, minden fogyasztó, amely ezt a családot kéri, egy megmaradt tagra irányul át. Azon a gépen, amely a `MS Shell Dlg 2`-t — a Windows dialógusablakainak betűtípusát — a `HKLM\...\FontSubstitutes` útján erre a családra aliasolja, a Regular eltávolítása **az egész asztalt dőlté teszi**, beleértve azokat az ablakcímeket is, amelyeket a DWM már gyorsítótárazott, és a visszaállításhoz kijelentkezés kell. Ezt egyetlen hivatkozásszámlálás sem javítja: a hatókör gépszerte, és egy tématelepítőnek nincs dolga ott.
+A betűtípus tehát egyszeri, kifejezett felhasználói lépés: jobb gomb a `Verdana_m1.ttf` fájlon → **Telepítés** (felhasználónkénti, nem kell admin), majd alkalmazd újra a célt. Ha a betűtípus hiányzik, a célok egyszer kimondják, megnevezik a javítást, és visszaesnek az eredeti Verdanára — antialiasinggel, de semmi sem történik a gépeden a hátad mögött.
 
 ### Electron alkalmazások
 
@@ -249,4 +264,4 @@ beállításhoz mérték, így az Apply utáni beállításváltoztatás eltér�
 jelenik meg, nem pedig "egészségesként". A terminálszínek életciklusa érintetlen:
 a Revert visszaállítja a pontos, Wintage előtti birtokolt értékeket, és soha
 nem távolít el betűtípust a gépről.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

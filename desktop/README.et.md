@@ -63,6 +63,7 @@ arhiiv on kasutuses.
 | `terminal` | Windows Terminal skeem + kõigi profiilide vaikeseaded, Terminus (TTF) Windowsile | yes — seaded on sinu profiilis |
 | `conhost` | `HKCU\Console` vaikeseaded + iga olemasolev cmd/PowerShell profiil | yes — puudutatud väärtuste täpne hetktõmmis |
 | `obs` | OBS 30.2+ `.ovt` variant + aktiivne `user.ini` teema ID | yes — elab sinu profiilis |
+| `qbittorrent` | lahtipakendatud Qt UI teema (`config.json` + `stylesheet.qss`) + kaks teemivõtit failis `qBittorrent.ini` | yes — elab sinu profiilis |
 | `antigravity`, `vscode` | värviteema laiendus kaustas `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — elab sinu profiilis |
 | `freebuff`, `antigravity-app`, `codenomad` | Electroni shim, vaata allpool | no — käivita paigaldaja uuesti |
 | `claude` | Electroni shim, plaasterdatud paigas — vaata allpool | no — uuendus loob uue `app-<version>` kausta |
@@ -307,6 +308,24 @@ juba valitud. Sulge OBS enne RAKENDA või TASTA kasutamist: OBS kirjutab
 `user.ini` väljudes üle. Esimene rakendamine varundab nii eelmise valiku kui ka
 igasuguse samanimelise teema baidibaidi.
 
+### qBittorrent
+
+`qbittorrent` kirjutab `%APPDATA%\qBittorrent\themes\wintage` kausta **lahtipakendatud** Qt UI teema — faili `config.json` (rollid `Palette.*` pluss qBittorrenti enda kontekstivärvid: ülekandeloendi olekud, logi raskusastmed) ja selle kõrval `stylesheet.qss` (2px faasad, nurgad ja Verdana, mida palett ei suuda väljendada) — ning suunab seejärel `General\CustomUIThemePath` sellele `config.json`-ile ja seab `General\UseCustomUITheme=true`.
+
+Lahtipakendatult, mitte `.qbtheme`-pakkina teadlikult: `.qbtheme` on Qt Resource Collection fail ning selle valmistamiseks oleks masinal vaja samas põhiversioonis `rcc` käivitatavat faili ehk kompilaatorisõltuvust kahe tekstifaili pärast. qBittorrent loeb kaustakuju loomupäraselt (`FolderThemeSource`).
+
+Sulgege qBittorrent enne Apply või Revert: see kirjutab väljumisel kogu `qBittorrent.ini` ümber, nii et töötava rakenduse ajal tehtud muudatus kaob sulgumisel — sihtmärk keeldub selles olekus töötamast, selle asemel et raporteerida edu, mille järgmine väljumine kustutab. `-Revert` taastab kaks INI-võtit nende täpsetele Wintage-eelsetele väärtustele (või eemaldab need, kui neid varem polnud) ning paneb sama nimega teemakausta baidihaaval tagasi; Apply-st hiljem tehtud seotudeta `qBittorrent.ini` muudatused jäävad alles.
+
+Kättesaamatu: tööriistariba ja süsteemiringi ikoonid pärinevad qBittorrenti enda kompileeritud ressurssikomplektist, seega jäävad neile endised tavavärvid.
+
+
+### Fondid: nimetatud, mitte kunagi paigaldatud
+
+UI.md seadus 1 nõuab Verdana **ilma antialiasinguta**. Qt-stiilileht pole selle jaoks omadust ning MPC-HC `OSDFont` on pelgalt GDI fondi nimi — ainus riputuskoha on font ise. Repos juurikas olev `Verdana_m1.ttf` on Verdana koopia, millel on eelnevalt renderdatud 1bpp bitmap-lõiked vahemikus 3–30 ppem, mida renderdaja kasutab pigem kui kontuuri siledustamist.
+`qbittorrent` ja `obs` stiililehed nimetavad `Verdana_m1, Verdana` ning `mpchc` nimetab neist kaks, mille masin tegelikult lahendab. **Paaldaja ei paalda ega eemalda kunagi fonti** ja see on tahtlik, mitte pooleli jäetud:
+Fondiperekond lahendatakse paarina (perekond, stiil). Registreeri Regular + Bold + Italic ning iga tarbija lahendub õigesti; eemalda **üks** liige ja iga tarbija, kes seda perekonda küsib, suunatakse üle ellujäänud liikmele. Masinal, mis aliaseb `MS Shell Dlg 2` ehk Windowsi dialoogifondi sellele perekonnale teel `HKLM\...\FontSubstitutes`, muudab Regulari eemaldamine **kogu töölaualdi kaldaks**, sealhulgas DWM-i juba vahemusse talletatud akna pealkirju, ning taastamiseks on vaja välja logida. Ükski viitede loendamine seda ei paranda: mõju ulatus on kogu masin ning teemapaaldajal pole seal asja ajada.
+Seega on font üks kordne ja selge kasutajategevus: paremklõps `Verdana_m1.ttf` peal → **Paalda** (kasutajapõhiselt, administraatorita pole vaja), seejärel rakenda sihtkoht uuesti. Kui font puudub, ütlevad sihtkohad seda üks kord, nimetavad paranduse ja langevad tagasi stock Verdana-le — antialiasinguga, kuid midagi pole masina taga tehtud.
+
 ### Electroni rakendused
 
 `resources/app.asar` teisaldatakse aadressile `resources/app/app.asar` (selle
@@ -397,4 +416,4 @@ node ..\tools\build-desktop.js --check  # exit 1 if anything is stale
 `release.ps1` käivitab ehituse ja iga värava, nii et väljalase ei saa saata
 väljundit, mis on palettidest kõrvale triivinud.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

@@ -61,6 +61,7 @@ GUI не может разойтись с командной строкой.
 | `terminal` | схема Windows Terminal + дефолты всех профилей, Terminus (TTF) для Windows | yes — настройки в твоём профиле |
 | `conhost` | дефолты `HKCU\Console` + каждый существующий профиль cmd/PowerShell | yes — снапшот только тронутых значений |
 | `obs` | вариант `.ovt` для OBS 30.2+ + активный ID темы в `user.ini` | yes — живёт в твоём профиле |
+| `qbittorrent` | распакованная тема интерфейса Qt (`config.json` + `stylesheet.qss`) + два ключа темы в `qBittorrent.ini` | yes — живёт в твоём профиле |
 | `antigravity`, `vscode` | расширение цветовой темы в `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — живёт в твоём профиле |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron-шим, см. ниже | no — перезапусти установщик |
 | `claude` | Electron-шим, патчится на месте — см. ниже | no — обновление создаёт новую папку `app-<version>` |
@@ -297,6 +298,43 @@ Windows новую цель ассоциации файла, когда та ж�
 Закрой OBS до Apply или Revert: OBS переписывает `user.ini` при выходе. Первый
 apply бэкапит байт-в-байт и прежний выбор, и любую одноимённую тему.
 
+### qBittorrent
+
+`qbittorrent` пишет **распакованную** тему интерфейса Qt в
+`%APPDATA%\qBittorrent\themes\wintage` — файл `config.json` (роли
+`Palette.*` плюс собственные контекстные цвета qBittorrent: состояния
+списка передач, уровни журнала) и `stylesheet.qss` рядом с ним (2px-фаски,
+прямые углы и Verdana, которые палитра не может выразить) — потом
+направляет `General\CustomUIThemePath` на этот `config.json` и задаёт
+`General\UseCustomUITheme=true`.
+
+Распакованной, а не пакетом `.qbtheme`, намеренно: `.qbtheme` — это файл
+Qt Resource Collection, и для его сборки на машине понадобился бы
+исполняемый файл `rcc` совпадающей основной версии, то есть зависимость
+от компилятора ради двух текстовых файлов. qBittorrent читает папочную форму
+нативно (`FolderThemeSource`).
+
+Закрой qBittorrent до Apply или Revert: он переписывает весь
+`qBittorrent.ini` при выходе, так что правка, сделанная пока приложение
+работает, теряется при закрытии — таргет отказывается работать в этом
+состоянии, вместо того чтобы отчитаться об успехе, который следующий выход
+сотрёт. `-Revert` возвращает два ключа INI к их точным значениям до Wintage
+(или удаляет их, если их не было) и восстанавливает любую одноимённую
+папку темы байт в байт; несвязанные правки `qBittorrent.ini`, сделанные
+после Apply, сохраняются.
+
+Недостижимо: значки панели инструментов и трея берутся из собственного
+скомпилированного пакета ресурсов qBittorrent, поэтому у них остаются
+штатные цвета.
+
+
+### Schriften: benannt, niemals installiert
+
+Gesetz 1 aus UI.md verlangt Verdana **ohne Kantenglättung**. Ein Qt-Stylesheet hot dafür kei Eiigenschaft, un `OSDFont` in MPC-HC isch e pure GDI-Schriftname — de einzige Hebel isch also d Schrift selwer. `Verdana_m1.ttf` im Repo-Wurzelverzeichnis isch e Kopie von Verdana mit vorgerenderten 1bpp-Bitmap-Schnitten von 3 bis 30 ppem, welle der Renderer dem Glätte der Kontur vorzieht.
+Die Stylesheets von `qbittorrent` un `obs` nenne `Verdana_m1, Verdana`, un `mpchc` nennt dijenige vun de beide, welle der Rechner tatsächlich uflöst. **Der Installer installiert un deinstalliert nie e Schrift**, un des isch Absicht, net Unferdichdichkeit:
+E Schriftfamilie wird über (Familie, Stil) uflöst. Registrier Sie Regular + Bold + Italic, dann löst jeder Verbraucher korrekt uflöst; melde Sie **ein** Mitglied ab, un jeder Verbraucher, wo di Family aafroocht, showt uf e verbleibend Mitglied. Auf em Rechner, wo `MS Shell Dlg 2` — de Windows-Dialogschrift — über `HKLM\...\FontSubstitutes` uf di Family aliast, wird duch s Entferne vun Regular **de ganze Desktop kursiv**, awerdi aach Feinschtilte, welle der DWM scho gispailt hot, un e Abmeldung isch nötig, um es zruckzuhole. Kei Menge Referenzzählung behebt des: Die Reichwede isch maschinweit, un e Theme-Installer hot do nix z suuche.
+Die Schrift isch also e eimolige, ausdrücklich Brucherhandlung: Rechklichklick auf `Verdana_m1.ttf` → **Installiere** (pro Brucher, kei Adminrecht nötig), danach s Ziel erneut aawende. Fehlt d Schrift, sange d Ziel des eenmol, nenne d Abhilfe un falle auf Standard-Verdana zruck — mit Kantenglättung, abber ohn dass hinder Ihrem Rucks ebbes an der Maschine verändere wird.
+
 ### Electron-приложения
 
 `resources/app.asar` переносится в `resources/app/app.asar` (его сосед
@@ -385,4 +423,4 @@ node ..\tools\build-desktop.js --check  # выход 1, если что-то п�
 `release.ps1` гоняет сборку и все шлюзы, так что релиз не может уехать с
 выводом, который разошёлся с палитрами.
 
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

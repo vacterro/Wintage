@@ -41,6 +41,7 @@ Apply apelează în exterior `install.ps1`. Există exact o cale de cod care ins
 | `terminal` | schemă Windows Terminal + setările implicite pentru toate profilurile, Consolas 12 aliased | da — setările sunt în profilul tău |
 | `conhost` | `HKCU\Console` implicite + fiecare profil cmd/PowerShell existent | da — snapshot exact al valorilor atinse |
 | `obs` | variantă OBS 30.2+ `.ovt` + ID-ul de temă activ din `user.ini` | da — trăiește în profilul tău |
+| `qbittorrent` | temă de interfață Qt neîmpachetată (`config.json` + `stylesheet.qss`) + cele două chei de temă din `qBittorrent.ini` | da — trăiește în profilul tău |
 | `antigravity`, `vscode` | extensie de temă de culoare în `~/.antigravity/extensions` / `~/.vscode/extensions` | **da** — trăiește în profilul tău |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electron, vezi mai jos | nu — re-rulează installer-ul |
 | `claude` | shim Electron, patch-uit pe loc — vezi mai jos | nu — o actualizare face un dosar nou `app-<version>` |
@@ -108,6 +109,20 @@ Chromium interzice deliberat instalarea silențioasă a extensiilor din afara ma
 ### OBS Studio
 
 `obs` generează o variantă OBS 30.2+ peste baza întreținută Yami Classic, o instalează în `%APPDATA%\obs-studio\themes` și scrie ID-ul său stabil de temă în `user.ini`, deci paleta Wintage aleasă este deja selectată la următoarea pornire. Închide OBS înainte de Apply sau Revert: OBS rescrie `user.ini` la ieșire. Prima aplicare face backup byte-cu-byte atât pentru selecția anterioară, cât și pentru orice temă cu același nume.
+
+### qBittorrent
+
+`qbittorrent` scrie o temă de interfață Qt **neîmpachetată** în `%APPDATA%\qBittorrent\themes\wintage` — un `config.json` (rolurile `Palette.*` plus culorile proprii de context ale qBittorrent: stările listei de transferuri, gravitățile jurnalului) și un `stylesheet.qss` alături (teșiturile de 2px, colțurile drepte și Verdana, pe care o paletă nu le poate exprima) — apoi îndreaptă `General\CustomUIThemePath` către acel `config.json` și setează `General\UseCustomUITheme=true`.
+Neîmpachetat, nu ca pachet `.qbtheme`, intenționat: un `.qbtheme` este un fișier Qt Resource Collection și ar cere pe mașină un binar `rcc` cu aceeași versiune majoră, adică o dependență de compilator pentru două fișiere text. qBittorrent citește forma de dosar nativ (`FolderThemeSource`).
+Închide qBittorrent înainte de Apply sau Revert: rescrie tot `qBittorrent.ini` la ieșire, așa că o modificare făcută cât rulează se pierde la închidere — ținta refuză să ruleze în această stare în loc să raporteze un succes pe care următoarea ieșire îl șterge. `-Revert` readuce cele două chei INI la valorile lor exacte de dinainte de Wintage (sau le elimină dacă lipseau) și pune la loc orice dosar de temă cu același nume, octet cu octet; modificările nelegate din `qBittorrent.ini` făcute după Apply supraviețuiesc.
+Inaccesibil: pictogramele din bara de instrumente și din zona de notificare provin din pachetul de resurse compilat al qBittorrent, așa că își păstrează culorile originale.
+
+### Fonturi: denumite, niciodată instalate
+
+Legea 1 din UI.md cere Verdana **fără antialiasing**. O foaie de stil Qt nu are nicio proprietate pentru asta, iar `OSDFont` din MPC-HC este doar un nume de font GDI — așa că singura pârghie este chiar fontul. `Verdana_m1.ttf` din rădăcina repo-ului este o copie a Verdonei cu tăieturi bitmap de 1 bpp prerenderizate între 3 și 30 ppem, pe care rendererul le preferă netezirii conturului.
+Foile de stil pentru `qbittorrent` și `obs` numesc `Verdana_m1, Verdana`, iar `mpchc` numește dintre cele două pe care mașina chiar o rezolvă. **Instalatorul nu instalează și nu dezinstalează niciodată un font**, și asta e deliberat, nu neterminat:
+O familie de fonturi se rezolvă prin (familie, stil). Înregistrezi Regular + Bold + Italic și fiecare consumator se rezolvă corect; dezînregistrezi **un singur** membru și fiecare consumator care cere familia aceea este redirecționat către un membru rămas. Pe o mașină care aliază `MS Shell Dlg 2` — fontul casetelor de dialog Windows — către acea familie prin `HKLM\...\FontSubstitutes`, eliminarea lui Regular face **întregul desktop cursiv**, inclusiv titlurile ferestrelor pe care DWM le-a deja în cache, și e nevoie de deconectare ca să-l readuci. Nicio numărare de referințe nu repară asta: raza de acțiune e la nivelul mașinii, iar un instalator de teme nu are ce căuta acolo.
+Așadar, fontul e o acțiune unică și explicită a utilizatorului: clic dreapta pe `Verdana_m1.ttf` → **Instalează** (per utilizator, fără drepturi de administrator), apoi reaplică ținta. Dacă fontul lipsește, țintele spun asta o singură dată, numesc soluția și revin la Verdana standard — cu antialiasing, dar fără să se facă nimic pe mașina ta în spatele tău.
 
 ### Aplicații Electron
 
@@ -187,4 +202,4 @@ Ambele ținte de terminal citesc O SINGURĂ preferință canonică de tipografie
 Instalatorul **navighează fonturi, nu le instalează.** Tabul TERMINAL FONTS încarcă un font inclus într-un `PrivateFontCollection` local procesului pentru o previzualizare vie, care face **zero** înregistrări de fonturi de sistem. Alegerea unui font, a unei dimensiuni (7–24 pt) sau a unui mod de randare (aliased/grayscale/cleartype) actualizează doar previzualizarea și preferința. Instalarea unui font este o acțiune explicită **INSTALL SELECTED** care deschide instalatorul de fonturi al propriului Windows; după confirmarea Windows, utilizatorul reinteroghează cu Refresh. Modificările reale asupra terminalului au loc doar la o acțiune explicită **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal este aplicat familiei instalate selectate, la dimensiunea selectată, iar modul de randare mapează la `profiles.defaults.antialiasingMode`. Conhost clasic este mai strict: randă pe o grilă fixă de celule, așa că un font selectat este refuzat înainte de orice modificare de registry, cu excepția cazului în care Windows îl rezolvă (fontul implicit și rezerva Consolas sunt exceptate). Health și Reapply validează fontul/dimensiunea/anti-aliasing-ul configurat față de preferință, așa că schimbarea preferinței după un Apply este raportată ca deviere, nu ca stare sănătoasă. Ciclul de viață al culorilor terminalului nu este atins: Revert restaurează exact valorile deținute înainte de Wintage și nu elimină niciodată un font de pe mașină.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

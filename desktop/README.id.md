@@ -41,6 +41,7 @@ Apply memanggil `install.ps1`. Hanya ada satu jalur kode yang memasang tema, seh
 | `terminal` | skema Windows Terminal + default semua-profil, Consolas 12 aliased | ya — pengaturannya ada di profil Anda |
 | `conhost` | default `HKCU\Console` + setiap profil cmd/PowerShell yang ada | ya — snapshot nilai-tersentuh persis |
 | `obs` | varian OBS 30.2+ `.ovt` + ID tema `user.ini` aktif | ya — ia tinggal di profil Anda |
+| `qbittorrent` | tema UI Qt tidak dipaketkan (`config.json` + `stylesheet.qss`) + dua kunci tema di `qBittorrent.ini` | ya — ia tinggal di profil Anda |
 | `antigravity`, `vscode` | ekstensi tema warna di `~/.antigravity/extensions` / `~/.vscode/extensions` | **ya** — ia tinggal di profil Anda |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electron, lihat di bawah | tidak — jalankan ulang penginstal |
 | `claude` | shim Electron, ditambal di tempat — lihat di bawah | tidak — pembaruan membuat folder `app-<version>` baru |
@@ -108,6 +109,20 @@ Chromium dengan sengaja melarang pemasangan ekstensi off-store senyap di mesin W
 ### OBS Studio
 
 `obs` menghasilkan varian OBS 30.2+ di atas basis Yami Classic yang dipelihara, memasangnya ke `%APPDATA%\obs-studio\themes`, dan menulis ID tema stabilnya ke `user.ini`, jadi palet Wintage terpilih sudah dipilih pada peluncuran berikutnya. Tutup OBS sebelum Apply atau Revert: OBS menulis ulang `user.ini` saat keluar. Apply pertama mem-backup pilihan sebelumnya dan tema bernama-sama byte-demi-byte.
+
+### qBittorrent
+
+`qbittorrent` menulis tema UI Qt **yang tidak dipaketkan** ke `%APPDATA%\qBittorrent\themes\wintage` — sebuah `config.json` (peran `Palette.*` plus warna konteks milik qBittorrent sendiri: keadaan daftar transfer, tingkat keparahan log) dan `stylesheet.qss` di sebelahnya (bevel 2px, sudut siku, dan Verdana, yang tidak bisa diungkapkan palet) — lalu mengarahkan `General\CustomUIThemePath` ke `config.json` itu dan menyetel `General\UseCustomUITheme=true`.
+Tidak dipaketkan, bukan dalam bundel `.qbtheme` — memang disengaja: `.qbtheme` adalah berkas Qt Resource Collection dan untuk membuatnya diperlukan biner `rcc` dengan versi mayor yang cocok di mesin, artinya ketergantungan kompilator demi dua berkas teks. qBittorrent membaca bentuk folder secara asli (`FolderThemeSource`).
+Tutup qBittorrent sebelum Apply atau Revert: ia menulis ulang seluruh `qBittorrent.ini` saat keluar, sehingga perubahan yang dilakukan saat ia berjalan terbuang saat ditutup — target menolak berjalan dalam keadaan itu daripada melaporkan keberhasilan yang dihapus oleh penutupan berikutnya. `-Revert` mengembalikan dua kunci INI ke nilai persisnya sebelum Wintage (atau menghapusnya jika tidak ada) dan mengembalikan folder tema bernama sama secara bita demi bita; perubahan `qBittorrent.ini` lain yang dibuat setelah Apply tetap bertahan.
+Tidak terjangkau: ikon bilah alat dan baki berasal dari bundel sumber daya terkompilasi qBittorrent sendiri, jadi keduanya mempertahankan warna aslinya.
+
+### Font: bernama, tidak pernah diinstal
+
+Hukum 1 pada UI.md meminta Verdana **tanpa antialiasing**. Stylesheet Qt tidak punya properti untuk itu, dan `OSDFont` di MPC-HC hanyalah nama font GDI biasa — jadi satu-satunya pengungkit adalah font itu sendiri. `Verdana_m1.ttf` di akar repositori adalah salinan Verdana yang membawa irisan bitmap 1bpp yang sudah dirender terlebih dahulu pada 3–30 ppem, yang dipakai renderer daripada melembutkan garis kontur.
+Stylesheet `qbittorrent` dan `obs` menyebut `Verdana_m1, Verdana`, dan `mpchc` menyebut yang mana dari keduanya benar-benar di-resolve mesin. **Pemasang tidak pernah memasang atau melepas sebuah font**, dan itu disengaja, bukan belum selesai:
+Keluarga font di-resolve berdasarkan (keluarga, gaya). Daftarkan Regular + Bold + Italic, maka setiap konsumen ter-resolve dengan benar; cabut **satu** anggota, dan setiap konsumen yang meminta keluarga itu dialihkan ke anggota yang tersisa. Pada mesin yang meng-alias `MS Shell Dlg 2` — font dialog Windows — ke keluarga itu lewat `HKLM\...\FontSubstitutes`, mencabut Regular membuat **seluruh desktop miring**, termasuk judul jendela yang sudah dicache DWM, dan diperlukan logoff untuk memulihkannya. Tak satu pun penghitungan referensi memperbaikinya: radius dampaknya seluruh mesin, dan pemasang tema tidak ada urusan di sana.
+Jadi font itu adalah tindakan pengguna yang satu kali dan eksplisit: klik kanan `Verdana_m1.ttf` → **Pasang** (per pengguna, tak perlu admin), lalu terapkan ulang targetnya. Jika font tidak ada, target menyatakannya sekali, menyebut perbaikannya, lalu kembali ke Verdana bawaan — dengan antialiasing, tapi tidak ada yang dikerjakan pada mesin di belakang punggungmu.
 
 ### Aplikasi Electron
 
@@ -247,4 +262,4 @@ typeface/ukuran/anti-aliasing yang dikonfigurasi terhadap preferensi, sehingga
 perubahan preferensi setelah Apply dilaporkan sebagai penyimpangan, bukan
 "sehat". Siklus hidup warna terminal tidak disentuh: Revert memulihkan nilai
 milik yang persis sebelum Wintage dan tidak pernah menghapus font dari mesin.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

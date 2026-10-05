@@ -41,6 +41,7 @@ Apply는 `install.ps1` 을 셸 아웃한다. 테마를 설치하는 코드 경�
 | `terminal` | Windows Terminal 스킴 + 모든 프로필 기본값, Consolas 12 앨리어스 | yes — 설정이 프로필에 있음 |
 | `conhost` | `HKCU\Console` 기본값 + 기존의 모든 cmd/PowerShell 프로필 | yes — 정확한 터치 값 스냅샷 |
 | `obs` | OBS 30.2+ `.ovt` 변형 + 활성 `user.ini` 테마 ID | yes — 프로필에 있음 |
+| `qbittorrent` | 압축을 풀어 둔 Qt UI 테마(`config.json` + `stylesheet.qss`) + `qBittorrent.ini` 의 테마 키 두 개 | yes — 프로필에 있음 |
 | `antigravity`, `vscode` | `~/.antigravity/extensions` / `~/.vscode/extensions` 의 컬러 테마 확장 | **yes** — 프로필에 있음 |
 | `freebuff`, `antigravity-app`, `codenomad` | Electron 셰임, 아래 참조 | no — 설치기 재실행 |
 | `claude` | Electron 셰임, 그 자리에서 패치 — 아래 참조 | no — 업데이트가 새 `app-<version>` 폴더를 만듦 |
@@ -108,6 +109,20 @@ Chromium은 관리되지 않는 Windows 머신에서 오프스토어 확장의 �
 ### OBS Studio
 
 `obs` 는 유지 관리되는 Yami Classic 베이스 위에 OBS 30.2+ 변형을 생성하고, `%APPDATA%\obs-studio\themes` 에 설치하며, 안정 테마 ID를 `user.ini` 에 쓴다. 그래서 고른 Wintage 팔레트가 다음 실행에서 이미 선택되어 있다. Apply 또는 Revert 전에 OBS를 닫아라: OBS는 종료 시 `user.ini` 를 다시 쓴다. 첫 적용은 이전 선택과 같은 이름의 테마 양쪽을 바이트 단위로 백업한다.
+
+### qBittorrent
+
+`qbittorrent` 는 **압축을 풀어 둔** Qt UI 테마를 `%APPDATA%\qBittorrent\themes\wintage` 에 씁니다 — `config.json`( `Palette.*` 역할과 qBittorrent 자체의 상황별 색상: 전송 목록 상태, 로그 심각도)과 그 옆의 `stylesheet.qss`(2px 베벨, 직각 모서리, 그리고 팔레트가 표현할 수 없는 Verdana)입니다 — 그런 다음 `General\CustomUIThemePath` 를 그 `config.json` 으로 지정하고 `General\UseCustomUITheme=true` 를 설정합니다.
+`.qbtheme` 번들 대신 압축을 푼 형태를 쓴 것은 의도적입니다. `.qbtheme` 는 Qt Resource Collection 파일이라 만들려면 같은 주 버전의 `rcc` 실행 파일이 그 컴퓨터에 있어야 하므로, 텍스트 파일 두 개 때문에 컴파일러 의존성이 생깁니다. qBittorrent 는 폴더 형태를 기본으로 읽습니다(`FolderThemeSource`).
+Apply 나 Revert 전에 qBittorrent 를 닫으십시오. 종료할 때 `qBittorrent.ini` 전체를 다시 쓰므로 실행 중에 한 편집은 닫을 때 버려집니다 — 이 대상은 그 상태에서 실행을 거부하며, 다음 종료가 지워 버릴 성공을 보고하지 않습니다. `-Revert` 는 두 INI 키를 Wintage 이전의 정확한 값으로 되돌리고(없었으면 제거합니다) 같은 이름의 테마 폴더를 바이트 단위로 되돌립니다. Apply 이후에 한 무관한 `qBittorrent.ini` 편집은 그대로 남습니다.
+도달할 수 없음: 도구 모음과 트레이 아이콘은 qBittorrent 자체의 컴파일된 리소스 번들에서 오므로 기본 색을 유지합니다.
+
+### 글꼴: 이름을 지을 뿐, 설치하지 않는다
+
+UI.md 제1조는 Verdana를 **안티앨리어싱 없이** 요구한다. Qt 스타일시트에는 그런 속성이 없고, MPC-HC의 `OSDFont`는 그저 GDI 글꼴 이름이므로, 유일한 지렛대는 글꼴 자체다. 저장소 루트의 `Verdana_m1.ttf`는 Verdana의 복사본으로 3~30 ppem 범위에 미리 렌더링된 1bpp 비트맵 스트라이크를 담고 있으며, 렌더러는 윤곽선을 매끄럽게 하는 것보다 이를 선호한다.
+`qbittorrent`와 `obs` 스타일시트는 `Verdana_m1, Verdana`를 지정하고, `mpchc`는 둘 중 기계가 실제로 해석하는 쪽을 지정한다. **설치 프로그램은 글꼴을 설치하거나 제거하지 않는다**. 미완성 탓이 아니라 의도된 선택이다:
+글꼴 계열은 (계열, 스타일)로 해석된다. Regular + Bold + Italic을 등록하면 모든 소비자가 올바르게 해석되지만, **하나**의 구성원을 해제하면 그 계열을 요청한 모든 소비자가 남은 구성원으로 방향을 바꾼다. `HKLM\...\FontSubstitutes`를 통해 `MS Shell Dlg 2`(Windows 대화상자 글꼴)를 그 계열로 별칭 지정한 시스템에서 Regular을 제거하면 **데스크톱 전체가 기울임**으로 바뀌고, 이미 DWM이 캐시한 창 제목까지 포함되며, 되돌리려면 로그오프가 필요하다. 참조 횟수를 아무리 세어도 이건 해결되지 않는다. 피해 범위가 시스템 전체이고, 테마 설치 프로그램이 손댈 영역이 아니다.
+따라서 글꼴은 한 번만 하는 사용자의 명시적 동작이다. `Verdana_m1.ttf`를 우클릭 → **설치**(사용자별, 관리자 권한 불필요), 그 다음 대상을 다시 적용한다. 글꼴이 없으면 대상들이 그 사실을 한 번 알리고, 해결책을 짚은 뒤 기본 Verdana로 되돌아간다——안티앨리어싱은 붙지만, 내 뒤에서 시스템에 손댈 일은 없다.
 
 ### Electron 앱
 
@@ -187,4 +202,4 @@ Apply 가 바꿀 수 있는 모든 값은 바뀌기 전에 스냅샷으로 기�
 설치기는 **글꼴을 찾아보지, 설치하지 않는다.** TERMINAL FONTS 탭은 동봉된 서체를 프로세스 전용 `PrivateFontCollection` 에 불러와 즉시 볼 수 있게 하며, 이는 시스템 글꼴 등록을 **전혀** 하지 않는다. 글꼴, 크기 (7–24 pt), 렌더링 모드 (aliased/grayscale/cleartype) 를 고르는 것은 미리보기와 설정만 바꾼다. 글꼴 설치는 Windows 자체 글꼴 설치기를 여는 명시적 **INSTALL SELECTED** 동작이다. Windows 의 확인 뒤에 사용자는 Refresh 로 다시 점검한다. 실제 터미널 변경은 명시적 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 이후에만 일어난다.
 
 Windows Terminal 은 선택한 크기로, 선택한 설치된 계열에 적용되며 렌더링 모드는 `profiles.defaults.antialiasingMode` 에 대응된다. 고전 conhost 는 더 엄격하다. 고정 셀 격자 위에 그리므로 Windows 가 해결하지 못하는 한 레지스트리를 건드리기 전에 선택된 서체가 거부된다 (기본 서체와 Consolas 폴백은 예외). Health 와 Reapply 는 설정된 서체, 크기, 안티앨리어싱을 설정과 대조해 검증하므로 Apply 이후에 설정을 바꾸면 "정상" 이 아니라 어긋남으로 보고된다. 터미널 색상 수명 주기는 건드리지 않는다: Revert 는 Wintage 이전의 소유 값을 정확히 복원하며 머신에서 글꼴을 삭제하는 일은 결코 없다.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

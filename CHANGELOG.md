@@ -1,5 +1,540 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+- **Duplicated BetterDiscord plugin distribution (T-413).** The standalone plugin
+  payloads formerly under `desktop/targets/betterdiscord/plugins/` and
+  `updated_discord_plugins/` are deleted; the installer BetterDiscord tab is now a
+  navigation page linking the canonical repository
+  https://github.com/vacterro/BetterDiscord_vac34_plugins, where those plugins are
+  maintained. The BetterDiscord theme target (`template.css`) is untouched, and
+  `tools/test-bd-architecture.ps1` fails the suite if a payload or a removed manager
+  symbol returns.
+
+ChatGPT Web viewport-owner coverage, plus the BetterDiscord media-control
+repair + HideEmbeds from the previous pass. The main Wintage version is
+deliberately NOT bumped here: it moves only once this wave and the full
+repository regression suite are green.
+
+### Fixed
+
+- **Three red controls that no suite entry ever ran.** Seventeen gates under
+  `tools/` declare a `-RedControl` mode; thirteen had a suite entry exercising it
+  and four did not. Three of those four — `test-log-append-bound.ps1`,
+  `test-totalcmd-recovery.ps1` and `test-windows-theme-boundary.ps1` — declare
+  the mode and nothing in `tests/Run-Tests.ps1` invoked them, so on every
+  full-suite pass those controls were inert. Each now has its own suite entry:
+  the bounded-log one prints `RED CONTROL PROVEN`, the TotalCommander one
+  `RED CONTROL PASS: 4 of 4 mandatory + 5 of 5 extra critical failures
+  reproduced`, and the theme-boundary one runs its control (see the entry below —
+  its original control measured nothing). All 17 red-control modes are now
+  exercised by the single entrypoint.
+
+- **The Windows theme boundary gate's red control could not fail.**
+  `test-windows-theme-boundary.ps1 -RedControl` claimed to prove that pre-fix
+  code orphans theme files when the accent write fails, but it never loaded any
+  pre-fix code and never injected any accent failure. It ran the shipped
+  `tools/install-windows-theme.js` helper directly and then appended a bare
+  `throw 'simulated accent write failure'` to the same command line — the helper
+  had already exited and written every file it was supposed to write, so the
+  throw rolled nothing back. The assertion then counted leftover scratch files,
+  which a scratch replay showed was byte-identically true with the failure and
+  without it: the control could not distinguish a defective tree from a healthy
+  one. It now copies the product tree, cuts `Restore-WindowsPreState`'s phase-A
+  file removal in the copy, and runs the real installer under the same
+  `WINTAGE_TEST_FAIL_WIN_ACCENT_WRITE` injector green Case 2 uses — in both
+  directions, so the cut is shown to remove what it claims and keep what it
+  claims to keep (`red cut tree: exit=1 orphaned theme files=1`, `shipped tree:
+  exit=1 orphaned theme files=0`). The gate also proves its own switch is read in
+  both directions now, the same guard the BetterDiscord installer gate got.
+
+- **`test-tf-apply-results.js --red-control` never injected the defect it
+  claimed to detect.** Its two RED assertions were negative regex matches against
+  the *shipped* source, and the second — `/Say-TfLog 'apply done\.';/` — is
+  strictly weaker than the first, since the semicolon variant's match set is a
+  subset of the unsuffixed one. So the pair could never disagree: green on a
+  clean build, red together on a broken one. A comment claimed they proved the
+  old unconditional `apply done.` emit was caught; no mutant was ever built. The
+  mode now splices that emit back into a copy of `Invoke-TfApply`, writes the
+  mutant to disk, re-reads it, and runs the same predicate on the file — plus an
+  assertion that the mutant kept the qualified emit it was spliced next to, so a
+  vacuous pass would be caught.
+
+- **Ten release gates ran only at release.** `tests/Run-Tests.ps1` derived every
+  gate `release.ps1` invokes, asserted each one exists as a file, and then
+  executed nine fewer of them than it had just proved present — so
+  "Run-Tests.ps1 exits 0" said nothing about the theme-switch, terminal-font,
+  shim-payloads, repainter-polarity, electron-shim, diag-counters, fs-retry,
+  theme-packs and wiki-mirror gates. All ten now have suite entries (1.9s
+  combined), and a new derived assertion requires every gate the block extracts
+  from `release.ps1` to be executed by the suite, so the eleventh cannot repeat
+  it. The assertion resolves one level of transitive invocation, which is why
+  `test-electron-repaint-probe.cjs` needs no entry of its own: it is reached
+  through `test-electron-repaint.ps1`, and that edge is read from the file's
+  source rather than trusted from a comment.
+
+- **The `wiki/` mirror had drifted for six releases.** Wiring
+  `check-wiki-mirror.js` into the suite immediately turned red: five mirror
+  pages — `Desktop.md`, `Development.md`, `Home.md`, `Installation.md`,
+  `_Footer.md` — still carried v1.30.0 content while the saiwiki kitchen had
+  moved to v1.36.0. The gate is release-only, so nothing in the test path was
+  reading it. The mirror was resynced by extracting `adaptForRepo()` verbatim
+  out of the gate's own source and calling it, so every byte written is by
+  construction the byte the gate accepts; `node tools/check-wiki-mirror.js` now
+  prints PASS.
+
+- **`test-perf-lanes.js` printed a ToS-compliance PASS that measured nothing.**
+  The retired-AD_BLOCK section carried
+  `check('PERF-002 shim: AD_BLOCK retired for FreeBuff ToS compliance', true, true)` —
+  the literal `true` compared with itself, so it passed for any content of any
+  file. The property was not unverified: `R012 static: AD_BLOCK is not
+  reintroduced into the shim` asserts it for real. Reinserting
+  `const AD_BLOCK = /ads|doubleclick/;` into `shim.cjs` proved it — the gate went
+  red on the static check while still printing the compliance PASS, two lines
+  away. The vacuous line is gone; the static check is the single source of truth.
+
+- **`test-perf-suspend.js` asserted its WeakMap-preservation check with a
+  permanently-vacuous comparison.** The check read
+  `t.ctx.sheetSeen === t.owners.sheetSeen || true`, whose `|| true` makes the
+  expression true whatever the left side says, so it reported PASS on every run
+  including one where suspension had replaced both caches. Two further faults sat
+  underneath it: the `owners` object never captured `sheetSeen` or
+  `attrCooldown` at all, so the left side was false on every run; and the check
+  was passed in the `(got, want)` form, which the gate compares with
+  `JSON.stringify` — and two distinct WeakMaps both stringify to `{}`, so even
+  with the comparison intact the form could never go red on a replacement. All
+  three are fixed: `owners` now carries both caches, and the identity check is
+  passed as a predicate, verified green on the shipped tree and red on a mutant
+  that substitutes `new WeakMap()` for the ctx-side pair.
+
+- **`test-batch-streaming-gui.ps1` carried a 34-line probe dispatcher nothing
+  called.** `Run-RedProbe` was a `switch` over the five `-Probe` values, defined
+  once and referenced zero times; the code that actually ran was a separate
+  `if`/`elseif` chain with no `else`. So an unrecognised `-Probe` name fell
+  through every branch, ran no probe, printed no assertion and exited 0. The
+  dead dispatcher is deleted and its `default { throw }` guard now sits on the
+  live chain as an `else`: an unknown probe name exits 1, while all five
+  recognised probes still run with the same assertion labels.
+
+- **`test-batch-generation.ps1 -RedControl` had never actually run.**
+  `common.ps1` dot-sources two siblings — `generation-lock.ps1` and
+  `json-doc.ps1`. The red-control staging rewrote and copied only the first, so
+  every probe that loaded the red copy died on `CommandNotFoundException` for
+  `json-doc.ps1` before reaching a single assertion — and the gate then exited 1
+  printing `RED CONTROL FAILED: a gate stayed green on defective source`, a claim
+  about probes that had never executed. A control that cannot run is not a
+  control that cannot bite. `json-doc.ps1` is now staged unmodified beside both
+  red copies (it is not part of the defect being reproduced), the owner-identity
+  and age-steal probes both report `True`, and the mode exits 0 with
+  `RED CONTROL OK: all gates reproduce their defects`. Because the control only
+  started working, its suite entry is new: `tests/Run-Tests.ps1` now runs
+  `test-batch-generation.ps1 -RedControl` alongside the default pass.
+
+- **`test-betterdiscord-plugin-installer.ps1` had a `-RedControl` switch it
+  never read.** The switch was declared, the header comment promised a second
+  mode, and the red-control block ran unconditionally in the default path — so
+  `-RedControl` and a plain run were the same run, and a control that judges the
+  harness was being judged by a product gate. It was the only one of the fifteen
+  PowerShell gates declaring that switch without guarding on it. The block is now
+  guarded, `tests/Run-Tests.ps1` gained its own `-RedControl` suite entry so the
+  control still runs on every full pass, and the file asserts in both directions
+  that the switch selected the mode: dropping the guard turns the default run
+  red, deleting the control turns the `-RedControl` run red. Default mode reports
+  42 checks, `-RedControl` reports 44, and the difference is exactly the two
+  `RED CONTROL` assertions.
+- **ChatGPT: the central viewport stayed stock charcoal while every themed
+  parent was present.** The current shell paints
+  `[data-testid="mobile-app-shell-scroll-container"]` with its own opaque
+  background. That element is a CHILD of `#web-mobile-root`,
+  `[data-testid="desktop-app-shell"]`, `main[aria-label="ChatGPT"]` and
+  `[role="region"][aria-label="Conversation"]` — all four of which were themed
+  correctly. Theming an ancestor does not theme the area you look at, so the
+  page was visibly wrong while every October contract still matched and every
+  existing gate stayed green. The scroll container now carries its own
+  `background-color: ${T.backgroundSoft}` / `color: ${T.textPrimary}`
+  declaration. The parent rules stay: they remain the fallback for rollouts
+  that have no scroll container.
+- **ChatGPT: page header and footer fades.** The shell draws both as a stock
+  charcoal `background-image` gradient over the scroll container, which no
+  surface rule could reach. They are now stripped to
+  `background-image: none` and repainted with `${T.backgroundSoft}`. The scope
+  is a direct-child combinator off `main[aria-label="ChatGPT"] [data-testid="desktop-app-shell"]`
+  and the scroll container, plus the stable `#page-header` id. A message
+  embed's header or footer is nested inside the conversation region and can
+  never be a direct child, so this is what keeps "do not affect headers/footers
+  inside message embeds" true without `:has()`, without a class fragment and
+  without a universal selector. A gradient was deliberately not used: UI.md
+  law 2 is zero gradients, and the runtime gradient killer already strips
+  gradient `background-image`s on any repaint.
+- **`test-inspect-web-mutations.js` was running a third of its controls.** Of
+  its 34 mutation anchors, the multi-line ones are written with `\n`, and this
+  repository checks out on Windows with CRLF, so eight of them could never be
+  found. Each of those eight reported "mutation anchor not found", incremented
+  a counter, and still exited 0 — a harness skipping a control is not the same
+  as the control biting. The source is now normalised to LF before any anchor is
+  matched: all 34 controls run, and all 34 go red.
+- **`tools/inspect-web.js` named a colour token for the prompt editor that
+  `vintage.user.js` never paints.** The surface's expectation was
+  `'prompt-editor': '--composer-background-color'`, justified in a comment as no
+  longer being a guess. It was: the element the selector actually matches on the
+  current shell, `[data-testid="prompt-textarea"]`, receives `color` and
+  `caret-color` and no background, and the one variant that is painted,
+  `#mobile-composer-prompt`, is a different element carrying `T.surface`. Because
+  `prompt-editor` is an acceptance surface, the phantom mismatch did not just add
+  noise — `mismatchedEver` was non-empty, `accept` was false, and the operator's
+  live acceptance pass could never go green on a page whose composer renders
+  correctly. `prompt-editor` is back on `DECLARED_UNPROVEN_ACCEPTANCE`, where it
+  stays non-accepting and honestly unexamined until a live run names its token —
+  the same rule the tool already applies to the other nine. This repairs a red
+  gate: `tools/test-inspect-web-cdp-live.js` was failing in `tests/Run-Tests.ps1`.
+- **The BetterDiscord locale gate checked one plugin out of four.** The gate
+  derives which plugins ship and requires each to have a
+  `Get-BdPluginDescription` case — then, for the locale check immediately below,
+  it tested the frozen literal `BdHideEmbedsDesc` and no other. The case regex
+  accepts any `Bd\w+Desc`, so a fifth plugin pointing at `BdFooDesc` passed the
+  derived half while `BdFooDesc` existed in zero of the 33 locales: 33 silent
+  English fallbacks, gate green at exit 0. The key is now read out of each
+  installer's case and required in all 33 locales, so the check covers every
+  plugin that ships rather than the one that happened to be named. The shipped
+  tree was already correct; this closes the gap for the next plugin.
+
+### Added
+
+- **`tools/test-chatgpt-viewport-coverage.js`** — the gate the two existing
+  ChatGPT gates structurally cannot be. `test-chatgpt-2026.js` and
+  `test-chatgpt-perf-css.js` read RULES; they prove the October contracts are
+  present in the sheet ChatGPT actually receives. The defect above is not a
+  missing selector, so both stayed green straight through it. This gate drives
+  real Chromium, injects the Golden Default sheet AFTER a stock sheet that
+  reproduces the shell with an opaque `#000000` scroll container, and asks
+  what colour a user actually sees in the centre of the viewport by walking to
+  the first ancestor that paints something opaque. It covers five viewport
+  states (empty new chat, populated, composer focused, sidebar expanded, and
+  the band below a short conversation region), asserts the stock build
+  reproduces the defect before asserting the themed build fixes it, and asserts
+  that message embed chrome is identical themed and unthemed. Four red
+  controls: remove only the scroll-container rule (every parent contract
+  survives), remove only the fade scope, replace the palette token with
+  `inherit`, remove the whole sheet. Each control verifies that its own cut
+  removed what it claimed and left standing what it claimed to keep, so a
+  control cannot go red by cutting too much.
+- **`tools/inspect-web.js` — viewport ownership and an opaque-surface audit.**
+  Every probed surface now reports its bounding rect, viewport coverage ratio,
+  computed `background-color` / `background-image`, and its nearest opaque
+  ancestor. A new `opaque` command walks the tree and lists every opaque node
+  covering at least `WINTAGE_OPAQUE_MIN` (default 10%) of the viewport, exiting
+  non-zero when any remain — which is the "large opaque stock area in the
+  centre of the viewport" acceptance condition, measured rather than asserted.
+  Colour attribution is gated on Wintage actually being live (host stamp plus
+  injected sheets); when attribution is off the report says so and credits
+  nothing to Wintage, because switching the theme off is the only thing that
+  can prove the cascade. It emits structural identity only — never text,
+  conversation titles, message content or URLs.
+- `tools/inspect-web.js` gains an `app-scroll-container` surface
+  (`CONTRACT.ALWAYS`) bound to `--chat-background-color`, so the viewport owner
+  is a first-class row in the existing matrix rather than an ad-hoc probe.
+
+### Fixed (BetterDiscord media-control repair + HideEmbeds)
+
+- **RemoveStickers 1.1.0** and **RemoveGIFS 1.1.0** were silent no-ops against
+  current Discord. Both matched generated hashed class substrings
+  (`[class*="stickerNode-"]`, `[class*="messageContent-"]`,
+  `[class*="gifButton-"]`, and seven more) that no longer exist. The selectors
+  stayed syntactically valid, so every check passed while the plugins hid
+  nothing. RemoveGIFS additionally swallowed its own failures with empty
+  `catch {}` blocks in `start()`, in observer processing and in the DOM checks,
+  so a broken probe reported healthy.
+- Both plugins now resolve media through a three-tier contract ladder, in this
+  order: stable semantic DOM contracts (the message list and item roles, the
+  `message-content-` / `message-reference-` / `components-` id prefixes, URL
+  shape and content), then `BdApi.Webpack` module discovery that reads a live
+  class token out of Discord's own module source at runtime, then a narrowly
+  scoped structural fallback. The generated-token tier exists only after
+  discovery — no current hash suffix is hardcoded anywhere, which is what
+  would have recreated the same defect at the next Discord hash.
+- RemoveStickers no longer hides accessibility UI that merely mentions
+  "sticker" in an `aria-label`, and a message row now collapses only when the
+  plugin itself owns hidden media in it. Previously any sibling plugin's hidden
+  media could collapse the row, so in reverse start order stopping HideEmbeds
+  left a restored image inside a collapsed row.
+- A Discord-proxied animated GIF is identified from `?animated=true` and
+  `?originalUrl=...gif`, not from a literal `.gif` suffix on the visible URL.
+  Provider hosts (Tenor, Giphy) are corroboration only and can never classify a
+  node on their own.
+- Plugin startup failure now emits exactly one concise console warning and marks
+  the settings panel DEGRADED. Health reporting names which contract tier is
+  live (semantic / runtime module / fallback) and how many items were hidden.
+  No message text, attachment URL or user ID is logged.
+- Wintage uninstall disabled plugins by three hardcoded names, so the fourth
+  plugin shipped enabled in BetterDiscord after an uninstall. Discovery is now
+  dynamic over `desktop/targets/betterdiscord/plugins/*.plugin.js`, so plugin
+  number five is covered too. Unrelated third-party plugin state, including
+  nested objects, is preserved byte-for-byte in `plugins.json`.
+
+### Fixed
+
+- **HideEmbeds 1.0.0 hid Discord's own interface.** This is the screenshot
+  regression, and 1.0.0 is the version that introduced it — not 1.1.0, which is
+  the version that fixes it. Its `classify()` ruled out stickers, GIFs,
+  `/emojis/` URLs and `/avatars/`+`/icons/` URLs, and then returned
+  `inline-preview` for everything else, with `hidePreviews` defaulting to true.
+  Two whole classes of image fell into that remainder:
+  - **Role icons and badges.** The identity rule required a slash before
+    `icons`, and Discord serves role icons from `/role-icons/`, so it never
+    matched.
+  - **Every emoji GoodEmoji had rewritten.** GoodEmoji moves emoji `<img>`
+    sources onto `cdnjs.cloudflare.com/.../twemoji/`. That is not Discord's
+    `/emojis/` path, so a rewritten emoji stopped looking like an emoji to
+    every sibling classifier at once.
+
+  Both were then hidden, and the placeholder was inserted as a sibling of the
+  leaf `<img>` — inline — so one ordinary message produced a run of
+  `IMAGE HIDDEN  Show  Open original` fragments through its own text.
+- Classification is now **positive and fails open**. HideEmbeds hides a node
+  only when it is positively identified as `ATTACHMENT_IMAGE` (Discord's own
+  `/attachments/` path), `EMBED_IMAGE` (the media body of a link to an external
+  source), `VIDEO` (carrying that same evidence, and only with *Hide videos* on)
+  or `RICH_EMBED` (opt-in). `UNKNOWN` is never hidden. Nothing is inferred from
+  a hashed Discord class, an alt string, a pixel size, or "it is somewhere in a
+  message row". Explicit vetoes cover avatars, reply avatars, avatar
+  decorations, role/clan icons, bot and application icons, badges, server and
+  channel icons, forum/thread icons, provider and favicon icons, inline and
+  reaction emoji, GoodEmoji output, stickers, GIFs owned by RemoveGIFS, plugin
+  UI, and anything inside a button or a header.
+- The placeholder now occupies the same **block** the media occupied. The marked
+  element is the anchor wrapper (or the bare `<img>`), and the strip is inserted
+  as that block's next sibling. It can no longer land inside a text span, the
+  username/header row, an inline emoji run or a reaction row.
+- **Open original** appears only when a real attachment/media anchor exists. It
+  is never manufactured from `img.src`; emoji, avatars, badges and provider
+  icons all carry a `src` and none of them has an original.
+- The placeholder label is now the filename Discord's own attachment path
+  states, and nothing else. v1.0.0 promoted `alt` text and scraped `width`/`height`
+  out of the src query string, which is how an accessibility label such as
+  *Role icon, Buffy's Lil Helpers* could appear where a filename belongs. No
+  real filename means no label.
+- **GoodEmoji 1.1.1** stamps `data-w95-owner="emoji"` on every image it
+  rewrites, the same contract RemoveStickers (`sticker`) and RemoveGIFS (`gif`)
+  already used. Any sibling that sees a foreign owner now leaves the node alone
+  before it classifies anything, so HideEmbeds cannot offer a Show button that
+  would resurrect a GIF or a sticker another plugin is holding down.
+- **RemoveStickers 1.1.1** and **RemoveGIFS 1.1.1** skip anything inside a
+  `[data-w95-plugin-ui]` root in both the observer and the row-collapse check.
+  A sibling's placeholder is UI, not media, so the four plugins no longer wake
+  each other on their own insertions. No detection rule changed in either.
+- HideEmbeds no longer polls for the message list. One observer on `#app-mount`
+  covers both finding the list and noticing that Discord swapped it on a route
+  change, replacing a 1 Hz interval and a second observer. An idle page performs
+  no work.
+- The installer gate no longer hardcodes HideEmbeds' version: it reads the
+  plugin header, so a version bump cannot leave the locale descriptions
+  asserting a build that no longer exists.
+
+- **HideEmbeds 1.1.2 — the "Hide rich link preview cards" checkbox did nothing
+  with all four plugins on.** The setting panel was built with
+  `check('hideRich', s.sHideRich)` while the runtime reads `hideRichCards`, so
+  the control was bound to a key that does not exist: toggling it wrote
+  `settings.hideRich`, and no rich card was ever hidden. Toggling it off and on
+  again now also re-runs the pass, because the row stamp from the first pass is
+  cleared first instead of being treated as "already decided".
+- **The rich-card pass was silently skipped whenever a sibling had seen the
+  row first.** All three plugins stamp the SAME attribute name
+  (`data-w95-scoped`) with their own owner value, so `row.hasAttribute(...)`
+  read a `RemoveStickers` or `RemoveGIFS` mark as "HideEmbeds already handled
+  this row" and returned before classifying anything. Each plugin now compares
+  the attribute VALUE to its own owner token, so a sibling's mark no longer
+  decides another plugin's verdict.
+- **A typed hyperlink inside message text was classified as a rich card.** The
+  old test was "an external link plus some text", which every ordinary message
+  containing a URL satisfies. A card must now be positively identified and is
+  never taken from inside `[id^="message-content-"]`; an ordinary hyperlink
+  never qualifies and `UNKNOWN` stays visible.
+- **Blurred-preview mode was inert.** Its CSS selected the media through a
+  previous-sibling combinator, but the placeholder strip is inserted AFTER the
+  media block, so the rule never matched. The visual state is now an explicit
+  `data-w95-visual="blurred"` attribute on the marked block, which the DOM state
+  exposes directly and is therefore independently testable.
+- **RemoveStickers 1.1.2** and **RemoveGIFS 1.1.2** no longer run a 1 Hz
+  `setInterval` route poll. Both use the same low-idle architecture HideEmbeds
+  already had: one observer that finds the message list and notices a route
+  change on its own, with no per-timer work on an idle page. Neither plugin adds
+  an independent full-body observer.
+- **RemoveStickers 1.1.2** and **RemoveGIFS 1.1.2** collapse a message row only
+  when ALL intentionally hidden meaningful media in it belongs to that same
+  plugin. A row that also holds a sibling's hidden media is left as a visible
+  shell rather than being collapsed out from under it. The ownership guard is
+  load-bearing only when the remover starts last — with the live start order a
+  plugin evaluates the row before its siblings have hidden anything — so the
+  regression matrix covers both.
+- **HideEmbeds 1.1.2** re-runs the per-message media bar reconciliation after a
+  single item is revealed or concealed by hand. The bar used to keep a stale
+  "Show all" above media the user had already brought back, and never grew a
+  second bar.
+- **HideEmbeds 1.1.2** session-wide *Reveal all* / *Hide all* skip message-level
+  bars. They iterate `[data-w95-ph]`, which also matches the per-message control
+  strip; a bar is a control, not a media placeholder, and treating it as one
+  made a session action operate on somebody else's media.
+- **HideEmbeds 1.1.2** moves the legacy loose classifier behind an Advanced
+  two-step arm-and-confirm switch with an explicit warning, and normalises any
+  imported or persisted `strict: false` value through that same confirmation.
+  A stale value from an older install can no longer silently re-enable the
+  destructive catch-all.
+- Both removers' settings-panel title read `1.1.1` from a `VERSION` constant that
+  had not been kept in step with the `@version` header, so the panel reported a
+  build that did not exist.
+
+### Added
+
+- **HideEmbeds: "Strict media classification" (default ON)** with an explicit
+  warning that legacy loose detection may hide Discord UI images. Turning it
+  off restores the v1.0.0 catch-all as a labelled compatibility escape hatch.
+- **HideEmbeds: "Show diagnostics" (default OFF).** Logs classification, owner,
+  reason and a structural shape summary only. Message text, usernames, user and
+  channel ids and attachment URLs are never logged.
+- The settings panel now reports how many images were left visible because they
+  could not be positively identified, alongside the hidden count.
+
+- **HideEmbeds 1.0.0** hides image attachments, embedded images and
+  link-derived image previews by default, leaving avatars, server and channel
+  icons, emoji, reaction emoji, UI icons, profile images, banners and non
+  message images alone. Video attachments and rich link preview cards are off
+  by default.
+- Hidden items get a compact Wintage placeholder offering Show and Open
+  original, with filename, media type and dimensions when Discord already
+  provided them. Raw URLs are never rendered. Reveal happens in place with no
+  message reload and no re-fetch; the blurred-preview mode reuses the existing
+  image element through a CSS filter instead of loading the asset twice. A
+  per-message "Show all media" control appears only when a message has two or
+  more hidden items.
+- Per-item reveal state is session-only and is never written to `BdApi.Data`;
+  only the settings persist. Settings take effect immediately without a restart.
+- Reveal controls are real buttons: keyboard reachable, Enter/Space activated,
+  `aria-expanded` where meaningful, visible focus ring, and never hover-gated.
+- Ownership between the three plugins is decided by classification, not by start
+  order (stickers, then GIFs, then everything else), so media intentionally
+  banned by one plugin never gains a Show placeholder from another. Ownership
+  markers are deterministic attributes on the media nodes themselves and are
+  removed on stop; stopping one plugin never reveals media another still owns.
+- `BdHideEmbedsDesc` added to all 33 locale files, so installer locale parity
+  holds.
+
+### Tests
+
+- `tools/test-bd-media-contract.js` is the contract gate for this wave: one
+  section per repaired defect, driving the four real plugin sources in a real
+  Chromium. It carries EIGHT red controls. Each rebuilds the pre-repair source
+  with a single anchored string replacement — asserted to differ from, and to
+  be present in, the shipped bytes — and then REQUIRES that section's own
+  assertions to go red against it. A section that cannot fail is not a gate, so
+  the harness exits 0 only after proving each defect still exists in mutated
+  form.
+  - the settings control is located by its LABEL and clicked through a real DOM
+    `change` event, never by index and never by calling `setSetting()`; the
+    oracle binds it back to `hideRich` and must be caught red
+  - the P1-5 matrix runs every plugin STOP permutation across two START orders
+    and six row shapes (sticker+GIF, sticker+image, GIF+image, sticker+GIF+image,
+    plus a sole-owner control for each remover). The sole-owner rows must still
+    collapse BY THEIR OWN OWNER under the guard mutation, so a green run cannot
+    be explained by "stop collapsing rows" instead of "stop stealing rows"
+  - a stopped plugin's media must come back somewhere VISIBLE, not merely
+    present: a row collapsed by a sibling reports every descendant as hidden, so
+    presence alone cannot tell a correct sibling hold from a restored item
+    trapped in a dead row
+- `package.json` declares Playwright as a pinned dev dependency with a single
+  documented bootstrap command (`npm ci`). `node_modules/` is git-ignored and
+  never shipped; an end user installing Wintage never needs Node.
+- `tools/test-remove-stickers.js`, `tools/test-remove-gifs.js`,
+  `tools/test-hide-embeds.js` and `tools/test-bd-coexistence.js` drive the real
+  plugin sources in a real Chromium through Playwright rather than a hand-rolled
+  fake DOM, because the behaviour under test is browser behaviour: selector
+  semantics, `MutationObserver` batching, `classList`, focus and Enter/Space.
+  The sticker and GIF suites carry in-process red controls that mutate the
+  shipped URL regexes and require the gates to go red.
+- `tools/test-betterdiscord-plugin-installer.ps1` extracts the real
+  `Get-BdPluginsJsonPaths` / `Get-BdSourcePluginNames` helpers from
+  `desktop/WintageInstaller.ps1` by AST and runs them against a scratch
+  `%APPDATA%` with the `stable` and `ptb` channels, a fifth plugin, third-party
+  plugins and nested state.
+- All five suites are wired into `tests/Run-Tests.ps1`. They previously passed
+  while being reachable from nothing, which is how the media plugins could have
+  shipped broken with every wired gate green.
+
+### Known limits
+
+- Live acceptance against a running Discord + BetterDiscord is still owed: the
+  installed Discord renderer bundle (`resources/app.asar`) is absent on this
+  machine, so no offline contract verification was possible. Everything above is
+  verified against the deterministic harness only.
+
+## [1.36.6] - 2026-10-03
+
+ChatGPT Web October 2026 shell refresh.
+
+- The active ChatGPT stylesheet now binds the current shell's structural
+  contracts alongside the September ones: `#web-mobile-root`,
+  `[data-testid="desktop-app-shell"]`, `main[aria-label="ChatGPT"]`,
+  `[role="region"][aria-label="Conversation"]`, the sidebar accessibility
+  landmark (`role="complementary"` / `aside[aria-label="Sidebar"]`) and
+  `#mobile-composer-prompt`. The central workspace, the sidebar and the prompt
+  editor matched nothing on the current shell and fell back to stock #000 while
+  Wintage's own overlays stayed themed.
+- The September contracts stay as rollout fallbacks: a ChatGPT account can carry
+  both generations in one document.
+- Generated `x*` atomic class names are deliberately NOT bound. They are build
+  output and are rehashed on every rollout, so binding to them would trade the
+  static-CSS theme for a repaint loop. No `:has()`, no class-fragment and no
+  universal selector was added; the lean CSS-only ChatGPT path is unchanged.
+- `tools/test-chatgpt-2026.js` now validates `CHATGPT_FAST_CSS`, the sheet
+  ChatGPT actually receives. It previously read `GLOBAL_CSS`, which the runtime
+  never sends to ChatGPT, so the gate stayed green while the live theme was
+  stock. `GLOBAL_CSS` keeps its compatibility copy and its presence can no
+  longer make the gate pass. The gate carries a RED control that strips the
+  October contracts out of the active sheet and requires the verdict to fail.
+- `tools/test-chatgpt-perf-css.js` now requires the October contracts in the
+  fast sheet, and bans generated atomic classes and `:has()` from both ChatGPT
+  sheets.
+- `tools/inspect-web.js` matrix updated: current contracts are primary and
+  September contracts are rollout fallbacks. The current prompt editor and the
+  current workspace surfaces carry proven token expectations; the unproven
+  September composer container hooks became optional, because the current shell
+  exposes no stable container hook and demanding it would make every live pass
+  report a false failure.
+- `tools/test-inspect-web.js` R7 now reads the active ChatGPT stylesheet, for
+  the same wrong-sheet reason.
+
+## [1.36.3] - 2026-09-29
+
+ChatGPT typing and idle-performance hotfix.
+
+- ChatGPT now receives a dedicated lean stylesheet instead of the universal all-sites stylesheet. The current semantic ChatGPT tokens, sidebar/composer/message/code hooks and Win95 surface treatment remain, while hundreds of global class-substring and universal typography selectors no longer participate in ChatGPT style invalidation on every React/editor update.
+- ChatGPT shadow roots use a matching lean shadow stylesheet, preventing the universal shadow theme from reintroducing the same selector cost.
+- Added `test-chatgpt-perf-css.js` to lock the fast-path selection, current ChatGPT hooks, and the absence of class-substring, `:has()` and universal all-element selectors from the ChatGPT fast sheets.
+- The page diagnostic now reports `data-w95-perf-reason="chatgpt-lean-css"` when this path is active.
+
+## [1.36.2] - 2026-09-28
+
+ChatGPT Web September 2026 interface refresh.
+
+- Rebuilt the ChatGPT host override around the current semantic surface contract
+  instead of broad Tailwind/class-fragment selectors. The theme now maps the
+  current chat, panel, sidebar, composer, message, code-block, text and border
+  tokens directly to the active Wintage palette.
+- Added current shell hooks for `#app-shell-sidebar`, `data-composer-*`,
+  `data-user-message-bubble`, `data-markdown-copy`, the prompt editor and the
+  redesigned pressed-state header controls. The new full-page settings and
+  reorganized sidebar inherit the same palette rather than leaking stock ChatGPT
+  charcoal surfaces.
+- Kept the older `stage-*` sidebar and legacy semantic aliases as rollout
+  fallbacks. ChatGPT frequently mixes old and new surfaces while an account is
+  being migrated, so the theme now handles that state deliberately.
+- Removed the old broad composer/bottom-bar strategy from the ChatGPT override.
+  The thread footer fade is also pinned to the themed conversation background so
+  long chats do not end in an unthemed dark strip.
+- Added `test-chatgpt-2026.js`, a static regression gate that requires the current
+  semantic hooks/tokens and rejects the retired broad ChatGPT selectors.
+
 ## [1.36.1] - 2026-09-28
 
 Host-exclusion and installer-locking fixes, plus the generated test surface that

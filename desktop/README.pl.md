@@ -63,6 +63,7 @@ nie, bo archiwum jest w użyciu.
 | `terminal` | schemat Windows Terminal + domyślne dla wszystkich profili, Consolas 12 aliased | yes — ustawienia są w twoim profilu |
 | `conhost` | domyślne `HKCU\Console` + każdy istniejący profil cmd/PowerShell | yes — dokładny snapshot dotkniętych wartości |
 | `obs` | wariant `.ovt` dla OBS 30.2+ + aktywny identyfikator motywu w `user.ini` | tak — żyje w twoim profilu |
+| `qbittorrent` | rozpakowany motyw UI Qt (`config.json` + `stylesheet.qss`) + dwa klucze motywu w `qBittorrent.ini` | yes — żyje w twoim profilu |
 | `antigravity`, `vscode` | rozszerzenie motywu kolorów w `~/.antigravity/extensions` / `~/.vscode/extensions` | **yes** — żyje w twoim profilu |
 | `freebuff`, `antigravity-app`, `codenomad` | shim Electrona, patrz poniżej | no — uruchom ponownie instalator |
 | `claude` | shim Electrona, łatany na miejscu — patrz poniżej | no — aktualizacja tworzy nowy folder `app-<version>` |
@@ -224,6 +225,20 @@ Zamknij OBS przed Apply lub Revert: OBS nadpisuje `user.ini` przy zamykaniu.
 Pierwszy apply robi kopię zapasową zarówno poprzedniego wyboru, jak i każdego
 motywu o tej samej nazwie, bajt po bajcie.
 
+### qBittorrent
+
+`qbittorrent` zapisuje **rozpakowany** motyw interfejsu Qt w `%APPDATA%\qBittorrent\themes\wintage` — plik `config.json` (role `Palette.*` oraz własne kolory kontekstowe qBittorrenta: stany listy transferów, wagi dziennika) i obok niego `stylesheet.qss` (2px fazowania, proste narożniki i Verdana, czego paleta nie potrafi wyrazić) — a następnie kieruje `General\CustomUIThemePath` na ten `config.json` i ustawia `General\UseCustomUITheme=true`.
+Rozpakowany, a nie jako pakiet `.qbtheme` — celowo: `.qbtheme` to plik Qt Resource Collection i do jego wytworzenia potrzebny byłby na maszynie plik `rcc` o zgodnej wersji głównej, czyli zależność od kompilatora dla dwóch plików tekstowych. qBittorrent czyta postać folderu natywnie (`FolderThemeSource`).
+Zamknij qBittorrent przed Apply lub Revert: przy zakończeniu nadpisuje cały `qBittorrent.ini`, więc zmiana wykonana podczas jego pracy przepada przy zamknięciu — cel odmawia działania w tym stanie, zamiast zgłaszać sukces, który zmiecie następne zakończenie. `-Revert` przywraca dwa klucze INI do dokładnych wartości sprzed Wintage (albo je usuwa, jeśli ich nie było) i odkłada z powrotem każdy folder motywu o tej samej nazwie, bajt po bajcie; niezwiązane zmiany w `qBittorrent.ini` wykonane po Apply przetrwają.
+Nieosiągalne: ikony paska narzędzi i zasobnika pochodzą z własnego skompilowanego pakietu zasobów qBittorrenta, więc zachowują oryginalne kolory.
+
+### Czcionki: nazwane, nigdy nieinstalowane
+
+Prawo 1 z UI.md wymaga Verdana **bez antyaliasingu**. Arkusz stylów Qt nie ma takiej właściwości, a `OSDFont` w MPC-HC to zwykła nazwa czcionki GDI — jedyną dźwignią jest więc sama czcionka. `Verdana_m1.ttf` w katalogu głównym repozytorium to kopia Verdany z wstępnie wyrenderowanymi kreskami bitmapowymi 1 bpp w zakresie 3–30 ppem, których renderer używa zamiast wygładzania konturu.
+Arkusze stylów `qbittorrent` i `obs` wskazują `Verdana_m1, Verdana`, a `mpchc` wskazuje tę z dwóch, którą maszyna faktycznie rozwiązuje. **Instalator nigdy nie instaluje ani nie odinstalowuje czcionki** i to jest celowe, a nie niedokończone:
+Rodzinę czcionek rozwiązuje się przez (rodzina, styl). Zarejestruj Regular + Bold + Italic, a każdy odbiorca rozwiąże się poprawnie; wyrejestruj **jeden** element, a każdy odbiorca proszący o tę rodzinę zostanie przekierowany na element, który przetrwał. Na maszynie, która aliasuje `MS Shell Dlg 2` — czcionkę okien dialogowych Windows — do tej rodziny przez `HKLM\...\FontSubstitutes`, usunięcie Regular czyni **cały pulpit pochyłym**, łącznie z tytułami okien, które DWM już zapisał w pamięci podręcznej, a odzyskanie wymaga wylogowania. Żadna liczba referencji tego nie naprawi: zasięg jest ogólnomaszynowy, a instalator motywu nie ma tam czego szukać.
+Czcionka jest więc jednorazowym, jawnym działaniem użytkownika: prawym przyciskiem na `Verdana_m1.ttf` → **Instaluj** (dla użytkownika, bez uprawnień administratora), a potem zastosuj cel ponownie. Jeśli czcionki brakuje, cele mówią to raz, nazywają poprawkę i wracają do stockowej Verdany — z antyaliasingiem, ale bez robienia czegokolwiek twojej maszynie za twoimi plecami.
+
 ### Aplikacje Electron
 
 `resources/app.asar` jest przenoszone do `resources/app/app.asar` (jego
@@ -346,4 +361,4 @@ Oba targety terminala czytają JEDNĄ kanoniczną preferencję typograficzną z 
 Instalator **przegląda czcionki, nie instaluje ich.** Zakładka TERMINAL FONTS wczytuje dołączony krój do lokalnej dla procesu kolekcji `PrivateFontCollection` na żywy podgląd, który wykonuje **zero** systemowych rejestracji czcionek. Wybór czcionki, rozmiaru (7–24 pt) lub trybu renderowania (aliased/grayscale/cleartype) aktualizuje tylko podgląd i preferencję. Instalacja czcionki to osobne działanie **INSTALL SELECTED**, które otwiera własny instalator czcionek systemu Windows; po potwierdzeniu przez Windows użytkownik sprawdza ponownie przyciskiem Refresh. Rzeczywiste zmiany terminala zachodzą dopiero przy jawnym **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal jest stosowany do wybranej zainstalowanej rodziny w wybranym rozmiarze, a tryb renderowania mapuje się na `profiles.defaults.antialiasingMode`. Klasyczny conhost jest surowszy: renderuje na stałej siatce komórek, więc wybrany krój zostaje odrzucony przed jakąkolwiek zmianą w rejestrze, chyba że Windows potrafi go rozwiązać (krój domyślny i zapasowy Consolas są zwolnione). Health i Reapply weryfikują skonfigurowany krój, rozmiar i wygładzanie względem preferencji, więc zmiana preferencji po Apply jest raportowana jako odchylenie, a nie jako stan "zdrowy". Cykl życia kolorów terminala pozostaje nietknięty: Revert przywraca dokładne wartości posiadane przed Wintagem i nigdy nie usuwa czcionki z maszyny.
-<!-- source-digest: desktop/README.md sha256:1b166ae6a7cf8a5c -->
+<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->

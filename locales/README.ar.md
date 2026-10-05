@@ -102,4 +102,4 @@ _كل عنصر يخبر عن الغرض منه بنظرة واحدة، مما ي
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:886c5e27060e7b30 -->
+<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->

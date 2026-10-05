@@ -1,0 +1,19 @@
+{
+  "event_id": "E-2942",
+  "externalization_event": {
+    "operation_id": "checkpoint-a8d40dbcc7dc4f2e9dfa63a6afdebdf2",
+    "reason": "new LOG event exceeds the live cap; canonical detail externalization"
+  },
+  "lossless": true,
+  "metadata_path": ".saipen/recovery/log-detail/E-2942-726e0a5f683d4688bbb57eb8.json",
+  "operation": "log_event_externalization",
+  "original_event_bytes": 1358,
+  "original_event_path": ".saipen/recovery/log-detail/E-2942-726e0a5f683d4688bbb57eb8.LOG.md",
+  "original_event_sha256": "726e0a5f683d4688bbb57eb8a96d0becb3cb8c48884fd9e7097863d483370af8",
+  "project_identity": "v:\\___vac\\__k\\__code\\_tampermonkey\\_win95theme\\wintage",
+  "project_lineage": "lineage-30ee844c69d34eb68605a4563cfdb8ff",
+  "schema_version": 1,
+  "source": ".saipen/LOG.md",
+  "status": "COMMITTED",
+  "ticket_id": "T-394"
+}

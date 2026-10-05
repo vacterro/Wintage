@@ -88,6 +88,10 @@ What each target can and cannot reach -- including the two apps that are fused s
 or have their colours compiled in -- is written down in
 **[desktop/README.md](desktop/README.md)**.
 
+BetterDiscord plugins are maintained separately:
+https://github.com/vacterro/BetterDiscord_vac34_plugins
+
+
 ## Features
 
 - **Golden Default palette** — deep brown-black canvas `#1A1810`, golden text `#D4C89A`, golden bevel highlights `#F0D060`. Solid flat surfaces only: no gradients, no blur, no transparency effects.
