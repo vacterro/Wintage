@@ -216,7 +216,22 @@
   // Folding IS_LOCAL in here silently disabled the surface remapping, the
   // floating-panel solidification and the hover surgery that the @description
   // promises on exactly the host most likely to be inspected.
-  const HIGH_CHURN_HOST = IS_X || IS_CHATGPT || /(^|\.)(claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
+  //
+  // REDDIT IS IN THIS SET ON PURPOSE (T-902). Reddit is a continuously
+  // mutating SPA built from shreddit web components: a feed scroll appends
+  // posts, comments and media shells faster than a document-wide sweeper can
+  // settle, and the users reported renderer crashes (STATUS_ACCESS_VIOLATION is
+  // a Chromium native fault, so nothing here claims to be its root cause) while
+  // that machinery was running on reddit.com. The prompt is then stable, and a
+  // stability/pressure contract for an infinite feed is worth more than the
+  // last percent of coverage. Reddit therefore runs the lean CSS-only path:
+  // no document-wide MutationObserver, no computed-style sweeps, no CSSOM hover
+  // surgery, no force passes. Removing IS_REDDIT from this line to chase a
+  // cosmetic gap re-arms all of that -- fix the gap in the
+  // html[data-w95-reddit="1"] CSS block instead, with a stable semantic
+  // selector, and bring performance evidence if the repainter is ever proposed
+  // again (see KNOWLEDGE/ADR-010.md).
+  const HIGH_CHURN_HOST = IS_X || IS_CHATGPT || IS_REDDIT || /(^|\.)(claude\.ai|gemini\.google\.com|chat\.qwen\.ai|perplexity\.ai)$/.test(HOST);
   const CSS_ONLY_MODE = HIGH_CHURN_HOST;
 
   // ─── UI.md TOKENS — THE COMPLETE PALETTE, NOTHING OUTSIDE IT ────────────────
@@ -675,7 +690,16 @@
   // hover surgery: pierceShadow (far above it) reports through the same counters,
   // and a `const` used before its declaration line is a TDZ ReferenceError, not
   // a hoisted undefined.
-  const DIAG = { hoverWalkThrows: 0, hoverAppendThrows: 0, sheetGenThrows: 0, shadowPierceThrows: 0, firstError: null };
+  const DIAG = { hoverWalkThrows: 0, hoverAppendThrows: 0, sheetGenThrows: 0, shadowPierceThrows: 0, repaintSkippedHighChurn: 0, shadowCssInjected: 0, firstError: null };
+  // T-902: the CSS-only contract is proved twice. The static gate
+  // (tools/test-reddit-cssonly.js) reads the host classification and the runtime
+  // gates, and these two counters are its runtime half: every entry point that
+  // would have started document-wide repaint work counts itself here instead of
+  // running, and every shadow root that receives the lean stylesheet counts
+  // itself there. On a CSS-only host the first number is the bound that matters
+  // (its growth is proportional to suppressed decisions, never to mutations) and
+  // the second must never exceed the number of shadow roots the page created.
+  function noteRepaintSkipped() { DIAG.repaintSkippedHighChurn++; }
   function noteSuppressed(kind, e) {
     DIAG[kind]++;
     // Only the FIRST error is kept: it carries the untangled stack, and a hostile
@@ -688,6 +712,13 @@
         version: W95_VERSION,
         theme: THEME_ID,
         cssOnlyMode: CSS_ONLY_MODE,
+        // T-902. redditCssOnly is true only on a Reddit host that is actually
+        // running the lean path, so it can never be read as "Reddit is themed"
+        // while the repainter is armed; the two counters are the runtime half of
+        // the CSS-only contract and are what the stress fixture asserts on.
+        redditCssOnly: IS_REDDIT && CSS_ONLY_MODE,
+        repaintSkippedHighChurn: DIAG.repaintSkippedHighChurn,
+        shadowCssInjected: DIAG.shadowCssInjected,
         suppressed: {
           hoverWalkThrows: DIAG.hoverWalkThrows,
           hoverAppendThrows: DIAG.hoverAppendThrows,
@@ -1437,6 +1468,34 @@ div[class*="space-y-1.5"]:has(> div[class*="h-1.5"] > div[style*="usage-chart-1)
     display: none !important;
   }
 
+  /* ── T-902: THE SURFACES THE JS REPAINTER USED TO CORRECT BY HAND ──────────
+     Reddit runs the lean CSS-only path (HIGH_CHURN_HOST), so nothing below
+     scans for a white surface or a low-contrast label any more: these rules are
+     the whole correction for comments, the composer and the overlay shells, and
+     they have to be right without a second JS pass. Only product-level
+     contracts are allowed in this block -- named custom elements, ARIA roles,
+     stable data attributes, stable ids. No generated atomic class, no build
+     hash, no :has(), no universal selector over the Reddit tree: a selector
+     that tracks Reddit's build output goes silently dead in one deploy, and the
+     repair that follows must never be "turn the repainter back on". */
+  html[data-w95-reddit="1"] shreddit-comment, html[data-w95-reddit="1"] shreddit-comment *,
+  html[data-w95-reddit="1"] [role="article"], html[data-w95-reddit="1"] [role="main"] {
+    color: ${T.textPrimary} !important;
+  }
+  html[data-w95-reddit="1"] [role="dialog"], html[data-w95-reddit="1"] [role="menu"],
+  html[data-w95-reddit="1"] [role="listbox"], html[data-w95-reddit="1"] [role="tooltip"],
+  html[data-w95-reddit="1"] faceplate-dropdown-menu, html[data-w95-reddit="1"] faceplate-hovercard[enter-done] {
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+    border-color: ${T.borderMuted} !important;
+  }
+  html[data-w95-reddit="1"] [contenteditable="true"], html[data-w95-reddit="1"] [role="textbox"],
+  html[data-w95-reddit="1"] shreddit-composer textarea, html[data-w95-reddit="1"] textarea {
+    background-color: ${T.compareBack} !important;
+    color: ${T.textPrimary} !important;
+    ${B_SUNK}
+  }
+
   /* Google Search & Material 3 / AI Overview / OneGoogle surface tokens */
   html[data-w95-google="1"] {
     --color-surface: ${T.surface} !important;
@@ -1825,6 +1884,7 @@ rect.bar.previous-period {
               s.setAttribute('data-w95', 'shadow'); s.setAttribute('data-w95-ver', W95_VERSION);
               s.textContent = SHADOW_CSS;
               shadow.insertBefore(s, shadow.firstChild);
+              DIAG.shadowCssInjected++;
             }
           } catch (e) { }
         });
@@ -2084,6 +2144,11 @@ rect.bar.previous-period {
       if (!CSS_ONLY_MODE) {
         shadowObserver.observe(host.shadowRoot, SHADOW_OBS_OPTS);
         stylesDirty = true;
+      } else {
+        // T-902: a per-shadow-root observer is exactly the fan-out the CSS-only
+        // contract forbids. The root keeps its creation-time stylesheet and is
+        // never observed.
+        noteRepaintSkipped();
       }
     } catch (e) { noteSuppressed('shadowPierceThrows', e); }
   }
@@ -2108,6 +2173,7 @@ rect.bar.previous-period {
   // bump a per-sheet generation token whenever ANY rule-mutating API runs.
   // The bounded style cursor then re-walks the sheet whenever either length or
   // generation changes, instead of silently skipping same-count changes.
+  if (CSS_ONLY_MODE) noteRepaintSkipped();
   if (!CSS_ONLY_MODE && typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype && !CSSStyleSheet.prototype.__wintageInstrumented) {
     CSSStyleSheet.prototype.__wintageInstrumented = true;
     // PERF-001 (audit/7.md, SRC-018:R013): a direct CSSOM mutation
@@ -3252,7 +3318,10 @@ rect.bar.previous-period {
   let observersStarted = false;
 
   function startObservers() {
-    if (CSS_ONLY_MODE || repainterSuspended || observersStarted) return;
+    if (CSS_ONLY_MODE || repainterSuspended || observersStarted) {
+      if (CSS_ONLY_MODE) noteRepaintSkipped();
+      return;
+    }
     const obsTarget = document.documentElement || document;
     if (!obsTarget) return;
     try {
@@ -3606,9 +3675,10 @@ rect.bar.previous-period {
     injectLate();
     startObservers();
     if (CSS_ONLY_MODE) {
+      noteRepaintSkipped();
       try {
         document.documentElement.setAttribute('data-w95-perf', 'css-only');
-        document.documentElement.setAttribute('data-w95-perf-reason', 'known-high-churn-host');
+        document.documentElement.setAttribute('data-w95-perf-reason', IS_REDDIT ? 'reddit-lean-css' : (IS_CHATGPT ? 'chatgpt-lean-css' : 'known-high-churn-host'));
       } catch (e) { }
       // One final cascade-order correction after late app CSS arrives. No DOM
       // scan, no observer, no repeating timer.

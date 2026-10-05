@@ -4,6 +4,35 @@
 
 ### Added
 
+- **Reddit runs the lean CSS-only path (T-902).** Reddit now uses Wintage's
+  lean CSS-only path to reduce renderer pressure and avoid expensive
+  document-wide repaint machinery. Reddit is an infinite `shreddit-*` feed, and
+  `HIGH_CHURN_HOST` gained one term -- `IS_REDDIT` -- rather than a second
+  Reddit-only mode, so every expensive mechanism that already keyed off
+  `CSS_ONLY_MODE` turns off on reddit.com at once: no body-subtree repaint
+  `MutationObserver`, no document-wide `getComputedStyle` sweeps, no CSSOM
+  `:hover` surgery, no force passes, no per-shadow-root repaint observer, no
+  timers. Shadow DOM theming is **not** disabled: the `attachShadow` hook still
+  injects the bounded creation-time stylesheet into each new root, which is what
+  `shreddit-*` components need, and stops there. The surfaces the repainter used
+  to correct by hand (comments, overlay shells, the composer) are now themed by
+  `html[data-w95-reddit="1"]` rules built only from stable product contracts --
+  named custom elements, ARIA roles, stable data hooks -- with no generated
+  atomic class, no build hash and no `:has()`. Coverage may be a shade less
+  perfect than on a repainted host; that is the deliberate price of the
+  stability contract, and `tools/test-reddit-cssonly.js` fails if `IS_REDDIT` is
+  removed from the line to chase a cosmetic gap. Three new gates are wired into
+  `tests/Run-Tests.ps1`: the host-classification red control (with look-alike
+  hosts and the six existing high-churn hosts), a side-effect suite that drives
+  the real `startObservers` / `startSweeping` / `pierceShadow` / `attachShadow`
+  bodies with spies and controls, and a mutation-stress fixture (4,000 synthetic
+  Reddit-like nodes, batched appends, attribute churn, 20 shadow roots) that
+  requires zero generic repaint callbacks, zero registered observers, zero
+  computed-style scans and zero CSSOM surgery, with counters that do not scale
+  with mutation volume. `window.__wintageDiag()` reports `redditCssOnly`,
+  `repaintSkippedHighChurn` and `shadowCssInjected` so the decision is
+  observable on a live page without any UI or telemetry.
+
 - **The suite says which tree it judged and what failed (T-414).**
   `tests/Run-Tests.ps1` printed a verdict that could not be compared with
   another run's and, when red, a bare count: one tree produced two verdicts
@@ -535,6 +564,13 @@ repository regression suite are green.
 
 ### Known limits
 
+- The Reddit live A/B (T-902) is not claimed here. Every reported
+  `STATUS_ACCESS_VIOLATION` is a Chromium native renderer fault, which a
+  userscript cannot raise, so nothing above says the native fall was fixed: it
+  says Reddit no longer runs the heavy repaint machinery, and the ticket's live
+  A/B against a real Brave/Chromium profile was not available on the machine
+  that produced this change. If the crash reproduces with the repainter already
+  off, it is not this layer, and browser/GPU diagnosis is out of scope.
 - Live acceptance against a running Discord + BetterDiscord is still owed: the
   installed Discord renderer bundle (`resources/app.asar`) is absent on this
   machine, so no offline contract verification was possible. Everything above is

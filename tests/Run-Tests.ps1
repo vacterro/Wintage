@@ -907,6 +907,17 @@ $toolSuites = @(
     # data hooks replace the retired broad composer / sticky-bottom selectors.
     @{ Name = 'test-chatgpt-2026.js'; Cmd = 'node "{0}\tools\test-chatgpt-2026.js"' },
     @{ Name = 'test-chatgpt-perf-css.js'; Cmd = 'node "{0}\tools\test-chatgpt-perf-css.js"' },
+    # T-902 Reddit renderer-pressure contract. Reddit is an infinite shreddit
+    # feed and now runs the lean CSS-only path with the other high-churn hosts.
+    # The first gate is the RED CONTROL for the classification (removing
+    # IS_REDDIT from HIGH_CHURN_HOST turns it red) and audits the Reddit CSS
+    # group at rule level; the second drives the real bodies with spies to prove
+    # no observer, no CSSOM surgery, no force pass and no timer is installed; the
+    # third runs a synthetic 4,000-node Reddit-like mutation stream and asserts
+    # the repaint counters stay at zero and never scale with mutation volume.
+    @{ Name = 'test-reddit-cssonly.js'; Cmd = 'node "{0}\tools\test-reddit-cssonly.js"' },
+    @{ Name = 'test-reddit-repaint-gates.js'; Cmd = 'node "{0}\tools\test-reddit-repaint-gates.js"' },
+    @{ Name = 'test-reddit-mutation-stress.js'; Cmd = 'node "{0}\tools\test-reddit-mutation-stress.js"' },
     # T-373 viewport-owner coverage. The two gates above read RULES: they prove
     # the October contracts are present in the sheet ChatGPT actually receives.
     # They cannot see the defect this one exists for, because the defect is not a

@@ -85,6 +85,10 @@ function run(containerKind) {
     W95_VERSION: 'test',
     THEME_ID: 'testpal',
     CSS_ONLY_MODE: false,
+    // T-902: window.__wintageDiag reports redditCssOnly, so the reporter reads
+    // the host flag this digest cannot derive. The harness supplies it the same
+    // way it supplies CSS_ONLY_MODE -- as one of the module's own bindings.
+    IS_REDDIT: false,
     CSSStyleSheet: undefined,
     window: {},
     // R013: the hover-surgery slice starts at HOVER_PAINT, which sits after the
@@ -153,6 +157,11 @@ function run(containerKind) {
   check('reporter exposes all four counters',
     Object.keys(diag.suppressed).sort(),
     ['hoverAppendThrows', 'hoverWalkThrows', 'sheetGenThrows', 'shadowPierceThrows'].sort());
+  // T-902: the Reddit CSS-only facts are part of the reporter's contract, and
+  // redditCssOnly must be false on a non-Reddit host even though the counters
+  // are always present.
+  check('reporter exposes the T-902 runtime counters',
+    [diag.redditCssOnly, diag.repaintSkippedHighChurn, diag.shadowCssInjected], [false, 0, 0]);
 }
 
 // ---- Test 4: every catch that suppresses one of these classes reports it ----

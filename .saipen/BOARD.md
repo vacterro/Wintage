@@ -1,6 +1,7 @@
 # BOARD
 
 ## DOING
+- [/] T-902 [P2] Reddit renderer crash hardening: promote reddit.com to the existing HIGH_CHURN_HOST/CSS_ONLY_MODE lean path, bounded creation-time shadow-root CSS only, red-... | verify: the requested change is present and demonstrated against the user own description of it | request_witness: model_supplied | source_receipts: SRC-065 | owner: saipen-cli | claim_time: 2026-10-05T23:45:08Z
 
 ## DONE
 - [x] T-414 [P2] tests/Run-Tests.ps1 verdict is not reproducible and a red run loses the failing suite name | verify: run the suite twice on one unchanged head and compare the verdict; a red run must print the failing suite in the retained transcript | owner: saipen-cli | claim_time: 2026-10-05T22:35:15Z | closure_mode: own_patch

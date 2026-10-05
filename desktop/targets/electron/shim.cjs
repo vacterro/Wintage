@@ -541,6 +541,15 @@ const REPAINTER_FIX = `(() => {
   // known application rather than the open web, and shipping the repainter here is
   // the entire point of this block, so it stays on.
   const CSS_ONLY_MODE = false;
+  // T-902: mirrored from the userscript. The repainter body is a slice of the
+  // userscript that reads both of these names -- IS_REDDIT on the CSS-only host
+  // gate and IS_CHATGPT as the lean-path label in startSweeping -- so the prelude
+  // has to provide them or the extracted body throws a ReferenceError inside
+  // executeJavaScript, which the user experiences as "the theme does nothing".
+  // A desktop shell is one known application, never a churn-heavy web SPA, so
+  // both stay false: same branch as every non-Reddit, non-ChatGPT web host.
+  const IS_REDDIT = false;
+  const IS_CHATGPT = false;
 
   // Polarity. Every luminance threshold downstream was written against a dark
   // palette; elev() normalises the incoming value so the same numbers keep their
@@ -590,7 +599,11 @@ const REPAINTER_FIX = `(() => {
   //
   // Same shape and same counter names as the userscript, deliberately: a bug
   // report from a desktop app and one from the browser then read identically.
-  const DIAG = { hoverWalkThrows: 0, hoverAppendThrows: 0, sheetGenThrows: 0, shadowPierceThrows: 0, firstError: null };
+  const DIAG = { hoverWalkThrows: 0, hoverAppendThrows: 0, sheetGenThrows: 0, shadowPierceThrows: 0, repaintSkippedHighChurn: 0, shadowCssInjected: 0, firstError: null };
+  // T-902: the userscript counts every document-wide decision it suppresses on a
+  // CSS-only host; the body calls this from those branches, so it must exist here
+  // for the same reason noteSuppressed does.
+  function noteRepaintSkipped() { DIAG.repaintSkippedHighChurn++; }
   function noteSuppressed(kind, e) {
     DIAG[kind]++;
     if (!DIAG.firstError) DIAG.firstError = { kind: kind, message: (e && e.message) ? e.message : String(e) };
@@ -606,6 +619,12 @@ const REPAINTER_FIX = `(() => {
         // file and trip its own unresolved-placeholder gate.
         background: T.background,
         cssOnlyMode: CSS_ONLY_MODE,
+        // T-902: same three runtime fields the userscript reports, so a desktop
+        // bug report reads like a browser one. A desktop shell is never Reddit,
+        // and shadowCssInjected counts the creation-time sheet it does inject.
+        redditCssOnly: IS_REDDIT && CSS_ONLY_MODE,
+        repaintSkippedHighChurn: DIAG.repaintSkippedHighChurn,
+        shadowCssInjected: DIAG.shadowCssInjected,
         suppressed: {
           hoverWalkThrows: DIAG.hoverWalkThrows,
           hoverAppendThrows: DIAG.hoverAppendThrows,
