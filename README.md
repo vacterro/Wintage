@@ -19,6 +19,25 @@ A Tampermonkey userscript and desktop theme toolkit that turns modern interfaces
 
 ---
 
+## Showcase
+
+Wintage is meant to stay recognizable across very different sites instead of looking good on one hand-picked page. These examples show the same sharp geometry, warm surfaces, explicit controls, and zero-rounded-corner language across dense and sparse interfaces.
+
+<table>
+<tr>
+<td width="50%"><img alt="Wintage themed web interface example 1" src="https://github.com/user-attachments/assets/7888e96f-f854-4b68-bd82-58f76b85f630" /></td>
+<td width="50%"><img alt="Wintage themed web interface example 2" src="https://github.com/user-attachments/assets/0fc63c83-b314-4c95-96ab-ac5cdd7c3d53" /></td>
+</tr>
+<tr>
+<td width="50%"><img alt="Wintage themed web interface example 3" src="https://github.com/user-attachments/assets/2a33c723-eaee-4f49-b4e7-2d24e6bc599e" /></td>
+<td width="50%"><img alt="Wintage themed web interface example 4" src="https://github.com/user-attachments/assets/db03a09c-dd8b-4423-b927-e8d87e7d0b4e" /></td>
+</tr>
+<tr>
+<td width="50%"><img alt="Wintage themed web interface example 5" src="https://github.com/user-attachments/assets/840ef269-6259-4c84-a1b6-8fd44f390aad" /></td>
+<td width="50%"><img alt="Wintage themed web interface example 6" src="https://github.com/user-attachments/assets/4f38b63a-860c-468a-843f-6982c5287a7b" /></td>
+</tr>
+</table>
+
 ## Why Wintage
 
 Modern interfaces often trade visible structure for decoration: rounded cards blur boundaries, animations delay feedback, hover effects flash across content, and controls increasingly resemble plain text.
@@ -120,30 +139,6 @@ BetterDiscord extensions are maintained separately in [BetterDiscord vac34 plugi
 The desktop installer can detect installed and portable Chromium profiles, report Tampermonkey coverage, stage the selected browser theme, and open the correct installation/update pages.
 
 Chromium still requires one **Developer mode → Load unpacked** confirmation per profile. Later palette changes reuse the same stable theme path.
-
-## Screenshots
-
-<details>
-<summary><b>Open screenshot gallery</b></summary>
-
-<br>
-
-<table>
-<tr>
-<td width="50%"><img alt="Wintage themed interface example 1" src="https://github.com/user-attachments/assets/7888e96f-f854-4b68-bd82-58f76b85f630" /></td>
-<td width="50%"><img alt="Wintage themed interface example 2" src="https://github.com/user-attachments/assets/0fc63c83-b314-4c95-96ab-ac5cdd7c3d53" /></td>
-</tr>
-<tr>
-<td width="50%"><img alt="Wintage themed interface example 3" src="https://github.com/user-attachments/assets/2a33c723-eaee-4f49-b4e7-2d24e6bc599e" /></td>
-<td width="50%"><img alt="Wintage themed interface example 4" src="https://github.com/user-attachments/assets/db03a09c-dd8b-4423-b927-e8d87e7d0b4e" /></td>
-</tr>
-<tr>
-<td width="50%"><img alt="Wintage themed interface example 5" src="https://github.com/user-attachments/assets/840ef269-6259-4c84-a1b6-8fd44f390aad" /></td>
-<td width="50%"><img alt="Wintage themed interface example 6" src="https://github.com/user-attachments/assets/4f38b63a-860c-468a-843f-6982c5287a7b" /></td>
-</tr>
-</table>
-
-</details>
 
 ## Known behaviors
 
