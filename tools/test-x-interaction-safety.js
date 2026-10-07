@@ -101,7 +101,9 @@ function resolve(css) {
     return TOKENS[t[1]];
   });
 }
-// X is not a CSS_ONLY fast-host, so it receives the full GLOBAL_CSS sheet.
+// X is in CSS_ONLY_MODE for JavaScript repaint/observer behavior (DOM repainter remains suspended).
+// CSS_ONLY_MODE does not mean "no CSS": X still receives the applicable static GLOBAL_CSS stylesheet
+// rather than a specialized fast-host stylesheet like CHATGPT_FAST_CSS.
 const sheet = resolve(GLOBAL_CSS_RAW);
 
 // ── 1. X stays on the CSS-only path ─────────────────────────────────────────

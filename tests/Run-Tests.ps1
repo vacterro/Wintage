@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $root = Split-Path $PSScriptRoot -Parent
@@ -1346,26 +1346,90 @@ Assert-True ($unbackedNames.Count -eq 0) "every suite Name is backed by its own 
 # tracked it, which is exactly the case the old note here anticipated; it is now
 # a scratch file this check creates and removes itself, so no later un-ignoring
 # can silently hollow out the assertion.
-function Get-UntrackedRepoPath([string[]]$paths) {
-    $out = @()
-    foreach ($p in $paths) {
-        $prevEap = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        & git -C $root ls-files --error-unmatch -- $p 2>$null | Out-Null
-        $onIndex = $LASTEXITCODE -eq 0
-        if (-not $onIndex) {
-            & git -C $root cat-file -e "HEAD:$p" 2>$null | Out-Null
-            $onIndex = $LASTEXITCODE -eq 0
+function Get-SuiteRepoPaths([array]$suites, [string]$runTestsCode, [string]$repoRoot) {
+    $suitePaths = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($s in $suites) {
+        $cmd = $s.Cmd
+        if ($cmd) {
+            foreach ($m in [regex]::Matches($cmd, '\{0\}[\\/]+((?:tests|tools|desktop)[\\/][A-Za-z0-9._\-\\/]+\.(?:js|cjs|mjs|ps1|py))')) {
+                $null = $suitePaths.Add(($m.Groups[1].Value -replace '\\+', '/'))
+            }
         }
-        $ErrorActionPreference = $prevEap
-        if (-not $onIndex) { $out += $p }
+    }
+    # Direct dot-sources in Run-Tests.ps1
+    foreach ($line in ($runTestsCode -split "`r?`n")) {
+        $trimmed = $line.Trim()
+        if ($trimmed.StartsWith('#')) { continue }
+        foreach ($m in [regex]::Matches($line, '\.\s*\([^)]*[''"]((?:tests|tools|desktop)[/\\].*?\.ps1)[''"]')) {
+            $null = $suitePaths.Add(($m.Groups[1].Value -replace '\\+', '/'))
+        }
+    }
+
+    $allPaths = New-Object 'System.Collections.Generic.HashSet[string]'($suitePaths)
+    foreach ($p in @($suitePaths)) {
+        $full = Join-Path $repoRoot ($p -replace '/', '\')
+        if (-not (Test-Path $full)) { continue }
+        $dir = Split-Path $p -Parent
+        $src = [System.IO.File]::ReadAllText($full)
+        if ($p -match '\.(?:js|cjs|mjs)$') {
+            foreach ($rm in [regex]::Matches($src, 'require\s*\(\s*[''"](\.[^''"]+)[''"]\s*\)')) {
+                $rel = $rm.Groups[1].Value
+                if ($rel -notmatch '\.[a-zA-Z0-9]+$') {
+                    if (Test-Path (Join-Path $repoRoot (Join-Path ($dir -replace '/', '\') "$rel.js"))) { $rel = "$rel.js" }
+                    elseif (Test-Path (Join-Path $repoRoot (Join-Path ($dir -replace '/', '\') "$rel.cjs"))) { $rel = "$rel.cjs" }
+                    elseif (Test-Path (Join-Path $repoRoot (Join-Path ($dir -replace '/', '\') "$rel.json"))) { $rel = "$rel.json" }
+                }
+                $norm = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($repoRoot, ($dir -replace '/', '\'), ($rel -replace '/', '\')))
+                if ($norm.StartsWith($repoRoot)) {
+                    $relRoot = $norm.Substring($repoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+                    $null = $allPaths.Add($relRoot)
+                }
+            }
+        } elseif ($p -match '\.ps1$') {
+            foreach ($dm in [regex]::Matches($src, '\.\s*(?:\([^)]*[''"]([^''"]+\.ps1)[''"]|[''"]([^''"]+\.ps1)[''"])')) {
+                $target = if ($dm.Groups[1].Success) { $dm.Groups[1].Value } else { $dm.Groups[2].Value }
+                $targetClean = $target -replace '\\+', '/'
+                if ($targetClean -match '^(?:tests|tools|desktop)/') {
+                    $null = $allPaths.Add($targetClean)
+                } elseif ($targetClean -match '^\.') {
+                    $norm = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($repoRoot, ($dir -replace '/', '\'), ($target -replace '/', '\')))
+                    if ($norm.StartsWith($repoRoot)) {
+                        $relRoot = $norm.Substring($repoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+                        $null = $allPaths.Add($relRoot)
+                    }
+                }
+            }
+        }
+    }
+    return @($allPaths | Sort-Object)
+}
+function Get-UntrackedRepoPath([string[]]$paths, [string]$indexFile = $null) {
+    $out = @()
+    $oldIndex = $env:GIT_INDEX_FILE
+    try {
+        if ($indexFile) { $env:GIT_INDEX_FILE = $indexFile }
+        foreach ($p in $paths) {
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            & git -C $root ls-files --error-unmatch -- $p 2>$null | Out-Null
+            $onIndex = $LASTEXITCODE -eq 0
+            if (-not $onIndex -and -not $indexFile) {
+                & git -C $root cat-file -e "HEAD:$p" 2>$null | Out-Null
+                $onIndex = $LASTEXITCODE -eq 0
+            }
+            $ErrorActionPreference = $prevEap
+            if (-not $onIndex) { $out += $p }
+        }
+    } finally {
+        $env:GIT_INDEX_FILE = $oldIndex
     }
     , $out
 }
 $suiteToolLeaves = @($executed | Where-Object { $_ -match '\.(?:js|cjs|mjs|ps1|py)$' } | Sort-Object)
-$suiteToolPaths = @($suiteToolLeaves | ForEach-Object { "tools/$_" })
-$untrackedTool = Get-UntrackedRepoPath $suiteToolPaths
-Assert-True ($untrackedTool.Count -eq 0) "every tool file the suite runs is carried by git ($($suiteToolPaths.Count) files; not tracked: $($untrackedTool -join ', '))"
+$runTestsCode = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Run-Tests.ps1'))
+$suiteRepoPaths = Get-SuiteRepoPaths $toolSuites $runTestsCode $root
+$untrackedTool = Get-UntrackedRepoPath $suiteRepoPaths
+Assert-True ($untrackedTool.Count -eq 0) "every suite file and internal dependency is carried by git ($($suiteRepoPaths.Count) files; not tracked: $($untrackedTool -join ', '))"
 # The probe lives under .saipen/logs/, which .gitignore excludes and the worktree
 # fingerprint deliberately skips, and it is deleted again before the assertion.
 $probeRel = '.saipen/logs/untracked-probe.txt'
@@ -1375,6 +1439,30 @@ Set-Content -Path $probeAbs -Value 'probe'
 $probeUntracked = Get-UntrackedRepoPath @($probeRel)
 Remove-Item -Path $probeAbs -Force -ErrorAction SilentlyContinue
 Assert-True ($probeUntracked.Count -eq 1 -and $probeUntracked[0] -eq $probeRel) "the tracked-file check names a file that exists here but is in neither HEAD nor the index (probe: $($probeUntracked -join ', '))"
+
+# T-909 Red Controls: throwaway index proves omission of top-level suite file
+# (tests/test-release-gate-audit.ps1) and omission of local CommonJS require dependency
+# (tools/inject-wintage-web.js) are both detected. T-394/T-395: no mutation of live index.
+$tempCarrierIndex = [System.IO.Path]::GetTempFileName()
+try {
+    Copy-Item (Join-Path $root '.git/index') $tempCarrierIndex
+    $oldIdx = $env:GIT_INDEX_FILE
+    $env:GIT_INDEX_FILE = $tempCarrierIndex
+
+    # Red control A: tests/test-release-gate-audit.ps1 absent from candidate index
+    & git -C $root update-index --force-remove tests/test-release-gate-audit.ps1 2>$null
+    $redA = Get-UntrackedRepoPath $suiteRepoPaths $tempCarrierIndex
+    Assert-True ($redA -contains 'tests/test-release-gate-audit.ps1') "red control A: absence of referenced tests/test-release-gate-audit.ps1 is detected (reported: $($redA -join ', '))"
+
+    # Restore A in temp index, then Red control B: tools/inject-wintage-web.js dependency absent
+    & git -c core.safecrlf=false -C $root update-index --add tests/test-release-gate-audit.ps1 2>$null
+    & git -C $root update-index --force-remove tools/inject-wintage-web.js 2>$null
+    $redB = Get-UntrackedRepoPath $suiteRepoPaths $tempCarrierIndex
+    Assert-True ($redB -contains 'tools/inject-wintage-web.js') "red control B: absence of require('./inject-wintage-web.js') dependency is detected (reported: $($redB -join ', '))"
+} finally {
+    $env:GIT_INDEX_FILE = $oldIdx
+    if (Test-Path $tempCarrierIndex) { Remove-Item $tempCarrierIndex -Force -ErrorAction SilentlyContinue }
+}
 # T-907: accepting HEAD as a carrier is right when a wave commits through a
 # private index, but it also passes a file the index being written would DELETE.
 # Thirteen tool files sat in exactly that hole: their entries were missing from
