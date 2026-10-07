@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.36.1
+// @version      1.36.6
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -134,6 +134,19 @@
         } catch (e) { }
       }
     };
+    // T-397 handover box: the hooks below are installed ONCE per document and
+    // then live for the document's whole life, so whatever they close over is
+    // the FIRST generation's `guard` -- which closes over the first generation's
+    // suspendRepainter and its observer set. Loading a newer generation over the
+    // page therefore left every hook quarantining through generation A forever.
+    // The box is written by EVERY pass and read at CALL time, so the newest
+    // generation takes ownership of the already-installed hooks instead of
+    // stacking a second layer behind the latch above.
+    state.guard = guard;
+    const fire = function () {
+      const owner = state.guard || guard;
+      owner();
+    };
     // Each component installs independently and flips its own flag only on
     // success, so one hostile hook can no longer poison the record of the
     // others -- and a partially-installed guard is REPAIRED by the next run
@@ -147,7 +160,7 @@
           const origPush = ps;
           history.pushState = function () {
             const ret = origPush.apply(this, arguments);
-            guard();
+            fire();
             return ret;
           };
           try { history.pushState.__wintageWrapped = true; } catch (e) { }
@@ -164,7 +177,7 @@
           const origReplace = rs;
           history.replaceState = function () {
             const ret = origReplace.apply(this, arguments);
-            guard();
+            fire();
             return ret;
           };
           try { history.replaceState.__wintageWrapped = true; } catch (e) { }
@@ -174,8 +187,12 @@
     }
     if (!state.listeners) {
       try {
-        window.addEventListener('popstate', guard);
-        window.addEventListener('hashchange', guard);
+        // T-397: the trampoline, not this pass's `guard`. addEventListener
+        // holds the function it was given for the document's life, so passing
+        // the closure directly would keep generation A as the listener even
+        // after a newer generation republished the box.
+        window.addEventListener('popstate', fire);
+        window.addEventListener('hashchange', fire);
         state.listeners = true;
       } catch (e) { }
     }
@@ -451,7 +468,7 @@
     custom: {
       label: 'Custom',
       tokens: {
-        background: '#1A1810', backgroundSoft: '#232018',
+        background: '#A0B0C0', backgroundSoft: '#232018',
         surface: '#332E22', surfaceRaised: '#3D372A', surfaceAlt: '#453D30',
         borderDark: '#100E08', borderHighlight: '#F0D060', bevelLight: '#75663D', borderMuted: '#5A5040',
         textPrimary: '#D4C89A', textSecondary: '#9C9371', textMuted: '#6E674E',
@@ -666,7 +683,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.36.1';
+  const W95_VERSION = '1.36.6';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -1070,10 +1087,21 @@ button[aria-disabled="true"], [role="button"][aria-disabled="true"] {
 /* Neutralize PAINT on button pseudo-elements (underlying squares/circles)
    WITHOUT display:none — hiding them also deleted ::before icon-font glyphs,
    leaving icon-only buttons as empty bevel boxes. Content stays, paint goes.
-   Ripple effects are already killed by the dedicated ripple rule below. */
+   Ripple effects are already killed by the dedicated ripple rule below.
+
+   🚨 BACKGROUND-COLOR, NOT THE background SHORTHAND 🚨
+   The shorthand also resets background-image, so this rule was deleting every
+   pseudo-element GLYPH painted as a url() — a provider logo, a payment mark, a
+   small sprite. The reported shape was five social sign-in methods rendered as
+   empty beveled boxes, and the paint this rule was written for (the stock
+   square/circle behind a control) is a background-COLOR, never an image. CSS
+   cannot test "is this image a gradient" (see the repainter's own note on the
+   same trade), so the rule stops at the property it can judge. Gradients on
+   button pseudo-elements therefore survive this rule and are still stripped by
+   the JS repainter on every non-CSS-only host. */
 button::before, button::after, .btn::before, .btn::after,
 [class~="button" i]::before, [class~="button" i]::after, [class~="btn" i]::before, [class~="btn" i]::after {
-  background: transparent !important; box-shadow: none !important; filter: none !important; border: none !important;
+  background-color: transparent !important; box-shadow: none !important; filter: none !important; border: none !important;
 }
 
 /* 🚨 A STATUS INDICATOR IS NOT BUTTON DECORATION 🚨
@@ -1102,13 +1130,28 @@ button::before, button::after, .btn::before, .btn::after,
    not to the app's, so the dot would have come back transparent and looked fixed
    in the CSS while staying broken on screen. Not matching is the only thing that
    lets the app's own colour through — and it is also what keeps the OTHER states
-   right without guessing what any of them are called. */
+   right without guessing what any of them are called.
+
+   🚨 THE WIPE FLATTENS SURFACES, IT DOES NOT DELETE ARTWORK 🚨
+   background-image: none used to sit in this rule, and it erased exactly the
+   thing it could not judge: a provider glyph, a payment mark, a sprite. The
+   carve-outs above only spare elements whose CLASS says "icon" — an anonymous
+   span carrying url(...) as its background-image matched the wipe and came back
+   an empty box, which is how a Register/Sign-in dialog lost all five of its
+   provider logos. The rule's job is "one control, not a pile of nested boxes",
+   and a nested box is a background-COLOR, a border or a shadow. Imagery is the
+   site's, not ours: the repainter already keeps url() backgrounds for the same
+   reason and only removes gradient FUNCTIONS (see its own note), and CSS has no
+   way to make that distinction — so this rule stops at colour. Gradients inside
+   a button therefore survive here and are still killed by the repainter on every
+   host that runs it; the CSS-only hosts carry the imagery-preserving contract
+   and lose at most a decorative gradient inside a control. */
 button:not(.ytp-button) *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 [class~="button" i] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 [class~="btn" i] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 span[role="button"] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]),
 a[role="button"] *:not(i):not([class*="icon" i]):not([class*="fa-" i]):not([class*="symbols" i]):not([class*="glyph" i]):not([class*="mdi" i]):not([class*="bi-" i]):not([class*="status" i]):not([class*="indicator" i]):not([class*="badge" i]):not([class*="dot" i]):not([data-kind]):not([data-status]):not([role="status"]):not([role="progressbar"]):not([role="meter"]) {
-  background-color: transparent !important; background-image: none !important; box-shadow: none !important;
+  background-color: transparent !important; box-shadow: none !important;
   border: none !important; text-shadow: none !important; color: inherit !important;
 }
 
@@ -1594,12 +1637,166 @@ div[class*="space-y-1.5"]:has(> div[class*="h-1.5"] > div[style*="usage-chart-1)
     box-shadow: none !important;
   }
 
-  /* ChatGPT composer background — v1.36.1 fix: removed div[class*="bottom-0" i] (too broad,
-     hit scroll containers and created large dark void), removed padding-bottom on
-     main div[role="presentation"] (now ChatGPT's main scroll viewport, not a clearance div). */
-  html[data-w95-chatgpt="1"] [class*="composer" i],
-  html[data-w95-chatgpt="1"] div.sticky.bottom-0 {
+  /* ChatGPT Web shell — September 2026 semantic-token refresh.
+     ChatGPT moved the current web shell onto semantic application tokens and
+     stable data hooks (#app-shell-sidebar, data-composer-*, data-user-message-
+     bubble, data-markdown-copy). Mapping those contracts is both more complete
+     and less brittle than chasing Tailwind class fragments after every rollout.
+
+     Keep legacy token aliases too: ChatGPT runs staged rollouts, so an account
+     can briefly contain the new shell and older surfaces in the same document. */
+  html[data-w95-chatgpt="1"] {
+    --chat-background-color: ${T.backgroundSoft} !important;
+    --app-color-background-surface: ${T.backgroundSoft} !important;
+    --app-color-background-surface-under: ${T.background} !important;
+
+    --color-surface: ${T.backgroundSoft} !important;
+    --color-surface-secondary: ${T.surface} !important;
+    --color-surface-recovery: ${T.backgroundSoft} !important;
+    --color-background-panel: ${T.surface} !important;
+
+    --color-token-bg-primary: ${T.backgroundSoft} !important;
+    --color-token-main-surface-primary: ${T.backgroundSoft} !important;
+    --color-token-main-surface-secondary: ${T.surface} !important;
+    --color-token-main-surface-tertiary: ${T.surfaceRaised} !important;
+    --color-token-side-bar-background: ${T.background} !important;
+
+    --main-surface-primary: ${T.backgroundSoft} !important;
+    --main-surface-secondary: ${T.surface} !important;
+    --main-surface-tertiary: ${T.surfaceRaised} !important;
+    --sidebar-surface-primary: ${T.background} !important;
+    --sidebar-surface-secondary: ${T.surface} !important;
+    --sidebar-surface-tertiary: ${T.surfaceRaised} !important;
+    --bg-primary: ${T.backgroundSoft} !important;
+    --bg-secondary-surface: ${T.surface} !important;
+    --bg-elevated-secondary: ${T.surfaceRaised} !important;
+
+    --composer-background-color: ${T.surface} !important;
+    --composer-surface: ${T.surface} !important;
+    --composer-surface-primary: ${T.surface} !important;
+    --message-surface: ${T.surfaceRaised} !important;
+    --user-message-background-color: ${T.surfaceRaised} !important;
+    --color-background-user-message: ${T.surfaceRaised} !important;
+    --color-background-user-message-compact: ${T.surfaceRaised} !important;
+
+    --codeblock-background-color: ${T.compareBack} !important;
+    --color-token-text-code-block-background: ${T.compareBack} !important;
+
+    --token-text-primary: ${T.textPrimary} !important;
+    --token-text-secondary: ${T.textSecondary} !important;
+    --token-text-tertiary: ${T.textMuted} !important;
+    --text-primary: ${T.textPrimary} !important;
+    --text-secondary: ${T.textSecondary} !important;
+    --text-tertiary: ${T.textMuted} !important;
+    --color-text-primary: ${T.textPrimary} !important;
+    --color-text-secondary: ${T.textSecondary} !important;
+    --color-text-tertiary: ${T.textMuted} !important;
+    --app-color-text-primary: ${T.textPrimary} !important;
+    --app-color-text-secondary: ${T.textSecondary} !important;
+
+    --border-light: ${T.borderMuted} !important;
+    --border-medium: ${T.bevelLight} !important;
+    --color-border: ${T.borderMuted} !important;
+    --color-border-subtle: ${T.borderDark} !important;
+  }
+
+  html[data-w95-chatgpt="1"],
+  html[data-w95-chatgpt="1"] body,
+  html[data-w95-chatgpt="1"] #root {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Current left shell plus rollout fallbacks. The app-shell id is the 2026
+     contract; stage-* keeps mixed-rollout accounts coherent. */
+  html[data-w95-chatgpt="1"] #app-shell-sidebar,
+  html[data-w95-chatgpt="1"] #stage-slideover-sidebar,
+  html[data-w95-chatgpt="1"] #stage-sidebar-tiny-bar {
+    --color-surface: ${T.background} !important;
+    --color-surface-secondary: ${T.surface} !important;
     background-color: ${T.background} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* New composer has two surface contracts. Standard chat paints the root;
+     Project/Home keeps the root layout-only and paints data-composer-body. */
+  html[data-w95-chatgpt="1"] [data-composer-dark][data-composer-utility-bar-variant="default"] {
+    background-color: ${T.surface} !important;
+    ${B_SUNK}
+  }
+  html[data-w95-chatgpt="1"] [data-composer-dark][data-composer-utility-bar-variant="home"] {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  html[data-w95-chatgpt="1"] [data-composer-dark][data-composer-utility-bar-variant="home"] [data-composer-body] {
+    background-color: ${T.surface} !important;
+    ${B_SUNK}
+  }
+  /* Fallback for the legacy/current mixed composer during staged rollout.
+     Do NOT resurrect broad bottom-0 selectors: those also match scroll regions. */
+  html[data-w95-chatgpt="1"] form[data-chatgpt-composer],
+  html[data-w95-chatgpt="1"] [data-testid="chat-input"] {
+    background-color: transparent !important;
+  }
+  html[data-w95-chatgpt="1"] #prompt-textarea,
+  html[data-w95-chatgpt="1"] [data-testid="prompt-textarea"],
+  html[data-w95-chatgpt="1"] [data-composer-markdown][contenteditable="true"] {
+    color: ${T.textPrimary} !important;
+    caret-color: ${T.borderHighlight} !important;
+  }
+
+  /* Message and code surfaces gained stable data hooks in the new renderer. */
+  html[data-w95-chatgpt="1"] [data-user-message-bubble="true"] {
+    background-color: ${T.surfaceRaised} !important;
+    color: ${T.textPrimary} !important;
+    ${B_OUTER}
+  }
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"] {
+    background-color: ${T.compareBack} !important;
+    color: ${T.textPrimary} !important;
+    border-radius: 0 !important;
+    ${B_SUNK}
+  }
+
+  /* ChatGPT lean geometry pass. Keep this deliberately narrow: these are stable
+     semantic hooks that already participate in the ChatGPT fast path. The old
+     universal all-element radius reset achieved square geometry by forcing a
+     full-tree style invalidation tax on every composer/stream update. */
+  html[data-w95-chatgpt="1"] [data-composer-dark],
+  html[data-w95-chatgpt="1"] [data-composer-body],
+  html[data-w95-chatgpt="1"] form[data-chatgpt-composer],
+  html[data-w95-chatgpt="1"] [data-testid="chat-input"],
+  html[data-w95-chatgpt="1"] [data-user-message-bubble="true"],
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"],
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"] > :first-child,
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"] > :last-child {
+    border-radius: 0 !important;
+  }
+
+  /* The composer shell is nested one level deeper in some 2026 rollouts. Limit
+     the reset to its immediate structural children instead of crawling every
+     descendant in the conversation tree. */
+  html[data-w95-chatgpt="1"] [data-composer-dark] > *,
+  html[data-w95-chatgpt="1"] [data-composer-body] > * {
+    border-radius: 0 !important;
+  }
+
+  /* The refreshed thread footer paints a generated fade layer independently
+     from the page token in some rollouts. Pin it to the conversation surface
+     so the bottom of long chats cannot fall back to ChatGPT's stock charcoal. */
+  html[data-w95-chatgpt="1"] #thread-bottom-container::after,
+  html[data-w95-chatgpt="1"] .content-fade::after {
+    background-color: ${T.backgroundSoft} !important;
+  }
+
+  /* The redesigned header uses pressed state for Chat/Work and related mode
+     controls. Make the selected state explicit without depending on copy text. */
+  html[data-w95-chatgpt="1"] header button[aria-pressed="true"],
+  html[data-w95-chatgpt="1"] #page-header button[aria-pressed="true"] {
+    background-color: ${T.surfaceAlt} !important;
+    color: ${T.link} !important;
+    ${B_INNER}
   }
 
   yt-interaction, paper-ripple, .mdc-ripple-surface, .mdc-ripple-upgraded::before, .mdc-ripple-upgraded::after {
@@ -1664,6 +1861,33 @@ rect.bar.previous-period {
   background-color: ${T.textMuted} !important;
   fill: ${T.textMuted} !important;
   opacity: 0.7 !important;
+  visibility: visible !important;
+}
+/* T-065 follow-up: the bar family was guarded because the symptom was reported
+   against it, and nothing guarded the SIBLINGS the same view renders. Studio's
+   Reach tab draws bar, line, area, stacked and sparkline charts from one
+   component family, so a report of "the analytics bars disappear" is equally
+   consistent with any of the non-bar ones, and those were left to the global
+   surface wipe -- the very rule class that hides data marks. The guard is
+   generalised along the axis the author had already generalised on (class
+   fragment, not one hard-coded element name) and holds the same three things:
+   the mark is not transparent, it is not hidden, and it carries a palette
+   colour. 'ytcp-table-cell' and the grid wrappers are deliberately NOT listed:
+   a table cell is a container, and painting it would flatten the chart. */
+ytcp-line-chart, ytcp-area-chart, ytcp-stacked-bar-chart, ytcp-sparkline,
+[class*="line-chart" i], [class*="area-chart" i], [class*="sparkline" i],
+[class*="stacked-bar" i] {
+  background-color: transparent !important;
+}
+ytcp-line-chart [class*="line" i], ytcp-area-chart [class*="area" i],
+ytcp-stacked-bar-chart rect, ytcp-sparkline rect,
+[class*="line-chart" i] path, [class*="line-chart" i] rect,
+[class*="area-chart" i] path, [class*="area-chart" i] rect,
+[class*="sparkline" i] path, [class*="sparkline" i] rect,
+rect[class*="bar" i], path[class*="bar" i] {
+  fill: ${T.link} !important;
+  stroke: ${T.link} !important;
+  opacity: 1 !important;
   visibility: visible !important;
 }
 .card, [class~="card" i], [class*="card-" i], [class*="-card" i], [class*="__card" i],
@@ -1745,6 +1969,429 @@ rect.bar.previous-period {
 `;
 
   // ─── SHADOW DOM MINIMAL CSS ──────────────────────────────────────────────────
+  // ─── CHATGPT FAST CSS ──────────────────────────────────────────────────────
+  // ChatGPT is already CSS-only, but feeding its constantly mutating React tree
+  // the universal all-sites sheet still makes every style invalidation expensive.
+  // Keep the site-specific semantic contract and a small set of cheap base rules;
+  // deliberately omit the global class-substring/type-ladder/hover machinery.
+  const CHATGPT_FAST_CSS = `
+:root {
+  color-scheme: ${DARK ? 'dark' : 'light'} !important;
+  --background: ${T.background}; --backgroundSoft: ${T.backgroundSoft};
+  --surface: ${T.surface}; --surfaceRaised: ${T.surfaceRaised}; --surfaceAlt: ${T.surfaceAlt};
+  --borderDark: ${T.borderDark}; --borderHighlight: ${T.borderHighlight}; --bevelLight: ${T.bevelLight}; --borderMuted: ${T.borderMuted}; --link: ${T.link};
+  --textPrimary: ${T.textPrimary}; --textSecondary: ${T.textSecondary}; --textMuted: ${T.textMuted};
+  --accentTeal: ${T.accentTeal}; --accentTealDeep: ${T.accentTealDeep};
+  --success: ${T.success}; --warning: ${T.warning}; --danger: ${T.danger}; --dangerText: ${T.dangerText};
+  --selection: ${T.selection}; --compareBack: ${T.compareBack};
+  --radius: 0px; --radius-none: 0px; --radius-2xs: 0px; --radius-xs: 0px; --radius-sm: 0px;
+  --radius-md: 0px; --radius-lg: 0px; --radius-xl: 0px; --radius-2xl: 0px;
+  --radius-full: 0px; --radius-round: 0px; --radius-pill: 0px; --radius-circle: 0px;
+}
+
+html[data-w95-chatgpt="1"],
+html[data-w95-chatgpt="1"] body,
+html[data-w95-chatgpt="1"] #root {
+  background-color: ${T.backgroundSoft} !important;
+  color: ${T.textPrimary} !important;
+  font-family: ${FONT} !important;
+}
+html[data-w95-chatgpt="1"] body { margin: 0 !important; padding: 0 !important; font-size: 12px !important; line-height: 1.2 !important; }
+html[data-w95-chatgpt="1"] h1 { font-size: 16px !important; line-height: 1.2 !important; color: ${T.textPrimary} !important; }
+html[data-w95-chatgpt="1"] h2, html[data-w95-chatgpt="1"] h3, html[data-w95-chatgpt="1"] h4,
+html[data-w95-chatgpt="1"] h5, html[data-w95-chatgpt="1"] h6 { font-size: 14px !important; line-height: 1.2 !important; color: ${T.textPrimary} !important; }
+html[data-w95-chatgpt="1"] p, html[data-w95-chatgpt="1"] li, html[data-w95-chatgpt="1"] blockquote { line-height: 1.4 !important; color: ${T.textPrimary} !important; }
+html[data-w95-chatgpt="1"] a, html[data-w95-chatgpt="1"] a:link { color: ${T.link} !important; text-decoration: none !important; }
+html[data-w95-chatgpt="1"] a:visited { color: ${T.textSecondary} !important; }
+html[data-w95-chatgpt="1"] a:hover { color: ${T.link} !important; text-decoration: underline !important; }
+
+html[data-w95-chatgpt="1"] button,
+html[data-w95-chatgpt="1"] input,
+html[data-w95-chatgpt="1"] textarea,
+html[data-w95-chatgpt="1"] select,
+html[data-w95-chatgpt="1"] code,
+html[data-w95-chatgpt="1"] pre,
+html[data-w95-chatgpt="1"] [contenteditable="true"] {
+  font-family: ${FONT} !important;
+  border-radius: 0 !important;
+}
+html[data-w95-chatgpt="1"] button,
+html[data-w95-chatgpt="1"] [role="button"] {
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+html[data-w95-chatgpt="1"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-w95-chatgpt="1"] textarea {
+  background-color: ${T.compareBack} !important;
+  color: ${T.textPrimary} !important;
+}
+html[data-w95-chatgpt="1"] dialog,
+html[data-w95-chatgpt="1"] [popover],
+html[data-w95-chatgpt="1"] [role="menu"],
+html[data-w95-chatgpt="1"] [role="listbox"],
+html[data-w95-chatgpt="1"] [role="dialog"],
+html[data-w95-chatgpt="1"] [role="alertdialog"] {
+  background-color: ${T.surfaceRaised} !important;
+  color: ${T.textPrimary} !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* ChatGPT account/action menus may redeclare semantic text variables inside
+   the portal subtree. Paint text on the ARIA action surface itself so the lean
+   CSS path cannot produce icon-only menu rows while keeping the selector local
+   to small popup trees rather than the constantly mutating conversation DOM. */
+html[data-w95-chatgpt="1"] [role="menu"] [role="menuitem"],
+html[data-w95-chatgpt="1"] [role="menu"] button,
+html[data-w95-chatgpt="1"] [role="menu"] a,
+html[data-w95-chatgpt="1"] [role="listbox"] [role="option"] {
+  color: ${T.textPrimary} !important;
+  -webkit-text-fill-color: ${T.textPrimary} !important;
+}
+html[data-w95-chatgpt="1"] [role="menu"] [role="menuitem"] :where(span, p, div),
+html[data-w95-chatgpt="1"] [role="menu"] button :where(span, p, div),
+html[data-w95-chatgpt="1"] [role="menu"] a :where(span, p, div),
+html[data-w95-chatgpt="1"] [role="listbox"] [role="option"] :where(span, p, div) {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+html[data-w95-chatgpt="1"] [role="menu"] [aria-disabled="true"],
+html[data-w95-chatgpt="1"] [role="listbox"] [aria-disabled="true"] {
+  color: ${T.textMuted} !important;
+  -webkit-text-fill-color: ${T.textMuted} !important;
+}
+html[data-w95-chatgpt="1"] ::selection { background-color: ${T.selection} !important; color: ${T.textPrimary} !important; }
+
+  /* ChatGPT Web shell — September 2026 semantic-token refresh.
+     ChatGPT moved the current web shell onto semantic application tokens and
+     stable data hooks (#app-shell-sidebar, data-composer-*, data-user-message-
+     bubble, data-markdown-copy). Mapping those contracts is both more complete
+     and less brittle than chasing Tailwind class fragments after every rollout.
+
+     Keep legacy token aliases too: ChatGPT runs staged rollouts, so an account
+     can briefly contain the new shell and older surfaces in the same document. */
+  html[data-w95-chatgpt="1"] {
+    --chat-background-color: ${T.backgroundSoft} !important;
+    --app-color-background-surface: ${T.backgroundSoft} !important;
+    --app-color-background-surface-under: ${T.background} !important;
+
+    --color-surface: ${T.backgroundSoft} !important;
+    --color-surface-secondary: ${T.surface} !important;
+    --color-surface-recovery: ${T.backgroundSoft} !important;
+    --color-background-panel: ${T.surface} !important;
+
+    --color-token-bg-primary: ${T.backgroundSoft} !important;
+    --color-token-main-surface-primary: ${T.backgroundSoft} !important;
+    --color-token-main-surface-secondary: ${T.surface} !important;
+    --color-token-main-surface-tertiary: ${T.surfaceRaised} !important;
+    --color-token-side-bar-background: ${T.background} !important;
+
+    --main-surface-primary: ${T.backgroundSoft} !important;
+    --main-surface-secondary: ${T.surface} !important;
+    --main-surface-tertiary: ${T.surfaceRaised} !important;
+    --sidebar-surface-primary: ${T.background} !important;
+    --sidebar-surface-secondary: ${T.surface} !important;
+    --sidebar-surface-tertiary: ${T.surfaceRaised} !important;
+    --bg-primary: ${T.backgroundSoft} !important;
+    --bg-secondary-surface: ${T.surface} !important;
+    --bg-elevated-secondary: ${T.surfaceRaised} !important;
+
+    --composer-background-color: ${T.surface} !important;
+    --composer-surface: ${T.surface} !important;
+    --composer-surface-primary: ${T.surface} !important;
+    --message-surface: ${T.surfaceRaised} !important;
+    --user-message-background-color: ${T.surfaceRaised} !important;
+    --color-background-user-message: ${T.surfaceRaised} !important;
+    --color-background-user-message-compact: ${T.surfaceRaised} !important;
+
+    --codeblock-background-color: ${T.compareBack} !important;
+    --color-token-text-code-block-background: ${T.compareBack} !important;
+
+    --token-text-primary: ${T.textPrimary} !important;
+    --token-text-secondary: ${T.textSecondary} !important;
+    --token-text-tertiary: ${T.textMuted} !important;
+    --text-primary: ${T.textPrimary} !important;
+    --text-secondary: ${T.textSecondary} !important;
+    --text-tertiary: ${T.textMuted} !important;
+    --color-text-primary: ${T.textPrimary} !important;
+    --color-text-secondary: ${T.textSecondary} !important;
+    --color-text-tertiary: ${T.textMuted} !important;
+    --app-color-text-primary: ${T.textPrimary} !important;
+    --app-color-text-secondary: ${T.textSecondary} !important;
+
+    --border-light: ${T.borderMuted} !important;
+    --border-medium: ${T.bevelLight} !important;
+    --color-border: ${T.borderMuted} !important;
+    --color-border-subtle: ${T.borderDark} !important;
+  }
+
+  html[data-w95-chatgpt="1"],
+  html[data-w95-chatgpt="1"] body,
+  html[data-w95-chatgpt="1"] #root {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Current left shell plus rollout fallbacks. The app-shell id is the 2026
+     contract; stage-* keeps mixed-rollout accounts coherent. */
+  html[data-w95-chatgpt="1"] #app-shell-sidebar,
+  html[data-w95-chatgpt="1"] #stage-slideover-sidebar,
+  html[data-w95-chatgpt="1"] #stage-sidebar-tiny-bar {
+    --color-surface: ${T.background} !important;
+    --color-surface-secondary: ${T.surface} !important;
+    background-color: ${T.background} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* New composer has two surface contracts. Standard chat paints the root;
+     Project/Home keeps the root layout-only and paints data-composer-body. */
+  html[data-w95-chatgpt="1"] [data-composer-dark][data-composer-utility-bar-variant="default"] {
+    background-color: ${T.surface} !important;
+    ${B_SUNK}
+  }
+  html[data-w95-chatgpt="1"] [data-composer-dark][data-composer-utility-bar-variant="home"] {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  html[data-w95-chatgpt="1"] [data-composer-dark][data-composer-utility-bar-variant="home"] [data-composer-body] {
+    background-color: ${T.surface} !important;
+    ${B_SUNK}
+  }
+  /* Fallback for the legacy/current mixed composer during staged rollout.
+     Do NOT resurrect broad bottom-0 selectors: those also match scroll regions. */
+  html[data-w95-chatgpt="1"] form[data-chatgpt-composer],
+  html[data-w95-chatgpt="1"] [data-testid="chat-input"] {
+    background-color: transparent !important;
+  }
+  html[data-w95-chatgpt="1"] #prompt-textarea,
+  html[data-w95-chatgpt="1"] [data-testid="prompt-textarea"],
+  html[data-w95-chatgpt="1"] [data-composer-markdown][contenteditable="true"] {
+    color: ${T.textPrimary} !important;
+    caret-color: ${T.borderHighlight} !important;
+  }
+
+  /* Message and code surfaces gained stable data hooks in the new renderer. */
+  html[data-w95-chatgpt="1"] [data-user-message-bubble="true"] {
+    background-color: ${T.surfaceRaised} !important;
+    color: ${T.textPrimary} !important;
+    ${B_OUTER}
+  }
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"] {
+    background-color: ${T.compareBack} !important;
+    color: ${T.textPrimary} !important;
+    ${B_SUNK}
+  }
+
+  /* The refreshed thread footer paints a generated fade layer independently
+     from the page token in some rollouts. Pin it to the conversation surface
+     so the bottom of long chats cannot fall back to ChatGPT's stock charcoal. */
+  html[data-w95-chatgpt="1"] #thread-bottom-container::after,
+  html[data-w95-chatgpt="1"] .content-fade::after {
+    background-color: ${T.backgroundSoft} !important;
+  }
+
+  /* The redesigned header uses pressed state for Chat/Work and related mode
+     controls. Make the selected state explicit without depending on copy text. */
+  html[data-w95-chatgpt="1"] header button[aria-pressed="true"],
+  html[data-w95-chatgpt="1"] #page-header button[aria-pressed="true"] {
+    background-color: ${T.surfaceAlt} !important;
+    color: ${T.link} !important;
+    ${B_INNER}
+  }
+
+  /* ═══ ChatGPT Web shell — OCTOBER 2026 structural contracts ═══════════════
+     The September selectors above still match mixed-rollout accounts, so they
+     stay. They are no longer where the CURRENT shell paints: the workspace,
+     the sidebar and the prompt editor moved onto a different set of stable
+     structural hooks, and on the current shell the September list matches
+     nothing. That leaves the central workspace, the sidebar and the composer
+     on ChatGPT's stock #000 while every Wintage-owned overlay stays themed --
+     which is exactly the reported symptom.
+
+     Everything below is a semantic element id, a data-testid or an ARIA
+     contract. Generated x* atomic class names are build output, not a product
+     contract: they are rehashed on every rollout, so binding to them would
+     trade a static-CSS theme for a repaint loop. No :has(), no class
+     fragment, no universal selector -- the lean CSS-only path stays intact. */
+  /* The current root app container. Kept in a rule OF ITS OWN, deliberately:
+     a rule mixing a current-live hook with a rollout hook cannot be cut, or
+     verified, one generation at a time -- which is how a fallback selector
+     ended up standing in for a current contract. #root stays with the rollout
+     ancestors below. */
+  html[data-w95-chatgpt="1"] #web-mobile-root {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Rollout ancestors: the previous generation carried a shell data-testid and
+     an aria-label on <main>, and the conversation scroll region is contextual
+     rather than required (tools/inspect-web.js classes it coverage). */
+  html[data-w95-chatgpt="1"] [data-testid="desktop-app-shell"],
+  html[data-w95-chatgpt="1"] main[aria-label="ChatGPT"],
+  html[data-w95-chatgpt="1"] [role="region"][aria-label="Conversation"] {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Current sidebar landmark. role=complementary is the accessibility contract
+     the current shell exposes; aside[aria-label="Sidebar"] covers the rollout
+     that still renders the landmark as a native aside. #app-shell-sidebar in
+     the September block above remains the fallback for older accounts. */
+  html[data-w95-chatgpt="1"] [role="complementary"][aria-label="Sidebar"] {
+    --color-surface: ${T.background} !important;
+    --color-surface-secondary: ${T.surface} !important;
+    --sidebar-surface-primary: ${T.background} !important;
+    --sidebar-surface-secondary: ${T.surface} !important;
+    background-color: ${T.background} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Rollout sidebar landmark: the generation that rendered it as a native
+     aside. Its own rule, so the current-live landmark above can be verified
+     without a fallback selector answering for it. */
+  html[data-w95-chatgpt="1"] aside[aria-label="Sidebar"] {
+    --color-surface: ${T.background} !important;
+    --color-surface-secondary: ${T.surface} !important;
+    --sidebar-surface-primary: ${T.background} !important;
+    --sidebar-surface-secondary: ${T.surface} !important;
+    background-color: ${T.background} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* ── THE VIEWPORT OWNER ──────────────────────────────────────────────────
+     This is the repair, and it exists because of a shape the block above got
+     wrong. Theming a PARENT does not theme the area you look at. The shell
+     paints its scroll container with its OWN opaque background, below
+     #web-mobile-root, below the shell, below <main>, below the conversation
+     region -- four ancestors that were all themed above and all irrelevant,
+     because the element actually covering the centre of the screen is a child
+     of them. Correct-looking parent rules, visibly wrong page.
+
+     So the parent rule stays (it is the fallback for rollouts that have no
+     scroll container) and the viewport owner gets its own declaration. */
+  html[data-w95-chatgpt="1"] [data-testid="mobile-app-shell-scroll-container"] {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* ── THE CURRENT-LIVE SHELL ──────────────────────────────────────────────
+     Everything above describes a shell that still carries data-testids. A
+     signed-in tab measured on 2026-10-04 does not: tools/inspect-web.js records
+     the app exposing NO data-testid on either shell, no #thread and no
+     aria-label on <main>, with the viewport owner a div.thread-scroll-container
+     and the editor a role=textbox contenteditable div carrying neither id nor
+     testid. So the repair above could be complete, correct, and invisible: on a
+     current account none of those selectors match, the scroll container keeps
+     painting its own #000 over the whole centre of the screen, and this is the
+     shape the operator reported twice.
+
+     The two generations stay bound TOGETHER. ChatGPT runs staged rollouts, so a
+     mixed account is normal and removing either half breaks somebody.
+
+     div.thread-scroll-container is a semantic class in inspect-web's own ALWAYS
+     contract, not a generated atomic: it is stable product markup, unlike the
+     x* build output this sheet is forbidden to bind. It is the ONE class name
+     this sheet is allowed to depend on, and it is here because a live
+     measurement named it, not because it looks convenient. */
+  html[data-w95-chatgpt="1"] div.thread-scroll-container {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Current <main> has no aria-label, so the October conversation rule above
+     misses it. Paint plain main: on today's shell it IS the application
+     viewport, it is inspect-web's own app-scroll-container fallback, and it is
+     the surface Settings and Customize are measured against. Scoped to the
+     ChatGPT stamp, so it never reaches a main element on another host. */
+  html[data-w95-chatgpt="1"] main {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Current composer editor. Measured live it is transparent and its container
+     ([data-composer-dark] -> --composer-background-color) is the painted owner,
+     which the September block above already themes. Text and caret only: a
+     second opaque surface here would contradict that measurement instead of
+     repairing it, and would paint a layout-only node as if it were the
+     composer. */
+  html[data-w95-chatgpt="1"] [role="textbox"][contenteditable="true"] {
+    color: ${T.textPrimary} !important;
+    caret-color: ${T.borderHighlight} !important;
+  }
+
+  /* Current shell header/footer fades. Same direct-child scope as the fade
+     block below, on the container that owns them today: a message embed's own
+     header sits several levels deeper and can never be a direct child. */
+  html[data-w95-chatgpt="1"] div.thread-scroll-container > header,
+  html[data-w95-chatgpt="1"] div.thread-scroll-container > footer {
+    background-image: none !important;
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Page header and footer fades. The current shell draws these as a
+     background-image gradient over the scroll container, so on an unthemed
+     stock account they carry stock charcoal regardless of every surface above.
+
+     A gradient is not the fix: UI.md law 2 is zero gradients, and the runtime
+     gradient killer already strips gradient background-images on any repaint,
+     so painting one here would buy a themed header for about as long as it took
+     the observer to notice. Solid colour plus background-image:none is both the
+     law and the cheap path.
+
+     SCOPE. The direct-child combinator is the whole point. A message embed's
+     header or footer is nested inside the conversation region, several levels
+     below either shell, so it can never be a direct child and cannot match.
+     That is what buys the handoff's "do not affect headers/footers inside
+     message embeds or unrelated components" without :has(), without a class
+     fragment and without a universal selector.
+
+     HONESTY: whether the current account's shell still renders these as direct
+     children is a LIVE question this static gate cannot answer. #page-header is
+     a stable element id the shipped CSS already binds to. If a rollout nests
+     the fade one wrapper deeper, this rule misses it -- visibly stock -- rather
+     than over-reaching onto embed internals. That trade is the intended one;
+     tools/inspect-web.js in its opaque mode settles it on a real tab. */
+  html[data-w95-chatgpt="1"] main[aria-label="ChatGPT"] [data-testid="desktop-app-shell"] > header,
+  html[data-w95-chatgpt="1"] main[aria-label="ChatGPT"] [data-testid="desktop-app-shell"] > footer,
+  html[data-w95-chatgpt="1"] [data-testid="mobile-app-shell-scroll-container"] > header,
+  html[data-w95-chatgpt="1"] [data-testid="mobile-app-shell-scroll-container"] > footer,
+  html[data-w95-chatgpt="1"] #page-header {
+    background-image: none !important;
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Current prompt editor. Painted directly on the editor itself: the shell
+     exposes no stable hook for its container, and guessing one with :has() or a
+     class fragment would reintroduce the exact cost the lean path exists to
+     avoid. The container stays UNPROVEN until a live run names a contract. */
+  html[data-w95-chatgpt="1"] #mobile-composer-prompt {
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+    caret-color: ${T.borderHighlight} !important;
+  }
+
+  `;
+
+  // Shadow DOM on ChatGPT gets the same performance treatment. A generic shadow
+  // sheet contains the same expensive universal selectors the light-DOM fast path
+  // is avoiding, so do not reintroduce them through newly-created shadow roots.
+  const CHATGPT_FAST_SHADOW_CSS = `
+:host {
+  color-scheme: ${DARK ? 'dark' : 'light'} !important;
+  color: ${T.textPrimary} !important;
+  font-family: ${FONT} !important;
+  --radius: 0px; --radius-full: 0px; --color-surface: ${T.surface};
+  --text-primary: ${T.textPrimary}; --text-secondary: ${T.textSecondary};
+}
+button, input, textarea, select, code, pre, [contenteditable="true"] { font-family: ${FONT} !important; border-radius: 0 !important; }
+button, [role="button"], dialog, [popover], [role="menu"], [role="listbox"], [role="dialog"] { box-shadow: none !important; border-radius: 0 !important; }
+a, a:link { color: ${T.link} !important; }
+`;
+
   const SHADOW_CSS = `
     /* Height-only 1ms transition + near-zero animation (see GLOBAL_CSS motion
        note): transitionend/animationend keep firing for collapse + rc-motion
@@ -1842,7 +2489,10 @@ rect.bar.previous-period {
     }
 
     /* Paint-only: display:none here deleted ::before icon glyphs (see GLOBAL_CSS) */
-    button::before, button::after, .btn::before, .btn::after { background: transparent !important; box-shadow: none !important; filter: none !important; }
+    /* background-COLOR, not the shorthand: the shorthand also reset
+       background-image and deleted every url() glyph on a control's
+       pseudo-element (provider logos, sprites) — same repair as GLOBAL_CSS. */
+    button::before, button::after, .btn::before, .btn::after { background-color: transparent !important; box-shadow: none !important; filter: none !important; }
     /* Same exclusions as the light-DOM wipe retired in T-121 */
 
     input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]) { background-color: ${T.compareBack} !important; color: ${T.textPrimary} !important; ${B_SUNK} box-sizing: border-box !important; }
@@ -1870,27 +2520,73 @@ rect.bar.previous-period {
     }
   `;
 
+  const ACTIVE_GLOBAL_CSS = IS_CHATGPT ? CHATGPT_FAST_CSS : GLOBAL_CSS;
+  const ACTIVE_SHADOW_CSS = IS_CHATGPT ? CHATGPT_FAST_SHADOW_CSS : SHADOW_CSS;
+
   // ─── attachShadow INTERCEPTION ───────────────────────────────────────────────
+  // T-397: this hook had NO idempotence latch at all, and it needed one. A
+  // second generation wrapped the first generation's wrapper instead of
+  // replacing it; the older generation's queued microtask therefore inserted
+  // its stylesheet first, and the newer generation then skipped the shadow root
+  // entirely on its `querySelector` check. Every shadow root created after
+  // reinjection kept the OLD generation's CSS -- a silent, permanent downgrade
+  // that no reload would fix. Two things change: the wrapper is installed once
+  // (recognising a wrapper from ANY earlier version, the same way the route
+  // guard does), and the CSS it injects is read from a handover box at call
+  // time rather than closed over. A shadow root that already carries an OLD
+  // generation's stylesheet is restyled in place instead of being skipped, so
+  // roots created before the reinjection catch up too.
   (function interceptAttachShadow() {
     if (typeof Element === 'undefined' || !Element.prototype || !Element.prototype.attachShadow) return;
-    const orig = Element.prototype.attachShadow;
+    const proto = Element.prototype;
+    // The handover box: every generation republishes the CSS it wants applied,
+    // and the one installed wrapper reads it per shadow root.
+    proto.__wintageShadowCss = ACTIVE_SHADOW_CSS;
+    proto.__wintageShadowVer = W95_VERSION;
+    // A handover-VISIBLE registry of the roots already styled. The wrapper
+    // records them, and every generation restyles the stale ones on load --
+    // without it a root created before the reinjection keeps the previous
+    // build's CSS for the rest of the page's life, because nothing else ever
+    // looks inside a shadow root again.
+    if (!proto.__wintageShadowRoots) {
+      try { proto.__wintageShadowRoots = []; } catch (e) { }
+    }
+    const roots = proto.__wintageShadowRoots;
+    const restyle = function (shadow) {
+      try {
+        const existing = shadow.querySelector('style[data-w95="shadow"]');
+        if (!existing) return;
+        if (existing.getAttribute('data-w95-ver') === proto.__wintageShadowVer) return;
+        existing.setAttribute('data-w95-ver', proto.__wintageShadowVer);
+        existing.textContent = proto.__wintageShadowCss;
+        DIAG.shadowCssInjected++;
+      } catch (e) { }
+    };
+    // Runs BEFORE the install latch, so the generation that installs nothing is
+    // still the one that takes the existing roots over.
+    if (roots) for (let i = 0; i < roots.length; i++) restyle(roots[i]);
+    const orig = proto.attachShadow;
+    if (orig.__wintageWrapped) return;
     Element.prototype.attachShadow = function (init) {
       const shadow = orig.call(this, init);
       if (shadow) {
+        try { if (roots && roots.indexOf(shadow) < 0) roots.push(shadow); } catch (e) { }
         queueMicrotask(() => {
           try {
-            if (!shadow.querySelector('style[data-w95="shadow"]')) {
-              const s = document.createElement('style');
-              s.setAttribute('data-w95', 'shadow'); s.setAttribute('data-w95-ver', W95_VERSION);
-              s.textContent = SHADOW_CSS;
-              shadow.insertBefore(s, shadow.firstChild);
-              DIAG.shadowCssInjected++;
-            }
+            // An older generation may have got here first; restyle in place
+            // rather than leaving the page themed by a build no longer loaded.
+            if (shadow.querySelector('style[data-w95="shadow"]')) { restyle(shadow); return; }
+            const s = document.createElement('style');
+            s.setAttribute('data-w95', 'shadow'); s.setAttribute('data-w95-ver', proto.__wintageShadowVer);
+            s.textContent = proto.__wintageShadowCss;
+            shadow.insertBefore(s, shadow.firstChild);
+            DIAG.shadowCssInjected++;
           } catch (e) { }
         });
       }
       return shadow;
     };
+    try { Element.prototype.attachShadow.__wintageWrapped = true; } catch (e) { }
   })();
 
   function injectStyle(root, id, content) {
@@ -1914,7 +2610,7 @@ rect.bar.previous-period {
     }
   }
 
-  injectStyle(document, 'global', GLOBAL_CSS);
+  injectStyle(document, 'global', ACTIVE_GLOBAL_CSS);
 
   // Late CSS from the site wins over ours at equal specificity purely by being
   // later in the document, so the theme has to end up last. It used to buy that
@@ -1939,7 +2635,7 @@ rect.bar.previous-period {
         return;
       }
       // The early injection never happened (document-start raced a hostile page).
-      injectStyle(document, 'global', GLOBAL_CSS);
+      injectStyle(document, 'global', ACTIVE_GLOBAL_CSS);
       const s = document.querySelector('style[data-w95="global"]');
       if (s && target.lastElementChild !== s) target.appendChild(s);
     } catch (e) { }
@@ -2111,7 +2807,6 @@ rect.bar.previous-period {
   const TAG_SKIP = /^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|SVG|PATH|CIRCLE|RECT|LINE|POLYGON|POLYLINE|ELLIPSE|DEFS|SYMBOL|USE|STYLE|SCRIPT|LINK|META|HEAD|HTML|BR|HR|WBR|TEMPLATE|NOSCRIPT|AUDIO|SOURCE|TRACK|OPTION|OPTGROUP)$/i;
 
   const piercedRoots = new Set();
-  const forceLapDeferredRoots = new Set();
   let forceLapActive = false;
   let forceLapId = 0;
 
@@ -2131,16 +2826,18 @@ rect.bar.previous-period {
   function pierceShadow(host) {
     const tag = (host.tagName || '').toUpperCase();
     if (SHADOW_SKIP_TAGS.has(tag)) return;
-    if (!host.shadowRoot || piercedRoots.has(host.shadowRoot) || forceLapDeferredRoots.has(host.shadowRoot)) return;
-    if (forceLapActive) {
-      host.shadowRoot.__wintageLapId = forceLapId + 1;
-      forceLapDeferredRoots.add(host.shadowRoot);
-    } else {
-      host.shadowRoot.__wintageLapId = forceLapId;
-      registerStyleRoot(host.shadowRoot);
-    }
+    if (!host.shadowRoot || piercedRoots.has(host.shadowRoot)) return;
+    // PERF-005 (SRC-063, T-404): a root discovered DURING a force lap is
+    // registered immediately and stamped for the NEXT lap. The live iterator may
+    // encounter it -- a Set tolerates insertion during iteration -- and the
+    // lap loop skips anything stamped past its own id, so the next lap's fresh
+    // iterator simply picks it up. That replaces a second strong-owner Set that
+    // was repaid in full, unbounded, in the one callback where the lane is not
+    // root-budgeted.
+    host.shadowRoot.__wintageLapId = forceLapActive ? forceLapId + 1 : forceLapId;
+    registerStyleRoot(host.shadowRoot);
     try {
-      injectStyle(host.shadowRoot, 'shadow', SHADOW_CSS);
+      injectStyle(host.shadowRoot, 'shadow', ACTIVE_SHADOW_CSS);
       if (!CSS_ONLY_MODE) {
         shadowObserver.observe(host.shadowRoot, SHADOW_OBS_OPTS);
         stylesDirty = true;
@@ -2174,7 +2871,22 @@ rect.bar.previous-period {
   // The bounded style cursor then re-walks the sheet whenever either length or
   // generation changes, instead of silently skipping same-count changes.
   if (CSS_ONLY_MODE) noteRepaintSkipped();
-  if (!CSS_ONLY_MODE && typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype && !CSSStyleSheet.prototype.__wintageInstrumented) {
+  if (!CSS_ONLY_MODE && typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype) {
+    const proto = CSSStyleSheet.prototype;
+    // T-397 handover box, republished by EVERY generation and read at call time
+    // by the hooks installed below. Those hooks live on a shared prototype for
+    // the document's whole life, so closing over this pass's stylesDirty and
+    // requestLightSweep meant a newer generation loaded over the page never took
+    // ownership: every later CSSOM mutation kept waking the FIRST generation's
+    // scheduler. The box republishes OUTSIDE the installation guard below,
+    // because the generation that skips installation is exactly the one whose
+    // closure must be replaced.
+    proto.__wintageSheetOwner = function (sheet) {
+      try { if (sheet && typeof sheet === 'object') sheet.__wintageGen = (sheet.__wintageGen || 0) + 1; } catch (e) { }
+      try { stylesDirty = true; } catch (e) { }
+      try { requestLightSweep(); } catch (e) { }
+    };
+    if (!proto.__wintageInstrumented) {
     CSSStyleSheet.prototype.__wintageInstrumented = true;
     // PERF-001 (audit/7.md, SRC-018:R013): a direct CSSOM mutation
     // (insertRule / deleteRule / replaceSync / replace) need not create a DOM
@@ -2184,11 +2896,14 @@ rect.bar.previous-period {
     // the scheduler wake are now ONE operation, and the wake is the existing
     // coalesced light lane (one pending timer however many mutations arrive).
     const bumpStyleSheet = function (sheet) {
+      // The installed hooks call THIS function, which was captured by the
+      // generation that wrapped the prototype. It owns nothing itself: it
+      // forwards to whichever generation last published the box, and falls
+      // back to a bare generation bump only if that write was refused.
+      const owner = proto.__wintageSheetOwner;
+      if (owner) { owner(sheet); return; }
       try { if (sheet && typeof sheet === 'object') sheet.__wintageGen = (sheet.__wintageGen || 0) + 1; } catch (e) { }
-      try { stylesDirty = true; } catch (e) { }
-      try { requestLightSweep(); } catch (e) { }
     };
-    const proto = CSSStyleSheet.prototype;
     if (typeof proto.replace === 'function' && !proto.__wintagePatchedReplace) {
       const origReplace = proto.replace;
       // replace() is ASYNC. Invalidating at call time stamps the NEW generation
@@ -2227,6 +2942,7 @@ rect.bar.previous-period {
       const origDelete = proto.deleteRule;
       proto.deleteRule = function () { const r = origDelete.apply(this, arguments); bumpStyleSheet(this); return r; };
       proto.__wintagePatchedDelete = true;
+    }
     }
   }
   // TARGET C: lazy STYLE text replacement detection on sheet encounter.
@@ -2813,9 +3529,9 @@ rect.bar.previous-period {
           for (let k = at + 1; at >= 0 && k < stack.length; k++) {
             const u = stack[k];
             if (u.tagName === 'VIDEO' || u.tagName === 'AUDIO' || u.tagName === 'CANVAS' ||
-                u.tagName === 'IMG' || u.tagName === 'PICTURE' || u.tagName === 'SVG' ||
-                (u.closest && u.closest(MEDIA)) ||
-                (u.querySelector && u.querySelector(MEDIA))) {
+              u.tagName === 'IMG' || u.tagName === 'PICTURE' || u.tagName === 'SVG' ||
+              (u.closest && u.closest(MEDIA)) ||
+              (u.querySelector && u.querySelector(MEDIA))) {
               isOverMediaOrCanvas = true;
               break;
             }
@@ -2831,7 +3547,7 @@ rect.bar.previous-period {
               const underComp = under.closest && under.closest('article, [class*="card" i], [class*="post" i], [class*="item" i], shreddit-post');
               if (elComp && underComp && elComp === underComp) continue;
               if (el.tagName === 'A' ||
-                  (el.matches && el.matches('[class*="inset-0" i], [class*="stretched-link" i], [class*="cover-link" i]'))) {
+                (el.matches && el.matches('[class*="inset-0" i], [class*="stretched-link" i], [class*="cover-link" i]'))) {
                 continue;
               }
               w.push(el, 'background-color', T.surfaceRaised,
@@ -2874,44 +3590,44 @@ rect.bar.previous-period {
       // nothing else on any other site changes behaviour.
       if (!(bg && el.style && /var\(--color-usage-chart-/i.test(el.style.backgroundColor || ''))) {
         if (bg && bg.a > 0.08) {
-        const L = elev(lum(bg));
-        const spread = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b);
-        const grayish = spread <= 24;
-        let repaint = null;
-        if (L > 0.45) {
-          // Flashbang surface — the far end of our own polarity, so on the golden
-          // palette this is literally the old "light surface" branch and on a light
-          // palette it is the site's dark chrome. Low-alpha tints go fully transparent
-          // (the "gray rectangle blocks"), neutral solids go dark brown, and
-          // saturated light tints (GitHub diff green/red, warning yellows,
-          // highlight rows) snap to the semantic token they meant.
-          if (bg.a <= 0.35) repaint = 'transparent';
-          else if (grayish) repaint = T.backgroundSoft;
-          else repaint = semanticToken(bg);
-        } else if (L >= 0.004) {
-          // DARK SURFACES. Two gaps used to let a site keep its own dark palette
-          // here, both measured on amazon.com:
-          //   #nav-belt  #131921  spread 14, lum 0.0094 — grayish, but the old
-          //     "near-black is left alone" floor was 0.015, so it survived.
-          //   #nav-main  #232f3e  spread 27, lum 0.0274 — over the old grayish
-          //     cutoff of 24 but under the saturated cutoff of 60, so it fell
-          //     through BOTH branches and was never touched at all.
-          // A dark navy chrome bar is a surface, not an accent, so the neutral
-          // band is widened to spread <= 60 and the two branches are merged:
-          // anything genuinely saturated (> 60) still goes to a semantic token,
-          // everything else joins the vintage brown scale.
-          //
-          // The floor drops from 0.015 to 0.004, which still leaves true black
-          // alone — video players and modal scrims sit at or near lum 0 — while
-          // catching real chrome like #131921.
-          repaint = spread > 60
-            ? semanticToken(bg)
-            : (L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface);
+          const L = elev(lum(bg));
+          const spread = Math.max(bg.r, bg.g, bg.b) - Math.min(bg.r, bg.g, bg.b);
+          const grayish = spread <= 24;
+          let repaint = null;
+          if (L > 0.45) {
+            // Flashbang surface — the far end of our own polarity, so on the golden
+            // palette this is literally the old "light surface" branch and on a light
+            // palette it is the site's dark chrome. Low-alpha tints go fully transparent
+            // (the "gray rectangle blocks"), neutral solids go dark brown, and
+            // saturated light tints (GitHub diff green/red, warning yellows,
+            // highlight rows) snap to the semantic token they meant.
+            if (bg.a <= 0.35) repaint = 'transparent';
+            else if (grayish) repaint = T.backgroundSoft;
+            else repaint = semanticToken(bg);
+          } else if (L >= 0.004) {
+            // DARK SURFACES. Two gaps used to let a site keep its own dark palette
+            // here, both measured on amazon.com:
+            //   #nav-belt  #131921  spread 14, lum 0.0094 — grayish, but the old
+            //     "near-black is left alone" floor was 0.015, so it survived.
+            //   #nav-main  #232f3e  spread 27, lum 0.0274 — over the old grayish
+            //     cutoff of 24 but under the saturated cutoff of 60, so it fell
+            //     through BOTH branches and was never touched at all.
+            // A dark navy chrome bar is a surface, not an accent, so the neutral
+            // band is widened to spread <= 60 and the two branches are merged:
+            // anything genuinely saturated (> 60) still goes to a semantic token,
+            // everything else joins the vintage brown scale.
+            //
+            // The floor drops from 0.015 to 0.004, which still leaves true black
+            // alone — video players and modal scrims sit at or near lum 0 — while
+            // catching real chrome like #131921.
+            repaint = spread > 60
+              ? semanticToken(bg)
+              : (L >= 0.13 ? T.surfaceAlt : L >= 0.05 ? T.surfaceRaised : T.surface);
+          }
+          if (repaint) {
+            w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
+          }
         }
-        if (repaint) {
-          w.push(el, 'background', repaint, el, 'background-color', repaint, el, 'background-image', 'none');
-        }
-      }
       }
     }
 
@@ -3023,6 +3739,22 @@ rect.bar.previous-period {
   const MUTATION_RECORD_LIMIT = 10000;
   const MUTATION_WORK_LIMIT_MS = 600;
   const ADDED_NODE_BUDGET = 500;
+  // PERF-001 (SRC-063): the attribute lane's per-slice bound and its retained
+  // state bound. process() reaches window.getComputedStyle before most semantic
+  // skipping, so a legal 10,000-record window used to mean 10,000
+  // computed-style reads in ONE task, with the 600 ms breaker only able to
+  // react after the task had already monopolised the main thread.
+  const ATTRIBUTE_PROCESS_BUDGET = 250;
+  const ATTRIBUTE_PENDING_CAP = 2000;
+  const ATTRIBUTE_SLICE_MS = 0;
+  // Attribute targets awaiting a repair. Keyed BY ELEMENT, which is the collapse:
+  // process() reads current final DOM/computed state, never historical mutation
+  // values, so 10,000 records for one target are one repair, and 10,000 records
+  // for 10,000 targets are 10,000 repairs -- bounded per slice below.
+  const attributePending = new Set();
+  let attributeIter = null;
+  let attributeLaneActive = false;
+  let attributeOverflowed = false;
   let mutationWindowStart = performance.now();
   let mutationRecords = 0;
   let mutationWorkMs = 0;
@@ -3039,6 +3771,29 @@ rect.bar.previous-period {
     repainterSuspended = true;
     try { mainObserver.disconnect(); } catch (e) { }
     try { shadowObserver.disconnect(); } catch (e) { }
+    // PERF-003 (SRC-063): a prune that was mid-migration when the lane died
+    // still owns a staged observer holding every survivor it had filled in so
+    // far. Disconnecting only the outgoing generation would leave that one
+    // registered -- and holding those ShadowRoots -- for the rest of the page's
+    // life, which is the exact leak this ticket is about.
+    if (shadowStagedObserver) {
+      try { shadowStagedObserver.takeRecords(); } catch (e) { }
+      try { shadowStagedObserver.disconnect(); } catch (e) { }
+      shadowStagedObserver = null;
+    }
+    shadowMigrationActive = false;
+    shadowPrunePhase = 0;
+    shadowPruneScanIter = null;
+    shadowPruneStageIter = null;
+    shadowPruneRemovedAny = false;
+    shadowPruneQueued = false;
+    // PERF-001 (SRC-063): the attribute lane's retained targets are the same
+    // class of owner -- a live Set of elements nothing will ever drain once the
+    // lane is dead. Suspension is permanent, so release them here.
+    attributeLaneActive = false;
+    attributeIter = null;
+    attributeOverflowed = false;
+    try { attributePending.clear(); } catch (e) { }
     if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
     if (sweepTimer) { clearTimeout(sweepTimer); sweepTimer = null; sweepPlannedAt = 0; }
     pendingMuts.length = 0;
@@ -3061,15 +3816,14 @@ rect.bar.previous-period {
     forceLapActive = false;
     // PERF-003 (SRC-018:R015): suspension is permanent, so it must be a COMPLETE
     // scheduler-state disposal boundary. The previous cleanup missed the style
-    // lane's strong owners: forceLapDeferredRoots and styleLapDeferredRoots are
-    // Sets that STRONGLY own ShadowRoots; activeStyleTask strongly owns its
+    // lane's strong owners: styleLapDeferredRoots is a Set that STRONGLY owns
+    // ShadowRoots; activeStyleTask strongly owns its
     // sheet; styleCursorRoot directly owns the current Document/ShadowRoot; and
     // styleCursorRootIterator is a live iterator over them. With no future pass
     // to drain or overwrite them, a page that tripped the breaker could freeze a
     // large dead DOM/CSSOM retention graph for the rest of the document's life.
     // WeakMap caches (sheetSeen, attrCooldown) and the already-injected theme
     // stay: they do not own their keys and must keep working.
-    try { forceLapDeferredRoots.clear(); } catch (e) { }
     try { styleLapDeferredRoots.clear(); } catch (e) { }
     activeStyleTask = null;
     styleCursorRoot = null;
@@ -3120,36 +3874,213 @@ rect.bar.previous-period {
   // registration from the survivors. Pending records are taken before the
   // disconnect and handed straight back to onMutations, so a legitimate shadow
   // mutation delivered in the same tick is not dropped.
+  // PERF-003 (SRC-063): the prune above was ONE synchronous task over the whole
+  // registry -- and because MutationObserver has no per-target unobserve, a
+  // single detached root made it disconnect the shared observer and re-observe
+  // every survivor. Measured: 50,000 roots + one dead root = 50,000
+  // connectivity checks + 49,999 observe() calls in a single invocation, and
+  // none of it was fed to addWorkPressure. The main force/style lanes are
+  // root-budgeted; this side lane was not.
+  //
+  // It is now a resumable state machine. Each task touches at most
+  // SHADOW_PRUNE_ROOT_BUDGET roots and re-arms itself:
+  //   SCAN  -- a persistent Set iterator finds detached roots across many tasks
+  //   STAGE -- a REPLACEMENT observer is filled in while the outgoing one stays
+  //            live, so no root is ever unobserved
+  //   SWAP  -- takeRecords, hand the outgoing observer over, disconnect it
+  //
+  // Exactly-once delivery across the overlap is a superset argument: the
+  // outgoing observer has had every survivor registered since before the first
+  // root was staged, so anything the staged observer sees during migration is
+  // already in the outgoing queue. The staged observer therefore drops its
+  // batches while shadowMigrationActive is true, and the swap order
+  // (takeRecords -> repoint -> disconnect -> flag) hands each record to exactly
+  // one of the two: before takeRecords the outgoing queue has it, after
+  // disconnect() only the staged one can have it.
+  const SHADOW_PRUNE_ROOT_BUDGET = 512;
+  const SHADOW_PRUNE_STEP_MS = 0;
   let shadowPruneQueued = false;
-  function pruneShadowRegistry() {
+  // 0 = idle, 1 = SCAN, 2 = STAGE. An explicit phase, because the two phases
+  // have separate cursors: without it every STAGE task re-armed a fresh SCAN
+  // and the cycle never advanced.
+  let shadowPrunePhase = 0;
+  let shadowPruneScanIter = null;
+  let shadowPruneStageIter = null;
+  let shadowPruneRemovedAny = false;
+  let shadowStagedObserver = null;
+  let shadowMigrationActive = false;
+
+  // Staged deliveries are duplicates for the whole migration window; see above.
+  function onShadowStagedMutations(records) {
+    if (shadowMigrationActive) return;
+    onMutations(records);
+  }
+
+  function finishShadowPrune() {
+    shadowPrunePhase = 0;
+    shadowPruneScanIter = null;
+    shadowPruneStageIter = null;
+    shadowPruneRemovedAny = false;
     shadowPruneQueued = false;
-    if (repainterSuspended) return;
-    let removedAny = false;
-    piercedRoots.forEach(root => {
+    if (!shadowStagedObserver) return;
+    shadowMigrationActive = false;
+    try {
+      shadowStagedObserver.takeRecords();
+      shadowStagedObserver.disconnect();
+    } catch (e) { }
+    shadowStagedObserver = null;
+  }
+
+  // ONE budgeted step. Returns with the cycle either finished or re-armed.
+  function pruneShadowRegistry() {
+    if (repainterSuspended) { finishShadowPrune(); return; }
+    const startedAt = performance.now();
+    if (shadowPrunePhase === 0) {
+      shadowPrunePhase = 1;
+      shadowPruneScanIter = piercedRoots.values();
+    }
+    if (shadowPrunePhase === 1) {
+      let scanDone = false;
+      for (let i = 0; i < SHADOW_PRUNE_ROOT_BUDGET; i++) {
+        const step = shadowPruneScanIter.next();
+        if (step.done) { scanDone = true; break; }
+        const root = step.value;
+        try {
+          if (!root.host || !root.host.isConnected) {
+            piercedRoots.delete(root);
+            forceRootCursors.delete(root);
+            shadowPruneRemovedAny = true;
+          }
+        } catch (e) { }
+      }
+      if (!scanDone) {
+        setTimeout(pruneShadowRegistry, SHADOW_PRUNE_STEP_MS);
+        addWorkPressure(performance.now() - startedAt, 'shadow-prune');
+        return;
+      }
+      shadowPruneScanIter = null;
+      // Nothing detached (or nothing is observed at all): the registration is
+      // already correct, so the observer is left completely alone.
+      if (!shadowPruneRemovedAny || CSS_ONLY_MODE) {
+        if (CSS_ONLY_MODE) noteRepaintSkipped();
+        finishShadowPrune(); return;
+      }
+      shadowStagedObserver = new MutationObserver(onShadowStagedMutations);
+      shadowMigrationActive = true;
+      shadowPruneStageIter = piercedRoots.values();
+      shadowPrunePhase = 2;
+    }
+    let stageDone = false;
+    for (let i = 0; i < SHADOW_PRUNE_ROOT_BUDGET; i++) {
+      const step = shadowPruneStageIter.next();
+      if (step.done) { stageDone = true; break; }
+      const root = step.value;
       try {
+        // A root can detach between SCAN and STAGE. Drop it here instead of
+        // registering it, so the replacement never re-acquires what the scan
+        // just released.
         if (!root.host || !root.host.isConnected) {
           piercedRoots.delete(root);
           forceRootCursors.delete(root);
-          removedAny = true;
+          continue;
         }
+        shadowStagedObserver.observe(root, SHADOW_OBS_OPTS);
       } catch (e) { }
-    });
-    if (!removedAny || CSS_ONLY_MODE) return;
+    }
+    if (!stageDone) {
+      setTimeout(pruneShadowRegistry, SHADOW_PRUNE_STEP_MS);
+      addWorkPressure(performance.now() - startedAt, 'shadow-prune');
+      return;
+    }
+    // SWAP. Every survivor is already on the staged observer, so the outgoing
+    // one can be released with no unobserved window.
+    shadowPruneStageIter = null;
+    let pending = null;
     try {
-      const pending = shadowObserver.takeRecords();
-      shadowObserver.disconnect();
-      piercedRoots.forEach(root => {
-        try { shadowObserver.observe(root, SHADOW_OBS_OPTS); } catch (e) { }
-      });
-      if (pending && pending.length) onMutations(pending);
+      pending = shadowObserver.takeRecords();
+      const outgoing = shadowObserver;
+      shadowObserver = shadowStagedObserver;
+      shadowStagedObserver = null;
+      outgoing.disconnect();
+      // Last: only now may the staged observer deliver on its own account.
+      shadowMigrationActive = false;
     } catch (e) { }
+    try { if (pending && pending.length) onMutations(pending); } catch (e) { }
+    shadowPrunePhase = 0;
+    shadowPruneRemovedAny = false;
+    shadowPruneQueued = false;
+    addWorkPressure(performance.now() - startedAt, 'shadow-prune');
   }
   function requestShadowPrune() {
+    // shadowPruneQueued is held for the WHOLE cycle, not just the first task, so
+    // a burst of removal batches while a 50,000-root migration is in flight
+    // cannot stack up concurrent scans.
     if (shadowPruneQueued || repainterSuspended || !piercedRoots.size) return;
     shadowPruneQueued = true;
     // Bounded, one-shot, and never a poll: only a batch that actually carried
     // removals gets here.
     setTimeout(pruneShadowRegistry, 250);
+  }
+
+  // PERF-001 (SRC-063): ONE bounded attribute slice. Called by the debounce
+  // batch and then re-armed by itself until attributePending is drained, so the
+  // batch callback's work is bounded no matter how many UNIQUE targets the
+  // delivery carried. Each slice owns its own write buffer and flushes it, which
+  // is what keeps corrections visible while the rest of the debt is still owed.
+  function drainAttributeSlice() {
+    if (!attributeLaneActive) return;
+    if (repainterSuspended) { finishAttributeLane(); return; }
+    const startedAt = performance.now();
+    if (attributeIter === null) attributeIter = attributePending.values();
+    const w = [];
+    let exhausted = false;
+    for (let i = 0; i < ATTRIBUTE_PROCESS_BUDGET; i++) {
+      const step = attributeIter.next();
+      if (step.done) { exhausted = true; break; }
+      const el = step.value;
+      try {
+        // Added-then-removed inside the same window: a detached element has no
+        // computed style worth reading and no pixels to fix. Same rule the
+        // added-node lane already applies; a CONNECTED target is never dropped.
+        if (!el || el.nodeType !== 1 || !el.isConnected) continue;
+        // Cooldown semantics preserved verbatim, just moved off the record loop:
+        // carousels and virtual scrollers toggle classes many times a second, and
+        // during the cooldown the element is only marked dirty for the light
+        // sweep. Nothing time-windowed is decided from a stale record any more.
+        const now = Date.now();
+        if ((attrCooldown.get(el) || 0) + 500 > now) {
+          el.removeAttribute('data-w95-done');
+          markLightDirty(el);
+          requestLightSweep();
+        } else {
+          attrCooldown.set(el, now);
+          el.removeAttribute('data-w95-done');
+          process(el, false, w);
+        }
+      } catch (e) { }
+    }
+    flushWrites(w);
+    // PERF-001 (SRC-063): the breaker is charged PER SLICE, so a deliberately
+    // slow process() is caught between slices rather than after the whole batch.
+    addWorkPressure(performance.now() - startedAt, 'attribute-slice');
+    if (repainterSuspended) { finishAttributeLane(); return; }
+    // Budget spent with debt left: yield and resume the same cursor. Debt gone:
+    // release the retained targets now rather than at the next suspension.
+    if (!exhausted) { setTimeout(drainAttributeSlice, ATTRIBUTE_SLICE_MS); return; }
+    finishAttributeLane();
+  }
+
+  function finishAttributeLane() {
+    attributeLaneActive = false;
+    attributeIter = null;
+    try { attributePending.clear(); } catch (e) { }
+  }
+
+  function startAttributeLane() {
+    if (attributeLaneActive || !attributePending.size) return;
+    attributeLaneActive = true;
+    if (attributeIter === null) attributeIter = attributePending.values();
+    setTimeout(drainAttributeSlice, ATTRIBUTE_SLICE_MS);
   }
 
   function onMutations(mutations) {
@@ -3186,32 +4117,22 @@ rect.bar.previous-period {
         if (m.type === 'attributes') {
           const t = m.target;
           if (t && t.nodeType === 1) {
-            // No time-window mute here any more — our own style writes are
-            // filtered out by identity in flushWrites before this ever runs.
-            // Cooldown: carousels/virtual scrollers toggle classes many times a
-            // second; re-processing each toggle (computed-style read + writes)
-            // is a jank source. During the cooldown just mark the element dirty
-            // — the next light sweep picks up its settled state.
-            const now = Date.now();
-            if ((attrCooldown.get(t) || 0) + 500 > now) {
-              t.removeAttribute('data-w95-done');
-              // PERF-005 (SRC-002): the cooldown contract promised the next
-              // light sweep would revisit. There was no such request. Now
-              // there is: requestLightSweep coalesces and stays floor-limited.
-              // PERF-003 (SRC-004): register the element explicitly so the
-              // light pass does not have to rediscover it with a document-wide
-              // negative selector.
-              markLightDirty(t);
-              requestLightSweep();
-            } else {
-              attrCooldown.set(t, now);
-              t.removeAttribute('data-w95-done');
-              process(t, false, w);
-            }
+            // Class/bgcolor changes restyle existing elements (SPA hydration, lazy
+            // CSS-in-JS). This record loop now costs O(1) per record: it reads
+            // only the tag, and defers the actual repair to the bounded
+            // attribute lane. Style discovery stays HERE and stays complete,
+            // because a STYLE/LINK target must mark stylesDirty even when the
+            // repair for that element is deferred or dropped.
             const tag = (t.tagName || '').toUpperCase();
             if (tag === 'STYLE' || (tag === 'LINK' && (t.rel || '').toLowerCase().includes('stylesheet'))) {
               styleishAdded = true;
             }
+            // PERF-001 (SRC-063): collapse BY TARGET. 10,000 class records on one
+            // element is one repair -- process() reads current final state, so
+            // the intermediate values are worthless. The Set gives that collapse
+            // for free and bounds retained state by ATTRIBUTE_PENDING_CAP.
+            if (attributePending.size >= ATTRIBUTE_PENDING_CAP) attributeOverflowed = true;
+            else attributePending.add(t);
           }
           continue;
         }
@@ -3308,13 +4229,30 @@ rect.bar.previous-period {
           requestForceSweep();
         }
       }
+      // PERF-001 (SRC-063): retained attribute state has a hard bound, and the
+      // overflow path is a COVERAGE SUPERSET, not a scan: the force lane
+      // re-verifies a rotating window of the document and eventually reaches
+      // every connected element, exactly like the added-node truncation above.
+      // Promote once and drop what was retained rather than repairing it here.
+      if (attributeOverflowed) {
+        attributeOverflowed = false;
+        finishAttributeLane();
+        stylesDirty = true;
+        requestForceSweep();
+      }
       flushWrites(w);
       if (removalSeen) requestShadowPrune();
+      // The attribute debt is owed to a lane of its own; this callback only
+      // ever pays for its own first slice.
+      startAttributeLane();
       addWorkPressure(performance.now() - workStarted, 'mutation-work');
     }, 60);
   }
   const mainObserver = new MutationObserver(onMutations);
-  const shadowObserver = new MutationObserver(onMutations);
+  // PERF-003 (SRC-063): `let`, not `const` -- pruneShadowRegistry migrates this
+  // registration onto a replacement observer one bounded task at a time, and
+  // pierceShadow must reach the CURRENT generation while that is happening.
+  let shadowObserver = new MutationObserver(onMutations);
   let observersStarted = false;
 
   function startObservers() {
@@ -3587,11 +4525,10 @@ rect.bar.previous-period {
             break;
           }
           const candidate = next.value;
-          if (forceLapDeferredRoots.has(candidate)) {
-            continue;
-          }
+          // PERF-005: a root stamped for a future lap is simply not this lap's
+          // work. It already lives in piercedRoots, so nothing has to be
+          // transferred when this lap finishes.
           if (candidate.__wintageLapId && candidate.__wintageLapId > forceLapWorkset.id) {
-            forceLapDeferredRoots.add(candidate);
             continue;
           }
           forceLapWorkset.currentRoot = candidate;
@@ -3648,13 +4585,6 @@ rect.bar.previous-period {
         forceLapIndex = 0;
         forceLapRemaining = 0;
         forceLapActive = false;
-
-        if (forceLapDeferredRoots.size > 0) {
-          for (const r of forceLapDeferredRoots) registerStyleRoot(r);
-          forceLapDeferredRoots.clear();
-          forcePassesOwed = Math.max(forcePassesOwed, 1);
-          scheduleSweep(MIN_SWEEP_GAP);
-        }
       } else if (!repainterSuspended && !document.hidden) {
         forcePassesOwed = Math.max(forcePassesOwed, 1);
         scheduleSweep(MIN_SWEEP_GAP);

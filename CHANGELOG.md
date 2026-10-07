@@ -121,6 +121,41 @@ repository regression suite are green.
 
 ### Fixed
 
+- **Provider/sign-in artwork is no longer deleted by the generic control wipe
+  (T-908; defect 3 of the v1.36.6 report).** A Register/Sign-in dialog rendered
+  all five social/provider sign-in methods as empty beveled boxes. The cause was
+  the wipe itself, not a missing exclusion: the button pseudo-element rule used
+  the `background` SHORTHAND, which resets `background-image`, and the descendant
+  rule set `background-image: none !important`, so an anonymous span carrying a
+  provider logo as `url(...)` -- and a `::before` glyph painted the same way --
+  both lost their artwork. The carve-outs only spared elements whose CLASS said
+  "icon", which is why the failure looked provider-specific. All three wipe sites
+  (`GLOBAL_CSS` pseudo-element, `GLOBAL_CSS` descendant, `SHADOW_CSS`
+  pseudo-element) now stop at colour: `background-color`, `box-shadow`, `border`
+  and `filter` are still flattened, imagery is left alone. That is the same
+  distinction the JS repainter already draws -- it removes gradient FUNCTIONS and
+  preserves `url()` -- and it is an invariant rather than a growing list of
+  provider class names. `tools/test-provider-image-preservation.js` drives real
+  Chromium with the shipped sheet: a descendant `url()` glyph and a `::before`
+  glyph must survive while an ordinary nested wrapper is still flattened (with
+  its border gone), the existing `status-dot[data-kind]` colour contract is
+  preserved exactly, and four red controls -- including the shadow-DOM twin --
+  re-apply each pre-repair declaration and require the matching case to go red.
+- **The install URL is now checkable, because it was the actual cause of the
+  ChatGPT report (T-908; defect 1 of the v1.36.6 report).** The browser running
+  the reported build installs the userscript from the README's own URL, and that
+  artifact was three versions behind this checkout: it served `1.36.1` with none
+  of the five current-live ChatGPT hooks (`div.thread-scroll-container`, plain
+  `main`, the sidebar, the editor), so the T-903 viewport-owner fix could never
+  have been live -- sidebar and composer themed by the retired contract, central
+  workspace stock black. Every static gate in this repository is green in that
+  state, because they all read the working tree. `tools/check-deployed-userscript.js`
+  fetches the published artifact and compares both version fields and the
+  `tools/chatgpt-live-contract.js` hook list against this checkout, so a stale
+  deployment is named as such ("the browser runs the PUBLISHED build, so a
+  source-side fix cannot be live") instead of being mis-triaged as a selector
+  defect. It needs the network, so it is deliberately NOT a blocking suite entry
+  -- run it before a release and on any report that a fix "did not work".
 - **Three red controls that no suite entry ever ran.** Seventeen gates under
   `tools/` declare a `-RedControl` mode; thirteen had a suite entry exercising it
   and four did not. Three of those four — `test-log-append-bound.ps1`,
@@ -571,6 +606,25 @@ repository regression suite are green.
   A/B against a real Brave/Chromium profile was not available on the machine
   that produced this change. If the crash reproduces with the repainter already
   off, it is not this layer, and browser/GPU diagnosis is out of scope.
+- The X/Twitter reply-submit failure of the v1.36.6 report (defect 2) is **not
+  diagnosed and not fixed** here, and nothing above claims otherwise. No live
+  browser or signed-in session was reachable from this machine (nothing on
+  127.0.0.1:9222/9223/9229), so the handoff's own causality rule applies: a
+  failure that still happens with the theme disabled for x.com is not a theme
+  defect, and patching on correlation is exactly what it forbids. What was
+  provable was pinned instead, in `tools/test-x-interaction-safety.js`: X stays
+  on the CSS-only path (`IS_X` in `HIGH_CHURN_HOST`, no document-wide repainter,
+  observer sweep, CSSOM hover surgery or force pass), the anti-fraud/challenge
+  `EXCLUDE` set is built and executed rather than grepped and still matches every
+  provider it names (Arkose, FunCaptcha, Cloudflare challenge/Turnstile, Kasada,
+  PerimeterX, plus `/oauth/` and `/captcha/`), no shipped rule mutates an
+  interaction property (`pointer-events`, `user-select`, `visibility`,
+  `display`, `opacity` appear nowhere in the product), and the shipped sheet
+  applied to an X-shaped composer leaves a real click and a real keystroke
+  reaching both the editor and the submit button through Chromium's own hit
+  test. No speculative domain regex was added. The live A/B (theme on, then
+  theme fully disabled for x.com in Tampermonkey, same account and text, nothing
+  else changed) is the deciding experiment and it needs the operator.
 - Live acceptance against a running Discord + BetterDiscord is still owed: the
   installed Discord renderer bundle (`resources/app.asar`) is absent on this
   machine, so no offline contract verification was possible. Everything above is

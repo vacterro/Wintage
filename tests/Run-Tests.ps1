@@ -930,6 +930,33 @@ $toolSuites = @(
     # requiring these same assertions to go red. It proves the TOOL and the CSS;
     # acceptance against a signed-in chatgpt.com tab is still a human step.
     @{ Name = 'test-chatgpt-viewport-coverage.js'; Cmd = 'node "{0}\tools\test-chatgpt-viewport-coverage.js"' },
+    # The drift gate. T-373 fixed the viewport owner for the data-testid
+    # generation, the inspector had already measured a newer shell, and nothing
+    # compared the two -- so the sheet, the inspector and the fixture could each
+    # be updated independently and stay green while the page went black. This one
+    # reads tools/chatgpt-live-contract.js (the single source of the current-live
+    # contract list) and requires every surface the inspector calls ALWAYS to be
+    # bound in the shipped sheet, or named as a transparent host whose themed
+    # owner is itself ALWAYS. It goes red if the current-live viewport-owner rule
+    # is cut while every older fallback remains.
+    @{ Name = 'test-chatgpt-contract-parity.js'; Cmd = 'node "{0}\tools\test-chatgpt-contract-parity.js"' },
+    # Defect 3 of the v1.36.6 report: the generic control wipe deleted ARTWORK as
+    # well as nested surfaces, so a Register/Sign-in dialog rendered five
+    # social/provider sign-in methods as empty beveled boxes. The fixture carries
+    # the exact shapes -- an anonymous descendant span with a url() glyph, and a
+    # ::before glyph -- plus an ordinary nested wrapper that MUST stay flattened
+    # and the existing status-dot/data-kind contract. Four red controls re-apply
+    # the pre-repair declaration and require the matching case to go red.
+    @{ Name = 'test-provider-image-preservation.js'; Cmd = 'node "{0}\tools\test-provider-image-preservation.js"' },
+    # Defect 2 of the same report (X reply submission). This gate does NOT settle
+    # it: the handoff's own causality rule says a failure that persists with the
+    # theme disabled is not a theme defect, and no live browser was reachable. What
+    # is pinned is what a future edit could break silently -- X stays on the
+    # CSS-only path, the anti-fraud/challenge EXCLUDE set still matches its
+    # providers (built and executed, not grepped), no shipped rule mutates an
+    # interaction property, and a real click plus a real keystroke still reach an
+    # X-shaped composer and submit button through Chromium's own hit test.
+    @{ Name = 'test-x-interaction-safety.js'; Cmd = 'node "{0}\tools\test-x-interaction-safety.js"' },
     @{ Name = 'test-inspect-web.js'; Cmd = 'node "{0}\tools\test-inspect-web.js"' },
     @{ Name = 'test-inspect-web-mutations.js'; Cmd = 'node "{0}\tools\test-inspect-web-mutations.js"' },
     # T-359: the injector that puts the product's own CHATGPT_FAST_CSS on a live
@@ -1172,8 +1199,11 @@ $toolSuites = @(
     @{ Name = 'test-commit-scope.ps1 -ExpectReject c528ef3'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-commit-scope.ps1" -Ticket T-413 -Commit c528ef3 -ExpectReject' },
     @{ Name = 'test-commit-scope.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-commit-scope.ps1" -RedControl' },
     # T-417: the T-413 delivery report listed an npm test/test:bd script repair in
-    # `package.json`, a file .gitignore:60 excludes and no release archive carries,
+    # `package.json`, which .gitignore then excluded and no release archive carried,
     # so the recipient could not open the claim and read it as stale narration.
+    # (T-906 later tracked that file, so only the historical half of this clause
+    # still describes the tree; the gate is unchanged and the ignored-file red
+    # control below builds its own scratch .gitignore.)
     # check-delivery-claims.ps1 resolves every path-shaped token of the delivery
     # text against the artifact (index or HEAD) and names the ones that resolve
     # nowhere. The scratch control proves both directions: an ignored file the
@@ -1312,29 +1342,62 @@ Assert-True ($unbackedNames.Count -eq 0) "every suite Name is backed by its own 
 # Falsifiable on demand -- `git rm --cached tools/<one of them>` turns this red
 # with the file named, proved against a private index -- and the predicate is
 # proved non-vacuous in the second assertion against a file that exists in this
-# working copy but is in neither (package.json, .gitignore:60; if that file is
-# ever tracked, move the probe, not the check).
-function Get-UntrackedToolFile([string[]]$names) {
+# working copy but is in neither. That probe was `package.json` until T-906
+# tracked it, which is exactly the case the old note here anticipated; it is now
+# a scratch file this check creates and removes itself, so no later un-ignoring
+# can silently hollow out the assertion.
+function Get-UntrackedRepoPath([string[]]$paths) {
     $out = @()
-    foreach ($n in $names) {
+    foreach ($p in $paths) {
         $prevEap = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        & git -C $root ls-files --error-unmatch -- "tools/$n" 2>$null | Out-Null
+        & git -C $root ls-files --error-unmatch -- $p 2>$null | Out-Null
         $onIndex = $LASTEXITCODE -eq 0
         if (-not $onIndex) {
-            & git -C $root cat-file -e "HEAD:tools/$n" 2>$null | Out-Null
+            & git -C $root cat-file -e "HEAD:$p" 2>$null | Out-Null
             $onIndex = $LASTEXITCODE -eq 0
         }
         $ErrorActionPreference = $prevEap
-        if (-not $onIndex) { $out += $n }
+        if (-not $onIndex) { $out += $p }
     }
     , $out
 }
 $suiteToolLeaves = @($executed | Where-Object { $_ -match '\.(?:js|cjs|mjs|ps1|py)$' } | Sort-Object)
-$untrackedTool = Get-UntrackedToolFile $suiteToolLeaves
-Assert-True ($untrackedTool.Count -eq 0) "every tool file the suite runs is carried by git ($($suiteToolLeaves.Count) files; not tracked: $($untrackedTool -join ', '))"
-$probeUntracked = Get-UntrackedToolFile @('package.json')
-Assert-True ($probeUntracked.Count -eq 1 -and $probeUntracked[0] -eq 'package.json') "the tracked-file check names a file that exists here but is in neither HEAD nor the index (probe: $($probeUntracked -join ', '))"
+$suiteToolPaths = @($suiteToolLeaves | ForEach-Object { "tools/$_" })
+$untrackedTool = Get-UntrackedRepoPath $suiteToolPaths
+Assert-True ($untrackedTool.Count -eq 0) "every tool file the suite runs is carried by git ($($suiteToolPaths.Count) files; not tracked: $($untrackedTool -join ', '))"
+# The probe lives under .saipen/logs/, which .gitignore excludes and the worktree
+# fingerprint deliberately skips, and it is deleted again before the assertion.
+$probeRel = '.saipen/logs/untracked-probe.txt'
+$probeAbs = Join-Path $root ($probeRel -replace '/', '\')
+New-Item -ItemType Directory -Force -Path (Split-Path $probeAbs) | Out-Null
+Set-Content -Path $probeAbs -Value 'probe'
+$probeUntracked = Get-UntrackedRepoPath @($probeRel)
+Remove-Item -Path $probeAbs -Force -ErrorAction SilentlyContinue
+Assert-True ($probeUntracked.Count -eq 1 -and $probeUntracked[0] -eq $probeRel) "the tracked-file check names a file that exists here but is in neither HEAD nor the index (probe: $($probeUntracked -join ', '))"
+# T-907: accepting HEAD as a carrier is right when a wave commits through a
+# private index, but it also passes a file the index being written would DELETE.
+# Thirteen tool files sat in exactly that hole: their entries were missing from
+# the index while their working-tree copies still existed and matched HEAD, so a
+# commit from that index would have written a tree in which this very file invoked
+# tools the archive does not carry -- T-906's defect one layer down, invisible
+# because T-906's archive proof named only the two manifests it had just tracked.
+# A path may be staged for deletion only when the file is gone from the checkout
+# too; a live file removed from the index means the index and the working tree
+# disagree about whether it exists, and one of the two ships a broken tree
+# whichever way that is settled. The list below is what a fresh `git status` after
+# a repair like T-907's reads, so a recurrence names itself instead of sitting
+# silent for three rounds.
+$stagedDeletions = @()
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+foreach ($line in @(& git -C $root diff --cached --name-status --diff-filter=D 2>$null)) {
+    $parts = @($line -split "`t")
+    if ($parts.Count -ge 2) { $stagedDeletions += $parts[1] }
+}
+$ErrorActionPreference = $prevEap
+$stagedDeletionsLive = @($stagedDeletions | Where-Object { Test-Path (Join-Path $root ($_ -replace '/', '\')) })
+Assert-True ($stagedDeletionsLive.Count -eq 0) "no path staged for deletion still exists in the checkout ($($stagedDeletions.Count) staged deletions; live: $($stagedDeletionsLive -join ', '))"
 foreach ($e in @($executed)) {
     $src = "$root\tools\$e"
     if (-not (Test-Path $src)) { continue }
