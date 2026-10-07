@@ -38,6 +38,17 @@ Wintage is meant to stay recognizable across very different sites instead of loo
 </tr>
 </table>
 
+<details>
+<summary><b>More screenshots — newer captures</b></summary>
+
+<br>
+
+The six newer captures below show Wintage across GitHub, YouTube, ChatGPT, a narrow side-panel workflow, a dense community/chat interface, and the Wintage repository itself.
+
+<img src="docs/showcase/more-screenshots-2026-10.webp" alt="Six newer Wintage screenshots arranged in a two-column showcase grid" width="1000">
+
+</details>
+
 ## Why Wintage
 
 Modern interfaces often trade visible structure for decoration: rounded cards blur boundaries, animations delay feedback, hover effects flash across content, and controls increasingly resemble plain text.
