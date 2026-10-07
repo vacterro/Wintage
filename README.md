@@ -1,74 +1,98 @@
+<div align="center">
+
 # Wintage
 
-**Win95 Dark Golden Vintage theme for the whole web.** A Tampermonkey userscript that restyles every site into a dark golden-brown Windows 95 application: pixel-sharp 3D bevels, zero rounded corners, zero animations, no hover flashbangs, Verdana everywhere.
-<img width="876" height="618" alt="2026-08-01_230413" src="https://github.com/user-attachments/assets/5c1839ac-b977-46a0-9003-d6bffa9299a8" />
-[🤍 Support Developer](https://buymeacoffee.com/vacuum34)
+**Windows 95 visual language for the modern web.**
 
-[English](README.md) | [Русский](locales/README.ru.md) | [Eesti](locales/README.et.md) | [Дед](locales/README.ded.md)
+A Tampermonkey userscript and desktop theme toolkit that turns modern interfaces into sharp, quiet, dark-vintage UI: square geometry, explicit 3D bevels, instant state changes, warm palettes, and readable Verdana typography.
 
-<details>
-<summary><b>🌍 30+ Languages</b></summary>
+[![Tampermonkey](https://img.shields.io/badge/Tampermonkey-userscript-00485B?style=flat-square&logo=tampermonkey&logoColor=white)](https://www.tampermonkey.net/)
+[![Platform](https://img.shields.io/badge/platform-Web%20%2B%20Windows-0078D4?style=flat-square)](#beyond-the-browser)
+[![Palettes](https://img.shields.io/badge/palettes-16-D4B86A?style=flat-square)](#palettes)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
-| Language | Readme | Language | Readme |
-|:---|:---|:---|:---|
-| 🇸🇦 العربية | [README.ar.md](locales/README.ar.md) | 🇧🇬 Български | [README.bg.md](locales/README.bg.md) |
-| 🇨🇿 Čeština | [README.cs.md](locales/README.cs.md) | 🇩🇰 Dansk | [README.da.md](locales/README.da.md) |
-| 🇩🇪 Deutsch | [README.de.md](locales/README.de.md) | 🇬🇷 Ελληνικά | [README.el.md](locales/README.el.md) |
-| 🇪🇸 Español | [README.es.md](locales/README.es.md) | 🇪🇪 Eesti | [README.et.md](locales/README.et.md) |
-| 🇫🇮 Suomi | [README.fi.md](locales/README.fi.md) | 🇫🇷 Français | [README.fr.md](locales/README.fr.md) |
-| 🇮🇱 עברית | [README.he.md](locales/README.he.md) | 🇮🇳 हिन्दी | [README.hi.md](locales/README.hi.md) |
-| 🇭🇷 Hrvatski | [README.hr.md](locales/README.hr.md) | 🇭🇺 Magyar | [README.hu.md](locales/README.hu.md) |
-| 🇮🇩 Bahasa Indonesia | [README.id.md](locales/README.id.md) | 🇮🇹 Italiano | [README.it.md](locales/README.it.md) |
-| 🇯🇵 日本語 | [README.ja.md](locales/README.ja.md) | 🇰🇷 한국어 | [README.ko.md](locales/README.ko.md) |
-| 🇳🇱 Nederlands | [README.nl.md](locales/README.nl.md) | 🇳🇴 Norsk | [README.no.md](locales/README.no.md) |
-| 🇵🇱 Polski | [README.pl.md](locales/README.pl.md) | 🇵🇹 Português | [README.pt.md](locales/README.pt.md) |
-| 🇷🇴 Română | [README.ro.md](locales/README.ro.md) | 🇷🇺 Русский | [README.ru.md](locales/README.ru.md) |
-| 🇸🇰 Slovenčina | [README.sk.md](locales/README.sk.md) | 🇸🇪 Svenska | [README.sv.md](locales/README.sv.md) |
-| 🇹🇭 ไทย | [README.th.md](locales/README.th.md) | 🇹🇷 Türkçe | [README.tr.md](locales/README.tr.md) |
-| 🇺🇦 Українська | [README.uk.md](locales/README.uk.md) | 🇻🇳 Tiếng Việt | [README.vi.md](locales/README.vi.md) |
-| 🇨🇳 中文 | [README.zh.md](locales/README.zh.md) | 🧓 Дед | [README.ded.md](locales/README.ded.md) |
+[**Install Wintage**](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js) · [Changelog](CHANGELOG.md) · [Desktop themes](desktop/README.md) · [Issues](https://github.com/vacterro/Wintage/issues)
 
-</details>
+<img width="876" height="618" alt="Wintage dark vintage theme applied to a modern web interface" src="https://github.com/user-attachments/assets/5c1839ac-b977-46a0-9003-d6bffa9299a8" />
 
-_The modern web optimizes for aesthetics at the expense of usability. Rounded corners replace visual hierarchy, animations replace feedback, shadows replace structure, and minimalism often removes the very cues our brains rely on to understand an interface._
+</div>
 
-_Users shouldn't have to guess whether something is a button, a label, a card, or plain text. Wintage brings back explicit visual language: raised buttons, sunken inputs, sharp boundaries, consistent typography, zero distractions, and immediate state changes._
+---
 
-_Every element communicates its purpose at a glance, reducing cognitive load and making the web feel like a precise instrument again instead of a collection of decorative bubbles._
+## Why Wintage
 
-[Changelog](CHANGELOG.md)
+Modern interfaces often trade visible structure for decoration: rounded cards blur boundaries, animations delay feedback, hover effects flash across content, and controls increasingly resemble plain text.
+
+Wintage goes the other way. It restores an explicit visual language where controls look clickable, inputs look editable, panels have boundaries, and state changes happen immediately.
+
+The result is intentionally old-school in appearance and modern in implementation:
+
+- **square geometry** instead of pervasive rounded corners;
+- **raised controls and sunken inputs** instead of ambiguous flat surfaces;
+- **instant state changes** instead of transitions and decorative motion;
+- **warm dark palettes** instead of gray-on-gray minimalism;
+- **Verdana-first typography** with icon-font protection;
+- **adaptive repainting** for sites that do not expose clean theme variables;
+- **Shadow DOM coverage** for modern component-heavy applications;
+- **safety exclusions** for OAuth, CAPTCHA, banking, and payment flows.
 
 ## Install
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Click **[Install Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey opens its install page automatically.
-3. Done. Every site you visit is now running Windows 95, Dark Golden edition.
+1. Install [Tampermonkey](https://www.tampermonkey.net/) for Chrome, Edge, Firefox, Opera, or Safari.
+2. Click **[Install Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)**.
+3. Confirm the userscript installation.
 
-## Updating
+That is it. Wintage applies automatically to ordinary web pages.
 
-- **Automatic:** the script carries `@updateURL`/`@downloadURL` pointing at this repo, so Tampermonkey picks up new versions on its regular update checks.
-- **Manual refresh:** Tampermonkey → **Utilities → Check for userscript updates**, or just click the install link again — it replaces the old version in place, no uninstall needed.
-- **Missing theme rows means an old script:** the menu is generated from the
-  embedded theme registry and the release test requires exactly one menu row for
-  every embedded palette. If the menu is shorter than the palette list below,
-  click **Install Wintage** again and confirm **Update** in Tampermonkey.
+### Updating
 
-## Sixteen palettes, and a switch
+Wintage ships `@updateURL` and `@downloadURL` metadata, so Tampermonkey can update it automatically.
 
-Wintage is no longer one palette. Six are UI.md's own structure rotated to another
-hue family (Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, CodeNomad),
-Custom can be edited and saved from the desktop installer, and nine are imported
-from [FastPrompter](https://github.com/vacterro) (Default, Golden
-Vintage, Golden Default, Vintage Dark, Vintage Classic, Dark 2 OLED, Dracula, Nord,
-Solarized Dark). Every one of them clears WCAG AA on the three tokens that carry
-text -- the build gate refuses a palette that does not.
+For a manual refresh, use **Tampermonkey → Utilities → Check for userscript updates**, or click **Install Wintage** again and confirm the update.
 
-Pick one from the **Tampermonkey menu** on any page; the choice is stored per user,
-not per site, so it holds across every domain.
+If the Tampermonkey menu shows fewer theme entries than the palette list below, the installed script is stale. Reinstalling from the link above refreshes it in place.
 
-Palettes live in `themes/*.json`, outside the script, for one reason: Tampermonkey
-re-downloads `wintage.user.js` on every update, so a palette edited into it by hand
-would vanish. Re-apply them onto a fresh build with:
+## Features
+
+| Area | What Wintage does |
+|---|---|
+| **Structure** | Pixel-sharp 3D bevels, square corners, visible panel boundaries, Win95-style controls and scrollbars |
+| **Motion** | Disables decorative transitions and animations so state changes are immediate |
+| **Hover behavior** | Removes paint-only hover flash while preserving functional hover menus and real control feedback |
+| **Typography** | Forces Verdana-compatible text while protecting icon fonts; automatically prefers `Verdana_m1` when installed |
+| **Adaptive repainting** | Converts light flashbang surfaces and generic dark grays into the active palette while preserving media |
+| **Shadow DOM** | Themes web components by intercepting `attachShadow` in page context |
+| **Popups** | Recolors menus, dialogs, tooltips, and hovercards without forcing visibility or z-index |
+| **Safety** | Disables itself on OAuth, CAPTCHA, banking, and payment pages |
+
+### Golden Default
+
+The canonical Golden Default palette uses warm brown-black surfaces with gold text and bevel highlights.
+
+| Token | Hex | Purpose |
+|---|---:|---|
+| `background` | `#1A1810` | outer background |
+| `backgroundSoft` | `#232018` | body/content backdrop |
+| `surface` | `#332E22` | headers, navigation, panels |
+| `surfaceRaised` | `#3D372A` | buttons, popups, scrollbar thumb |
+| `surfaceAlt` | `#453D30` | alternate raised state |
+| `borderHighlight` | `#F0D060` | bevel highlights and links |
+| `borderDark` | `#100E08` | sunken edges and borders |
+| `textPrimary` | `#D4C89A` | primary text |
+| `textMuted` | `#6E674E` | secondary and disabled text |
+| `link` | `#F0D060` | links and focus |
+
+Every shipped palette defines the complete 21-token contract, including bevel structure, semantic colors, selection, and target-specific values.
+
+## Palettes
+
+Wintage ships **16 palettes**. Pick one from the Tampermonkey menu on any page; the selection is stored per user and applies across domains.
+
+The set includes Wintage/SAIPEN-oriented palettes such as Dark Golden, Claude Code, Antigravity, K-Lite, FreeBuff, and CodeNomad, plus Custom and nine palettes shared with FastPrompter including Golden Vintage, Golden Default, Vintage Dark, Vintage Classic, Dark 2 OLED, Dracula, Nord, and Solarized Dark.
+
+The build gate checks text-carrying palette tokens against WCAG AA requirements.
+
+Palette definitions live in `themes/*.json` rather than being hand-edited inside the userscript. To apply them to a fresh build:
 
 ```powershell
 .\install-themes.ps1 -Latest
@@ -76,89 +100,108 @@ would vanish. Re-apply them onto a fresh build with:
 
 ## Beyond the browser
 
-The same palettes install into desktop applications -- VS Code and Antigravity as
-colour themes, Electron apps (Freebuff, the Antigravity agent app) through a shim
-that injects the very stylesheet this userscript uses. There is a small GUI for it:
+Wintage also installs matching themes into selected desktop applications.
 
-Double-click **`Wintage Installer.vbs`** in the repo root. It opens the GUI without
-a console window. The legacy `.cmd` launcher forwards to the same hidden host;
-`desktop\WintageInstaller.ps1` can still be run directly for diagnostics.
+Double-click **`Wintage Installer.vbs`** for the GUI installer without a console window. The legacy `.cmd` launcher forwards to the same hidden host, while `desktop\WintageInstaller.ps1` remains available for diagnostics.
 
-What each target can and cannot reach -- including the two apps that are fused shut
-or have their colours compiled in -- is written down in
-**[desktop/README.md](desktop/README.md)**.
+Desktop coverage includes:
 
-BetterDiscord plugins are maintained separately:
-https://github.com/vacterro/BetterDiscord_vac34_plugins
+- VS Code-style color themes;
+- Antigravity-compatible themes;
+- Electron application shims where safe injection is possible;
+- Chromium browser-theme staging for installed and portable profiles.
 
+Target-specific capabilities and limitations are documented in **[desktop/README.md](desktop/README.md)**.
 
-## Features
+BetterDiscord extensions are maintained separately in [BetterDiscord vac34 plugins](https://github.com/vacterro/BetterDiscord_vac34_plugins).
 
-- **Golden Default palette** — deep brown-black canvas `#1A1810`, golden text `#D4C89A`, golden bevel highlights `#F0D060`. Solid flat surfaces only: no gradients, no blur, no transparency effects.
-- **Classic 3D bevels** — buttons raised, inputs sunken, pressed buttons push in (with the authentic 1px label shift). Scrollbars are full 16px Win95-style, beveled thumb and buttons included.
-- **Radius killer** — `border-radius: 0` enforced everywhere, including framework CSS variables (Bootstrap, Material, YouTube, Reddit).
-- **Motion is forbidden** — all transitions and animations are zeroed out. State changes are instant, like a real 1995 UI.
-- **Hover-highlighting disabled completely** — no white flashbang rows, no gray tint blocks:
-  - paint properties are surgically stripped from every readable `:hover` CSS rule (functional properties like `display`/`visibility`/`opacity` are kept, so hover-opened menus still work);
-  - unreadable cross-origin stylesheets are neutralized by a transition-freeze fallback.
-  Only real controls (buttons, links, inputs) keep an instant, themed bevel response.
-- **Verdana forced 100% everywhere** — including inputs and textareas, with font smoothing disabled. Icon fonts are excluded so glyphs don't turn into letters. If you have a custom font installed under the name `Verdana_m1` (e.g. a de-antialiased Verdana patch), it is used automatically; otherwise regular Verdana.
-- **Adaptive repainter** — a lightweight JS sweeper converts light "flashbang" surfaces and unthemed dark-mode grays into the vintage brown scale, and fixes low-contrast (dark-on-dark) text to golden, at WCAG-aware thresholds. Images, videos, canvases, and players are never touched.
-- **Shadow DOM piercing** — themes web components too (YouTube, Reddit, and friends) via an `attachShadow` hook.
-- **Popups behave** — menus, dialogs, tooltips, and hovercards are recolored only; the script never forces `opacity`/`z-index`/`visibility`, so hidden site UI stays hidden.
-- **Safety guard** — the script disables itself on OAuth, captcha, banking, and payment pages so critical flows are never restyled.
+### Matching Chromium theme
 
-## Palette
+The desktop installer can detect installed and portable Chromium profiles, report Tampermonkey coverage, stage the selected browser theme, and open the correct installation/update pages.
 
-The table below shows 10 of the 21 Golden Default palette tokens. Every shipped
-palette defines all 21; the remaining 11 cover bevel structure, text secondary,
-semantic colours (success/warning/danger), selection, and per-target specifics.
+Chromium still requires one **Developer mode → Load unpacked** confirmation per profile. Later palette changes reuse the same stable theme path.
 
-| Token | Hex | Used for |
-|---|---|---|
-| background | `#1A1810` | outermost background |
-| backgroundSoft | `#232018` | body / content backdrop |
-| surface | `#332E22` | headers, nav, panels |
-| surfaceRaised | `#3D372A` | buttons, popups, scrollbar thumb |
-| surfaceAlt | `#453D30` | button hover |
-| borderHighlight | `#F0D060` | bevel edges, links |
-| borderDark | `#100E08` | sunken edges, borders |
-| textPrimary | `#D4C89A` | primary golden text |
-| textMuted | `#6E674E` | placeholders, disabled |
-| link | `#F0D060` | links, focus |
+## Screenshots
 
-## Matching browser theme
+<details>
+<summary><b>Open screenshot gallery</b></summary>
 
-The desktop installer's `browsers` target detects installed and portable Chromium
-profiles, reports Tampermonkey coverage, stages the selected browser theme, and
-opens the correct install/update pages for every profile. Chromium requires one
-**Developer mode → Load unpacked** confirmation per profile; the installer copies
-the stable theme path to the clipboard. Later palette changes reuse that path.
+<br>
+
+<table>
+<tr>
+<td width="50%"><img alt="Wintage themed interface example 1" src="https://github.com/user-attachments/assets/7888e96f-f854-4b68-bd82-58f76b85f630" /></td>
+<td width="50%"><img alt="Wintage themed interface example 2" src="https://github.com/user-attachments/assets/0fc63c83-b314-4c95-96ab-ac5cdd7c3d53" /></td>
+</tr>
+<tr>
+<td width="50%"><img alt="Wintage themed interface example 3" src="https://github.com/user-attachments/assets/2a33c723-eaee-4f49-b4e7-2d24e6bc599e" /></td>
+<td width="50%"><img alt="Wintage themed interface example 4" src="https://github.com/user-attachments/assets/db03a09c-dd8b-4423-b927-e8d87e7d0b4e" /></td>
+</tr>
+<tr>
+<td width="50%"><img alt="Wintage themed interface example 5" src="https://github.com/user-attachments/assets/840ef269-6259-4c84-a1b6-8fd44f390aad" /></td>
+<td width="50%"><img alt="Wintage themed interface example 6" src="https://github.com/user-attachments/assets/4f38b63a-860c-468a-843f-6982c5287a7b" /></td>
+</tr>
+</table>
+
+</details>
 
 ## Known behaviors
 
-- Sites that build hover effects in JavaScript (class toggling) rather than CSS `:hover` may still show their own highlight.
-- On rare sites whose CSS is cross-origin, clicking a non-focusable element can delay its visual state change until the mouse leaves it (the hover-freeze fallback at work). Real buttons and links are exempt.
-- The script is static by design: no options panel, no per-site toggles. Fork it and edit the tokens at the top if you want a different flavor.
+- Sites that create hover effects through JavaScript class changes instead of CSS `:hover` may retain their own highlight.
+- Rare cross-origin stylesheets can trigger the transition-freeze fallback, which may delay a non-focusable element's visual update until the pointer leaves it. Real buttons and links are exempt.
+- Wintage intentionally avoids pretending every target can be themed safely. Targets with inaccessible or compiled-in styling remain documented limitations rather than being patched recklessly.
 
-## Releasing a new version (maintainers)
+## Maintainer workflow
 
-Add a `## [x.y.z] - date` entry to the top of `CHANGELOG.md` first — `release.ps1` refuses to run without it. Then:
+Add the new `## [x.y.z] - date` entry to [CHANGELOG.md](CHANGELOG.md) before releasing. The release script refuses to continue without it.
 
 ```powershell
 .\release.ps1 -Message "what changed"
 ```
 
-It bumps the `@version` patch number (the Tampermonkey header and the `W95_VERSION` stamp both move together), rebuilds the generated desktop themes, runs the whole release-gate suite, and commits, tags, and pushes — Tampermonkey clients pick the update up automatically. Pass `-Bump minor` or `-Bump major` for bigger releases.
+The release flow updates userscript version stamps together, rebuilds generated desktop themes, runs the release gates, then commits, tags, and pushes. Use `-Bump minor` or `-Bump major` when required.
 
-<img width="1440" height="860" alt="2026-07-29_180529" src="https://github.com/user-attachments/assets/7888e96f-f854-4b68-bd82-58f76b85f630" />
-<img width="641" height="1080" alt="2026-08-01_230328" src="https://github.com/user-attachments/assets/2a33c723-eaee-4f49-b4e7-2d24e6bc599e" />
-<img width="874" height="903" alt="2026-07-29_180545" src="https://github.com/user-attachments/assets/0fc63c83-b314-4c95-96ab-ac5cdd7c3d53" />
-<img width="640" height="1080" alt="2026-08-01_230203" src="https://github.com/user-attachments/assets/db03a09c-dd8b-4423-b927-e8d87e7d0b4e" />
-<img width="746" height="1080" alt="2026-07-29_180639" src="https://github.com/user-attachments/assets/840ef269-6259-4c84-a1b6-8fd44f390aad" />
-<img width="900" height="663" alt="2026-07-29_180652" src="https://github.com/user-attachments/assets/4f38b63a-860c-468a-843f-6982c5287a7b" />
+## Languages
 
+**English** · [Русский](locales/README.ru.md) · [Eesti](locales/README.et.md) · [日本語](locales/README.ja.md) · [Дед](locales/README.ded.md)
+
+<details>
+<summary><b>All translated READMEs</b></summary>
+
+| Language | README | Language | README |
+|:---|:---|:---|:---|
+| العربية | [AR](locales/README.ar.md) | Български | [BG](locales/README.bg.md) |
+| Čeština | [CS](locales/README.cs.md) | Dansk | [DA](locales/README.da.md) |
+| Deutsch | [DE](locales/README.de.md) | Ελληνικά | [EL](locales/README.el.md) |
+| Español | [ES](locales/README.es.md) | Eesti | [ET](locales/README.et.md) |
+| Suomi | [FI](locales/README.fi.md) | Français | [FR](locales/README.fr.md) |
+| עברית | [HE](locales/README.he.md) | हिन्दी | [HI](locales/README.hi.md) |
+| Hrvatski | [HR](locales/README.hr.md) | Magyar | [HU](locales/README.hu.md) |
+| Bahasa Indonesia | [ID](locales/README.id.md) | Italiano | [IT](locales/README.it.md) |
+| 日本語 | [JA](locales/README.ja.md) | 한국어 | [KO](locales/README.ko.md) |
+| Nederlands | [NL](locales/README.nl.md) | Norsk | [NO](locales/README.no.md) |
+| Polski | [PL](locales/README.pl.md) | Português | [PT](locales/README.pt.md) |
+| Română | [RO](locales/README.ro.md) | Русский | [RU](locales/README.ru.md) |
+| Slovenčina | [SK](locales/README.sk.md) | Svenska | [SV](locales/README.sv.md) |
+| ไทย | [TH](locales/README.th.md) | Türkçe | [TR](locales/README.tr.md) |
+| Українська | [UK](locales/README.uk.md) | Tiếng Việt | [VI](locales/README.vi.md) |
+| 中文 | [ZH](locales/README.zh.md) | Дед | [DED](locales/README.ded.md) |
+
+</details>
+
+## Project network
+
+Wintage is part of the broader **SAIPEN / vacterro** project ecosystem.
+
+[**Author hub**](https://github.com/vacterro) · [**SAIPEN HQ**](https://github.com/saipenhq) · [**SAIPEN Core**](https://github.com/vacterro/saipen) · [**ZAICODE**](https://github.com/vacterro/zaicode) · [**FastPrompter**](https://github.com/vacterro/FastPrompter) · [**SAIPEN Community**](https://discord.gg/SEYaYkuVgN)
+
+For reproducible bugs and durable feature requests, use [GitHub Issues](https://github.com/vacterro/Wintage/issues).
 
 ## License
 
 [MIT](LICENSE)
+
+<!-- VACTERRO_SUPPORT:BEGIN -->
+---
+<sub>If Wintage is useful to you, optional support: [Buy Me a Coffee](https://buymeacoffee.com/vacuum34) · [Boosty](https://boosty.to/vacuum34/donate) · [PayPal](https://paypal.me/AlexNelin) · [other ways](https://github.com/vacterro/vacterro/blob/main/SUPPORT.md)</sub>
+<!-- VACTERRO_SUPPORT:END -->
