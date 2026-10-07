@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.36.6
+// @version      1.36.7
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -683,7 +683,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.36.6';
+  const W95_VERSION = '1.36.7';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -2372,6 +2372,75 @@ html[data-w95-chatgpt="1"] ::selection { background-color: ${T.selection} !impor
     background-color: ${T.surface} !important;
     color: ${T.textPrimary} !important;
     caret-color: ${T.borderHighlight} !important;
+  }
+
+  /* Live DOM contracts measured on live ChatGPT tabs (2026-10-07) */
+  html[data-w95-chatgpt="1"] aside[aria-label="Sidebar"] header {
+    background-image: none !important;
+    background-color: ${T.background} !important;
+    color: ${T.textPrimary} !important;
+  }
+  html[data-w95-chatgpt="1"] aside[aria-label="Sidebar"] header button,
+  html[data-w95-chatgpt="1"] [data-testid="desktop-app-shell"] header button {
+    border-radius: 0px !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Live sidebar container descendants. The aside landmark is themed above,
+     but its inner wrappers paint opaque stock background. Theming the inner
+     containers and nav landmark ensures no stock charcoal or white leaks. */
+  html[data-w95-chatgpt="1"] [role="complementary"][aria-label="Sidebar"] div,
+  html[data-w95-chatgpt="1"] aside[aria-label="Sidebar"] div,
+  html[data-w95-chatgpt="1"] nav[aria-label="Sidebar"] {
+    --color-surface: ${T.background} !important;
+    --color-surface-secondary: ${T.surface} !important;
+    --sidebar-surface-primary: ${T.background} !important;
+    --sidebar-surface-secondary: ${T.surface} !important;
+    background-color: ${T.background} !important;
+    color: ${T.textPrimary} !important;
+  }
+  html[data-w95-chatgpt="1"] aside[aria-label="Sidebar"] a,
+  html[data-w95-chatgpt="1"] aside[aria-label="Sidebar"] button,
+  html[data-w95-chatgpt="1"] nav[aria-label="Sidebar"] a,
+  html[data-w95-chatgpt="1"] nav[aria-label="Sidebar"] button {
+    color: ${T.textPrimary} !important;
+    border-radius: 0px !important;
+  }
+
+  /* Live composer form container. The prompt editor is transparent; the
+     enclosing form owns the 28px rounded stock box and background. */
+  html[data-w95-chatgpt="1"] form {
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+    border-radius: 0px !important;
+    box-shadow: none !important;
+    ${B_SUNK}
+  }
+  html[data-w95-chatgpt="1"] form div,
+  html[data-w95-chatgpt="1"] form [role="presentation"] {
+    background-color: transparent !important;
+    border-radius: 0px !important;
+  }
+  html[data-w95-chatgpt="1"] form button {
+    border-radius: 0px !important;
+    background-color: ${T.surfaceAlt} !important;
+    color: ${T.textPrimary} !important;
+    ${B_INNER}
+  }
+
+  /* Live conversation turns and user message bubble */
+  html[data-w95-chatgpt="1"] ol[aria-label="Conversation"] li {
+    color: ${T.textPrimary} !important;
+  }
+  html[data-w95-chatgpt="1"] ol[aria-label="Conversation"] li button,
+  html[data-w95-chatgpt="1"] ol[aria-label="Conversation"] button {
+    border-radius: 0px !important;
+  }
+  html[data-w95-chatgpt="1"] ol[aria-label="Conversation"] li:nth-child(odd) > div button {
+    background-color: ${T.surfaceRaised} !important;
+    color: ${T.textPrimary} !important;
+    border-radius: 0px !important;
+    ${B_OUTER}
   }
 
   `;
