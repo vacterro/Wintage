@@ -568,6 +568,7 @@ const REPAINTER_FIX = `(() => {
   const elev = L => (DARK ? L : 1 - L);
 
   const SHADOW_CSS = ` + JSON.stringify(SHADOW_CSS) + `;
+  const ACTIVE_SHADOW_CSS = SHADOW_CSS;
 
   function injectStyle(root, id, content) {
     if (root.querySelector && root.querySelector('style[data-w95="' + id + '"]')) return;
