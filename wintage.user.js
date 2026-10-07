@@ -563,18 +563,41 @@
   // ─── IMMEDIATE BACKGROUND ────────────────────────────────────────────────────
   // Must stay the first thing that touches the document so nothing white ever
   // paints, and it now paints the ACTIVE theme rather than a hardcoded golden.
-  whenRoot(function paintRoot() {
+  function paintRoot() {
     const root = document.documentElement;
-    root.style.setProperty('background-color', T.background, 'important');
-    root.style.setProperty('color', T.textPrimary, 'important');
-    root.setAttribute('data-w95-dark', DARK ? '1' : '0');
-    root.setAttribute('data-w95-theme', THEME_ID);
-    // typeof-guarded: tools/test-theme-switch.js evaluates this block without
-    // the host constants above it.
-    if (typeof IS_X !== 'undefined' && IS_X) root.setAttribute('data-w95-x', '1');
-    if (typeof IS_REDDIT !== 'undefined' && IS_REDDIT) root.setAttribute('data-w95-reddit', '1');
-    if (typeof IS_GOOGLE !== 'undefined' && IS_GOOGLE) root.setAttribute('data-w95-google', '1');
-    if (typeof IS_CHATGPT !== 'undefined' && IS_CHATGPT) root.setAttribute('data-w95-chatgpt', '1');
+    if (!root) return;
+    try {
+      root.style.setProperty('background-color', T.background, 'important');
+      root.style.setProperty('color', T.textPrimary, 'important');
+      root.setAttribute('data-w95-dark', DARK ? '1' : '0');
+      root.setAttribute('data-w95-theme', THEME_ID);
+      // typeof-guarded: tools/test-theme-switch.js evaluates this block without
+      // the host constants above it.
+      if (typeof IS_X !== 'undefined' && IS_X) root.setAttribute('data-w95-x', '1');
+      if (typeof IS_REDDIT !== 'undefined' && IS_REDDIT) root.setAttribute('data-w95-reddit', '1');
+      if (typeof IS_GOOGLE !== 'undefined' && IS_GOOGLE) root.setAttribute('data-w95-google', '1');
+      if (typeof IS_CHATGPT !== 'undefined' && IS_CHATGPT) root.setAttribute('data-w95-chatgpt', '1');
+    } catch (e) { }
+  }
+
+  whenRoot(function paintRoot() {
+    paintRoot();
+    try {
+      const root = document.documentElement;
+      let inPaint = false;
+      const rootObs = new MutationObserver(function () {
+        if (inPaint) return;
+        const missing = (typeof IS_CHATGPT !== 'undefined' && IS_CHATGPT && !root.hasAttribute('data-w95-chatgpt')) ||
+                        (typeof IS_REDDIT !== 'undefined' && IS_REDDIT && !root.hasAttribute('data-w95-reddit')) ||
+                        (typeof IS_X !== 'undefined' && IS_X && !root.hasAttribute('data-w95-x')) ||
+                        !root.hasAttribute('data-w95-theme');
+        if (missing) {
+          inPaint = true;
+          try { paintRoot(); } finally { inPaint = false; }
+        }
+      });
+      rootObs.observe(root, { attributes: true, subtree: false });
+    } catch (e) { }
   });
 
   // ─── THEME MENU ──────────────────────────────────────────────────────────────
@@ -2726,6 +2749,7 @@ a, a:link { color: ${T.link} !important; }
   // to the end of <head> buys the identical cascade order for nothing.
   function injectLate() {
     try {
+      paintRoot();
       const targetDoc = document;
       if (targetDoc && targetDoc.adoptedStyleSheets && targetDoc.__w95Sheets && targetDoc.__w95Sheets['global']) {
         const sheet = targetDoc.__w95Sheets['global'];
@@ -4708,17 +4732,22 @@ a, a:link { color: ${T.link} !important; }
   // once late CSS settled, then on demand whenever requestForceSweep() fires.
   // The write-if-changed guard in setImp keeps repeat passes cheap.
   function startSweeping() {
+    paintRoot();
     injectLate();
     startObservers();
     if (CSS_ONLY_MODE) {
       noteRepaintSkipped();
       try {
+        paintRoot();
         document.documentElement.setAttribute('data-w95-perf', 'css-only');
         document.documentElement.setAttribute('data-w95-perf-reason', IS_REDDIT ? 'reddit-lean-css' : (IS_CHATGPT ? 'chatgpt-lean-css' : 'known-high-churn-host'));
       } catch (e) { }
       // One final cascade-order correction after late app CSS arrives. No DOM
       // scan, no observer, no repeating timer.
-      window.addEventListener('load', injectLate, { once: true });
+      window.addEventListener('load', function () {
+        paintRoot();
+        injectLate();
+      }, { once: true });
       return;
     }
     // The boot pass measured ONE 716ms long task on a 16921-element page, right

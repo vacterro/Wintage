@@ -550,6 +550,7 @@ const REPAINTER_FIX = `(() => {
   // both stay false: same branch as every non-Reddit, non-ChatGPT web host.
   const IS_REDDIT = false;
   const IS_CHATGPT = false;
+  function paintRoot() { }
 
   // Polarity. Every luminance threshold downstream was written against a dark
   // palette; elev() normalises the incoming value so the same numbers keep their
