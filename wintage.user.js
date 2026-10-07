@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.36.7
+// @version      1.36.8
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
@@ -683,7 +683,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.36.7';
+  const W95_VERSION = '1.36.8';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -2642,6 +2642,20 @@ a, a:link { color: ${T.link} !important; }
         try { if (roots && roots.indexOf(shadow) < 0) roots.push(shadow); } catch (e) { }
         queueMicrotask(() => {
           try {
+            // Adopted stylesheet for shadow roots (CSP safe)
+            if (shadow.adoptedStyleSheets && typeof CSSStyleSheet !== 'undefined' && proto.__wintageShadowCss) {
+              try {
+                if (!shadow.__w95Sheets) shadow.__w95Sheets = {};
+                let sheet = shadow.__w95Sheets['shadow'];
+                if (!sheet) {
+                  sheet = new CSSStyleSheet();
+                  sheet.replaceSync(proto.__wintageShadowCss);
+                  shadow.__w95Sheets['shadow'] = sheet;
+                  shadow.adoptedStyleSheets = [sheet, ...shadow.adoptedStyleSheets.filter(s => s !== sheet)];
+                  DIAG.shadowCssInjected++;
+                }
+              } catch (e) { }
+            }
             // An older generation may have got here first; restyle in place
             // rather than leaving the page themed by a build no longer loaded.
             if (shadow.querySelector('style[data-w95="shadow"]')) { restyle(shadow); return; }
@@ -2664,6 +2678,23 @@ a, a:link { color: ${T.link} !important; }
     if (root === document && !document.documentElement) {
       whenRoot(function () { injectStyle(root, id, content); });
       return;
+    }
+    // CSP mitigation (T-398 / T-1442): pages with strict Content Security Policy
+    // (e.g. chatgpt.com's default-src 'none') block inline <style> elements added
+    // via DOM insertion in page context (@sandbox raw).
+    // Constructable stylesheets (CSSStyleSheet / adoptedStyleSheets) are created
+    // programmatically in JS and are NOT subject to inline script/style CSP restrictions.
+    if (root && root.adoptedStyleSheets && typeof CSSStyleSheet !== 'undefined') {
+      try {
+        if (!root.__w95Sheets) root.__w95Sheets = {};
+        let sheet = root.__w95Sheets[id];
+        if (!sheet) {
+          sheet = new CSSStyleSheet();
+          sheet.replaceSync(content);
+          root.__w95Sheets[id] = sheet;
+          root.adoptedStyleSheets = [sheet, ...root.adoptedStyleSheets.filter(s => s !== sheet)];
+        }
+      } catch (e) { }
     }
     if (root.querySelector && root.querySelector(`style[data-w95="${id}"]`)) return;
     const s = document.createElement('style');
@@ -2695,6 +2726,12 @@ a, a:link { color: ${T.link} !important; }
   // to the end of <head> buys the identical cascade order for nothing.
   function injectLate() {
     try {
+      const targetDoc = document;
+      if (targetDoc && targetDoc.adoptedStyleSheets && targetDoc.__w95Sheets && targetDoc.__w95Sheets['global']) {
+        const sheet = targetDoc.__w95Sheets['global'];
+        const filtered = targetDoc.adoptedStyleSheets.filter(s => s !== sheet);
+        targetDoc.adoptedStyleSheets = [...filtered, sheet];
+      }
       const existing = document.querySelector('style[data-w95="global"]');
       const target = document.head || document.documentElement;
       if (!target) return;
