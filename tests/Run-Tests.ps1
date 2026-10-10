@@ -951,6 +951,12 @@ $toolSuites = @(
     @{ Name = 'test-reddit-cssonly.js'; Cmd = 'node "{0}\tools\test-reddit-cssonly.js"' },
     @{ Name = 'test-reddit-repaint-gates.js'; Cmd = 'node "{0}\tools\test-reddit-repaint-gates.js"' },
     @{ Name = 'test-reddit-mutation-stress.js'; Cmd = 'node "{0}\tools\test-reddit-mutation-stress.js"' },
+    # T-916 P1 prerequisite: the Playwright delivery contract. The Chromium gates
+    # below call require('playwright') and launch real Chromium; this gate proves
+    # the manifests are committed and npm ci resolves in a scratch tree, plus a RED
+    # control that removing the declaration fails the gate. It exits 0 only when
+    # both the delivery proof and the red control hold.
+    @{ Name = 'browser-deps.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\browser-deps.ps1" -RedControl -SkipBrowserDownload' },
     # T-373 viewport-owner coverage. The two gates above read RULES: they prove
     # the October contracts are present in the sheet ChatGPT actually receives.
     # They cannot see the defect this one exists for, because the defect is not a
