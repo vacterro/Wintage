@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-w95-chatgpt="1">
+<head>
+<meta charset="utf-8">
+<title>ChatGPT surface fixture</title>
+<!--
+  Credential-free stand-in for the chatgpt.com app shell.
+
+  WHY THIS EXISTS. tools/test-inspect-web.js exercises the probe, the
+  sanitizer, the aggregator and the verdict against MOCK page reports and a
+  stub transport. Nothing in the repo ever drove tools/cdp-client.js against a
+  real browser, so the whole transport layer -- /json/list, the WebSocket,
+  Runtime.evaluate, getComputedStyle -- was unproven. T-359 is the live
+  acceptance pass and it needs an operator's signed-in tab; this fixture is
+  what lets the SAME command be proven today, by anyone, with no account.
+
+  WHAT IT IS NOT. This is not chatgpt.com and it is not evidence about
+  chatgpt.com. It proves the tool works; it cannot prove which surfaces the
+  real product renders. The selectors below are transcribed from SURFACES in
+  tools/inspect-web.js -- if that list changes, this file is now lying about
+  coverage and the assertions in test-inspect-web-cdp-live.js are what catch it.
+-->
+<style>
+  /* The token values the probe reads back off :root. */
+  :root {
+    /* --background is NOT --chat-background-color, and holding <html> to the
+       latter is a false positive against the real page: paintRoot writes
+       background-color: T.background inline with !important on <html>
+       (wintage.user.js:536), so <html> computes to the PALETTE value while
+       every descendant computes to the softer one. CHATGPT_FAST_CSS declares
+       --background for exactly that pair (wintage.user.js:1878). A fixture
+       that omits it makes the probe report "token resolved to nothing" on a
+       page the product paints correctly. */
+    --background: #212121;
+    --chat-background-color: #212121;
+    --color-token-side-bar-background: #171717;
+    --user-message-background-color: #343541;
+    --composer-background-color: #303030;
+    --codeblock-background-color: #0d0d0d;
+    /* An open dialog on the live 2026-10-04 tab computed to rgb(61, 55, 42) =
+       #3D372A = T.surfaceRaised, which CHATGPT_FAST_CSS declares on :root. */
+    --surfaceRaised: #3D372A;
+  }
+  html, body, #root, main, #thread, #thread-bottom-container,
+  [data-message-author-role="assistant"] {
+    background: #212121;
+  }
+  /* The viewport owner. It is an ALWAYS-required surface in the probe matrix,
+     so the fixture has to render it -- a fixture that omits a contract the
+     matrix declares makes the tool report a MISSING that the fixture itself
+     caused, which is a fixture bug wearing a product regression's clothes. */
+  [data-testid="mobile-app-shell-scroll-container"] { background: #212121; }
+  #app-shell-sidebar { background: #171717; }
+  [data-user-message-bubble="true"] { background: #343541; }
+  [data-composer-dark], [data-composer-body] { background: #303030; }
+  [data-markdown-copy="code-block"], [data-markdown-copy="code-block"] pre { background: #0d0d0d; }
+  /* The nav entries, the editor and the code-block buttons stay transparent here,
+     exactly as they are on the live page: the product paints the CONTAINER and
+     leaves these alone (sidebar / composer / code-block respectively). They are
+     TRANSPARENT_HOSTS in the probe matrix, and that is only checkable against a
+     fixture that reproduces the transparency rather than painting them. The button
+     rule is explicit because a bare <button> is NOT transparent on its own: the UA
+     sheet paints it buttonface, and the live page reads transparent only because
+     ChatGPT's own reset says so. */
+  button { background: transparent; }
+  /* One rule for all six overlay selectors, exactly as CHATGPT_FAST_CSS writes
+     them (wintage.user.js:1926). The fixture used to paint only `dialog`, which
+     left [role="menu"], [role="listbox"] and [popover] transparent -- correct
+     only while those three carried no token expectation. They now carry the same
+     --surfaceRaised the product binds them to, so painting them here is what
+     makes the fixture honest about the contract instead of quietly agreeing
+     with a missing expectation. */
+  dialog, [popover], [role="menu"], [role="listbox"], [role="dialog"] {
+    background: #3D372A;
+  }
+
+  /* Wintage-owned rules, stamped so the `rules` subcommand's cascade
+     attribution has something real to attribute. */
+  html[data-w95-chatgpt="1"] main { color: #ececec; }
+  html[data-w95-chatgpt="1"] #app-shell-sidebar { color: #b4b4b4; }
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"] { color: #e6e6e6; }
+</style>
+</head>
+<body>
+<div id="root">
+  <aside id="app-shell-sidebar">
+    <nav>
+      <a href="/c/fixture-conversation">Fixture conversation</a>
+      <a href="/g/fixture-project">Fixture project</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div data-testid="mobile-app-shell-scroll-container">
+    <header><button aria-pressed="true">Mode</button></header>
+    <div id="thread">
+      <div data-user-message-bubble="true">SENTINEL_USER_TEXT_DO_NOT_EMIT_9f3a2c</div>
+      <div data-message-author-role="assistant">
+        <div data-markdown-copy="code-block">
+          <pre>SENTINEL_ASSISTANT_TEXT_DO_NOT_EMIT_7b1e4d</pre>
+          <button>Copy</button>
+        </div>
+      </div>
+    </div>
+    <div id="thread-bottom-container"></div>
+    <div data-composer-dark>
+      <div data-composer-body>
+        <div data-testid="prompt-textarea"></div>
+      </div>
+      <div data-composer-utility-bar></div>
+    </div>
+    </div>
+  </main>
+
+  <div role="menu"><div role="menuitem">Item</div></div>
+  <div role="listbox"><div role="option">Option</div></div>
+  <div popover>Popover body</div>
+  <dialog open>Dialog body</dialog>
+</div>
+</body>
+</html>

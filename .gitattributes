@@ -1,0 +1,18 @@
+# SAIPEN byte-bound evidence (digest-verified; never convert line endings) -- T-1508.
+.saipen/intake/** -text
+.saipen/archive/source/** -text
+.saipen/archive/retired/** -text
+.saipen/recovery/log-detail/** -text
+.saipen/recovery/board-compaction/** -text
+.saipen/recovery/log-normalize/** -text
+.saipen/recovery/log-foreign-tail/** -text
+.saipen/recovery/board-scrub/** -text
+
+# Deterministic delivery contract for the browser-test dependency manifests.
+# `npm ci` reads byte values from package.json / package-lock.json, so these two
+# files MUST be committed AND must NOT be CRLF-rewritten on checkout -- a
+# lockfile that changes between LF and CRLF on the way through git is not the
+# lockfile any reviewer audited. Pin LF. Everything else inherits git's default
+# text handling.
+package.json text eol=lf
+package-lock.json text eol=lf

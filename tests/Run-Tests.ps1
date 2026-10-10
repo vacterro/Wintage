@@ -4,6 +4,20 @@ Set-StrictMode -Version Latest
 $root = Split-Path $PSScriptRoot -Parent
 $script:errors = 0
 
+# The gates below are Windows PowerShell 5.1 gates: half of them spawn
+# `powershell.exe` children, and Windows PowerShell pointed at PowerShell 7's
+# PSCore PSModulePath cannot resolve its own core cmdlets, so a gate dies on its
+# first Get-FileHash and the suite reports a red tree that is perfectly green.
+# A wrong host is a wrong MEASUREMENT, not a finding about the tree: refuse to
+# judge and name the host, instead of publishing the false red. This is the same
+# guard the gates themselves carry (test-batch-streaming-gui.ps1 exits 2 on a
+# non-5.1 host) moved to the entry point that spawns them all.
+if ($PSVersionTable.PSEdition -ne 'Desktop') {
+    Write-Host "WRONG HOST: this suite judges the tree under Windows PowerShell 5.1, but is running on $($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion)." -ForegroundColor Red
+    Write-Host 'The gates spawn 5.1 children and cannot resolve their cmdlets from here. Re-run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\Run-Tests.ps1' -ForegroundColor Red
+    exit 2
+}
+
 # T-414: the verdict of this file was not reproducible and a red run lost the
 # name of what failed. One tree, two runs, two verdicts -- the browser-cache live
 # smoke failed under full-suite load and passed twice standalone -- and the
@@ -538,6 +552,25 @@ Invalid relative date_SearchFlags=0|000002000020|||-1|-1|||||0000|
 }
 
 Write-Host "
+--- Testing Browser Test Dependency Delivery (T-916 P1) ---" -ForegroundColor Cyan
+# T-916: test-chatgpt-*.js and test-provider-image-preservation.js call
+# require('playwright'). A fresh checkout must be able to install it from
+# COMMITTED manifests, not from a developer's untracked node_modules. This gate
+# validates the delivery contract: the manifests are tracked, not gitignored,
+# npm ci succeeds in a scratch dir, require('playwright') resolves there, and a
+# removed declaration makes the gate fail (RED control). Chromium launch is
+# skipped here -- the browser itself is gated separately below.
+$browserDepsOut = & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\tools\browser-deps.ps1" -SkipBrowserDownload -RedControl 2>&1
+$browserDepsCode = $LASTEXITCODE
+if ($browserDepsCode -ne 0) {
+    Assert-True $false 'browser-deps delivery gate exits 0 (manifests tracked, npm ci + require(playwright) resolve from committed bytes)'
+    $tails = @($browserDepsOut -split "`r?`n" | Where-Object { $_ -match 'FAIL|RED' } | Select-Object -Last 4)
+    foreach ($line in $tails) { Write-Host "       $line" -ForegroundColor Red }
+} else {
+    Assert-True $true 'browser-deps delivery gate exits 0 (manifests tracked, npm ci + require(playwright) resolve from committed bytes)'
+}
+
+Write-Host "
 --- Testing Browser and Tampermonkey Target ---" -ForegroundColor Cyan
 $browserRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-browsers-" + [guid]::NewGuid().ToString('N'))
 try {
@@ -940,6 +973,10 @@ $toolSuites = @(
     # owner is itself ALWAYS. It goes red if the current-live viewport-owner rule
     # is cut while every older fallback remains.
     @{ Name = 'test-chatgpt-contract-parity.js'; Cmd = 'node "{0}\tools\test-chatgpt-contract-parity.js"' },
+    # Assistant-message content surface repair: ensures tables, inline code,
+    # blockquotes, code blocks, highlights and buttons inside assistant responses
+    # render with the active Wintage palette with zero unintended white surfaces.
+    @{ Name = 'test-chatgpt-assistant-content.js'; Cmd = 'node "{0}\tools\test-chatgpt-assistant-content.js"' },
     # Defect 3 of the v1.36.6 report: the generic control wipe deleted ARTWORK as
     # well as nested surfaces, so a Register/Sign-in dialog rendered five
     # social/provider sign-in methods as empty beveled boxes. The fixture carries

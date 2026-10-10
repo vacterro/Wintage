@@ -1,0 +1,16 @@
+{
+  "name": "wintage",
+  "version": "1.36.9",
+  "private": true,
+  "description": "Win95 dark theme for ChatGPT web / BetterDiscord / Electron / desktop targets",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  },
+  "scripts": {
+    "test": "pwsh tests/Run-Tests.ps1"
+  }
+}
