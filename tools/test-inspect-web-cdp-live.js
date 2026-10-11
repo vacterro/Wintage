@@ -10,9 +10,10 @@
 // account, so the operator's step is "open the surfaces", not "debug the tool".
 //
 // WHAT IT PROVES. The transport, the probe, the watch loop, the five report
-// fields the T-359 verify clause names, the privacy sanitizer, and -- the
-// point of the exercise -- that the tool still REFUSES to accept when the
-// acceptance surfaces are unproven.
+// fields the T-359 verify clause names, the privacy sanitizer, and the two
+// acceptance contracts on the real transport: a scoped conversation pass
+// accepts, and the explicit full-session mode refuses -- naming the route
+// family the operator was asked for and never reached.
 //
 // WHAT IT DOES NOT PROVE. Anything about the real chatgpt.com. Its DOM, its
 // tokens and its routes are not here. A green run here is a green tool, not a
@@ -94,9 +95,10 @@ function parseObservations(stdout) {
   return out;
 }
 
-function runWatch(cdpPort, urlPart, seconds) {
+function runWatch(cdpPort, urlPart, seconds, extraArgs) {
   return new Promise(resolve => {
-    const child = spawn(process.execPath, [CLI, 'watch', urlPart, String(seconds), '--json', '--attribute'], {
+    const child = spawn(process.execPath, [CLI, 'watch', urlPart, String(seconds), '--json', '--attribute']
+      .concat(extraArgs || []), {
       cwd: ROOT,
       env: Object.assign({}, process.env, {
         WINTAGE_DEBUG_PORT: String(cdpPort),
@@ -134,9 +136,16 @@ async function main() {
   ], { stdio: 'ignore' });
 
   let result;
+  let fullSession;
   try {
     await waitForCdp(cdpPort, 30000);
     result = await runWatch(cdpPort, '127.0.0.1', 10);
+    // T-916: the SAME fixture under the explicit full-session contract, which
+    // requires both route families. A local /c/ fixture page never visits the
+    // Settings family, so this is the live-transport half of the full-session
+    // refusal control -- the run proves everything it can and still refuses,
+    // naming the family it was asked for and never reached.
+    fullSession = await runWatch(cdpPort, '127.0.0.1', 10, ['--full-session']);
   } finally {
     // Only ever the PID this process started.
     try { child.kill(); } catch (e) { /* already gone */ }
@@ -217,15 +226,34 @@ async function main() {
       'classify as themed rather than silently reading UNPROVEN');
   }
 
-  // 5. The tool must still REFUSE. The acceptance surfaces carry no token
-  //    expectation, so a run that cannot open them is non-accepting BY
-  //    DESIGN. A green here would mean the gate stopped gating.
-  assert.strictEqual(final.accept, false,
-    'watch accepted a run that proved nothing about the acceptance surfaces');
-  assert.ok(final.unresolvedAcceptance.length > 0,
-    'expected unresolved acceptance surfaces, got none');
-  assert.strictEqual(result.code, 1,
-    'non-accepting watch must exit 1, got ' + result.code);
+  // 5. The two acceptance contracts, on the real transport.
+  // 5a. ROUTE-SCOPED (default): the fixture is a /c/ route. Every applicable
+  //    requested surface is rendered and themed, and the Settings family is
+  //    not applicable to this route, so the scoped verdict accepts. This is
+  //    the behavior the route-awareness fix exists for: a conversation-only
+  //    diagnostic pass is legitimate work and must not fail for surfaces on
+  //    routes it never claimed to cover.
+  assert.strictEqual(final.accept, true,
+    'a scoped conversation pass with every applicable surface themed must accept, got: ' +
+    JSON.stringify(final.notAcceptingBecause));
+  assert.deepStrictEqual(final.unresolvedAcceptance, [],
+    'no requested surface is unresolved on a fully themed scoped pass');
+  assert.strictEqual(result.code, 0,
+    'an accepting scoped watch must exit 0, got ' + result.code);
+  // 5b. FULL SESSION (--full-session): the same evidence under the operator's
+  //     full request. The Settings route family was never visited, so the run
+  //     is NON-ACCEPTING and names what it was asked for and never reached --
+  //     and exits 1.
+  const fsFinal = parseFinal(fullSession.out);
+  assert.strictEqual(fsFinal.accept, false,
+    'a full session that never visited the Settings family must refuse');
+  assert.strictEqual(fullSession.code, 1,
+    'a non-accepting full-session watch must exit 1, got ' + fullSession.code);
+  assert.ok(fsFinal.notAcceptingBecause.some(r => r.indexOf('Settings route family was never visited') >= 0),
+    'the full-session refusal must name the never-visited route family: ' +
+    JSON.stringify(fsFinal.notAcceptingBecause));
+  assert.strictEqual(fsFinal.fullSession, true,
+    'the machine-readable report must record the full-session mode');
 
   // 6. Privacy. Conversation text planted in the fixture must not appear in
   //    stdout or stderr on the way out.
@@ -237,8 +265,7 @@ async function main() {
   console.log('PASS: live CDP transport attaches to a real browser and completes a bounded watch');
   console.log('PASS: probe found all ' + rendered.length + ' rendered surfaces in the live document');
   console.log('PASS: ' + themed.length + ' token-bearing surfaces classified themed, 0 mismatched');
-  console.log('PASS: the tool refuses to accept a run that proved nothing (exit ' + result.code +
-    ', ' + final.unresolvedAcceptance.length + ' acceptance surfaces unresolved)');
+  console.log('PASS: scoped conversation pass accepts; full session refuses, naming the never-visited family (exit ' + fullSession.code + ')');
   console.log('PASS: no conversation text emitted by the sanitizer');
 }
 

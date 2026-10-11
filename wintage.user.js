@@ -468,7 +468,7 @@
     custom: {
       label: 'Custom',
       tokens: {
-        background: '#A0B0C0', backgroundSoft: '#232018',
+        background: '#1A1810', backgroundSoft: '#232018',
         surface: '#332E22', surfaceRaised: '#3D372A', surfaceAlt: '#453D30',
         borderDark: '#100E08', borderHighlight: '#F0D060', bevelLight: '#75663D', borderMuted: '#5A5040',
         textPrimary: '#D4C89A', textSecondary: '#9C9371', textMuted: '#6E674E',
@@ -1883,7 +1883,14 @@ ytcp-bar-chart .previous, ytcp-bar-chart .secondary-bar,
 rect.bar.previous-period {
   background-color: ${T.textMuted} !important;
   fill: ${T.textMuted} !important;
-  opacity: 0.7 !important;
+  /* UI-001: transparency is not the "quieter" channel here. UI.md iron law 2
+     bans it, and this rule's own answer is two lines up -- --textMuted on the
+     same surface already carries the secondary meaning. 0.7 was also the file's
+     only fractional alpha, so the previous-period series put its meaning in
+     alpha alone: invisible in a screenshot, and thinner than --textMuted on a
+     light palette. Forced opaque like every sibling guard, so a host
+     opacity:0 cannot re-hide the marks the wipe just revealed. */
+  opacity: 1 !important;
   visibility: visible !important;
 }
 /* T-065 follow-up: the bar family was guarded because the symptom was reported
@@ -2147,6 +2154,38 @@ html[data-w95-chatgpt="1"] ::selection { background-color: ${T.selection} !impor
     --border-medium: ${T.bevelLight} !important;
     --color-border: ${T.borderMuted} !important;
     --color-border-subtle: ${T.borderDark} !important;
+
+    --tw-prose-body: ${T.textPrimary} !important;
+    --tw-prose-headings: ${T.textPrimary} !important;
+    --tw-prose-lead: ${T.textSecondary} !important;
+    --tw-prose-links: ${T.link} !important;
+    --tw-prose-bold: ${T.textPrimary} !important;
+    --tw-prose-counters: ${T.textSecondary} !important;
+    --tw-prose-bullets: ${T.borderHighlight} !important;
+    --tw-prose-quotes: ${T.textPrimary} !important;
+    --tw-prose-quote-borders: ${T.borderHighlight} !important;
+    --tw-prose-captions: ${T.textMuted} !important;
+    --tw-prose-code: ${T.textPrimary} !important;
+    --tw-prose-pre-code: ${T.textPrimary} !important;
+    --tw-prose-pre-bg: ${T.compareBack} !important;
+    --tw-prose-th-borders: ${T.borderMuted} !important;
+    --tw-prose-td-borders: ${T.borderMuted} !important;
+
+    --tw-prose-invert-body: ${T.textPrimary} !important;
+    --tw-prose-invert-headings: ${T.textPrimary} !important;
+    --tw-prose-invert-lead: ${T.textSecondary} !important;
+    --tw-prose-invert-links: ${T.link} !important;
+    --tw-prose-invert-bold: ${T.textPrimary} !important;
+    --tw-prose-invert-counters: ${T.textSecondary} !important;
+    --tw-prose-invert-bullets: ${T.borderHighlight} !important;
+    --tw-prose-invert-quotes: ${T.textPrimary} !important;
+    --tw-prose-invert-quote-borders: ${T.borderHighlight} !important;
+    --tw-prose-invert-captions: ${T.textMuted} !important;
+    --tw-prose-invert-code: ${T.textPrimary} !important;
+    --tw-prose-invert-pre-code: ${T.textPrimary} !important;
+    --tw-prose-invert-pre-bg: ${T.compareBack} !important;
+    --tw-prose-invert-th-borders: ${T.borderMuted} !important;
+    --tw-prose-invert-td-borders: ${T.borderMuted} !important;
   }
 
   html[data-w95-chatgpt="1"],
@@ -2464,6 +2503,148 @@ html[data-w95-chatgpt="1"] ::selection { background-color: ${T.selection} !impor
     color: ${T.textPrimary} !important;
     border-radius: 0px !important;
     ${B_OUTER}
+  }
+
+  /* ═══ Assistant message content surface repair ═══════════════════════════
+     The current ChatGPT renderer marks assistant turns with
+     [data-markdown-text-style="assistant-message"] (retaining legacy
+     [data-message-author-role="assistant"] as fallback). The markdown root
+     is transparent over the themed conversation viewport, but stock child
+     elements (tables, inline code, blockquotes, callout cards, white utility
+     classes) paint their own stock backgrounds or inherit stock light styles.
+     Theme the content subtree with the active Wintage palette while
+     preserving syntax highlighting, math, interaction, and media. */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"],
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] {
+    background-color: transparent !important;
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Prose typography inside assistant messages */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] p,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] li,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] p,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] li {
+    color: ${T.textPrimary} !important;
+    background-color: transparent !important;
+  }
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] h1,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] h2,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] h3,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] h4,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] h5,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] h6,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] h1,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] h2,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] h3,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] h4,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] h5,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] h6 {
+    color: ${T.textPrimary} !important;
+    background-color: transparent !important;
+  }
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] strong,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] b,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] strong,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] b {
+    color: ${T.textPrimary} !important;
+  }
+
+  /* Inline code: distinct surface from conversation background */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] code:not(pre code),
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] code:not(pre code),
+  html[data-w95-chatgpt="1"] code:not(pre code),
+  html[data-w95-chatgpt="1"] kbd,
+  html[data-w95-chatgpt="1"] samp {
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+    border: 1px solid ${T.borderMuted} !important;
+    padding: 1px 4px !important;
+    margin: 0 2px !important;
+    border-radius: 0px !important;
+  }
+
+  /* Blockquotes: distinct left accent, palette background */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] blockquote,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] blockquote {
+    background-color: transparent !important;
+    color: ${T.textPrimary} !important;
+    border-left: 3px solid ${T.borderHighlight} !important;
+    border-top: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    padding: 2px 0 2px 8px !important;
+    margin: 8px 0 !important;
+  }
+
+  /* Tables: Win95 beveled header and themed cells (eliminates stock white table rows) */
+  html[data-w95-chatgpt="1"] table {
+    border-collapse: collapse !important;
+    background-color: ${T.backgroundSoft} !important;
+    border-spacing: 0 !important;
+  }
+  html[data-w95-chatgpt="1"] table th {
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+    font-weight: 700 !important;
+    border: 1px solid ${T.borderMuted} !important;
+    ${B_OUTER}
+  }
+  html[data-w95-chatgpt="1"] table td {
+    background-color: ${T.backgroundSoft} !important;
+    color: ${T.textPrimary} !important;
+    border: 1px solid ${T.borderMuted} !important;
+  }
+
+  /* Code blocks: separate dark surface, action buttons, syntax highlighting preserved */
+  html[data-w95-chatgpt="1"] pre {
+    background-color: ${T.compareBack} !important;
+    color: ${T.textPrimary} !important;
+    border-radius: 0px !important;
+  }
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"] pre {
+    background-color: transparent !important;
+    color: ${T.textPrimary} !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"] button {
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+    border-radius: 0px !important;
+  }
+
+  /* Semantic highlights (mark) */
+  html[data-w95-chatgpt="1"] mark {
+    background-color: ${T.surfaceAlt} !important;
+    color: ${T.borderHighlight} !important;
+    border-bottom: 1px solid ${T.borderHighlight} !important;
+  }
+
+  /* Math (KaTeX) formula containers */
+  html[data-w95-chatgpt="1"] .katex,
+  html[data-w95-chatgpt="1"] .katex-display {
+    color: ${T.textPrimary} !important;
+    background-color: transparent !important;
+  }
+
+  /* Collapsible thought / reasoning blocks and action buttons in assistant turn */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] details,
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] summary,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] details,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] summary {
+    background-color: transparent !important;
+    color: ${T.textSecondary} !important;
+  }
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] button,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] button {
+    border-radius: 0px !important;
+    background-color: ${T.surface} !important;
+    color: ${T.textPrimary} !important;
+  }
+  html[data-w95-chatgpt="1"] hr {
+    border: none !important;
+    border-top: 1px solid ${T.borderMuted} !important;
   }
 
   `;

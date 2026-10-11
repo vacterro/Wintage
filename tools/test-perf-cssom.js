@@ -97,6 +97,7 @@ function createCtx(setup) {
     lum: () => 0.1, hexLum: () => 0.1, contrast: () => 4.5, BG_LUM: 0.1, BG_SOFT_LUM: 0.15, DARK: true,
     elev: L => L, SHADOW_CSS: '', GLOBAL_CSS: '',
     injectStyle: () => {}, injectLate: () => {}, noteSuppressed: () => {},
+    paintRoot: () => {},
   };
   ctx.window = ctx;
   vm.createContext(ctx);

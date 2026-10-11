@@ -7,8 +7,9 @@
 #
 # FIX: the batch owns ONE Wintage-Build mutex for check+dispatch as one
 # window, and every source mutation (Invoke-CustomMutation) publishes under the
-# SAME mutex. `build-desktop::emit` stages through a same-dir temp so no
-# reader sees a half-published tree. `WINTAGE_TEST_BATCH_LOCK_DELAY_MS`
+# SAME mutex. `build-desktop` renders into `desktop/out.staging` and installs it
+# with one directory swap (W2-002 T-396), so no reader sees a half-published
+# tree. `WINTAGE_TEST_BATCH_LOCK_DELAY_MS`
 # widens the held window so a harness can prove serialization with wall clock.
 #
 # This file drives REAL code. Structural probes pin the lock identity;
@@ -147,13 +148,26 @@ if ($RedControl) {
     # like the original $pid collision that made the metadata unusable.
     $redSrc = $lockSrc -replace [regex]::Escape('$self = [System.Diagnostics.Process]::GetCurrentProcess()'), ('$realSelf = [System.Diagnostics.Process]::GetCurrentProcess(); $self = New-Object psobject | Add-Member -MemberType NoteProperty -Name Id -Value ($realSelf.Id - 1) -PassThru | Add-Member -MemberType NoteProperty -Name StartTime -Value ($realSelf.StartTime.AddSeconds(-1)) -PassThru')
     if ($redSrc -eq $lockSrc) { Write-Host 'RED CONTROL INVALID: the owner-id replacement did not apply' -ForegroundColor Red; exit 1 }
-    $redCommon = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-red-common-' + [guid]::NewGuid().ToString('N') + '.ps1')
+    # The red common.ps1 is staged in a DIRECTORY of its own. common.ps1
+    # dot-sources its sibling modules through $PSScriptRoot (generation-lock.ps1
+    # and, since W2-005, json-doc.ps1), so a lone copy dropped in %TEMP% dies on
+    # its first missing dependency -- and the crash then satisfies the "identity
+    # is broken" contract vacuously. Carry the real siblings along and overwrite
+    # only the two files under test.
+    $redCommonDir = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-red-common-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $redCommonDir -Force | Out-Null
+    foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $root 'desktop\modules') -Filter *.ps1 -File) {
+        if ($mod.Name -ne 'common.ps1' -and $mod.Name -ne 'generation-lock.ps1') {
+            Copy-Item -LiteralPath $mod.FullName -Destination (Join-Path $redCommonDir $mod.Name) -Force
+        }
+    }
+    $redCommon = Join-Path $redCommonDir 'common-red.ps1'
     # The red common.ps1 dots the RED generation-lock module next to itself.
     $dotSourceLine = 'Join-Path ' + '$' + 'PSScriptRoot' + " 'generation-lock.ps1'"
     $redCommonSrc = $commonSrc -replace [regex]::Escape($dotSourceLine), ("Join-Path " + '$' + 'PSScriptRoot' + " 'generation-lock-red.ps1'")
     if ($redCommonSrc -eq $commonSrc) { Write-Host 'RED CONTROL INVALID: the red dot-source retarget did not apply' -ForegroundColor Red; exit 1 }
     [System.IO.File]::WriteAllText($redCommon, $redCommonSrc, $utf8NoBom)
-    $redLockFile = Join-Path (Split-Path $redCommon -Parent) 'generation-lock-red.ps1'
+    $redLockFile = Join-Path $redCommonDir 'generation-lock-red.ps1'
     [System.IO.File]::WriteAllText($redLockFile, $redSrc, $utf8NoBom)
     $isoRed = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-redapp-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $isoRed -Force | Out-Null
@@ -195,7 +209,7 @@ if ($RedControl) {
             # desktop-like layout, then load the shipped GUI wrappers against them.
             $redModules = Join-Path $isoRedLock 'modules'
             New-Item -ItemType Directory -Path $redModules -Force | Out-Null
-            Copy-Item -LiteralPath $redCommon -Destination (Join-Path $redModules 'common-red.ps1') -Force
+            Copy-Item -Path (Join-Path $redCommonDir '*') -Destination $redModules -Force -Recurse
             [System.IO.File]::WriteAllText((Join-Path $redModules 'generation-lock-red.ps1'), $redLockSrc, $utf8NoBom)
             $redCommon2 = Join-Path $redModules 'common-red.ps1'
             # The RED common dots its sibling RED module; load the wrappers AFTER it.
@@ -253,8 +267,7 @@ if ($RedControl) {
     if ($red1 -and $red2 -and $red3) { Write-Host 'RED CONTROL OK: all gates reproduce their defects' -ForegroundColor Yellow; exit 0 }
     Write-Host 'RED CONTROL FAILED: a gate stayed green on defective source' -ForegroundColor Red; exit 1
     } finally {
-        Remove-Item $redCommon -Force -ErrorAction SilentlyContinue
-        Remove-Item $redLockFile -Force -ErrorAction SilentlyContinue
+        Remove-Item $redCommonDir -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item $isoRed -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
@@ -272,8 +285,14 @@ check 'struct: install.ps1 owns one batchLock covering check+dispatch, not a spl
 check 'struct: GUI Enter-BatchLockShared uses the same Local\Wintage-Build- hash family' (
     $guiSrc -match 'function Enter-BatchLockShared' -and $guiSrc -match 'Local\\Wintage-Build-' -and $guiSrc -match 'WINTAGE_APPDATA|WintageAppData' -and $guiSrc -match 'WaitOne\(15000\)'
 )
-check 'struct: build-desktop emit() stages through a same-dir temp then renames' (
-    $builderSrc -match '\.wintage-tmp-' -and $builderSrc -match 'renameSync' -and $builderSrc -match 'function emit\(file'
+# W2-004's per-file temp+rename became W2-002's whole-generation stage+swap: the
+# property under test is unchanged (no reader sees a half-published desktop/out),
+# the mechanism is now stronger, and emit() must not write into the live tree at all.
+check 'struct: build-desktop publishes a staged generation by directory swap, never into the live tree' (
+    $builderSrc -match 'function emit\(file' -and
+    $builderSrc -match "OUT \+ '\.staging'" -and
+    $builderSrc -match 'renameSync\(STAGE, OUT\)' -and
+    -not ($builderSrc -match '\.wintage-tmp-')
 )
 check 'struct: Invoke-CustomMutation holds the shared batch lock and surfaces contention' (
     $guiSrc -match 'function Invoke-CustomMutation' -and $guiSrc -match 'Enter-BatchLockShared' -and $guiSrc -match 'Exit-BatchLock' -and

@@ -42,10 +42,10 @@ const MUTATIONS = [
     "  if (!resolved.some(r => r.value)) {\n    return { state: 'unproven', why: 'token ' + wanted.join(' | ') + ' resolved to nothing on this page' };\n  }",
     "  if (!resolved.some(r => r.value)) {\n    return { state: 'themed', why: null };\n  }"],
   ['session coverage stops being decided over the whole session',
-    "  const requiredCoverageNotObserved = coverageNeeded.filter(id => !presentEver.has(id));",
+    "  const requiredCoverageNotObserved = applicableCoverageNeeded.filter(id => !presentEver.has(id));",
     "  const requiredCoverageNotObserved = [];"],
   ['a never-seen always-required contract stops failing the run',
-    "    if (s.contract === CONTRACT.ALWAYS && !presentEver.has(s.id)) requiredMissingEver.add(s.id);",
+    "      if (seen.length === 0 || applicableEver.has(mat.id)) requiredMissingEver.add(mat.id);",
     "    if (false) requiredMissingEver.add(s.id);"],
   // Anchored on the unproven HALF of the derivation, not on the whole statement:
   // T-388 split unresolvedAcceptance into an observed-but-unprovable half and a
@@ -61,8 +61,20 @@ const MUTATIONS = [
   // operator never opened and every assertion would still be satisfied -- which
   // is exactly what happened until T-388.
   ['a requested surface the operator never opened stops being unresolved',
-    "  const neverObservedAcceptance = [...ACCEPTANCE_SURFACES].filter(id => !presentEver.has(id));",
+    "  const neverObservedAcceptance = [...ACCEPTANCE_SURFACES].filter(id => {\n    if (presentEver.has(id)) return false;\n    // A session with no usable poll has opened nothing anywhere: every requested\n    // surface is unresolved, not just the ones a route would have judged.\n    if (seen.length === 0) return true;\n    if (requiredRoutesNeverVisited.includes(id)) return false;\n    if (!applicableEver.has(id)) return false;\n    if (COMPOSER_ACCEPTANCE_GROUP.includes(id) &&\n        COMPOSER_ACCEPTANCE_GROUP.some(x => presentEver.has(x))) return false;\n    return true;\n  });",
     "  const neverObservedAcceptance = [];"],
+  // The 2026-10-10 composer acceptance repair: an absent sibling used to be
+  // demanded per-id, so a correct single-variant shell read NON-ACCEPTING. The
+  // group exemption is the fix -- this restores the per-id demand and requires
+  // the A/B/C fixtures (sibling absent / current shell) to go red.
+  ['composer acceptance reverts to demanding every rollout variant per id',
+    "    if (COMPOSER_ACCEPTANCE_GROUP.includes(id) &&\n        COMPOSER_ACCEPTANCE_GROUP.some(x => presentEver.has(x))) return false;\n",
+    ""],
+  // Fixture F's negative half: without it the ownership-inheritance rule could
+  // be loosened to "ancestor has some colour" and a stock owner would inherit.
+  ['a transparent child inherits without its owner being observed and themed',
+    "    if (!anc || !anc.surfaceId || !themed.has(anc.surfaceId)) continue;",
+    "    if (!anc) continue;"],
   ['the assistant message loses its token expectation again',
     "  'assistant-message': '--chat-background-color',",
     "  assistant: '--chat-background-color',"],
@@ -111,8 +123,11 @@ const MUTATIONS = [
   ['malformed page report coerced into an all-clear',
     "function sanitizePageReport(raw) {\n  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.surfaces)) {\n    throw new Error('Malformed page report: expected an object with a surfaces array');\n  }",
     "function sanitizePageReport(raw) {\n  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.surfaces)) {\n    return { url_host: null, route: null, wintage: { stamped: false, sheets: 0 }, tokens: {}, surfaces: [] };\n  }"],
+  ['aggregation demands every route-scoped surface of a single-route session',
+    "  const applicableCoverageNeeded = coverageNeeded.filter(id => seen.length === 0 || applicableEver.has(id));",
+    "  const applicableCoverageNeeded = coverageNeeded;"],
   ['class-fragment selector allowed into the matrix',
-    "CURRENT_SIDEBAR + ' a, #app-shell-sidebar nav a",
+    "CURRENT_SIDEBAR + ' a, #app-shell-sidebar nav a, #app-shell-sidebar a[href^=\"/c/\"], #app-shell-sidebar a[href^=\"/g/\"]",
     "selector: '[class*=\"sidebar\"]'"],
   ['code block no longer probes ChatGPT-owned layout',
     "{ id: 'code-block', label: 'code block container', selector: '[data-markdown-copy=\"code-block\"]', contract: CONTRACT.COVERAGE, scope: SCOPE.CONVERSATION, props: DEFAULT_PROPS.concat(LAYOUT_PROPS) },",

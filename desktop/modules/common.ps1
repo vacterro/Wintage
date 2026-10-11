@@ -422,6 +422,39 @@ function Get-CustomContentDigest([string]$Palette) {
     return [BitConverter]::ToString($sha).Replace('-', '').ToLowerInvariant()
 }
 
+# W2-004 (SRC-063): a manifest entry written by a NEWER Vintage must survive an
+# older build re-applying the same target. The writer used to rebuild every entry
+# from nothing, so a field this build does not know -- a rollback path, a
+# forward-compatibility block, an extra per-item flag -- was deleted silently and
+# the loss only became visible when the newer build read the file back. Carry
+# every field this build does not OWN from the entry being replaced forward onto
+# the new one; an owned field is always taken from the new value, never the old.
+function Add-ManifestUnknownFields($existing, $entry, [string[]]$owned) {
+    if ($null -eq $existing) { return $entry }
+    $names = if ($existing -is [System.Collections.IDictionary]) { @($existing.Keys) } else { @($existing.PSObject.Properties.Name) }
+    foreach ($name in $names) {
+        $name = [string]$name
+        if ($owned -contains $name) { continue }
+        if ($entry.ContainsKey($name)) { continue }
+        $entry[$name] = if ($existing -is [System.Collections.IDictionary]) { $existing[$name] } else { $existing.PSObject.Properties[$name].Value }
+    }
+    return $entry
+}
+
+# The recorded multi-item entry whose path matches, so its unknown per-item
+# fields can be carried onto the replacement for the SAME location. A path that
+# is not in the old set is a genuinely new item and has nothing to carry.
+function Get-ManifestItemForPath($entry, [string]$path) {
+    if ($null -eq $entry) { return $null }
+    $items = Get-ManifestField $entry 'items'
+    if ($null -eq $items) { return $null }
+    foreach ($item in @($items)) {
+        $itemPath = Get-ManifestField $item 'path'
+        if ($null -ne $itemPath -and [string]$itemPath -eq $path) { return $item }
+    }
+    return $null
+}
+
 function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $payloadVersion) {
     $lock = Enter-ManifestLock
     try {
@@ -441,6 +474,11 @@ function Set-ManifestEntry($target, $palette, $resolvedPath, $appVersion, $paylo
         # silently recording a digest-less custom entry.
         $digest = Get-CustomContentDigest -Palette $palette
         if ($digest) { $entry.contentDigest = $digest }
+        # W2-004 (SRC-063): carry forward what this build does not own. contentDigest
+        # is owned on purpose, so a custom publish that can no longer compute one
+        # REMOVES the stale value rather than preserving it.
+        $entry = Add-ManifestUnknownFields -existing (Get-ManifestField $m $target) -entry $entry `
+            -owned @('palette', 'path', 'appVersion', 'payloadVersion', 'applied', 'contentDigest')
         $m[$target] = $entry
         Write-Manifest $m
     } finally { Exit-ManifestLock $lock }
@@ -523,16 +561,29 @@ function Set-ManifestEntryMulti($target, $palette, [string[]]$paths, $appVersion
     $lock = Enter-ManifestLock
     try {
         $m = Read-Manifest
+        # W2-004 (SRC-063): the same forward-compatibility rule one level down. The
+        # owned SET is rebuilt from the new paths, but an unknown field on the ENTRY
+        # and an unknown field on an ITEM whose path matched keep their values --
+        # otherwise a newer build's per-item bookkeeping is erased by an older
+        # re-apply of the same target.
+        $existing = Get-ManifestField $m $target
+        $newItems = @($paths | ForEach-Object {
+            $newItem = @{ path = $_ }
+            [void](Add-ManifestUnknownFields -existing (Get-ManifestItemForPath $existing $_) -entry $newItem -owned @('path'))
+            $newItem
+        })
         $entry = @{
             palette       = $palette
             path          = if ($paths.Count) { $paths[0] } else { '' }
-            items         = @($paths | ForEach-Object { @{ path = $_ } })
+            items         = $newItems
             appVersion    = $appVersion
             payloadVersion = $payloadVersion
             applied       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         }
         $digest = Get-CustomContentDigest -Palette $palette
         if ($digest) { $entry.contentDigest = $digest }
+        $entry = Add-ManifestUnknownFields -existing $existing -entry $entry `
+            -owned @('palette', 'path', 'items', 'appVersion', 'payloadVersion', 'applied', 'contentDigest')
         $m[$target] = $entry
         Write-Manifest $m
     } finally { Exit-ManifestLock $lock }

@@ -180,6 +180,7 @@ function createRepainterContext(overrides = {}, customBody = repainterBody) {
     GLOBAL_CSS: '',
     injectStyle: () => {},
     injectLate: () => {},
+    paintRoot: () => {},
     DIAG: { hoverWalkThrows: 0, hoverAppendThrows: 0, sheetGenThrows: 0, shadowPierceThrows: 0, firstError: null },
     noteSuppressed: (kind, e) => {
       ctx.DIAG[kind]++;
@@ -210,7 +211,6 @@ return {
   requestLightSweep,
   pierceShadow,
   piercedRoots,
-  forceLapDeferredRoots,
   forceRootCursors,
   sheetSeen,
   lightDirty,
@@ -672,10 +672,10 @@ console.log('\n--- Test 5: New Root Mid-Lap ---');
   const lateRoot = makeRoot('late_shadow');
   rep.pierceShadow({ tagName: 'DIV', shadowRoot: lateRoot });
 
-  check('Test 5: new root is placed in deferred set during active lap',
-    rep.forceLapDeferredRoots.has(lateRoot), true);
-  check('Test 5: new root NOT yet in piercedRoots',
-    rep.piercedRoots.has(lateRoot), false);
+  check('Test 5: new root is registered in piercedRoots immediately',
+    rep.piercedRoots.has(lateRoot), true);
+  check('Test 5: new root is stamped for the NEXT lap, past this one',
+    lateRoot.__wintageLapId > rep.getForceLapWorkset().id, true);
 
   // Slice 2: completes initial lap (serves remaining 37 initial roots)
   rep.runSweeper(true);
@@ -684,8 +684,9 @@ console.log('\n--- Test 5: New Root Mid-Lap ---');
   check('Test 5: late root was NOT served in initial lap',
     servedRoots.includes('late_shadow'), false);
 
-  // The lap completion transferred deferred roots into piercedRoots
-  check('Test 5: deferred root now transferred to piercedRoots for next lap',
+  // The late root was already registered when it was pierced; the next lap
+  // picks it up from piercedRoots with a fresh iterator.
+  check('Test 5: late root stays registered for the next lap',
     rep.piercedRoots.has(lateRoot), true);
 
   // Drain lap 2 until late_shadow is served
@@ -1023,7 +1024,6 @@ console.log('\n--- Test 11: New Root Mid-Style-Lap ---');
   measure('Test 11: force lane active at context construction (boot)',
     rep.getForceLapActive());
   rep.setForceLapActive(false);
-  rep.forceLapDeferredRoots.clear();
 
   const INITIAL = 200;
   for (let i = 0; i < INITIAL; i++) {

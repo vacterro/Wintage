@@ -18,7 +18,9 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(ROOT, 'themes');
 const DESKTOP = path.join(ROOT, 'desktop');
-const OUT = path.join(DESKTOP, 'out');
+// W2-002 (T-396): the publication root is redirectable so a gate can drive the
+// real CLI against a throwaway tree instead of mutating the working one.
+const OUT = process.env.WINTAGE_BUILD_OUT || path.join(DESKTOP, 'out');
 const { loadAndValidatePacks } = require('./theme-schema.js');
 
 const VERSION = (/\/\/ @version\s+(\d+\.\d+\.\d+)/.exec(
@@ -52,6 +54,9 @@ const checkOnly = process.argv.includes('--check');
 // TEST SEAMS (never set in production):
 //  WINTAGE_TEST_LOCK_TIMEOUT_MS - contention timeout, default 15000
 //  WINTAGE_TEST_LOCK_STALE_MS   - malformed-lock recovery age, default 30000
+//  WINTAGE_BUILD_OUT            - publication root, default desktop/out (W2-002:
+//                                 lets a gate drive the real CLI against a throwaway tree)
+//  WINTAGE_TEST_FAIL_TARGET     - throw while rendering one target's files
 const appData = process.env.WINTAGE_APPDATA || path.join(process.env.APPDATA || '', 'Wintage');
 const GEN_LOCK = path.join(appData, 'build-generation.lock');
 function genLockTimeoutMs() { return process.env.WINTAGE_TEST_LOCK_TIMEOUT_MS ? parseInt(process.env.WINTAGE_TEST_LOCK_TIMEOUT_MS, 10) : 15000; }
@@ -205,18 +210,88 @@ function fill(node, tokens, ctx) {
   return node;
 }
 
+// ─── W2-002 (T-396): publication is whole-generation or nothing ────────────────
+// This used to be atomic per FILE: every emit() renamed one file straight into the
+// live desktop/out tree. A throw in the last target -- cinema4d validates a pack
+// before writing it, exactly the failure that arrives after nine targets are
+// already on disk -- therefore left electron/browser/windows at generation N+1 and
+// cinema4d at N. The mixed tree was permanent (only another full build repaired it)
+// and the unconditional `finally` had already handed the lock to a batch that read
+// both halves and cached them. The generation is now rendered into OUT.staging and
+// INSTALLED as one tree; anything that throws beforehand leaves the published tree
+// byte-identical to what it was. A crash between the swap's two steps is repaired
+// from the journal, because the stage only ever holds a COMPLETE generation.
+const STAGE = OUT + '.staging';
+const PUBLISH_JOURNAL = path.join(appData, 'build-publish.json');
+// TEST SEAM (never set in production): fail as if one target's validation threw,
+// so the gate can prove a late failure moves nothing.
+const FAIL_TARGET = process.env.WINTAGE_TEST_FAIL_TARGET || null;
+// A seam value that matches no rendered target injects nothing, so the run would
+// finish GREEN and a red control would read as "the defect is gone" (TEST-201
+// SCN-206). The firing is therefore recorded and asserted below.
+let failTargetFired = false;
+
+function writePublishJournal(phase) {
+  fs.mkdirSync(appData, { recursive: true });
+  fs.writeFileSync(PUBLISH_JOURNAL, JSON.stringify({
+    out: OUT, stage: STAGE, phase: phase, pid: process.pid, at: new Date().toISOString()
+  }) + '\n');
+}
+
+// An empty stage means the rendering produced nothing at all -- installing it
+// would delete the published generation and leave the applications with no theme.
+function seedStage() {
+  fs.rmSync(STAGE, { recursive: true, force: true });
+  fs.mkdirSync(STAGE, { recursive: true });
+}
+
+function installStagedGeneration() {
+  const entries = fs.existsSync(STAGE) ? fs.readdirSync(STAGE) : [];
+  if (!entries.length) throw new Error('refusing to install an empty stage: the staged generation holds no output');
+  writePublishJournal('installing');
+  fs.rmSync(OUT, { recursive: true, force: true });
+  fs.renameSync(STAGE, OUT);
+}
+
+function publishGeneration() {
+  installStagedGeneration();
+  fs.rmSync(PUBLISH_JOURNAL, { force: true });
+}
+
+function recoverInterruptedPublish() {
+  if (!fs.existsSync(PUBLISH_JOURNAL)) return;
+  let j = null;
+  try { j = JSON.parse(fs.readFileSync(PUBLISH_JOURNAL, 'utf8')); } catch (e) { j = null; }
+  const stage = (j && typeof j.stage === 'string' && j.stage !== OUT) ? j.stage : STAGE;
+  fs.rmSync(PUBLISH_JOURNAL, { force: true });
+  if (j && j.phase === 'installing' && fs.existsSync(stage)) {
+    // Finish the swap the interrupted process began. The stage holds a WHOLE
+    // generation, so installing it IS the repair: a half-installed live tree is
+    // replaced, never merged with.
+    fs.rmSync(OUT, { recursive: true, force: true });
+    fs.renameSync(stage, OUT);
+    console.log('build-desktop: recovered an interrupted publish - installed the staged generation into ' + path.relative(ROOT, OUT));
+  } else {
+    console.log('build-desktop: recovered an interrupted publish - discarded an incomplete stage');
+  }
+}
+
 function emit(file, content) {
   const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
-  if (prev === content) return;
-  if (checkOnly) { console.error('build-desktop: STALE ' + path.relative(ROOT, file)); stale++; return; }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  // W2-004: staged write -- no reader (batch child or concurrent build) can
-  // observe a half-published `desktop/out` tree when Save-Custom/regeneration
-  // races Apply.
-  const tmp = file + '.wintage-tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-  fs.writeFileSync(tmp, content);
-  fs.renameSync(tmp, file);
-  wrote++;
+  if (checkOnly) {
+    if (prev !== content) { console.error('build-desktop: STALE ' + path.relative(ROOT, file)); stale++; }
+    return;
+  }
+  if (FAIL_TARGET && path.relative(OUT, file).split(path.sep)[0] === FAIL_TARGET) {
+    failTargetFired = true;
+    throw new Error('injected late failure while rendering target ' + FAIL_TARGET + ' (' + path.relative(OUT, file) + ')');
+  }
+  // Every file is written, changed or not: the stage is installed as a whole
+  // tree, so anything omitted here would be REMOVED from the published tree.
+  const staged = path.join(STAGE, path.relative(OUT, file));
+  fs.mkdirSync(path.dirname(staged), { recursive: true });
+  fs.writeFileSync(staged, content);
+  if (prev !== content) wrote++;
 }
 
 // ─── TARGET: vscode ──────────────────────────────────────────────────────────
@@ -652,8 +727,11 @@ function buildCinema4D(packs) {
 // reflects themes/ exactly.
 function prune(packs) {
   const live = new Set(packs.map(p => p.slug));
+  // W2-002: prune the staged tree being installed. --check has no stage, so it
+  // reads the live tree and reports instead of repairing.
+  const base = checkOnly ? OUT : STAGE;
   for (const target of ['electron', 'browser', 'obsidian', 'obs', 'betterdiscord', 'windows', 'qbittorrent', 'notepadplusplus', 'cinema4d']) {
-    const dir = path.join(OUT, target);
+    const dir = path.join(base, target);
     if (!fs.existsSync(dir)) continue;
     for (const slug of fs.readdirSync(dir)) {
       if (live.has(slug)) continue;
@@ -672,21 +750,47 @@ const packs = loadPacks();
 // publish B while a consuming batch pinned A. The lock is advisory to
 // --check, which only reads.
 let genLock = null;
+let failure = null;
 try {
   genLock = acquireGenLock();
-  buildVscode(packs);
-  buildElectron(packs);
-  buildBrowser(packs);
-  buildObsidian(packs);
-  buildObs(packs);
-  buildBetterDiscord(packs);
-  buildWindows(packs);
-  buildQbittorrent(packs);
-  buildNotepadPlusPlus(packs);
-  buildCinema4D(packs);
-  prune(packs);
+  if (!checkOnly) recoverInterruptedPublish();
+  if (!checkOnly) seedStage();
+  try {
+    buildVscode(packs);
+    buildElectron(packs);
+    buildBrowser(packs);
+    buildObsidian(packs);
+    buildObs(packs);
+    buildBetterDiscord(packs);
+    buildWindows(packs);
+    buildQbittorrent(packs);
+    buildNotepadPlusPlus(packs);
+    buildCinema4D(packs);
+    prune(packs);
+    if (!checkOnly) publishGeneration();
+  } catch (e) {
+    failure = e;
+    // The journal is written only once the swap has begun, so it is the marker
+    // for "the install itself died". A stage holding a COMPLETE generation is
+    // that case's repair material and must survive; anything else is debris.
+    if (!checkOnly && !fs.existsSync(PUBLISH_JOURNAL)) fs.rmSync(STAGE, { recursive: true, force: true });
+  }
 } finally {
   releaseGenLock(genLock);
+}
+
+if (failure) {
+  if (!checkOnly && fs.existsSync(PUBLISH_JOURNAL)) {
+    console.error('build-desktop: ' + failure.message + ' - the publication died mid-install; the next build finishes it from ' + path.relative(ROOT, PUBLISH_JOURNAL));
+  } else {
+    console.error('build-desktop: ' + failure.message + ' - the published tree was left at its previous whole generation');
+  }
+  process.exit(1);
+}
+
+if (FAIL_TARGET && !checkOnly && !failTargetFired) {
+  console.error('build-desktop: WINTAGE_TEST_FAIL_TARGET=' + FAIL_TARGET + ' matched no rendered target - the requested failure was never injected');
+  process.exit(1);
 }
 
 if (stale) { console.error('\n' + stale + ' output(s) out of date — run `node tools/build-desktop.js`'); process.exit(1); }

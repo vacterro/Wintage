@@ -26,14 +26,18 @@ without editing the protocol install:
      implements;
   5. every `evidence[].line_sha256` re-derives from the LIVE LOG shard line.
 
-CHECKS 1-4 are HARD and fail the gate. Check 5 is REPORTED, not fatal, and the
-distinction is load-bearing. `load_record` already verifies the integrity
+CHECKS 1-3 are HARD and fail the gate -- the engine's own loader, the settled
+chain, and the terminal hash. Checks 4 (writer provenance) and 5 (evidence
+drift) are REPORTED, not fatal, and the distinction is load-bearing.
+`load_record` already verifies the integrity
 digest, and the digest covers the evidence block -- so evidence drift can only
 come from the LOG moving underneath a correct record, never from a tampered
 record. A rotated shard leaves a perfectly intact acceptance whose cited line
 no longer resolves; that is an environmental fact to surface on every run, not
 evidence that the acceptance is corrupt. Making it fatal would train the reader
-to ignore the gate.
+to ignore the gate. Writer provenance is reported for the same reason: AD-000002's
+terminal receipt is booked under an operation no module implements, so a fatal
+verdict there would block the gate on exactly the defect T-312 exists to close.
 
 Exit 0 when every hard check passes. The JSON verdict on stdout is the report.
 
@@ -200,6 +204,35 @@ def supersession(root: Path, records: list[dict]) -> dict[str, dict]:
     return out
 
 
+def writer_issue(receipt: dict, rel: str) -> tuple[str, str] | None:
+    """Classify one settled receipt that touched an AD file. REPORTED, never fatal.
+
+    Two ways a write can fail to prove itself, and both have to be reachable or
+    the check is decoration:
+      UNREGISTERED_WRITER -- the operation is not one this protocol install
+        implements, so the write went through the generic journal CAS (T-312);
+      UNVERIFIED_WRITER -- the operation is real but the receipt carries no
+        verification policy, so nothing re-verified the bytes it wrote.
+    """
+    if receipt["operation"] not in ENGINE_OPERATIONS:
+        return (
+            "UNREGISTERED_WRITER",
+            f"{receipt['op_id']} wrote {rel} under operation "
+            f"{receipt['operation']!r}, which no protocol module implements; the "
+            "write therefore went through the generic journal CAS instead of a "
+            "closed domain writer",
+        )
+    if receipt["verification_policy"] in (None, "", "none"):
+        return (
+            "UNVERIFIED_WRITER",
+            f"{receipt['op_id']} is a registered operation "
+            f"({receipt['operation']}) but carries "
+            f"verification_policy={receipt['verification_policy']!r}, so nothing "
+            "re-verified the record bytes it wrote",
+        )
+    return None
+
+
 def verify_record(root: Path, ad_path: Path, accepted_debt, hard: list, findings: list,
                   history: dict, supersedes: dict) -> dict:
     ref = ad_path.stem
@@ -331,31 +364,16 @@ def verify_record(root: Path, ad_path: Path, accepted_debt, hard: list, findings
         )
         # 5. writer provenance: REPORTED, not fatal.
         for receipt in chain:
-            if receipt["operation"] not in ENGINE_OPERATIONS:
+            issue = writer_issue(receipt, rel)
+            if issue:
                 findings.append(
                     {
                         "record_id": ref,
                         "op_id": receipt["op_id"],
                         "operation": receipt["operation"],
                         "created_at": receipt["created_at"],
-                        "issue": "UNREGISTERED_WRITER",
-                        "detail": (
-                            f"{receipt['op_id']} wrote {rel} under operation "
-                            f"{receipt['operation']!r}, which no protocol module implements; the "
-                            "write therefore went through the generic journal CAS instead of a "
-                            "closed domain writer"
-                        ),
-                    }
-                )
-            elif receipt["verification_policy"] in (None, "", "none") and receipt["operation"] not in ENGINE_OPERATIONS:
-                findings.append(
-                    {
-                        "record_id": ref,
-                        "op_id": receipt["op_id"],
-                        "operation": receipt["operation"],
-                        "created_at": receipt["created_at"],
-                        "issue": "UNVERIFIED_WRITER",
-                        "detail": f"{receipt['op_id']} carries verification_policy=none",
+                        "issue": issue[0],
+                        "detail": issue[1],
                     }
                 )
 
@@ -419,6 +437,29 @@ def self_test() -> int:
     live = b"payload"
     expect("the journal hash shape is sha256 truncated to 16 hex",
            len(_sha16(live)) == 16 and _sha16(live) == _sha16(b"payload") and _sha16(live) != _sha16(b"payloa"))
+
+    # Writer provenance has TWO branches and both must be reachable. The second
+    # one was not: its elif re-tested the negation the if had already tested, so
+    # an engine-registered writer with no verification policy was silently
+    # accepted -- which is the live state of BOTH accepted_debt.register
+    # receipts in this project (verification_policy "none").
+    def issue_of(receipt: dict) -> str:
+        got = writer_issue(receipt, "AD-000001.json")
+        return got[0] if got else ""
+
+    valid_receipt = {
+        "op_id": "accepted_debt.register-1e452f4f7758",
+        "operation": "accepted_debt.register",
+        "verification_policy": "full",
+    }
+    expect("a registered, verified writer is silent", issue_of(valid_receipt) == "")
+    expect("a registered writer with no verification policy is reported",
+           issue_of(dict(valid_receipt, verification_policy="none")) == "UNVERIFIED_WRITER")
+    expect("an unregistered writer is reported",
+           issue_of(dict(valid_receipt, operation="accepted_debt_rebind")) == "UNREGISTERED_WRITER")
+    expect("the two writer branches are mutually exclusive, not nested-away",
+           issue_of(dict(valid_receipt, operation="accepted_debt_rebind", verification_policy="none"))
+           == "UNREGISTERED_WRITER")
 
     # Supersession: a strict subset under the same rule/authority is claimed by
     # its superset; a same-size or disjoint set is not, and a different rule is

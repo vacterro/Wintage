@@ -548,9 +548,10 @@ async function main() {
     const s = W.summarize(settingsPoll);
     check('R10 a Settings poll with no composer produces no missing-contract failure',
       s.missing.length === 0, JSON.stringify(s.missing));
-    check('R10 the conversation surfaces are inapplicable, not merely absent',
+    check('R10 fixture G: the conversation surfaces are inapplicable on Settings, not merely absent',
       ['composer-root', 'composer-body', 'prompt-editor'].every(id => s.notApplicable.includes(id)) &&
-      s.notApplicable.includes('user-message') && s.notApplicable.includes('code-block'),
+      s.notApplicable.includes('user-message') && s.notApplicable.includes('code-block') &&
+      !s.missing.some(m => ['composer-root', 'composer-body', 'prompt-editor'].includes(m.id)),
       JSON.stringify(s.notApplicable));
     // The converse: a conversation poll must not demand the Settings surfaces.
     const chatPoll = W.sanitizePageReport(report([
@@ -595,7 +596,12 @@ async function main() {
     // menu and settings-nav used to carry it and both LEFT the list on 2026-10-04 on
     // live evidence, and a copy would have kept asserting they are still unprovable
     // -- which is the exact drift this check exists to catch.
-    const guessedId = W.DECLARED_UNPROVEN_ACCEPTANCE[0];
+    // DECLARED_UNPROVEN_ACCEPTANCE is empty since the 2026-10-10 T-359
+    // retirement (nav-project left ACCEPTANCE with it), so fall back to the
+    // first matrix surface that still carries no token -- same derive-never-
+    // hard-code rule as R2b, applied to the next subject in line.
+    const guessedId = W.DECLARED_UNPROVEN_ACCEPTANCE[0] ||
+      (W.SURFACES.find(x => !W.SURFACE_TOKENS[x.id]) || {}).id;
     const guessedSel = (W.SURFACES.find(x => x.id === guessedId) || {}).selector || '#x';
     const menuSeen = W.sanitizePageReport(report([
       surface({ id: guessedId, selector: guessedSel, style: { backgroundColor: W95_BG } })
@@ -616,7 +622,23 @@ async function main() {
     const menuWrong = W.sanitizePageReport(report([
       surface({ id: 'menu', selector: '[role="menu"]', style: { backgroundColor: STOCK_BG } })
     ]));
-    const agg = W.aggregateWatch([menuSeen, settingsSeen, menuWrong]);
+    // The rule under test -- "an UNPROVEN surface the operator REQUESTED makes
+    // the run non-accepting", plus its console marker -- is keyed to ACCEPTANCE
+    // membership, and since the 2026-10-10 T-359 retirement no unproven surface
+    // is a member (every requested id now carries a token). Enroll the probe id
+    // for exactly this block: the rule is membership-driven, so a roster-derived
+    // subject would silently stop testing anything the day the roster emptied.
+    // The aggregation freezes unresolvedAcceptance at build time, so the build
+    // itself must happen inside the window; renderConsole reads membership live.
+    W.ACCEPTANCE_SURFACES.add(guessedId);
+    let agg, vU, consoleU;
+    try {
+      agg = W.aggregateWatch([menuSeen, settingsSeen, menuWrong]);
+      vU = W.watchVerdict(agg);
+      consoleU = W.renderConsole(menuSeen, W.summarize(menuSeen));
+    } finally {
+      W.ACCEPTANCE_SURFACES.delete(guessedId);
+    }
     check('R11 a surface still without a token is reported UNPROVEN, not themed',
       W.summarize(menuSeen).unproven.length === 1 && agg.unprovenEver.includes(guessedId) &&
       !agg.observedEver.includes(guessedId),
@@ -627,12 +649,12 @@ async function main() {
     check('R11 a menu under the product\'s own overlay token is a MISMATCH when painted wrong',
       agg.mismatchedEver.includes('menu') && !agg.unprovenEver.includes('menu'),
       JSON.stringify({ m: agg.mismatchedEver, u: agg.unprovenEver }));
-    check('R11 an unproven requested surface makes the run NON-ACCEPTING',
-      W.watchVerdict(agg).accept === false &&
-      W.watchVerdict(agg).unresolvedAcceptance.includes(guessedId),
-      JSON.stringify(W.watchVerdict(agg)));
+    check('R11 fixture H: a requested surface seen but unproven makes the run NON-ACCEPTING',
+      vU.accept === false &&
+      vU.unresolvedAcceptance.includes(guessedId),
+      JSON.stringify(vU));
     check('R11 the console render flags an unproven requested surface explicitly',
-      /REQUESTED FOR ACCEPTANCE -- NOT ACCEPTING/.test(W.renderConsole(menuSeen, W.summarize(menuSeen))));
+      /REQUESTED FOR ACCEPTANCE -- NOT ACCEPTING/.test(consoleU));
     // A fully proven session is the only thing that accepts. Built from the
     // real matrix rather than a hand-picked pair, so "everything the operator
     // was asked to open was seen and judged" is what is actually asserted --
@@ -692,42 +714,169 @@ async function main() {
           acceptance: W.ACCEPTANCE_SURFACES.has(id),
           contract: (W.SURFACES.find(x => x.id === id) || {}).contract
         }))));
-      const sessionWithout = (drop) => {
+      const sessionWith = (cfg) => {
         const lent2 = {};
         for (const id of W.DECLARED_UNPROVEN_ACCEPTANCE) {
           lent2[id] = W.SURFACE_TOKENS[id];
           W.SURFACE_TOKENS[id] = '--chat-background-color';
         }
+        const drop = (cfg && cfg.drop) || [];
+        const at = (cfg && cfg.at) || {};
         const built = W.aggregateWatch([W.sanitizePageReport(report(W.SURFACES
           .filter(s => !drop.includes(s.id))
-          .map(s => surface({
+          .map(s => surface(Object.assign({
             id: s.id, label: s.label, selector: s.selector,
             required: s.contract === W.CONTRACT.ALWAYS,
             routeMatched: s.route ? true : undefined,
             style: { backgroundColor: valueFor(s.id) }
-          }))))]);
+          }, at[s.id] || {})))) )]);
         for (const id of Object.keys(lent2)) {
           if (lent2[id] === undefined) delete W.SURFACE_TOKENS[id]; else W.SURFACE_TOKENS[id] = lent2[id];
         }
-        return W.watchVerdict(built);
+        return Object.assign(W.watchVerdict(built), { agg: built });
       };
-      const bothGone = sessionWithout(COMPOSER_PAIR);
-      check('R11 a requested surface that was NEVER observed is unresolved, not a pass',
+      const sessionWithout = (drop) => sessionWith({ drop });
+      // Fixtures A-D: composer acceptance is SEMANTIC coverage of one feature
+      // (COMPOSER_ACCEPTANCE_GROUP), not simultaneous presence of mutually
+      // exclusive rollout variants.
+      check('R11 the composer acceptance group is declared and every member is an acceptance surface',
+        W.COMPOSER_ACCEPTANCE_GROUP.includes('composer-root') &&
+        W.COMPOSER_ACCEPTANCE_GROUP.includes('composer-body') &&
+        W.COMPOSER_ACCEPTANCE_GROUP.includes('prompt-editor') &&
+        W.COMPOSER_ACCEPTANCE_GROUP.every(id => W.ACCEPTANCE_SURFACES.has(id)),
+        JSON.stringify(W.COMPOSER_ACCEPTANCE_GROUP));
+      const bothGone = sessionWithout(['composer-root', 'composer-body', 'prompt-editor']);
+      check('R11 fixture D: no composer at all on a conversation route is unresolved, not a pass',
         bothGone.accept === false && bothGone.unresolvedAcceptance.includes('composer-root') &&
         bothGone.unresolvedAcceptance.includes('composer-body'),
         JSON.stringify(bothGone));
-      // One at a time, because reconcileComposerPair deliberately lets the member
-      // a variant does not paint read as transparent -- a sibling being PRESENT is
-      // not the same as this one having been observed, and the old gate confused
-      // the two by ignoring presence entirely.
-      for (const id of COMPOSER_PAIR) {
-        const oneGone = sessionWithout([id]);
-        check('R11 and the same holds for one composer member alone (' + id + ')',
-          oneGone.accept === false && oneGone.unresolvedAcceptance.includes(id),
-          JSON.stringify(oneGone));
-      }
+      // One variant at a time: the sibling a variant's shell does not render is
+      // an implementation detail, never unresolved work -- a correct page
+      // rendering only the painted member must accept.
+      const rootOnly = sessionWithout(['composer-body']);
+      check('R11 fixture A: legacy root-painted composer with its sibling absent accepts',
+        rootOnly.accept === true, JSON.stringify(rootOnly));
+      const bodyOnly = sessionWithout(['composer-root']);
+      check('R11 fixture B: legacy body-painted composer with its sibling absent accepts',
+        bodyOnly.accept === true, JSON.stringify(bodyOnly));
+      // Fixture C: today's shell renders NEITHER legacy variant. Its composer is
+      // the role=textbox editor, transparent over an opaque container the probe
+      // identified as a matrix surface, and that surface is observed and themed
+      // in the same report. The inheritance is decided by WHICH element owns the
+      // pixels -- ancestor.surfaceId -- not by which colour it computes to.
+      const currentShell = sessionWith({
+        drop: ['composer-root', 'composer-body'],
+        at: {
+          'prompt-editor': {
+            style: { backgroundColor: 'rgba(0, 0, 0, 0)' },
+            ownership: { transparent: true, opaqueAncestor: { tag: 'div', backgroundColor: W95_BG, surfaceId: 'app-scroll-container' } }
+          }
+        }
+      });
+      check('R11 fixture C: current-shell editor with a verified themed owner and no legacy variants accepts',
+        currentShell.accept === true, JSON.stringify(currentShell));
+      // Fixtures E-F: presence without theming must still fail -- colour and
+      // ownership are judged per-surface no matter how the group is satisfied.
+      const stockBody = sessionWith({ at: { 'composer-body': { style: { backgroundColor: STOCK_BG } } } });
+      check('R11 fixture E: a present but stock-coloured composer makes the run non-accepting',
+        stockBody.accept === false && stockBody.unresolvedAcceptance.length === 0 &&
+        stockBody.agg.mismatchedEver.includes('composer-body') &&
+        stockBody.reasons.length > 0, JSON.stringify(stockBody));
+      const stockOwner = sessionWith({
+        drop: ['composer-body'],
+        at: {
+          'composer-root': { style: { backgroundColor: STOCK_BG } },
+          'prompt-editor': {
+            style: { backgroundColor: 'rgba(0, 0, 0, 0)' },
+            ownership: { transparent: true, opaqueAncestor: { tag: 'div', backgroundColor: STOCK_BG, surfaceId: 'composer-root' } }
+          }
+        }
+      });
+      check('R11 fixture F: a transparent editor over a stock-coloured owner stays non-accepting, both named',
+        stockOwner.accept === false &&
+        stockOwner.agg.mismatchedEver.includes('prompt-editor') &&
+        stockOwner.agg.mismatchedEver.includes('composer-root'),
+        JSON.stringify(stockOwner));
       check('R11 and the full page still accepts -- the demand is scoped to what was asked for',
         sessionWithout([]).accept === true, JSON.stringify(sessionWithout([])));
+    }
+    // The transparent-owner inheritance fixtures. The rule they pin is the one
+    // that decides ownership for the CURRENT shell's editor, which renders none
+    // of the legacy composer variants: a transparent child may inherit only when
+    // the probe identified its actual opaque ancestor as a matrix surface AND
+    // that surface is observed themed in the same report. Colour alone must
+    // never decide it -- an ancestor that matches no measured surface, or a
+    // stock owner, must not inherit because an unrelated themed element shares
+    // its rgb. Fixtures A-G cover the decision surface of that rule. All are
+    // built through summarize directly (not the full session builder) because
+    // the question here is per-report ownership, not session aggregation.
+    {
+      const OWNER_TOKENS = {
+        '--chat-background-color': W95_BG,
+        '--composer-background-color': W95_BG,
+        '--color-token-side-bar-background': W95_BG
+      };
+      const ownerReport = (cfg) => W.sanitizePageReport({
+        route: '/c/:id',
+        tokens: OWNER_TOKENS,
+        surfaces: [
+          { id: 'app-scroll-container', label: 'scroll container', selector: 'main', required: true, present: true, count: 1, style: { backgroundColor: W95_BG } },
+          { id: 'sidebar', label: 'sidebar', selector: '#app-shell-sidebar', required: true, present: true, count: 1, style: { backgroundColor: W95_BG } },
+          { id: 'composer-root', label: 'composer root', selector: '[data-composer-dark]', required: false, present: true, count: 1, style: { backgroundColor: W95_BG } },
+          Object.assign({ id: 'prompt-editor', label: 'prompt editor', selector: '[role="textbox"]', required: true, present: true, count: 1, style: { backgroundColor: 'rgba(0, 0, 0, 0)' } }, cfg.editor || {})
+        ]
+      });
+      const editorOf = (s) => s.observed.some(o => o.id === 'prompt-editor');
+      const editorMismatch = (s) => s.mismatches.some(m => m.id === 'prompt-editor');
+      // A: the correct current-shell shape -- the editor's opaque ancestor IS the
+      // app-scroll-container, which is themed. Inheritance accepted.
+      const fixtureA = W.summarize(ownerReport({
+        editor: { ownership: { transparent: true, opaqueAncestor: { tag: 'main', backgroundColor: W95_BG, surfaceId: 'app-scroll-container' } } }
+      }));
+      check('R11 fixture A: current-shell editor over its verified themed ancestor accepts',
+        editorOf(fixtureA) && !editorMismatch(fixtureA), JSON.stringify(fixtureA));
+      // B: the legacy composer-root variant -- the map's declared owner is
+      // themed, so the transparent editor inherits through the map, not the walk.
+      const fixtureB = W.summarize(ownerReport({
+        editor: { ownership: { transparent: true, opaqueAncestor: { tag: 'div', backgroundColor: W95_BG, surfaceId: 'composer-root' } } }
+      }));
+      check('R11 fixture B: legacy composer-root themed keeps the transparent editor accepted',
+        editorOf(fixtureB) && !editorMismatch(fixtureB), JSON.stringify(fixtureB));
+      // C: same map path, composer-body variant.
+      const fixtureC = W.summarize(ownerReport({
+        editor: { ownership: { transparent: true, opaqueAncestor: { tag: 'div', backgroundColor: W95_BG, surfaceId: 'composer-root' } } }
+      }));
+      check('R11 fixture C: legacy composer-body themed keeps the transparent editor accepted',
+        editorOf(fixtureC) && !editorMismatch(fixtureC), JSON.stringify(fixtureC));
+      // D: the owner the probe identified is present but NOT themed (stock) --
+      // inheritance refused, the editor stays a mismatch.
+      const fixtureD = W.summarize(ownerReport({
+        editor: { ownership: { transparent: true, opaqueAncestor: { tag: 'main', backgroundColor: STOCK_BG, surfaceId: 'app-scroll-container' } } }
+      }));
+      check('R11 fixture D: transparent editor over an unthemed identified owner is refused',
+        !editorOf(fixtureD) && editorMismatch(fixtureD), JSON.stringify(fixtureD));
+      // E: an unrelated themed surface paints the SAME rgb as the editor's stock
+      // ancestor. The ancestor is not a measured surface, so colour identity with
+      // the sidebar must NOT let the editor inherit.
+      const fixtureE = W.summarize(ownerReport({
+        editor: { ownership: { transparent: true, opaqueAncestor: { tag: 'div', backgroundColor: W95_BG, surfaceId: null } } }
+      }));
+      check('R11 fixture E: an ancestor sharing rgb with an unrelated themed surface does not inherit',
+        !editorOf(fixtureE) && editorMismatch(fixtureE), JSON.stringify(fixtureE));
+      // F: the ancestor is an unknown (unmeasured) element whose colour coincides
+      // with a themed surface. Still no inheritance -- no surfaceId to trust.
+      const fixtureF = W.summarize(ownerReport({
+        editor: { ownership: { transparent: true, opaqueAncestor: { tag: 'section', backgroundColor: 'rgb(20, 20, 24)', surfaceId: null } } }
+      }));
+      check('R11 fixture F: an unknown owner with coincidentally matching rgb is refused',
+        !editorOf(fixtureF) && editorMismatch(fixtureF), JSON.stringify(fixtureF));
+      // G: an opaque verified owner with the correct semantic token. The editor is
+      // transparent and its ancestor is the themed composer-root surface.
+      const fixtureG = W.summarize(ownerReport({
+        editor: { ownership: { transparent: true, opaqueAncestor: { tag: 'div', backgroundColor: W95_BG, surfaceId: 'composer-root' } } }
+      }));
+      check('R11 fixture G: transparent editor over an opaque verified themed owner accepts',
+        editorOf(fixtureG) && !editorMismatch(fixtureG), JSON.stringify(fixtureG));
     }
     // A surface painted by its container is transparent on a CORRECT page, and
     // transparent on a stock one too -- so the allowance has to be conditional on
@@ -820,6 +969,172 @@ async function main() {
       W.SURFACE_TOKENS.menu = savedMenu;
     }
   }
+
+  // ── R15: aggregation is route-aware, not matrix-blind ────────────────────
+  // The defect: aggregateWatch unioned every COVERAGE and ALWAYS surface over the
+  // whole matrix without asking which route each poll was on, so a Settings-only
+  // run failed for never opening the composer, a conversation-only run failed for
+  // never opening Settings, and a session that never visited a required route had
+  // no way to say so. Route applicability now travels with the session: a surface
+  // is demanded only on a route where it applies, never-visited routes land in
+  // their own bucket, and a session with no usable poll still fails with every
+  // request named.
+  {
+    const valueFor = (id) => {
+      const t = W.SURFACE_TOKENS[id];
+      const name = Array.isArray(t) ? t[0] : t;
+      return (report([]).tokens[name]) || W95_BG;
+    };
+    // Build a report for one route. A surface that does not apply on that route
+    // is recorded the way the real probe records it: present:false with
+    // routeOnly:true, which is what the pathname non-match produces.
+    const onRoute = (route, paintOf, skipIds) => {
+      const skip = new Set(skipIds || []);
+      const r = W.sanitizePageReport(report(W.SURFACES.map(s => {
+        const conv = s.scope === W.SCOPE.CONVERSATION;
+        const sett = s.scope === W.SCOPE.SETTINGS;
+        const applies = s.route
+          ? s.route.test(route)
+          : (conv ? !W.isSettingsRoute(route) : (sett ? W.isSettingsRoute(route) : true));
+        if (!applies || skip.has(s.id)) {
+          return surface({ id: s.id, label: s.label, selector: s.selector, present: false, count: 0, style: null, routeOnly: true });
+        }
+        return surface({
+          id: s.id, label: s.label, selector: s.selector,
+          required: s.contract === W.CONTRACT.ALWAYS,
+          routeMatched: s.route ? true : undefined,
+          style: { backgroundColor: paintOf(s) }
+        });
+      })));
+      r.route = route;
+      return r;
+    };
+
+    // 1. Settings-only: the composer contract is inapplicable, not missing.
+    const settingsOnly = W.aggregateWatch([onRoute('/settings/general', s => valueFor(s.id))]);
+    check('R15 a Settings-only session does not fail for the composer contract',
+      settingsOnly.requiredMissingEver.length === 0 &&
+      settingsOnly.neverObservedAcceptance.length === 0 &&
+      W.watchVerdict(settingsOnly).accept === true,
+      JSON.stringify({ m: settingsOnly.requiredMissingEver, n: settingsOnly.neverObservedAcceptance }));
+    check('R15 and the inapplicable conversation surfaces are reported applicable-to-nothing, not missed',
+      settingsOnly.notApplicable.every(id => {
+        const s = W.SURFACES.find(x => x.id === id); return s;   // every id is a real matrix entry
+      }) && settingsOnly.notApplicable.includes('prompt-editor') &&
+      settingsOnly.notApplicable.includes('user-message'),
+      JSON.stringify(settingsOnly.notApplicable));
+
+    // 2. Conversation-only: the Settings set is inapplicable, not missing, and
+    // the never-visited route is named in its own bucket.
+    const chatOnly = W.aggregateWatch([onRoute('/c/:id', s => valueFor(s.id))]);
+    check('R15 a conversation-only session does not fail for the Settings surfaces',
+      chatOnly.requiredMissingEver.length === 0 &&
+      chatOnly.neverObservedAcceptance.length === 0 &&
+      W.watchVerdict(chatOnly).accept === true,
+      JSON.stringify({ m: chatOnly.requiredMissingEver, n: chatOnly.neverObservedAcceptance }));
+    check('R15 the Settings route the operator never visited is its own bucket, not a failure',
+      ['settings-page', 'settings-nav', 'customize'].every(id => chatOnly.requiredRoutesNeverVisited.includes(id)) &&
+      chatOnly.notApplicable.includes('settings-page') &&
+      W.watchVerdict(chatOnly).accept === true,
+      JSON.stringify(chatOnly.requiredRoutesNeverVisited));
+
+    // 3. An applicable composer that is missing on a conversation route still
+    // fails, under both reasons: the acceptance request and the ALWAYS contract.
+    const noComposer = W.aggregateWatch([onRoute('/c/:id', s => valueFor(s.id),
+      ['composer-root', 'composer-body', 'prompt-editor'])]);
+    check('R15 an applicable composer missing on a conversation route fails',
+      W.watchVerdict(noComposer).accept === false &&
+      noComposer.requiredMissingEver.includes('prompt-editor') &&
+      noComposer.neverObservedAcceptance.includes('composer-root') &&
+      noComposer.neverObservedAcceptance.includes('composer-body'),
+      JSON.stringify({ m: noComposer.requiredMissingEver, n: noComposer.neverObservedAcceptance }));
+
+    // 4. A composer that opens and is painted a stock colour fails as a
+    // MISMATCH, which is stronger than "never seen" -- the two must not merge.
+    const stockComposer = W.aggregateWatch([onRoute('/c/:id', s => s.id === 'composer-root' ? STOCK_BG : valueFor(s.id))]);
+    check('R15 an applicable composer painted a stock colour fails as a mismatch',
+      W.watchVerdict(stockComposer).accept === false &&
+      stockComposer.mismatchedEver.includes('composer-root') &&
+      stockComposer.neverObservedAcceptance.length === 0,
+      JSON.stringify({ m: stockComposer.mismatchedEver, n: stockComposer.neverObservedAcceptance }));
+
+    // 5. A mixed session, every applicable surface themed, accepts.
+    const mixed = W.aggregateWatch([
+      onRoute('/c/:id', s => valueFor(s.id)),
+      onRoute('/settings/general', s => valueFor(s.id))
+    ]);
+    check('R15 a mixed session with every applicable surface themed accepts',
+      W.watchVerdict(mixed).accept === true &&
+      mixed.requiredCoverageNotObserved.length === 0 &&
+      mixed.unresolvedAcceptance.length === 0,
+      JSON.stringify({ k: mixed.requiredCoverageNotObserved, u: mixed.unresolvedAcceptance }));
+
+    // 6. A mismatch seen once must survive later healthy polls.
+    const leakedChat = onRoute('/c/:id', s => s.id === 'sidebar' ? STOCK_BG : valueFor(s.id));
+    const healedChat = onRoute('/c/:id', s => valueFor(s.id));
+    const healedAfter = W.aggregateWatch([leakedChat, healedChat]);
+    check('R15 a mismatch observed once stays non-accepting after later healthy polls',
+      W.watchVerdict(healedAfter).accept === false &&
+      healedAfter.mismatchedEver.includes('sidebar') &&
+      healedAfter.observedEver.includes('sidebar'),
+      JSON.stringify(healedAfter));
+
+    // 7. Zero observations: a session that proved nothing cannot accept, and
+    // names every request rather than reporting empty buckets.
+    const nothing = W.aggregateWatch([]);
+    check('R15 zero observations is non-accepting and names every missed request',
+      W.watchVerdict(nothing).accept === false &&
+      nothing.requiredCoverageNotObserved.length > 0 &&
+      nothing.unresolvedAcceptance.length > 0,
+      JSON.stringify({ k: nothing.requiredCoverageNotObserved.length, u: nothing.unresolvedAcceptance.length }));
+
+    // 8. Route applicability itself: the two flanking scopes on the correct
+    // route, the third verified.
+    const convS = W.SURFACES.find(s => s.id === 'user-message');
+    const settS = W.SURFACES.find(s => s.id === 'settings-nav');
+    check('R15 the matrix still declares the scopes the route-awareness rests on',
+      convS && convS.scope === W.SCOPE.CONVERSATION && settS && settS.scope === W.SCOPE.SETTINGS,
+      JSON.stringify({ conv: convS && convS.scope, sett: settS && settS.scope }));
+    check('R15 and surfaceAppliesFromRoute marks only the right scope on each route',
+      W.surfaceAppliesFromRoute(convS, '/settings/general') === false &&
+      W.surfaceAppliesFromRoute(convS, '/c/:id') === true &&
+      W.surfaceAppliesFromRoute(settS, '/settings/general') === true &&
+      W.surfaceAppliesFromRoute(settS, '/c/:id') === false,
+      'route scoping is wrong at the matrix level');
+    // ── R16: the explicit full-session acceptance mode ─────────────────────
+    // The default modes above stay route-scoped on purpose: a Settings-only or
+    // conversation-only diagnostic run is legitimate work and accepts. The FULL
+    // session is the acceptance contract the operator asked for -- both route
+    // families visited -- so an omitted family is NON-ACCEPTING and named, and
+    // the names arrive in the machine-readable report the CLI emits.
+    const fullVerdictChatOnly = W.watchVerdict(chatOnly, { fullSession: true });
+    check('R16 a full session that never visited Settings is NON-ACCEPTING and names the family',
+      fullVerdictChatOnly.accept === false &&
+      fullVerdictChatOnly.reasons.some(r => r.indexOf('Settings route family was never visited') >= 0),
+      JSON.stringify(fullVerdictChatOnly.reasons));
+    const fullVerdictSettingsOnly = W.watchVerdict(settingsOnly, { fullSession: true });
+    check('R16 a full session that never visited the conversation family is NON-ACCEPTING and names the family',
+      fullVerdictSettingsOnly.accept === false &&
+      fullVerdictSettingsOnly.reasons.some(r => r.indexOf('conversation route family was never visited') >= 0),
+      JSON.stringify(fullVerdictSettingsOnly.reasons));
+    check('R16 and the never-visited required routes are named in the reason list',
+      fullVerdictChatOnly.reasons.some(r => r.indexOf('settings-page') >= 0) &&
+      fullVerdictSettingsOnly.reasons.some(r => r.indexOf('conversation route family was never visited') >= 0),
+      JSON.stringify({ c: fullVerdictChatOnly.reasons, s: fullVerdictSettingsOnly.reasons }));
+    const fullVerdictMixed = W.watchVerdict(mixed, { fullSession: true });
+    check('R16 a full session that visited both families with everything themed accepts',
+      fullVerdictMixed.accept === true, JSON.stringify(fullVerdictMixed.reasons));
+    check('R16 and the route families are carried on the aggregation for the CLI report',
+      mixed.conversationRouteVisited === true && mixed.settingsRouteVisited === true &&
+      chatOnly.conversationRouteVisited === true && chatOnly.settingsRouteVisited === false &&
+      settingsOnly.settingsRouteVisited === true && settingsOnly.conversationRouteVisited === false &&
+      Array.isArray(chatOnly.visitedRoutes) && chatOnly.visitedRoutes.length === 1,
+      JSON.stringify({ m: [mixed.conversationRouteVisited, mixed.settingsRouteVisited] }));
+    check('R16 the default mode is unchanged: the same conversation-only run still accepts without --full-session',
+      W.watchVerdict(chatOnly).accept === true && W.watchVerdict(settingsOnly).accept === true,
+      'route-scoped diagnostics must not become failures by default');
+  }
+
 
   // ── R12: attribution cannot leave the theme switched off ──────────────────
   // The probe DISABLES Wintage's own stylesheets to attribute the cascade. With

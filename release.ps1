@@ -30,6 +30,28 @@ function Git-Safe {
     return $code
 }
 
+# W2-003: the release keeps TWO stores in step -- the tracked source and the
+# git-ignored desktop generation derived from it. A failed release must return
+# BOTH to the pre-release state, or a rerun ships a source at N with a generated
+# tree at N+1. The pre-repair rollback restored only what git tracks, so the
+# generated tree kept the half-built generation and nothing noticed: the ignored
+# tree is exactly the one the *next* batch consumes.
+function Restore-PreReleaseState([string]$worktreeRef, [string]$indexRef, [bool]$generated) {
+    if ((Git-Safe restore "--source=$worktreeRef" --worktree -- .) -ne 0 -or
+        (Git-Safe restore "--source=$indexRef" --staged -- .) -ne 0) {
+        throw 'release rollback failed: pre-release tracked worktree and index could not be restored'
+    }
+    # Only an abort that had already STARTED generating has a generated tree to
+    # undo; a pre-generation abort changed nothing there, and rewriting it would
+    # contradict its own "NOTHING was changed" message.
+    if ($generated) {
+        & node (Join-Path $PSScriptRoot 'tools/build-desktop.js')
+        if ($LASTEXITCODE -ne 0) {
+            throw 'release rollback failed: the desktop themes could not be re-derived from the restored source - run tools/build-desktop.js by hand'
+        }
+    }
+}
+
 # T-232: the same two belts, for the calls whose VALUE is needed.
 #
 # Git-Safe above was written for exactly this hazard and every fire-and-forget
@@ -102,6 +124,9 @@ $branchRef = 'refs/heads/main'
 # COMMIT exists. Any failure before that restores the exact pre-release worktree
 # and index, so a rerun recomputes the SAME version without losing user edits.
 $prepared = $false
+# W2-003: raised the moment the ignored generation is touched, so the catch
+# knows whether the generated tree has to be re-derived as well.
+$generated = $false
 $snapshotCommit = ((Git-Read stash create 'wintage release pre-state') -join '').Trim()
 if ($LASTEXITCODE -ne 0) { throw 'could not snapshot the pre-release tracked worktree and index' }
 $snapshotIndex = if ($snapshotCommit) { "$snapshotCommit^2" } else { $headCommit }
@@ -231,6 +256,10 @@ try {
     # version is read from the header line this script just bumped -- so a --check
     # would fail on EVERY release by construction. Build instead: the version bump
     # is the reason it is stale, and the fix is deterministic.
+    # W2-003: from here on the ignored tree is part-modified, so a later abort
+    # owes it a re-derivation (the flag is raised BEFORE the first generated write,
+    # never after the build call).
+    $generated = $true
     node (Join-Path $PSScriptRoot 'tools/build-desktop.js')
     if ($LASTEXITCODE -ne 0) { throw "Building the desktop themes failed - release aborted" }
 
@@ -299,10 +328,10 @@ try {
         # W2-009: restore every tracked file the preparation mutated so a rerun
         # retries the SAME version (untracked files were refused at preflight, so
         # restoring tracked files returns the tree to its exact pre-release state).
-        if ((Git-Safe restore "--source=$snapshotWorktree" --worktree -- .) -ne 0 -or
-            (Git-Safe restore "--source=$snapshotIndex" --staged -- .) -ne 0) {
-            throw 'release rollback failed: pre-release tracked worktree and index could not be restored'
-        }
+        # W2-003: and, when generation had already started, re-derive the ignored
+        # desktop tree from the restored source -- a tracked-only restore would
+        # leave source at N and the generated tree at N+1.
+        Restore-PreReleaseState $snapshotWorktree $snapshotIndex $generated
         Write-Host "release aborted before the release commit: the versioned files were restored to their pre-release state - fix the cause and rerun (it will bump the SAME version)." -ForegroundColor Yellow
     }
     throw

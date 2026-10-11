@@ -38,6 +38,9 @@ const USERSCRIPT = fs.readFileSync(path.join(ROOT, 'wintage.user.js'), 'utf8');
 const SHIM = fs.readFileSync(path.join(ROOT, 'desktop', 'targets', 'electron', 'shim.cjs'), 'utf8');
 
 let bad = 0;
+// PERF-001 (SRC-063): the attribute lane's retained-state cap, read from the
+// real source so the fixture cannot drift from the shipped bound.
+const ATTRIBUTE_CAP = Number((USERSCRIPT.match(/const ATTRIBUTE_PENDING_CAP = (\d+)/) || [])[1]) || 2000;
 // R012: lazy budget-const reader (the SCROLL_FIX budgets are regexed out of
 // the real shim source when the fixtures below run).
 const budgetConsts = () => ({
@@ -171,6 +174,11 @@ function makeDom(counters) {
     debounceTimer: null,
     attrCooldown: new WeakMap(),
     ADDED_NODE_BUDGET: 500,
+    attributePending: new Set(),
+    attributeOverflowed: false,
+    ATTRIBUTE_PENDING_CAP: ATTRIBUTE_CAP,
+    startAttributeLane: () => { },
+    finishAttributeLane: () => { },
     stylesDirty: false,
     process: () => { stats.processCalls++; },
     flushWrites: () => { },
@@ -253,7 +261,12 @@ function makeDom(counters) {
       setTimeout: (fn) => { fn(); return 1; }, clearTimeout: () => { },
       repainterSuspended: false, noteMutationPressure: () => false,
       pendingMuts: [], debounceTimer: null, attrCooldown: new WeakMap(),
-      ADDED_NODE_BUDGET: 500, stylesDirty: stylesDirty0,
+      ADDED_NODE_BUDGET: 500,
+    attributePending: new Set(),
+    attributeOverflowed: false,
+    ATTRIBUTE_PENDING_CAP: ATTRIBUTE_CAP,
+    startAttributeLane: () => { },
+    finishAttributeLane: () => { }, stylesDirty: stylesDirty0,
       process: () => { stats.processCalls++; }, flushWrites: () => { },
       requestForceSweep: () => { stats.forceRequests++; },
       requestLightSweep: () => { }, markLightDirty: () => { },
@@ -345,6 +358,11 @@ function makeDom(counters) {
     debounceTimer: null,
     attrCooldown: new WeakMap(),
     ADDED_NODE_BUDGET: 500,
+    attributePending: new Set(),
+    attributeOverflowed: false,
+    ATTRIBUTE_PENDING_CAP: ATTRIBUTE_CAP,
+    startAttributeLane: () => { },
+    finishAttributeLane: () => { },
     stylesDirty: false,
     process: () => { stats.processCalls++; },
     flushWrites: () => { },
@@ -395,21 +413,42 @@ function makeDom(counters) {
   const ctx = {
     console, document, Set, Map,
     setTimeout: (fn) => { fn(); return 1; },
+    performance: { now: () => 0 },
     repainterSuspended: false,
     CSS_ONLY_MODE: false,
     piercedRoots,
     forceRootCursors,
+    SHADOW_PRUNE_ROOT_BUDGET: 64,
+    SHADOW_PRUNE_STEP_MS: 0,
     SHADOW_OBS_OPTS: { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] },
     shadowObserver: {
       observe(root, opts) { obs.observed.push({ root, opts }); },
       disconnect() { obs.disconnects++; },
       takeRecords() { obs.taken++; return pendingRecords; }
     },
+    // The migration stages survivors onto a REPLACEMENT observer, so the class
+    // has to be real here: the rebuilt registration is the thing under test.
+    MutationObserver: class {
+      constructor(cb) { this.cb = cb; }
+      observe(root, opts) { obs.observed.push({ root, opts }); }
+      disconnect() { obs.disconnects++; }
+      takeRecords() { return []; }
+    },
+    finishShadowPrune: () => { },
+    addWorkPressure: () => { },
+    noteRepaintSkipped: () => { },
+    onShadowStagedMutations: () => { },
     onMutations(records) { stats.onMutations++; stats.deliveredRecords += records.length; }
   };
   vm.createContext(ctx);
   vm.runInContext([
     'let shadowPruneQueued = false;',
+    'let shadowPrunePhase = 0;',
+    'let shadowPruneScanIter = null;',
+    'let shadowPruneStageIter = null;',
+    'let shadowPruneRemovedAny = false;',
+    'let shadowMigrationActive = false;',
+    'let shadowStagedObserver = null;',
     sliceBlock(USERSCRIPT, '  function pruneShadowRegistry() {'),
     sliceBlock(USERSCRIPT, '  function requestShadowPrune() {'),
     'this.__prune = pruneShadowRegistry; this.__request = requestShadowPrune;'

@@ -57,6 +57,12 @@ const CURRENT_LIVE_HOOKS = [
     css: STAMP + ' [role="textbox"][contenteditable="true"]',
     inspector: '[role="textbox"][contenteditable="true"]',
     surface: 'prompt-editor'
+  },
+  {
+    label: 'current-live assistant message content',
+    css: STAMP + ' [data-markdown-text-style="assistant-message"]',
+    inspector: '[data-markdown-text-style="assistant-message"]',
+    surface: 'assistant-message'
   }
 ];
 

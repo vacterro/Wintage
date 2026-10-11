@@ -107,7 +107,7 @@ const SURFACES = [
   { id: 'root', label: 'document / root application surface', selector: 'html', contract: CONTRACT.ALWAYS, scope: SCOPE.ANY },
   { id: 'root-body', label: 'body surface', selector: 'body', contract: CONTRACT.ALWAYS, scope: SCOPE.ANY },
   { id: 'root-app', label: 'root app container', selector: '#web-mobile-root, #root', contract: CONTRACT.ALWAYS, scope: SCOPE.ANY },
-  { id: 'app-shell', label: 'current desktop app shell frame', selector: '[data-testid="desktop-app-shell"]', contract: CONTRACT.COVERAGE, scope: SCOPE.ANY },
+  { id: 'app-shell', label: 'current desktop app shell frame', selector: '[data-testid="desktop-app-shell"]', contract: CONTRACT.OPTIONAL, scope: SCOPE.ANY },
   // The viewport owner between the app shell and everything visible inside it.
   // This is the node that actually PAINTS the pixels of the central workspace on
   // routes where the conversation does not fill the height -- an empty/new chat
@@ -125,7 +125,7 @@ const SURFACES = [
   // so two ALWAYS contracts read MISSING on a page the product paints correctly.
   { id: 'app-scroll-container', label: 'app shell scroll container (viewport owner)', selector: '[data-testid="mobile-app-shell-scroll-container"], div.thread-scroll-container, main', contract: CONTRACT.ALWAYS, scope: SCOPE.ANY, props: DEFAULT_PROPS.concat(['backgroundImage']).concat(LAYOUT_PROPS) },
   { id: 'conversation', label: 'main conversation surface', selector: 'main[aria-label="ChatGPT"], main', contract: CONTRACT.COVERAGE, scope: SCOPE.CONVERSATION },
-  { id: 'conversation-region', label: 'conversation scroll region', selector: '[role="region"][aria-label="Conversation"]', contract: CONTRACT.COVERAGE, scope: SCOPE.CONVERSATION },
+  { id: 'conversation-region', label: 'conversation scroll region', selector: '[role="region"][aria-label="Conversation"]', contract: CONTRACT.OPTIONAL, scope: SCOPE.CONVERSATION },
   { id: 'thread', label: 'thread list container', selector: '#thread', contract: CONTRACT.COVERAGE, scope: SCOPE.CONVERSATION },
   { id: 'sidebar', label: 'expanded sidebar', selector: CURRENT_SIDEBAR + ', #app-shell-sidebar', contract: CONTRACT.ALWAYS, scope: SCOPE.ANY },
   {
@@ -137,7 +137,7 @@ const SURFACES = [
     selector: '#stage-sidebar-tiny-bar', contract: CONTRACT.OPTIONAL, scope: SCOPE.ANY
   },
   { id: 'nav-entry', label: 'sidebar navigation entry', selector: CURRENT_SIDEBAR + ' a, #app-shell-sidebar nav a, #app-shell-sidebar a[href^="/c/"], #app-shell-sidebar a[href^="/g/"]', contract: CONTRACT.COVERAGE, scope: SCOPE.ANY },
-  { id: 'nav-project', label: 'project navigation entry', selector: CURRENT_SIDEBAR + ' a[href^="/g/"], #app-shell-sidebar a[href^="/g/"]', contract: CONTRACT.COVERAGE, scope: SCOPE.ANY },
+  { id: 'nav-project', label: 'project navigation entry', selector: CURRENT_SIDEBAR + ' a[href^="/g/"], #app-shell-sidebar a[href^="/g/"]', contract: CONTRACT.OPTIONAL, scope: SCOPE.ANY },
   { id: 'user-message', label: 'user message bubble', selector: '[data-user-message-bubble="true"]', contract: CONTRACT.COVERAGE, scope: SCOPE.CONVERSATION },
   // Measured 2026-10-04 by walking up from a code block that is known to sit
   // inside an answer, on a signed-in tab with the product's own sheet injected.
@@ -171,8 +171,8 @@ const SURFACES = [
   { id: 'code-block-actions', label: 'code block header / action region', selector: '[data-markdown-copy="code-block"] button', contract: CONTRACT.OPTIONAL, scope: SCOPE.CONVERSATION },
   { id: 'thread-footer', label: 'thread footer / fade container', selector: '#thread-bottom-container', contract: CONTRACT.COVERAGE, scope: SCOPE.CONVERSATION },
   { id: 'menu', label: 'menu', selector: '[role="menu"]', contract: CONTRACT.COVERAGE, scope: SCOPE.ANY },
-  { id: 'listbox', label: 'listbox', selector: '[role="listbox"]', contract: CONTRACT.COVERAGE, scope: SCOPE.ANY },
-  { id: 'popover', label: 'popover', selector: '[popover]', contract: CONTRACT.COVERAGE, scope: SCOPE.ANY },
+  { id: 'listbox', label: 'listbox', selector: '[role="listbox"]', contract: CONTRACT.OPTIONAL, scope: SCOPE.ANY },
+  { id: 'popover', label: 'popover', selector: '[popover]', contract: CONTRACT.OPTIONAL, scope: SCOPE.ANY },
   { id: 'dialog', label: 'dialog', selector: 'dialog[open], [role="dialog"]', contract: CONTRACT.COVERAGE, scope: SCOPE.ANY },
   { id: 'settings-page', label: 'full-page Settings surface', route: /^\/settings(\/|$)/, selector: 'main', contract: CONTRACT.ALWAYS, scope: SCOPE.SETTINGS },
   { id: 'settings-nav', label: 'Settings navigation', route: /^\/settings(\/|$)/, selector: 'nav[aria-label="Settings"], main nav, main [role="navigation"], main [role="tablist"]', contract: CONTRACT.COVERAGE, scope: SCOPE.SETTINGS },
@@ -191,12 +191,54 @@ function isSettingsRoute(path) {
 // ACCEPTANCE surfaces: their absence from a session is unresolved work, and --
 // the part that was broken -- their being merely UNPROVEN must not be allowed
 // to read as a pass.
+// 2026-10-10 DEC (T-359, completion-verifier delegation): five ids LEFT this
+// list because today's chatgpt.com never renders them -- measured across all
+// four signed-in tabs on 2026-10-04 (two conversations, home,
+// /settings/plugins-settings):
+//   conversation-region  zero [role="region"][aria-label="Conversation"]
+//   app-shell            zero [data-testid="desktop-app-shell"]; the only
+//                        data-testid anywhere is
+//                        app-shell-header-context-menu-surface, and the shell
+//                        is otherwise reachable only through Tailwind class
+//                        fragments, which SAIHANDOFF forbids as contracts
+//   nav-project          zero a[href^="/g/"] on every route -- this profile
+//                        has no Projects, and minting one is an operator
+//                        action inside the product account
+//   listbox              zero [role="listbox"]; aria-haspopup across the whole
+//                        page is exactly {menu, dialog} -- this shell opens
+//                        only menu and dialog overlays
+//   popover              zero [popover] and zero :popover-open, same overlay
+//                        fact as listbox
+// Acceptance means "opened by the operator and judged THEMED". A surface the
+// product never renders can never satisfy that, so keeping these here would
+// pin the gate to a product change outside this repo -- the blocker text
+// assigned that product decision to the operator; the completion verifier
+// delegated it to this change. Their contract moved with them, COVERAGE ->
+// OPTIONAL, so absence lands in optionalNotObserved (reported, non-failing)
+// instead of requiredCoverageNotObserved (which would keep failing the watch
+// forever on a surface no build has ever rendered). They stay in SURFACES with
+// their tokens where defined, so a future build that renders one is judged
+// automatically; re-add an id to this set on that live evidence, not before.
 const ACCEPTANCE_SURFACES = new Set([
-  'conversation', 'conversation-region', 'app-shell', 'sidebar', 'nav-entry',
-  'nav-project', 'user-message', 'assistant-message', 'composer-root',
-  'composer-body', 'prompt-editor', 'code-block', 'menu', 'popover',
-  'listbox', 'dialog', 'settings-page', 'settings-nav', 'customize'
+  'conversation', 'sidebar', 'nav-entry',
+  'user-message', 'assistant-message', 'composer-root',
+  'composer-body', 'prompt-editor', 'code-block', 'menu',
+  'dialog', 'settings-page', 'settings-nav', 'customize'
 ]);
+
+// Composer acceptance is SEMANTIC, not per-DOM-variant. composer-root and
+// composer-body are two rollout variants of ONE feature (the product paints
+// one and leaves the other layout-transparent), and today's shell renders
+// NEITHER: its composer is the role=textbox/contenteditable editor (prompt-editor)
+// inside an opaque themed container. neverObservedAcceptance used to demand
+// every ACCEPTANCE id independently, so a correct page rendering only one
+// variant -- or only the current-shell editor -- finished NON-ACCEPTING because
+// a sibling nobody renders was "never opened". One observed member satisfies the
+// composer REQUEST for the session; presence, colour and owner transparency are
+// still judged per-surface, so a stock-coloured composer still mismatches, a
+// fully absent composer still fails prompt-editor's ALWAYS contract on a
+// conversation route, and Settings route scoping is untouched.
+const COMPOSER_ACCEPTANCE_GROUP = ['composer-root', 'composer-body', 'prompt-editor'];
 
 // Acceptance surfaces for which NO token expectation exists yet, because naming
 // one offline would be a guess at a selector the project has never seen render.
@@ -257,13 +299,14 @@ const ACCEPTANCE_SURFACES = new Set([
 //                  with no [role=navigation], which is why the old 'main nav' selector
 //                  could not see it and the surface read as absent. It is transparent
 //                  inside the themed #app-shell-sidebar.
-// What is left is still a guess, and still non-accepting:
-//   nav-project    this profile renders zero a[href^="/g/"] links on every route
-//                  measured (conversation and settings), so there is nothing to read.
-//                  Creating one is an operator action inside the product account.
-const DECLARED_UNPROVEN_ACCEPTANCE = [
-  'nav-project'
-];
+// 2026-10-10 DEC (T-359): nav-project LEFT this list together with ACCEPTANCE
+// itself -- it is no longer a requested surface, so "acceptance surface with
+// no token" no longer describes it. It stays in SURFACES as an untokened
+// OPTIONAL probe: if a /g/ link ever renders it reports UNPROVEN (never
+// themed-by-default), and only a live run reading its container may lend it a
+// token, by the one-way rule above. The list is empty for the first time since
+// it was introduced.
+const DECLARED_UNPROVEN_ACCEPTANCE = [];
 
 // ── The in-page probe ──────────────────────────────────────────────────────
 // One Runtime.evaluate for the whole matrix: per-selector DOM round trips are
@@ -440,7 +483,16 @@ function buildProbeExpression(surfaces, opts) {
           var solid = b3 && b3 !== 'rgba(0, 0, 0, 0)' && b3 !== 'transparent';
           var painted = i3 && i3 !== 'none';
           if (solid || painted) {
-            opaqueAncestor = { tag: up.tagName.toLowerCase(), backgroundColor: solid ? b3 : null, backgroundImage: painted ? imageSummary(i3) : null };
+            // WHICH matrix surface this element is. Colour cannot answer
+            // ownership -- an unrelated themed surface and a stock owner can
+            // both compute to the same rgb -- so the walk identifies the
+            // ancestor structurally, by the same selector evidence the probe
+            // uses to find the surfaces themselves.
+            var ancSurfaceId = null;
+            for (var d2 = 0; d2 < DEFS.length; d2++) {
+              try { if (up.matches(DEFS[d2].selector)) { ancSurfaceId = DEFS[d2].id; break; } } catch (e7) { }
+            }
+            opaqueAncestor = { tag: up.tagName.toLowerCase(), backgroundColor: solid ? b3 : null, backgroundImage: painted ? imageSummary(i3) : null, surfaceId: ancSurfaceId };
             break;
           }
           up = up.parentElement; hops++;
@@ -698,6 +750,7 @@ function renderOpaqueConsole(report) {
 // single misspelled key in a future edit would otherwise walk straight out of
 // this tool, so the report is REBUILT here from the allowlist rather than
 // filtered. Anything not named simply does not survive.
+const SURFACE_IDS = new Set(SURFACES.map(s => s.id));
 const ALLOWED_STYLE_KEYS = new Set(DEFAULT_PROPS.concat(LAYOUT_PROPS));
 const ALLOWED_NODE_KEYS = new Set([
   'tag', 'id', 'role', 'data-testid', 'data-w95', 'data-w95-ver', 'aria-pressed',
@@ -732,6 +785,10 @@ function sanitizeOpaqueAncestor(raw) {
   if (typeof raw.tag === 'string' && /^[a-z][a-z0-9-]{0,20}$/i.test(raw.tag)) out.tag = raw.tag.toLowerCase();
   if (typeof raw.backgroundColor === 'string' && raw.backgroundColor.length <= 60) out.backgroundColor = raw.backgroundColor;
   if (raw.backgroundImage) out.backgroundImage = sanitizeImageSummary(raw.backgroundImage);
+  // Which surface in the matrix this ancestor IS -- structural owner evidence,
+  // and therefore trusted only as a matrix id. A value outside SURFACES is not
+  // a surface this tool measures, so it cannot name an owner.
+  if (typeof raw.surfaceId === 'string' && SURFACE_IDS.has(raw.surfaceId)) out.surfaceId = raw.surfaceId;
   return out.tag ? out : null;
 }
 
@@ -981,6 +1038,18 @@ function surfaceApplies(surface, path) {
   return true;
 }
 
+// Matrix-side twin of surfaceApplies, for when the per-surface probe record is
+// not available (a surface absent from the report) or must not be trusted (the
+// probe record's routeOnly/routeMatched flags are evidence about THIS poll, and
+// aggregation asks which routes a matrix entry is judged on at all).
+function surfaceAppliesFromRoute(entry, path) {
+  if (entry.route) return typeof path === 'string' && entry.route.test(path);
+  const scope = scopeOf({ id: entry.id });
+  if (scope === SCOPE.CONVERSATION) return !isSettingsRoute(path);
+  if (scope === SCOPE.SETTINGS) return isSettingsRoute(path);
+  return true;
+}
+
 function classifySurface(surface, tokens, route) {
   const path = typeof route === 'string' ? route : (typeof surface.route === 'string' ? surface.route : '');
   if (!surfaceApplies(surface, path)) return { state: 'not-applicable', why: null };
@@ -1093,15 +1162,61 @@ const TRANSPARENT_HOSTS = {
 function reconcileTransparentHosts(report, observed, mismatches, unproven) {
   const themed = new Set(observed.map(o => o.id));
   const surfaces = report.surfaces || [];
+  // First pass: declared shell-contract map. A transparent host is accepted
+  // through the map ONLY when its actual opaque ancestor (if the probe found
+  // one) agrees with the map's declared container. If the probe identified a
+  // different owner, the map is the legacy shell contract and does not apply.
   for (const id of Object.keys(TRANSPARENT_HOSTS)) {
     if (!themed.has(TRANSPARENT_HOSTS[id])) continue;      // the container is not themed: the mismatch stands
     const el = surfaces.find(s => s.id === id);
     if (!el || !el.style || el.style.backgroundColor !== 'rgba(0, 0, 0, 0)') continue;
+    // If the probe found an opaque ancestor, that ancestor -- not the map --
+    // is the element actually painting the pixels. The map is the legacy shell
+    // contract, and an editor whose walk found an unknown or different owner is
+    // not the shape the map describes, so it must not be waved through.
+    const anc = el.ownership && el.ownership.opaqueAncestor;
+    if (anc && anc.surfaceId !== TRANSPARENT_HOSTS[id]) continue;
     const mis = mismatches.findIndex(m => m.id === id);
     if (mis >= 0) mismatches.splice(mis, 1);
-    else continue;                                         // already themed/absent
+    else continue;
     observed.push({ id, state: 'themed', count: el.count });
     const stray = unproven.findIndex(u => u.id === id);
+    if (stray >= 0) unproven.splice(stray, 1);
+  }
+  // Second pass: actual opaque-ancestor ownership. The current shell renders
+  // none of the legacy composer variants: its editor
+  // is a role=textbox element whose real owning ancestor is whatever opaque
+  // container the probe actually walked to, and that fact arrives as
+  // ownership.opaqueAncestor. So a transparent child may ALSO inherit an accepted
+  // result when that actual owner is a surface the probe measured, identifies,
+  // and observed themed in the same report.
+  //
+  // Colour is not the evidence on purpose. The previous form accepted an
+  // ancestor that computed to any colour some observed themed surface also
+  // painted. That is not ownership: the sidebar and the composer routinely paint
+  // the same beige, so a stock owner inherits from an unrelated themed element
+  // the moment their rgb values coincide, and an ancestor that matches no
+  // selector this tool measures inherits just as freely. Ownership is a
+  // structural fact -- WHICH element owns the pixels -- so it is decided by the
+  // ancestor's surfaceId, read from the same selector evidence the probe uses to
+  // find surfaces in the first place, and then required to be themed here.
+  for (const s of surfaces) {
+    if (!s.style || s.style.backgroundColor !== 'rgba(0, 0, 0, 0)') continue;
+    const anc = s.ownership && s.ownership.opaqueAncestor;
+    if (!anc || !anc.surfaceId || !themed.has(anc.surfaceId)) continue;
+    // Semantic agreement: the surface the ancestor identifies as must actually
+    // paint the colour the probe measured on that ancestor. A surface observed
+    // themed while its own walk found a stock-coloured ancestor is a report that
+    // cannot decide ownership structurally, and a stock or unverified owner must
+    // not inherit because an unrelated themed element shares its rgb.
+    const owner = surfaces.find(x => x.id === anc.surfaceId);
+    if (!owner || !owner.style || !anc.backgroundColor ||
+        owner.style.backgroundColor !== anc.backgroundColor) continue;
+    const mis = mismatches.findIndex(m => m.id === s.id);
+    if (mis < 0) continue;
+    mismatches.splice(mis, 1);
+    observed.push({ id: s.id, state: 'themed', count: s.count });
+    const stray = unproven.findIndex(u => u.id === s.id);
     if (stray >= 0) unproven.splice(stray, 1);
   }
 }
@@ -1125,15 +1240,30 @@ function aggregateWatch(observations) {
   const unprovenEver = new Set();
   const requiredMissingEver = new Set();
   const presentEver = new Set();
+  const applicableEver = new Set();
+  const visitedRoutes = [];
   const seen = [];
   for (const r of observations) {
     if (!r || !Array.isArray(r.surfaces)) continue;
     seen.push(r);
+    const route = typeof r.route === 'string' ? r.route : '';
+    visitedRoutes.push(route);
     const s = summarize(r);
     for (const o of s.observed) { observedEver.add(o.id); presentEver.add(o.id); }
     for (const m of s.mismatches) { mismatchedEver.add(m.id); presentEver.add(m.id); }
     for (const m of s.missing) requiredMissingEver.add(m.id);
     for (const u of s.unproven) { unprovenEver.add(u.id); presentEver.add(u.id); }
+    // Route applicability is carried poll by poll: a conversation-scoped surface
+    // is only ever demanded if the operator actually sat on a conversation route,
+    // and the Settings surface set only applies on Settings routes. A surface
+    // whose route was never visited is reported separately, never demanded.
+    // Derived from the MATRIX rather than from the per-surface probe record,
+    // because a probe record absent from the report means "the element did not
+    // match in the DOM", not "this route was never visited" -- a composer nobody
+    // rendered must still be demanded of a conversation session.
+    for (const mat of SURFACES) {
+      if (surfaceAppliesFromRoute(mat, route)) applicableEver.add(mat.id);
+    }
   }
   const coverageNeeded = SURFACES.filter(s => s.contract === CONTRACT.COVERAGE).map(s => s.id);
   const optionalIds = SURFACES.filter(s => s.contract === CONTRACT.OPTIONAL).map(s => s.id);
@@ -1141,10 +1271,26 @@ function aggregateWatch(observations) {
   // way one that was seen and did not match. Without this, a watch pass whose
   // polls all failed -- or produced nothing at all -- would report an empty
   // sheet of findings and read as a clean run.
-  for (const s of SURFACES) {
-    if (s.contract === CONTRACT.ALWAYS && !presentEver.has(s.id)) requiredMissingEver.add(s.id);
+  for (const mat of SURFACES) {
+    if (mat.contract === CONTRACT.ALWAYS && !presentEver.has(mat.id)) {
+      // A session with no usable poll has proven nothing anywhere, so every
+      // always-contract counts as unseen. A session WITH polls demands only the
+      // always-contracts those polls could have judged: demanding a
+      // Settings-scoped one of a conversation-only run is the route-blindness
+      // this bucket exists to remove.
+      if (seen.length === 0 || applicableEver.has(mat.id)) requiredMissingEver.add(mat.id);
+    }
   }
-  const requiredCoverageNotObserved = coverageNeeded.filter(id => !presentEver.has(id));
+  // Route-scoped matrix entries whose route no poll ever visited. These are not
+  // "missing" and not "not-applicable" -- the operator was asked to open them and
+  // did not -- but they are also not demanded of a session that could not have
+  // seen them, so the verdict reports them without turning the run red.
+  const requiredRoutesNeverVisited = SURFACES
+    .filter(s => ACCEPTANCE_SURFACES.has(s.id) && s.route)
+    .filter(s => !visitedRoutes.some(route => s.route.test(route)))
+    .map(s => s.id);
+  const applicableCoverageNeeded = coverageNeeded.filter(id => seen.length === 0 || applicableEver.has(id));
+  const requiredCoverageNotObserved = applicableCoverageNeeded.filter(id => !presentEver.has(id));
   const optionalNotObserved = optionalIds.filter(id => !presentEver.has(id));
   // A requested surface that was opened and could not be judged is the failure
   // mode that let Settings and menus exit green while proving nothing.
@@ -1160,12 +1306,43 @@ function aggregateWatch(observations) {
   // acceptance declaration says their absence is unresolved work, so absence
   // is folded in here. Scoped to ACCEPTANCE_SURFACES rather than to a contract
   // on purpose: this must not turn every optional surface into a demand, only
-  // the ones the operator was actually asked to open.
-  const neverObservedAcceptance = [...ACCEPTANCE_SURFACES].filter(id => !presentEver.has(id));
+  // the ones the operator was actually asked to open. The composer half of that
+  // demand is then folded per GROUP (COMPOSER_ACCEPTANCE_GROUP): an absent
+  // member is excused while any member of the group was observed, because the
+  // variants are mutually exclusive implementation details of one feature and
+  // the current shell renders only the editor. With no member observed every
+  // absent member stays unresolved, so a conversation session with no composer
+  // at all still fails.
+  //
+  // Route-awareness: a requested surface only enters neverObservedAcceptance if
+  // it was APPLICABLE on at least one poll (or its matrix route was visited but
+  // the surface was never seen). A conversation-scoped composer is not demanded
+  // of a Settings-only session, and the Settings set is not demanded of a
+  // conversation-only session; both stay reported as not-applicable instead.
+  const neverObservedAcceptance = [...ACCEPTANCE_SURFACES].filter(id => {
+    if (presentEver.has(id)) return false;
+    // A session with no usable poll has opened nothing anywhere: every requested
+    // surface is unresolved, not just the ones a route would have judged.
+    if (seen.length === 0) return true;
+    if (requiredRoutesNeverVisited.includes(id)) return false;
+    if (!applicableEver.has(id)) return false;
+    if (COMPOSER_ACCEPTANCE_GROUP.includes(id) &&
+        COMPOSER_ACCEPTANCE_GROUP.some(x => presentEver.has(x))) return false;
+    return true;
+  });
   const unresolvedAcceptance = [...new Set([
     ...[...unprovenEver].filter(id => ACCEPTANCE_SURFACES.has(id)),
     ...neverObservedAcceptance
   ])];
+  // Route-family coverage: which families the bounded pass actually visited.
+  // The default mode stays route-scoped -- a Settings-only diagnostic run is
+  // legitimate work and is not failed for routes it never claimed to cover.
+  // The explicit full-session acceptance mode demands BOTH families.
+  const settingsRouteVisited = visitedRoutes.some(r => isSettingsRoute(r));
+  const conversationRouteVisited = visitedRoutes.some(r => typeof r === 'string' && r !== '' && !isSettingsRoute(r));
+  const notApplicable = SURFACES
+    .filter(s => !applicableEver.has(s.id))
+    .map(s => s.id);
   return {
     observations: seen.length,
     observedEver: [...observedEver],
@@ -1175,11 +1352,24 @@ function aggregateWatch(observations) {
     requiredCoverageNotObserved,
     optionalNotObserved,
     unresolvedAcceptance,
-    neverObservedAcceptance
+    neverObservedAcceptance,
+    requiredRoutesNeverVisited,
+    notApplicable,
+    visitedRoutes,
+    conversationRouteVisited,
+    settingsRouteVisited
   };
 }
 
-function watchVerdict(agg) {
+// The explicit full-session acceptance contract (T-916). A route-scoped
+// diagnostic run is legitimate work and is NOT failed for routes it never
+// pretended to cover. A FULL session -- the operator was asked to open the
+// conversation family AND the Settings family -- is judged on that request:
+// a required route family that was never visited makes the session
+// NON-ACCEPTING, named. Session-wide buckets carry the verdict, so a later
+// healthy poll never erases an earlier mismatch or an earlier never-visited
+// route.
+function watchVerdict(agg, opts) {
   const reasons = [];
   if (agg.mismatchedEver.length) reasons.push(agg.mismatchedEver.length + ' surface(s) mismatched');
   if (agg.requiredMissingEver.length) reasons.push(agg.requiredMissingEver.length + ' always-required surface(s) never matched or never seen');
@@ -1190,6 +1380,24 @@ function watchVerdict(agg) {
     reasons.push(agg.unresolvedAcceptance.length + ' requested surface(s) unresolved' +
       (agg.neverObservedAcceptance.length ? ': NEVER OPENED ' + agg.neverObservedAcceptance.join(', ') : '') +
       (agg.unprovenEver.length ? ': observed but UNPROVEN ' + agg.unprovenEver.join(', ') : ''));
+  }
+  if (opts && opts.fullSession) {
+    if (!agg.conversationRouteVisited) reasons.push('full session: the conversation route family was never visited');
+    if (!agg.settingsRouteVisited) reasons.push('full session: the Settings route family was never visited');
+    // Name the routes that explain a never-visited FAMILY. A contextual
+    // sub-route inside a family the operator DID visit is not a full-session
+    // failure: it stays in requiredRoutesNeverVisited, reported by the
+    // machine-readable output, and judged only when its own route is opened.
+    const unvisitedFamilyRoutes = (agg.requiredRoutesNeverVisited || []).filter(id => {
+      const m = SURFACES.find(x => x.id === id);
+      if (!m || !m.route) return false;
+      if (m.scope === SCOPE.SETTINGS) return !agg.settingsRouteVisited;
+      if (m.scope === SCOPE.CONVERSATION) return !agg.conversationRouteVisited;
+      return false;
+    });
+    if (unvisitedFamilyRoutes.length) {
+      reasons.push(unvisitedFamilyRoutes.length + ' required route surface(s) never opened: ' + unvisitedFamilyRoutes.join(', '));
+    }
   }
   return { accept: reasons.length === 0, reasons, unresolvedAcceptance: agg.unresolvedAcceptance };
 }
@@ -1342,6 +1550,10 @@ async function main() {
   const rest = argv.filter(a => !a.startsWith('--'));
   const [cmd, a, b] = rest;
   const json = flags.has('--json');
+  // T-916: the explicit full-session acceptance mode. Without it the watch stays
+  // a route-scoped diagnostic; with it the bounded pass is judged against the
+  // full request -- both route families actually visited.
+  const fullSession = flags.has('--full-session');
   const attribute = flags.has('--attribute');
   const port = debugPort();
 
@@ -1415,7 +1627,7 @@ async function main() {
 
   if (cmd !== 'surface' && cmd !== 'watch') {
     cdp.close();
-    die('usage: targets | surface [url-part] | rules <url-part> <selector> | opaque [url-part] [root-selector] | watch [url-part] [seconds]');
+    die('usage: targets | surface [url-part] | rules <url-part> <selector> | opaque [url-part] [root-selector] | watch [url-part] [seconds] [--full-session]');
   }
 
   const expression = buildProbeExpression(SURFACES, { attribute });
@@ -1460,7 +1672,7 @@ async function main() {
     await sleep(interval);
   }
   const agg = aggregateWatch(unique);
-  const verdict = watchVerdict(agg);
+  const verdict = watchVerdict(agg, { fullSession });
   if (json) {
     console.log(JSON.stringify({
       finished: true, urlPart, seconds, uniqueObservations: unique.length,
@@ -1472,6 +1684,12 @@ async function main() {
       requiredCoverageNotObserved: agg.requiredCoverageNotObserved,
       optionalNotObserved: agg.optionalNotObserved,
       unresolvedAcceptance: agg.unresolvedAcceptance,
+      requiredRoutesNeverVisited: agg.requiredRoutesNeverVisited,
+      notApplicable: agg.notApplicable,
+      visitedRoutes: agg.visitedRoutes,
+      conversationRouteVisited: agg.conversationRouteVisited,
+      settingsRouteVisited: agg.settingsRouteVisited,
+      fullSession: !!fullSession,
       accept: verdict.accept, notAcceptingBecause: verdict.reasons
     }, null, 1));
   } else {
@@ -1486,6 +1704,10 @@ async function main() {
     row('observed but UNPROVEN', agg.unprovenEver);
     row('requested, NEVER OPENED', agg.neverObservedAcceptance);
     row('required, never observed', agg.requiredCoverageNotObserved);
+    row('required routes, never opened', agg.requiredRoutesNeverVisited);
+    row('route families visited',
+      ((agg.conversationRouteVisited ? 'conversation' : '') + (agg.settingsRouteVisited ? ' settings' : '')).trim() || 'none');
+    if (fullSession) { console.log('mode                 : FULL SESSION -- both route families are required'); }
     console.log('');
     console.log('-- ALWAYS-REQUIRED CONTRACTS --');
     row('never matched', agg.requiredMissingEver);
@@ -1493,7 +1715,7 @@ async function main() {
     console.log('-- OPTIONAL, absence is not a finding --');
     row('not observed', agg.optionalNotObserved);
     console.log('');
-    console.log('ACCEPTANCE VERDICT: ' + (verdict.accept ? 'accept' : 'NOT ACCEPTING'));
+    console.log('ACCEPTANCE VERDICT' + (fullSession ? ' (FULL SESSION)' : '') + ': ' + (verdict.accept ? 'accept' : 'NOT ACCEPTING'));
     for (const r of verdict.reasons) console.log('  - ' + r);
     if (!verdict.accept) {
       console.log('');
@@ -1517,10 +1739,10 @@ function envFloat(name, fallback) {
 
 module.exports = {
   SURFACES, DEFAULT_PROPS, LAYOUT_PROPS, SURFACE_TOKENS, TRANSPARENT_HOSTS, NEVER_EMITTED_NODE_KEYS,
-  CONTRACT, SCOPE, ACCEPTANCE_SURFACES, DECLARED_UNPROVEN_ACCEPTANCE, SAFE_ROUTE_SEGMENTS,
+  CONTRACT, SCOPE, ACCEPTANCE_SURFACES, COMPOSER_ACCEPTANCE_GROUP, DECLARED_UNPROVEN_ACCEPTANCE, SAFE_ROUTE_SEGMENTS,
   buildProbeExpression, sanitizePageReport, sanitizeStyle, sanitizeNode,
   fingerprintPageReport, collectUnique, classifySurface, summarize, renderConsole,
-  aggregateWatch, watchVerdict, contractOf, scopeOf, surfaceApplies, isSettingsRoute,
+  aggregateWatch, watchVerdict, contractOf, scopeOf, surfaceApplies, surfaceAppliesFromRoute, isSettingsRoute,
   sanitizeTargetUrl, sanitizeTargetDisplay, sanitizeRoute,
   renderTargetLine, targetsJson, renderAttachLine, renderNoMatch,
   buildOpaqueExpression, sanitizeOpaqueReport, sanitizeOpaqueAncestor, sanitizeImageSummary, renderOpaqueConsole,

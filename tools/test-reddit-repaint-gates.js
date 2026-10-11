@@ -123,7 +123,7 @@ const startSweepingBody = sliceBlock(src, '  function startSweeping() {');
 function runStartSweeping(opts) {
   const st = {
     forceSweeps: 0, timers: 0, injectLateCalls: 0, startObserversCalls: 0,
-    skipped: 0, attrs: {}, loadListeners: 0
+    skipped: 0, attrs: {}, loadListeners: 0, paintRootCalls: 0
   };
   const sandbox = {
     CSS_ONLY_MODE: opts.cssOnly,
@@ -131,6 +131,10 @@ function runStartSweeping(opts) {
     IS_CHATGPT: !!opts.isChatGPT,
     IS_TOP: true,
     noteRepaintSkipped() { st.skipped++; },
+    // paintRoot is the bounded root-attribute stamp the boot pass makes before
+    // anything else; it is not a DOM scan, so it is stubbed and counted rather
+    // than allowed to reach a real document.
+    paintRoot() { st.paintRootCalls++; },
     injectLate() { st.injectLateCalls++; },
     startObservers() { st.startObserversCalls++; },
     requestForceSweep() { st.forceSweeps++; },
@@ -148,6 +152,8 @@ function runStartSweeping(opts) {
 }
 
 const ssReddit = runStartSweeping({ cssOnly: true, isReddit: true });
+check('GATE 3 (Reddit/CSS-only): injection still calls paintRoot -- boot plus the one late cascade correction',
+  ssReddit.paintRootCalls, 2);
 check('GATE 3 (Reddit/CSS-only): no force pass requested', ssReddit.forceSweeps, 0);
 check('GATE 3 (Reddit/CSS-only): no timer scheduled (no 1.5s/3s settling pass)', ssReddit.timers, 0);
 check('GATE 3 (Reddit/CSS-only): the boot path still injects the late stylesheet once', ssReddit.injectLateCalls, 1);
@@ -169,6 +175,8 @@ check('GATE 3 (other high-churn/CSS-only): generic reason is kept for the other 
   ssOther.attrs['data-w95-perf-reason'], 'known-high-churn-host');
 
 const ssFull = runStartSweeping({ cssOnly: false });
+check('GATE 3 control (non-churn host): the boot pass stamps the root exactly once',
+  ssFull.paintRootCalls, 1);
 check('GATE 3 control (non-churn host): the SAME body DOES request a force pass',
   ssFull.forceSweeps, 1);
 check('GATE 3 control (non-churn host): the settling timer is scheduled',

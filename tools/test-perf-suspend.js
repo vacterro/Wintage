@@ -7,8 +7,8 @@
 // suspendRepainter's own contract says suspension is permanent for the page:
 // there is no future scheduler pass to drain or overwrite any owner. The
 // previous cleanup cleared piercedRoots / forceRootCursors / forceLapWorkset /
-// lightDirty but MISSED the style lane's strong owners -- forceLapDeferredRoots
-// and styleLapDeferredRoots (Sets that strongly own ShadowRoots), activeStyleTask
+// lightDirty but MISSED the style lane's strong owners -- styleLapDeferredRoots
+// (a Set that strongly owns ShadowRoots), activeStyleTask
 // (strongly owns its sheet), styleCursorRoot (owns the current Document/Shadow
 // root) and styleCursorRootIterator (a live iterator over them). A page that
 // tripped the breaker could therefore freeze a large dead DOM/CSSOM graph for
@@ -56,7 +56,7 @@ const suspendBody = sliceBlock(src, '  function suspendRepainter(reason) {');
 // named by a disposal action inside suspendRepainter. This is what fails a
 // future Set added without suspension coverage.
 const STRONG_OWNERS = [
-  'piercedRoots', 'forceRootCursors', 'forceLapDeferredRoots', 'styleLapDeferredRoots',
+  'piercedRoots', 'forceRootCursors', 'shadowStagedObserver', 'styleLapDeferredRoots',
   'lightDirty', 'activeStyleTask', 'styleCursorRoot', 'styleCursorRootIterator',
   'forceLapWorkset', 'pendingMuts'
 ];
@@ -69,14 +69,13 @@ for (const owner of STRONG_OWNERS) {
 
 function makeCtx() {
   const sentinel = (name) => ({ __sentinel: name });
-  const deferredA = sentinel('forceLapDeferredRoot');
   const deferredB = sentinel('styleLapDeferredRoot');
   const cursorRoot = sentinel('styleCursorRoot');
   const activeTask = { sheet: sentinel('activeSheet'), gen: 1, count: 5, mode: 'full', stack: [{ container: { length: 5 }, index: 2, length: 5 }] };
   const pierced = new Set([sentinel('pierced')]);
   const forceRootCursors = new Map([['k', sentinel('cursor')]]);
-  const forceLapDeferredRoots = new Set([deferredA]);
   const styleLapDeferredRoots = new Set([deferredB]);
+  const shadowStagedObserver = { takeRecords() { } , disconnect() { } };
   const lightDirty = new Set([sentinel('dirty')]);
   const pendingMuts = [sentinel('m1'), sentinel('m2')];
   const sheetSeen = new WeakMap();
@@ -95,12 +94,13 @@ function makeCtx() {
     document: doc,
     mainObserver: { disconnect() { disconnected.main++; } },
     shadowObserver: { disconnect() { disconnected.shadow++; } },
+    shadowStagedObserver,
     debounceTimer: 123, sweepTimer: 456, sweepPlannedAt: 999,
     pendingMuts, forcePassesOwed: 3,
     piercedRoots: pierced, forceRootCursors,
     forceLapWorkset: { docDone: true }, forceLapIndex: 4, forceLapRemaining: 2,
     lightDirty, forceLapActive: true,
-    forceLapDeferredRoots, styleLapDeferredRoots,
+    styleLapDeferredRoots,
     activeStyleTask: activeTask, styleCursorRoot: cursorRoot,
     styleCursorRootIterator: { next() { return { done: true }; } },
     styleCursorListIndex: 1, styleCursorSheetIndex: 7,
@@ -118,8 +118,8 @@ function makeCtx() {
   return {
     ctx, attrs, disconnected,
     owners: {
-      piercedRoots: pierced, forceRootCursors, forceLapDeferredRoots, styleLapDeferredRoots,
-      lightDirty, activeTask, cursorRoot, pendingMuts
+      piercedRoots: pierced, forceRootCursors, styleLapDeferredRoots,
+      lightDirty, activeTask, cursorRoot, pendingMuts, shadowStagedObserver
     }
   };
 }
@@ -131,12 +131,12 @@ console.log('--- PERF-003: suspension disposes every strong scheduler owner ---'
   check('suspension flag set', t.ctx.repainterSuspended, true);
   check('piercedRoots emptied', t.owners.piercedRoots.size, 0);
   check('forceRootCursors emptied', t.owners.forceRootCursors.size, 0);
-  check('forceLapDeferredRoots emptied', t.owners.forceLapDeferredRoots.size, 0);
   check('styleLapDeferredRoots emptied', t.owners.styleLapDeferredRoots.size, 0);
   check('lightDirty emptied', t.owners.lightDirty.size, 0);
   check('activeStyleTask nulled', t.ctx.activeStyleTask, null);
   check('styleCursorRoot nulled', t.ctx.styleCursorRoot, null);
   check('styleCursorRootIterator nulled', t.ctx.styleCursorRootIterator, null);
+  check('shadowStagedObserver released', t.ctx.shadowStagedObserver, null);
   check('forceLapWorkset nulled', t.ctx.forceLapWorkset, null);
   check('forceLapIndex reset', t.ctx.forceLapIndex, 0);
   check('forceLapRemaining reset', t.ctx.forceLapRemaining, 0);

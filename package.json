@@ -5,12 +5,12 @@
   "description": "Win95 dark theme for ChatGPT web / BetterDiscord / Electron / desktop targets",
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "devDependencies": {
     "playwright": "^1.62.1"
   },
   "scripts": {
-    "test": "pwsh tests/Run-Tests.ps1"
+    "test": "powershell -NoProfile -ExecutionPolicy Bypass -File tests/Run-Tests.ps1"
   }
 }

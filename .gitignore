@@ -63,8 +63,14 @@ Cached Theme.pak
 
 # node scaffolding is scratch here -- the tools run on plain node, no deps
 node_modules/
-package.json
-package-lock.json
+# package.json / package-lock.json are COMMITTED: the browser-test gates in
+# tests/Run-Tests.ps1 drive tools/test-*viewport*.js, test-chatgpt-*.js,
+# test-provider-image-preservation.js and test-x-interaction-safety.js, which
+# require('playwright'). Tracking the manifests makes `npm ci` reproduce that
+# dependency from a clean checkout; node_modules and the browser binaries
+# remain excluded.
+!package.json
+!package-lock.json
 
 # FreeBuff desktop app's own local data
 .freebuff/
