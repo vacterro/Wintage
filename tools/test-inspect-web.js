@@ -1079,6 +1079,34 @@ async function main() {
       healedAfter.observedEver.includes('sidebar'),
       JSON.stringify(healedAfter));
 
+    // 6b. The mirror image, and the one that bit the live gate: a poll taken
+    // before the page finished rendering matches NOTHING, so its per-poll
+    // `missing` list is simply "everything". Folding that into the session
+    // bucket -- which is where it used to go -- makes the session fail for
+    // surfaces a LATER poll rendered and themed, and on a loaded machine that
+    // is the first poll of every run.
+    const midParse = W.sanitizePageReport(report(W.SURFACES.map(s => surface({
+      id: s.id, label: s.label, selector: s.selector,
+      required: s.contract === W.CONTRACT.ALWAYS,
+      routeMatched: s.route ? true : undefined,
+      present: false, count: 0, visible: false, style: null, withoutWintage: null
+    }))));
+    midParse.route = '/c/:id';
+    const parsedLater = W.aggregateWatch([midParse, onRoute('/c/:id', s => valueFor(s.id))]);
+    check('R15 a mid-parse first poll does not permanently fail surfaces a later poll themed',
+      parsedLater.requiredMissingEver.length === 0 &&
+      parsedLater.observedEver.length > 0 &&
+      W.watchVerdict(parsedLater).accept === true,
+      JSON.stringify({ m: parsedLater.requiredMissingEver }));
+    // ...and the rule must not collapse into a blanket amnesty: a surface that
+    // NO poll rendered is still a miss.
+    const neverRendered = W.aggregateWatch([midParse,
+      onRoute('/c/:id', s => valueFor(s.id), ['prompt-editor'])]);
+    check('R15 a surface no poll rendered still fails after a mid-parse poll',
+      neverRendered.requiredMissingEver.includes('prompt-editor') &&
+      W.watchVerdict(neverRendered).accept === false,
+      JSON.stringify({ m: neverRendered.requiredMissingEver }));
+
     // 7. Zero observations: a session that proved nothing cannot accept, and
     // names every request rather than reporting empty buckets.
     const nothing = W.aggregateWatch([]);
