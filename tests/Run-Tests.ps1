@@ -79,14 +79,14 @@ if ($env:WINTAGE_TEST_NO_TRANSCRIPT -ne '1') {
 
 # T-916: one teardown for the borrowed browser-dependency scratch install.
 # Removes ONLY a scratch dir this suite itself retained -- a temp path whose
-# leaf starts with witage-deps-, never a user-owned node_modules -- and
+# leaf starts with wintage-deps-, never a user-owned node_modules -- and
 # restores NODE_PATH to the exact value the caller had. A cleanup failure is
 # reported as its own failure; the failure that sent the suite to the exit is
 # already recorded and is never hidden or replaced.
 function Reset-Browser-Scratch {
     if (-not $script:browserScratchPath) { return }
     $sp = $script:browserScratchPath
-    $owned = $sp -like ([System.IO.Path]::GetTempPath() + 'witage-deps-*')
+    $owned = $sp -like ([System.IO.Path]::GetTempPath() + 'wintage-deps-*')
     if (Test-Path -LiteralPath $sp) {
         if ($owned) {
             try {
@@ -96,7 +96,7 @@ function Reset-Browser-Scratch {
                 Assert-True $false "retained browser scratch install removed ($sp): $($_.Exception.Message)"
             }
         } else {
-            Write-Host "SKIP cleanup: $sp is not a suite-retained witage-deps-* scratch dir" -ForegroundColor Yellow
+            Write-Host "SKIP cleanup: $sp is not a suite-retained wintage-deps-* scratch dir" -ForegroundColor Yellow
         }
     }
     $script:browserScratchPath = ''
@@ -617,7 +617,7 @@ if ($browserDepsCode -eq 0 -and $browserDepsText -match 'SCRATCH_PATH:([^
         $sp = $null
         try { $sp = $script:browserScratchPath } catch { }
         if (-not $sp) { $sp = $ownedScratch }
-        if ($sp -and $sp -like ([System.IO.Path]::GetTempPath() + 'witage-deps-*')) {
+        if ($sp -and $sp -like ([System.IO.Path]::GetTempPath() + 'wintage-deps-*')) {
             try { Remove-Item -Recurse -Force -LiteralPath $sp -ErrorAction SilentlyContinue } catch { }
         }
     }
@@ -637,7 +637,6 @@ if ($browserDepsCode -ne 0) {
     Assert-True $true 'browser-deps delivery gate exits 0 (manifests tracked, npm ci + require(playwright) resolve from committed bytes)'
 }
 
-Write-Host "
 # (state preserved across the fixtures below: the real retained scratch stays
 # borrowed for the downstream Playwright gates and for Exit-Suite teardown)
 $redKeptNodePath = $env:NODE_PATH
@@ -648,8 +647,8 @@ $redKeptPriorSet = $script:priorNodePathSet
 # T-916 RED CONTROLS: the scratch lifecycle above is proved here, not assumed.
 # (a) the mechanics: a suite-retained scratch install is removed and NODE_PATH
 # is restored to the caller value, on a fixture that looks exactly like the
-# real retained path (temp + witage-deps-* + node_modules inside).
-$redScratch = Join-Path ([System.IO.Path]::GetTempPath()) ('witage-deps-redctl-' + [guid]::NewGuid().ToString('N'))
+# real retained path (temp + wintage-deps-* + node_modules inside).
+$redScratch = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-deps-redctl-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path (Join-Path $redScratch 'node_modules') -Force | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $redScratch 'proof.txt'), 'owned scratch fixture')
 $script:browserScratchPath = $redScratch
@@ -661,7 +660,7 @@ Assert-True (-not (Test-Path $redScratch)) 'RED cleanup: a suite-retained scratc
 Assert-True ($env:NODE_PATH -eq 'C:sentinelcaller-node-path') 'RED cleanup: NODE_PATH is restored to the caller value the suite found'
 # (b) the guard: a directory this suite did NOT retain is never deleted,
 # however much it looks like dependency install.
-$redForeign = Join-Path ([System.IO.Path]::GetTempPath()) ('witage-browser-foreign-' + [guid]::NewGuid().ToString('N'))
+$redForeign = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-browser-foreign-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path (Join-Path $redForeign 'node_modules') -Force | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $redForeign 'keep.txt'), 'not ours')
 $script:browserScratchPath = $redForeign
@@ -671,14 +670,14 @@ Remove-Item -Recurse -Force $redForeign -ErrorAction SilentlyContinue
 # (c) the early-abort door: the ProcessExit/CancelKeyPress handler removes an
 # owned scratch install even when Exit-Suite never ran. Invoked directly here,
 # because the doors it covers (Ctrl-C, host kill) cannot be simulated safely.
-$abortScratch = Join-Path ([System.IO.Path]::GetTempPath()) ('witage-deps-redctl-abort-' + [guid]::NewGuid().ToString('N'))
+$abortScratch = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-deps-redctl-abort-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path (Join-Path $abortScratch 'node_modules') -Force | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $abortScratch 'proof.txt'), 'abort fixture')
 $script:browserScratchPath = $abortScratch
 if ($script:browserScratchCleanupHandler) {
     & $script:browserScratchCleanupHandler
     Assert-True (-not (Test-Path $abortScratch)) 'RED cleanup: the early-abort handler removes an owned scratch install'
-    $abortForeign = Join-Path ([System.IO.Path]::GetTempPath()) ('witage-browser-foreign-' + [guid]::NewGuid().ToString('N'))
+    $abortForeign = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-browser-foreign-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path (Join-Path $abortForeign 'node_modules') -Force | Out-Null
     $script:browserScratchPath = $abortForeign
     & $script:browserScratchCleanupHandler
@@ -689,9 +688,9 @@ if ($script:browserScratchCleanupHandler) {
 }
 # (d) wiring contract: every exit door performs the teardown, and a failed
 # bootstrap cannot borrow a scratch install or set NODE_PATH.
-$thisSuiteText = [System.IO.File]::ReadAllText("$root	estsRun-Tests.ps1")
+$thisSuiteText = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Run-Tests.ps1'))
 Assert-True ($thisSuiteText -match '(?s)function Exit-Suite.*?Reset-Browser-Scratch') 'every exit door: Exit-Suite performs the scratch teardown before the verdict'
-Assert-True ($thisSuiteText -match '$browserDepsCode -eq 0 -and $browserDepsText -match') 'a failed dependency bootstrap cannot adopt a scratch install or set NODE_PATH'
+Assert-True ($thisSuiteText.Contains('$browserDepsCode -eq 0 -and $browserDepsText -match')) 'a failed dependency bootstrap cannot adopt a scratch install or set NODE_PATH'
 # Put the suite back exactly the way the green adoption block left it: these
 # fixtures borrowed the state for the duration of the checks above, and the
 # downstream Playwright gates still need the real retained scratch on
@@ -700,7 +699,7 @@ $env:NODE_PATH = $redKeptNodePath
 $script:browserScratchPath = $redKeptScratch
 $script:priorNodePath = $redKeptPriorPath
 $script:priorNodePathSet = $redKeptPriorSet
-
+Write-Host "
 --- Testing Browser and Tampermonkey Target ---" -ForegroundColor Cyan
 $browserRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-browsers-" + [guid]::NewGuid().ToString('N'))
 try {

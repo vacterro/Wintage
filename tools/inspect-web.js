@@ -1251,7 +1251,9 @@ function aggregateWatch(observations) {
     const s = summarize(r);
     for (const o of s.observed) { observedEver.add(o.id); presentEver.add(o.id); }
     for (const m of s.mismatches) { mismatchedEver.add(m.id); presentEver.add(m.id); }
-    for (const m of s.missing) requiredMissingEver.add(m.id);
+    // Deferred to the session-wide pass below: an always-required surface the session
+    // rendered on ANY poll (a first poll mid-parse matches nothing) is not
+    // "never seen", so the per-poll miss must not be finalised here.
     for (const u of s.unproven) { unprovenEver.add(u.id); presentEver.add(u.id); }
     // Route applicability is carried poll by poll: a conversation-scoped surface
     // is only ever demanded if the operator actually sat on a conversation route,

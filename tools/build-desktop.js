@@ -249,8 +249,25 @@ function installStagedGeneration() {
   const entries = fs.existsSync(STAGE) ? fs.readdirSync(STAGE) : [];
   if (!entries.length) throw new Error('refusing to install an empty stage: the staged generation holds no output');
   writePublishJournal('installing');
-  fs.rmSync(OUT, { recursive: true, force: true });
-  fs.renameSync(STAGE, OUT);
+  // Windows releases a file SYSTEM handle a moment AFTER the closing process is
+  // gone, and a delete or a rename of a directory that held one fails with
+  // EPERM until it does. The gate that contends the generation lock forces
+  // exactly that ordering, so the swap is retried as ONE unit: a rename that
+  // landed while its delete had silently not would publish into a stale tree.
+  // ponytail: not fsRetry from install-electron.js -- its gate slices that source
+  // text out of that file, and a single-fn retry cannot wrap a two-step swap.
+  // Extract when a THIRD caller appears.
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try {
+      fs.rmSync(OUT, { recursive: true, force: true });
+      fs.renameSync(STAGE, OUT);
+      return;
+    } catch (e) {
+      if (Date.now() >= deadline || ['EPERM', 'EACCES', 'EBUSY', 'ENOTEMPTY', 'EEXIST'].indexOf(e.code) < 0) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    }
+  }
 }
 
 function publishGeneration() {
