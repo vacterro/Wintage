@@ -25,7 +25,7 @@
 ## Установка
 
 1. Ставь [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Жми **[Установить Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey сам откроет страницу.
+2. Жми **[Установить Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey сам откроет страницу.
 3. Всё. Любой сайт теперь — Windows 95, тёмная золотая редакция.
 
 ## Обновление
@@ -164,4 +164,4 @@ OLED, Dracula, Nord, Solarized Dark). Каждая проходит WCAG AA по
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

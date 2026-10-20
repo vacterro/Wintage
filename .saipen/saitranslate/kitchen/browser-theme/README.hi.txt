@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — ब्राउज़र थीम (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Wintage यूजरस्क्रिप्ट के लिए साथी थीम (https://github.com/vacterro/Wintage).
+Wintage यूजरस्क्रिप्ट के लिए साथी थीम (https://gitlab.com/vacuum34/wintage).
 यह थीम एक स्थिर विरासत (legacy) Dark Golden पैलेट है, हाथ से बंडल किया गया और
 यूजरस्क्रिप्ट की बदलने योग्य पैलेटों से स्वतंत्र: canvas #1A0F05, toolbar #2A1C0A,
 सुनहरा टेक्स्ट #D4B87A, bevel gold #C0A060, धँसा ऑम्निबॉक्स #0F0A04, लिंक accent

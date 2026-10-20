@@ -609,7 +609,7 @@ function buildObsidian(packs) {
     const dir = path.join(OUT, 'obsidian', pack.slug);
     emit(path.join(dir, 'theme.css'), css);
     emit(path.join(dir, 'manifest.json'), JSON.stringify({
-      name, version: VERSION, minAppVersion: '0.16.0', author: 'Wintage', authorUrl: 'https://github.com/vacterro/Wintage'
+      name, version: VERSION, minAppVersion: '0.16.0', author: 'Wintage', authorUrl: 'https://gitlab.com/vacuum34/wintage'
     }, null, 2) + '\n');
   }
 }

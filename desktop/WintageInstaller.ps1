@@ -194,7 +194,16 @@ if ($form.Width -gt $work.Width -or $form.Height -gt $work.Height) {
 # R015 / PERF-004 startup instrument: the form records the real Shown event and
 # self-closes when a smoke fixture arms the auto-close timer, so a live GUI
 # smoke can prove the ordinary (cache-served) startup reaches a usable window
-# without the recursive portable walk. Inert without the env var.
+# without the recursive portable walk.
+#
+# STRICTLY OPT-IN: nothing below writes anything unless the fixture supplies
+# WINTAGE_TEST_FORM_SHOWN_FILE. The legacy handler defaulted the stamp to
+# %TEMP%\wintage-form-shown.stamp when the variable was NOT set, so every
+# ordinary launch of the installer wrote a test artifact into the user's temp
+# directory -- a GUI smoke's fixture leaking into normal operation, and a file
+# no operator asked for. "Inert without the env var" now means inert, not
+# "writes to a default path". The smoke harness (tools/test-browser-cache.ps1)
+# sets the variable itself, so the live smoke contract is unchanged.
 #
 # The timer lives in the SCRIPT scope: a WinForms Tick callback is re-bound to
 # the script scope when the pump invokes it, so a handler-local timer variable
@@ -203,9 +212,10 @@ if ($form.Width -gt $work.Width -or $form.Height -gt $work.Height) {
 # crash dialog instead of a clean close.
 $script:wintageSmokeTimer = $null
 $form.Add_Shown({
-    $stamp = Join-Path ([System.IO.Path]::GetTempPath()) 'wintage-form-shown.stamp'
-    if ($env:WINTAGE_TEST_FORM_SHOWN_FILE) { $stamp = $env:WINTAGE_TEST_FORM_SHOWN_FILE }
-    try { [System.IO.File]::WriteAllText($stamp, (Get-Date).ToUniversalTime().ToString('o')) } catch { }
+    if ($env:WINTAGE_TEST_FORM_SHOWN_FILE) {
+        $stamp = $env:WINTAGE_TEST_FORM_SHOWN_FILE
+        try { [System.IO.File]::WriteAllText($stamp, (Get-Date).ToUniversalTime().ToString('o')) } catch { }
+    }
     if ($env:WINTAGE_TEST_AUTOCLOSE_MS) {
         $script:wintageSmokeTimer = New-Object Windows.Forms.Timer
         $script:wintageSmokeTimer.Interval = [int]$env:WINTAGE_TEST_AUTOCLOSE_MS
@@ -565,6 +575,15 @@ $btnSelectAll.FlatStyle = 'Flat'; $btnSelectAll.FlatAppearance.BorderSize = 0
 $btnSelectNone = New-Object Windows.Forms.Button
 $btnSelectNone.Text = (T 'SelectNone'); $btnSelectNone.Location = '116,508'; $btnSelectNone.Size = '96,24'; $btnSelectNone.Font = $FONT
 $btnSelectNone.FlatStyle = 'Flat'; $btnSelectNone.FlatAppearance.BorderSize = 0
+
+# T-967: the retry affordance the transactional refresh needs. Discovery is the
+# one thing the operator cannot fix inside the window (a listing child that
+# died, a folder that moved), so the recovery has to be one click and must say
+# what happened, not a silent empty list. Disabled while the inventory is fresh
+# in the normal case, and re-enabled with a red label when a refresh failed.
+$btnRefreshTargets = New-Object Windows.Forms.Button
+$btnRefreshTargets.Text = (T 'RefreshTargets'); $btnRefreshTargets.Location = '220,508'; $btnRefreshTargets.Size = '96,24'; $btnRefreshTargets.Font = $FONT
+$btnRefreshTargets.FlatStyle = 'Flat'; $btnRefreshTargets.FlatAppearance.BorderSize = 0
 
 # Preview ---------------------------------------------------------------------
 $lblPreview = New-Object Windows.Forms.Label
@@ -1731,7 +1750,7 @@ function Update-GuiStrings {
     $btnTabBetterDiscord.Text = (T 'TabBetterDiscord')
     $lblThemes.Text = (T 'Palettes'); $lblMyApps.Text = (T 'MyApps'); $lblPopularApps.Text = (T 'PopularApps')
     $lblPreview.Text = (T 'Preview'); $lblTokens.Text = (T 'Tokens'); $lblLanguage.Text = (T 'LanguageLabel')
-    $btnSelectAll.Text = (T 'SelectAll'); $btnSelectNone.Text = (T 'SelectNone')
+    $btnSelectAll.Text = (T 'SelectAll'); $btnSelectNone.Text = (T 'SelectNone'); $btnRefreshTargets.Text = (T 'RefreshTargets')
     $btnApply.Text = (T 'Apply'); $btnSave.Text = (T 'Save'); $btnDelCustom.Text = (T 'DelCustom'); $btnRevert.Text = (T 'Revert')
     $chkLogonTask.Text = (T 'LogonTask'); $btnFbSoundCopy.Text = (T 'FbSoundCopy')
     $status.Text = (T 'StatusHint')
@@ -1764,7 +1783,7 @@ $cmbLanguage.Add_SelectedIndexChanged({
     Update-GuiStrings
 })
 
-$pnlThemes.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $lblPreview, $preview,
+$pnlThemes.Controls.AddRange(@($lblThemes, $lstThemes, $lblMyApps, $clbMyApps, $lblPopularApps, $clbPopularApps, $btnSelectAll, $btnSelectNone, $btnRefreshTargets, $lblPreview, $preview,
         $lblTokens, $swatchPanel, $lblInfo, $btnApply, $btnSave, $btnDelCustom, $btnRevert, $chkLogonTask, $btnFbSound, $btnFbSoundCopy, $log,
         $lblPreset, $cmbPreset, $btnPresetSave, $btnPresetUpdate, $btnPresetRename, $btnPresetDelete, $lblPresetState))
 
@@ -1785,48 +1804,265 @@ $script:tabTable = @(
 
 $form.Controls.AddRange(@($btnTabThemes, $btnTabBetterDiscord, $btnTabFonts, $lblLanguage, $cmbLanguage, $pnlThemes, $pnlBetterDiscord, $pnlFonts, $status))
 $lstThemes.TabIndex = 0; $clbMyApps.TabIndex = 1; $clbPopularApps.TabIndex = 2
-$btnSelectAll.TabIndex = 3; $btnSelectNone.TabIndex = 4; $btnApply.TabIndex = 5
-$btnSave.TabIndex = 6; $btnDelCustom.TabIndex = 7; $btnRevert.TabIndex = 8; $btnFbSound.TabIndex = 9; $btnFbSoundCopy.TabIndex = 10; $log.TabIndex = 11
+$btnSelectAll.TabIndex = 3; $btnSelectNone.TabIndex = 4; $btnRefreshTargets.TabIndex = 5; $btnApply.TabIndex = 6
+$btnSave.TabIndex = 7; $btnDelCustom.TabIndex = 8; $btnRevert.TabIndex = 9; $btnFbSound.TabIndex = 10; $btnFbSoundCopy.TabIndex = 11; $log.TabIndex = 12
 
 # ---- TARGET DISCOVERY ----
 # Read from install.ps1's own listing rather than duplicated here: one source of
 # truth for what exists on this machine, and a target added there shows up here
 # without a second edit.
+#
+# Load-Targets is a TRANSACTION, not a clear-and-hope. The legacy shape cleared
+# both visible lists FIRST and only then asked the listing child for a result,
+# so a failed discovery -- a child that died, a listing that exited nonzero, a
+# parse that matched nothing -- left the window with NO target rows at all. The
+# operator's prior target inventory was erased by proof that the new one did
+# not exist, and every downstream reader ($script:targets, the selectability
+# rule, Apply/Revert) then reported "not found on this machine" for targets
+# that are in fact installed and themed right there on disk. That is not a
+# cosmetic refresh bug: Get-TargetSelectability answering 'not found' on a
+# stale table authorises Apply to mutate whatever the operator typed instead
+# of what is actually there.
+#
+# So: build the candidate inventory entirely off-screen, classify the result,
+# and publish it only when it is real. The published state is either a fresh
+# complete inventory or the PREVIOUS one marked stale -- never an empty list
+# that reads as authoritative. T-967.
 $script:targets = @()
-function Load-Targets {
-    foreach ($list in $TARGET_LISTS) { $list.Items.Clear() }
-    $script:targets = @()
-    # EAP=Stop would turn the child's stderr into a terminating error here, so
-    # the target list is read with the same Continue discipline as Apply.
+# Freshness of the published inventory. Set at startup and after every
+# successful refresh; cleared when a refresh FAILED and the rows below are
+# known to be behind reality. Read by every mutation entry point.
+$script:targetsFresh = $false
+$script:targetsRefreshReason = 'never discovered'
+
+# Captures the visible state of a target list WITHOUT clearing it, so a failed
+# refresh can restore the exact prior presentation (labels, order, checks).
+function Get-TargetRowSnapshot($list) {
+    $rows = @()
+    for ($i = 0; $i -lt $list.Items.Count; $i++) {
+        $rows += [pscustomobject]@{ Label = [string]$list.Items[$i]; Checked = $list.GetItemChecked($i) }
+    }
+    return $rows
+}
+
+# Rebuilds a list from a snapshot: same order, same labels, same checks. Used
+# ONLY to restore a prior inventory after a failed refresh, so the restore is
+# the exact pre-refresh presentation rather than a reconstructed guess.
+function Restore-TargetRows($list, $rows) {
+    $list.Items.Clear()
+    foreach ($r in $rows) {
+        $i = $list.Items.Add($r.Label)
+        $list.SetItemChecked($i, $r.Checked)
+    }
+}
+
+# Maps a raw listing row into the target record used everywhere else. One place
+# that owns the state vocabulary, so a new state string cannot be recognised by
+# the row parser and unknown to the selectability rule.
+function ConvertTo-TargetRecord([string]$key, [string]$name, [string]$state, [string]$palette) {
+    [pscustomobject]@{ Key = $key; Name = $name; State = $state; Palette = $palette }
+}
+
+# The one selectability predicate, shared by the startup default and the publish
+# step. Everything that CAN be themed is ticked -- the overwhelmingly common
+# intent is "put this palette on all of it", and unticking two rows is less work
+# than ticking eleven. An app that is absent, fused shut or unresolvable is never
+# ticked, because Apply would only print a refusal for it (T-189). The three
+# source-tree targets are ticked only when their folder is already remembered:
+# ticking them otherwise would fire the folder dialog from startup, three times,
+# before the window is even usable.
+function Test-TargetSelectableByState([string]$key, [string]$state) {
+    if ($state -eq 'not installed' -or $state -eq 'fused shut' -or $state -eq 'listing failed') { return $false }
+    if ($key -in $PATH_TARGETS -and -not $script:customPaths.ContainsKey($key)) { return $false }
+    return $true
+}
+
+# Runs the listing child and classifies what came back. EAP=Stop would turn the
+# child's stderr into a terminating error here, so the listing is read with the
+# same Continue discipline as Apply. The classification is EXPLICIT: an operator
+# can be told "discovery failed" only if the code knows that it failed, and a
+# listing that printed rows no parser recognised must never be published as
+# "zero targets".
+#
+# $TargetListingRunner is the ONE seam, and it exists for the same reason the
+# browser-discovery decision function takes -Enumerator: the transaction's
+# failure paths can only be proven by supplying a listing that fails, and a
+# fixture that has to break a real install.ps1 to do it is testing the wrong
+# thing. It defaults to the real child; a harness overrides it. In production no
+# override happens, so there is no test-only branch in this function.
+if ($null -eq $script:TargetListingRunner) {
+    $script:TargetListingRunner = { & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'install.ps1') 2>&1 }
+}
+function Get-TargetListing {
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'install.ps1') 2>&1
-    $ErrorActionPreference = $prev
+    try {
+        $out = @(& $script:TargetListingRunner)
+        $code = $LASTEXITCODE
+    } catch {
+        $out = @($_.Exception.Message)
+        $code = -1
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    $rows = @()
+    # T-970: the completion witness install.ps1 prints as its last machine-readable
+    # line. Without it a listing is only known to be NON-EMPTY, not complete --
+    # which is how a truncated listing could be published as a fresh full
+    # inventory and silently drop targets that were on screen a moment ago.
+    $declared = $null
     foreach ($line in $out) {
+        if ($line -match '^\s*#\s+wintage-listing-complete\s+rows=(\d+)\s*$') { $declared = [int]$Matches[1]; continue }
         if ($line -match '^\s{2}(\S+)\s{2,}(.+?)\s{2,}(not installed|themed|found, not themed|fused shut|listing failed)\s{2,}(.+)$') {
-            $t = [pscustomobject]@{ Key = $Matches[1]; Name = $Matches[2].Trim(); State = $Matches[3]; Palette = $Matches[4].Trim() }
-            if ($t.Key -eq 'target') { continue }
-            $list = if ($t.Key -in $MY_APP_KEYS) { $clbMyApps } else { $clbPopularApps }
-            $label = '{0,-16} {1}' -f $t.Key, $t.State
-            [void]$list.Items.Add($label)
-            $i = $list.Items.Count - 1
-            $t | Add-Member -NotePropertyName List -NotePropertyValue $list
-            $t | Add-Member -NotePropertyName ItemIndex -NotePropertyValue $i
-            $script:targets += $t
-            # Everything that CAN be themed starts ticked -- the overwhelmingly common
-            # intent is "put this palette on all of it", and unticking two rows is less
-            # work than ticking eleven. An app that is absent or fused shut is never
-            # ticked, because Apply would only print a refusal for it. A listing that
-            # FAILED is likewise not ticked: we do not know what is there (T-189).
-            #
-            # The three source-tree targets are ticked only when their folder is already
-            # remembered: ticking them otherwise would fire the folder dialog from
-            # startup, three times, before the window is even usable.
-            $selectable = $t.State -ne 'not installed' -and $t.State -ne 'fused shut' -and $t.State -ne 'listing failed'
-            if ($selectable -and $t.Key -in $PATH_TARGETS) { $selectable = $script:customPaths.ContainsKey($t.Key) }
-            if ($selectable) { $list.SetItemChecked($i, $true) }
+            $key = $Matches[1]
+            if ($key -eq 'target') { continue }
+            $rows += (ConvertTo-TargetRecord $key $Matches[2].Trim() $Matches[3] $Matches[4].Trim())
         }
     }
+    # A listing is USABLE only when the child succeeded, named at least one target
+    # row, AND proved the inventory complete. The witness count must equal what
+    # this parser actually recognised: if the child emitted twelve rows and only
+    # one was recognised, the difference is rows this reader cannot see, and
+    # publishing the one would erase the other eleven from the operator's screen.
+    # All four states stay distinguishable in Reason: child failure, no rows at
+    # all, a listing that never claimed completion (truncated), and a listing
+    # whose claim does not match its parseable rows (malformed / partial).
+    $complete = ($null -ne $declared -and $declared -eq $rows.Count)
+    return [pscustomobject]@{
+        ExitCode   = $code
+        RawLines   = $out
+        Rows       = $rows
+        Declared   = $declared
+        Complete   = $complete
+        Ok         = ($code -eq 0 -and $rows.Count -gt 0 -and $complete)
+        Reason     = if ($code -ne 0) { "install.ps1 listing exited $code" }
+                     elseif ($rows.Count -eq 0) { 'install.ps1 listing produced no parseable target rows' }
+                     elseif ($null -eq $declared) { "install.ps1 listing never reported completion; $($rows.Count) row(s) may be a truncated inventory" }
+                     elseif ($declared -ne $rows.Count) { "install.ps1 listing claims $declared target row(s) but only $($rows.Count) were parseable" }
+                     else { '' }
+    }
+}
+
+function Load-Targets {
+    # 1. CAPTURE BEFORE PUBLICATION. The prior presentation is snapshotted from
+    #    the live lists, so a failed refresh can put back exactly what was there.
+    $priorRows = @{}
+    foreach ($list in $TARGET_LISTS) {
+        $priorRows[$list.Name] = Get-TargetRowSnapshot $list
+    }
+    $priorTargets = $script:targets
+    $priorFresh = $script:targetsFresh
+    # The selection that is about to be preserved: keyed pairs from the visible
+    # label, because the label is the only thing that survives both a snapshot
+    # and a rebuild. TWO sets, because "checked" and "present" are different
+    # questions: a key that was on screen and unticked must STAY unticked (the
+    # operator said no), while only a key that was not on screen at all is "new"
+    # and earns the default tick. Collapsing them would silently re-tick a target
+    # the operator had deliberately cleared on every refresh.
+    $priorChecked = @{}
+    $priorPresent = @{}
+    foreach ($list in $TARGET_LISTS) {
+        for ($i = 0; $i -lt $list.Items.Count; $i++) {
+            $key = ([string]$list.Items[$i] -split '\s+')[0]
+            $priorPresent[$key] = $true
+            if ($list.GetItemChecked($i)) { $priorChecked[$key] = $true }
+        }
+    }
+
+    # 2. Ask for a result BEFORE touching what is on screen.
+    $listing = Get-TargetListing
+
+    # 3. VALIDATE BEFORE REPLACING. A failed listing publishes nothing.
+    if (-not $listing.Ok) {
+        # A failed refresh must not silently erase the prior visible inventory.
+        # The previous rows stay on screen, the freshness flag is cleared so no
+        # mutation authority is derived from a table we know is behind reality,
+        # and the reason is kept for the status line.
+        if ($listing.Rows.Count -eq 0 -and -not $priorFresh -and $priorTargets.Count -eq 0 -and $priorRows.Values | Where-Object { $_.Count -gt 0 } | Select-Object -First 1) {
+            # First discovery failed outright: there is nothing authoritative to
+            # show, so an explicit placeholder row names the problem instead of
+            # an empty list that reads as "nothing is installed here".
+            foreach ($list in $TARGET_LISTS) { $list.Items.Clear() }
+            $clbMyApps.Items.Add('discovery unavailable')
+            $script:targetsFresh = $false
+            $script:targetsRefreshReason = $listing.Reason
+            Say-Log ("TARGET DISCOVERY FAILED: $($listing.Reason). No target is listed until a refresh succeeds.")
+            return $false
+        }
+        $script:targetsFresh = $false
+        $script:targetsRefreshReason = $listing.Reason
+        Say-Log ("TARGET DISCOVERY FAILED: $($listing.Reason). The previously listed targets are shown but marked stale; re-check them before applying.")
+        return $false
+    }
+
+    # 4. The result is real: build it off-screen in TWO staging lists, so the
+    #    visible lists are cleared only once a complete replacement exists.
+    $stagedMy = New-Object System.Collections.ArrayList
+    $stagedPopular = New-Object System.Collections.ArrayList
+    $newTargets = New-Object System.Collections.ArrayList
+    $unresolved = @()
+    foreach ($t in $listing.Rows) {
+        $list = if ($t.Key -in $MY_APP_KEYS) { $clbMyApps } else { $clbPopularApps }
+        $label = '{0,-16} {1}' -f $t.Key, $t.State
+        if ($list -eq $clbMyApps) { [void]$stagedMy.Add($label) } else { [void]$stagedPopular.Add($label) }
+        $rec = $t | Select-Object Key, Name, State, Palette
+        $rec | Add-Member -NotePropertyName List -NotePropertyValue $list
+        $rec | Add-Member -NotePropertyName Label -NotePropertyValue $label
+        [void]$newTargets.Add($rec)
+    }
+
+    # 5. PUBLISH. Only now are the visible lists replaced, and the only way to
+    #    reach this point was a validated listing.
+    $clbMyApps.BeginUpdate()
+    $clbPopularApps.BeginUpdate()
+    try {
+        $clbMyApps.Items.Clear()
+        $clbPopularApps.Items.Clear()
+        foreach ($label in $stagedMy) { [void]$clbMyApps.Items.Add($label) }
+        foreach ($label in $stagedPopular) { [void]$clbPopularApps.Items.Add($label) }
+        $script:targets = @($newTargets)
+        # ItemIndex is only meaningful against a published list, so it is filled
+        # after publication rather than during staging.
+        foreach ($rec in $script:targets) {
+            $list = $rec.List
+            $idx = -1
+            for ($i = 0; $i -lt $list.Items.Count; $i++) { if ([string]$list.Items[$i] -eq $rec.Label) { $idx = $i; break } }
+            $rec | Add-Member -NotePropertyName ItemIndex -NotePropertyValue $idx -Force
+        }
+        # 6. SELECTION PRESERVATION WHERE VALID. A target the operator had ticked
+        #    is still ticked if it remains present and still selectable; its new
+        #    state is honoured rather than the old checkbox. A newly appearing
+        #    selectable target gets the default tick, exactly as at startup.
+        foreach ($rec in $script:targets) {
+            $wasChecked = $priorChecked.ContainsKey($rec.Key)
+            $wasPresent = $priorPresent.ContainsKey($rec.Key)
+            $stillSelectable = Test-TargetSelectableByState $rec.Key $rec.State
+            if ($rec.ItemIndex -lt 0) { continue }
+            if ($wasChecked -and $stillSelectable) {
+                $rec.List.SetItemChecked($rec.ItemIndex, $true)
+            } elseif (-not $wasPresent) {
+                # Newly appearing this refresh: the startup default applies.
+                if ($stillSelectable) { $rec.List.SetItemChecked($rec.ItemIndex, $true) }
+            } elseif ($wasChecked) {
+                # Was ticked, no longer usable (uninstalled, fused shut, or the
+                # remembered folder went away): an unresolved target is disabled
+                # rather than silently left ticked, so Apply cannot be fired at a
+                # target the machine cannot honour.
+                $unresolved += $rec
+            }
+            # Present-but-unticked and still selectable: the operator's "no" is
+            # preserved -- no branch, it stays unticked.
+        }
+        $script:targetsFresh = $true
+        $script:targetsRefreshReason = 'current'
+    } finally {
+        $clbMyApps.EndUpdate()
+        $clbPopularApps.EndUpdate()
+    }
+    if ($unresolved.Count) {
+        Say-Log ("Targets no longer usable and left unticked: " + (($unresolved | ForEach-Object { "$($_.Key) ($($_.State))" }) -join ', '))
+    }
+    return $true
 }
 
 function Get-CheckedTargetItems {
@@ -2132,7 +2368,7 @@ function Disable-BatchUi {
     $btnSave.Enabled = $false; $btnDelCustom.Enabled = $false
     $lstThemes.Enabled = $false
     $clbMyApps.Enabled = $false; $clbPopularApps.Enabled = $false
-    $btnSelectAll.Enabled = $false; $btnSelectNone.Enabled = $false
+    $btnSelectAll.Enabled = $false; $btnSelectNone.Enabled = $false; $btnRefreshTargets.Enabled = $false
     $cmbLanguage.Enabled = $false
 }
 
@@ -2142,7 +2378,7 @@ function Enable-BatchUi {
     $btnSave.Enabled = $true; $btnDelCustom.Enabled = $true
     $lstThemes.Enabled = $true
     $clbMyApps.Enabled = $true; $clbPopularApps.Enabled = $true
-    $btnSelectAll.Enabled = $true; $btnSelectNone.Enabled = $true
+    $btnSelectAll.Enabled = $true; $btnSelectNone.Enabled = $true; $btnRefreshTargets.Enabled = $true
     $cmbLanguage.Enabled = $true
 }
 
@@ -3032,6 +3268,17 @@ $btnApply.Add_Click({
         $btnApply.Enabled = $false
         $btnRevert.Enabled = $false
         try {
+            # T-967: previous target status must never authorise a mutation after
+            # freshness is lost. A stale inventory names targets whose state on
+            # disk is unknown, so the operator is asked to re-discover first
+            # rather than being allowed to apply to a remembered name.
+            if (-not $script:targetsFresh) {
+                Say-Log ("DISCOVERY IS STALE ($($script:targetsRefreshReason)) - refresh the target list before applying.")
+                $status.Text = 'Target discovery is stale - refresh the list before applying.'
+                $status.ForeColor = [System.Drawing.Color]::Firebrick
+                $btnApply.Enabled = $true; $btnRevert.Enabled = $true
+                return
+            }
             $slug = if ($script:current -eq '<custom>') { Save-Custom; 'custom' } else { $script:current }
             $checked = @(Get-CheckedTargetItems)
             if (-not $checked) { Say-Log 'nothing selected'; $btnApply.Enabled = $true; $btnRevert.Enabled = $true; return }
@@ -3058,9 +3305,16 @@ $btnApply.Add_Click({
                         if ($verdict.Kind -ne 'SUCCESS') { Say-Log $verdict.Message }
                         $failed = @($verdict.FailedNames)
                     }
-                    Load-Targets
+                    # T-967: an honest refresh result. A successful apply whose
+                    # status refresh FAILED is reported as applied-with-stale-view,
+                    # never as a clean success: the operator asked what is on the
+                    # machine now and the answer could not be obtained.
+                    $refreshed = Load-Targets
                     Update-FbButtonsVisibility
-                    if ($failed.Count) {
+                    if (-not $refreshed) {
+                        $status.Text = "Applied '$doneSlug', but the target list could not be refreshed ($($script:targetsRefreshReason)) - the listed targets are stale."
+                        $status.ForeColor = [System.Drawing.Color]::Firebrick
+                    } elseif ($failed.Count) {
                         $status.Text = "Applied '$doneSlug' with $($failed.Count) failure(s): $($failed -join ', '). See the log - nothing more was installed for those targets."
                         $status.ForeColor = [System.Drawing.Color]::Firebrick
                     } else {
@@ -3077,11 +3331,41 @@ $btnApply.Add_Click({
         catch { Say-Log ('APPLY FAILED: ' + $_.Exception.Message); $status.Text = 'Apply failed - see the log.'; $btnApply.Enabled = $true; $btnRevert.Enabled = $true }
     })
 
+$btnRefreshTargets.Add_Click({
+        # T-967: the operator-visible retry for the transactional refresh. The
+        # listing child is re-run on demand and the outcome is reported in the
+        # status line: a success clears the stale warning, a failure says why
+        # and keeps the prior rows. There is deliberately no automatic retry
+        # loop -- a child that cannot list must not be hammered, and each
+        # attempt costs a full install.ps1 listing.
+        $btnRefreshTargets.Enabled = $false
+        try {
+            $ok = Load-Targets
+            Update-FbButtonsVisibility
+            if ($ok) {
+                $status.Text = 'Target list refreshed - current discovery applied.'
+                $tokensNow = Get-ActiveTokens
+                if ($tokensNow) { $status.ForeColor = C $tokensNow.textPrimary }
+            } else {
+                $status.Text = "Target discovery failed ($($script:targetsRefreshReason)) - the previously listed targets are shown but stale."
+                $status.ForeColor = [System.Drawing.Color]::Firebrick
+            }
+        } catch {
+            $status.Text = 'Target discovery failed - see the log.'
+            $status.ForeColor = [System.Drawing.Color]::Firebrick
+            Say-Log ('REFRESH TARGETS FAILED: ' + $_.Exception.Message)
+        } finally { $btnRefreshTargets.Enabled = $true }
+    })
+
 $btnSelectAll.Add_Click({
+        # T-967: ONE selectability rule for the bulk tick, the same predicate the
+        # refresh publishes with. The old inline check skipped only 'not
+        # installed' and 'fused shut', so Select-All ticked 'listing failed'
+        # rows and path-backed targets with no remembered folder -- rows Apply
+        # can only refuse.
         foreach ($target in $script:targets) {
-            $state = $target.State
-            if ($state -eq 'not installed' -or $state -eq 'fused shut') { continue }
-            $target.List.SetItemChecked($target.ItemIndex, $true)
+            if (-not (Test-TargetSelectableByState $target.Key $target.State)) { continue }
+            if ($target.ItemIndex -ge 0) { $target.List.SetItemChecked($target.ItemIndex, $true) }
         }
         Update-FbButtonsVisibility
     })
@@ -3096,6 +3380,15 @@ $btnRevert.Add_Click({
         $btnApply.Enabled = $false
         $btnRevert.Enabled = $false
         try {
+            # Same freshness gate as Apply (T-967): reverting on a stale
+            # inventory would mutate a target the listing no longer vouches for.
+            if (-not $script:targetsFresh) {
+                Say-Log ("DISCOVERY IS STALE ($($script:targetsRefreshReason)) - refresh the target list before reverting.")
+                $status.Text = 'Target discovery is stale - refresh the list before reverting.'
+                $status.ForeColor = [System.Drawing.Color]::Firebrick
+                $btnApply.Enabled = $true; $btnRevert.Enabled = $true
+                return
+            }
             $checkedNow = @(Get-CheckedTargetItems)
             if (-not $checkedNow) { Say-Log 'nothing selected'; $btnApply.Enabled = $true; $btnRevert.Enabled = $true; return }
             $keys = @($checkedNow | ForEach-Object { ($_ -split '\s+')[0] })
@@ -3114,8 +3407,15 @@ $btnRevert.Add_Click({
                         if ($verdict.Kind -ne 'SUCCESS') { Say-Log $verdict.Message }
                         $failed = @($verdict.FailedNames)
                     }
-                    Load-Targets
-                    if ($failed.Count) {
+                    # T-967: honest Revert result reporting. A revert that DID
+                    # happen but whose status refresh failed is reported as
+                    # such, so the operator is never told "back to pre-Wintage
+                    # state" by a table that could not be re-read.
+                    $refreshed = Load-Targets
+                    if (-not $refreshed) {
+                        $status.Text = "Revert processed, but the target list could not be refreshed ($($script:targetsRefreshReason)) - the listed targets are stale."
+                        $status.ForeColor = [System.Drawing.Color]::Firebrick
+                    } elseif ($failed.Count) {
                         $status.Text = "Revert incomplete: $($failed.Count) target(s) failed ($($failed -join ', ')). See the log."
                         $status.ForeColor = [System.Drawing.Color]::Firebrick
                     } else {
@@ -3180,7 +3480,7 @@ function Skin-Self {
         $c.BackColor = C $t.compareBack; $c.ForeColor = C $t.textPrimary
     }
     $pnlTfPreview.BackColor = C $t.background
-    foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnSelectAll, $btnSelectNone,
+    foreach ($b in @($btnApply, $btnSave, $btnDelCustom, $btnRevert, $btnFbSound, $btnSelectAll, $btnSelectNone, $btnRefreshTargets,
                     $btnBdOpenRepo,
                     $btnTfInstall, $btnTfApplyTerminal, $btnTfApplyConhost, $btnTfApplyBoth, $btnTfRestore, $btnTfSource, $btnTfLicense, $btnTfRefresh,
                     $btnPresetSave, $btnPresetUpdate, $btnPresetRename, $btnPresetDelete)) {
@@ -3192,13 +3492,23 @@ function Skin-Self {
     $cmbLanguage.Invalidate()
 }
 
-Load-Targets
+# T-967: the startup refresh is the same transaction as every other one, and a
+# failed first discovery is stated in the window instead of presenting an empty
+# target list that reads as "nothing is installed on this machine".
+$startupDiscovered = Load-Targets
 # PERF-001: terminal-font initialization is LAZY. Do NOT call Initialize-TfTab
 # before ShowDialog — that eagerly loads all 20 bundled font files into private
 # GDI+ collections and runs fixed-pitch probes before first paint. Set-ActiveTab
 # initializes the subsystem on first Fonts-tab activation instead.
 $script:TfInitialized = $false
 Update-FbButtonsVisibility
+if (-not $startupDiscovered) {
+    # Apply/Revert are gated on freshness, so the stale reason is also why the
+    # buttons do nothing yet -- say it rather than leaving them mysteriously inert.
+    $status.Text = "Target discovery is unavailable ($($script:targetsRefreshReason)) - use REFRESH LIST to retry; Apply is held until it succeeds."
+    $status.ForeColor = [System.Drawing.Color]::Firebrick
+    $btnRefreshTargets.FlatAppearance.BorderSize = 2
+}
 
 # ---- SCENARIO PRESET LOGIC (T-257 / SRC-013) ----
 # All preset state is GUI-local; none of these functions ever launches

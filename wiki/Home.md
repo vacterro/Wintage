@@ -12,7 +12,7 @@ element communicates its purpose at a glance.
 
 ## Quick facts
 
-- **Current version:** 1.36.9 (2026-10-11)
+- **Current version:** 1.36.10 (2026-10-20)
 - **Palettes:** sixteen, switchable per user from the Tampermonkey menu
 - **Scope:** every site, plus desktop applications (see [Desktop](Desktop.md))
 - **License:** MIT
@@ -20,7 +20,7 @@ element communicates its purpose at a glance.
 ## Install
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Click **[Install Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)**.
+2. Click **[Install Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)**.
 3. Done.
 
 Full instructions: [Installation](Installation.md)

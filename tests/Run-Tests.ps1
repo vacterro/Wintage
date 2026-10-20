@@ -33,38 +33,214 @@ if ($PSVersionTable.PSEdition -ne 'Desktop') {
 # ignored files excluded, so two runs can be compared without trusting that the
 # tree was untouched. It is computed BEFORE the run and never after: the run
 # itself writes (this transcript, .saipen/locks), and a fingerprint taken at the
-# end would report those writes as if the tree had moved.
+# But a name list (porcelain) plus a diff of TRACKED work is still half an
+# identity, and so is a diff taken against a throwaway index. T-969's defect
+# was the second one: the content half was read from a throwaway index REBUILT
+# from HEAD, so the REAL .git/index -- the only place a staged blob lives --
+# never entered the fingerprint. Stage `staged-alpha` and then `staged-beta`
+# into the same file, restore the working file to HEAD, and both trees report
+# `MM tracked.txt`, an empty throwaway-index diff and the SAME fingerprint:
+# two different staged contents compare identical (reproduced: blobs
+# 9779a208... and ac442383..., both = 0f4aff079817/0file/2k). A fingerprint
+# that cannot see staged bytes therefore cannot tell "no work since the
+# reference run" from "the staged half was swapped".
+#
+# The identity is now TWO independent halves:
+#   * the INDEX half, read from the LIVE index, read-only, as
+#     `git --no-optional-locks ls-files --stage`. It prints exact index
+#     metadata -- mode, blob SHA, stage, path -- so one digest covers staged
+#     edits, staged additions and deletions, renames, changed modes, unmerged
+#     stages and binary blobs (through the blob SHA, which is content-derived).
+#   * the WORKTREE half, unchanged from T-967: a throwaway index
+#     (`read-tree HEAD` + `add -N` + `diff HEAD`), which is the only
+#     git-native form that carries unstaged and untracked BYTES.
+# Neither half may substitute for the other, and a half that cannot be read is
+# not a partial identity -- it is IDENTITY-FAILED. The live index is never
+# written: `--no-optional-locks` is on every read-only git call so a status
+# refresh cannot write the caller's index, and the live index bytes are
+# byte-compared before and after by tools/test-identity-index-safety.ps1 and
+# by this file's own self-test below.
+#
+# Explicit failure reporting replaces the silent 'no-git' fallback: an identity
+# that cannot be computed is printed as an error, never a plausible-looking
+# constant, because a wrong identity is worse than a missing one.
 $script:failures = @()
 $script:runHead = 'no-git'
 $script:runFingerprint = 'no-git'
+$script:identityNote = ''
 $script:transcript = $null
-try {
+
+# Get-IdTempPath owns the temp location: the throwaway index is a fresh per-run
+# path under GetTempPath, so two concurrent runs cannot collide on it and a
+# stale file can never be mistaken for this run's index.
+function Get-IdTempPath([string]$leaf) {
+    $dir = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-id-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    return (Join-Path $dir $leaf)
+}
+function Get-BytesHashHex([byte[]]$bytes) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { return (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join '') }
+    finally { $sha.Dispose() }
+}
+
+# The whole identity is ONE function so the fingerprint's central claim -- that
+# two trees differing in a staged byte, an unstaged byte or an untracked byte's
+# content never compare equal -- is a property the suite can DRIVE against a
+# throwaway repository, rather than a paragraph the reader has to believe. It is
+# pure: it reads $repoRoot and never writes outside a per-call temp index.
+#
+# Two halves, each carrying a byte class the other structurally cannot see.
+# INDEX: `git --no-optional-locks ls-files --stage` on the LIVE index, which
+# prints every entry as "<mode> <blob> <stage>\t<path>" -- exact git index
+# metadata, read-only, sorted, so it covers staged edits, additions and
+# deletions, renames, mode changes, unmerged stages and binary blobs (the blob
+# SHA is content-derived, so binary content needs no special case). This is
+# the half T-969 added: the staged blob lives ONLY in the live index, so a
+# diff against a HEAD-rebuilt throwaway index cannot see it.
+# WORKTREE: `read-tree HEAD` into a throwaway index (never .git/index), `add -N`
+# to record intent-to-add rows for untracked files WITHOUT writing blob objects
+# (verified: N untracked files add exactly ONE loose object, not N), then
+# `diff HEAD`, which prints unstaged, staged-against-the-throwaway-index and
+# untracked content in path order. `-uall` on the status is what makes
+# directory additions (not just directories) visible; core.quotePath keeps
+# byte-for-byte determinism so an unusual filename hashes by its bytes, not
+# by a rendering. A half that cannot be read is IDENTITY-FAILED, never a
+# fingerprint computed from the half that did work.
+function Get-WorktreeIdentity([string]$repoRoot) {
+    $result = [pscustomobject]@{
+        Head = 'no-git'; Fingerprint = 'no-git'; Note = ''; Error = ''; Ok = $false
+    }
+    $idIndex = $null
+    $priorIndex = $null
     $prevEapId = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $headOut = @(& git -C $root rev-parse --short HEAD 2>$null)
-    $headCode = $LASTEXITCODE
-    $porcelain = @(& git -C $root status --porcelain=v1 -uall 2>$null)
-    $statusCode = $LASTEXITCODE
-    # Paths are not enough: git status names which files are dirty and never
-    # what changed inside them, so an edit to an already-dirty file would leave
-    # the identity untouched and two different trees would compare equal. The
-    # diff text is the content half of the fingerprint. Measured on this tree:
-    # 3.4 MB in 0.8s, which is why it is the whole-diff form and not a per-file
-    # hash of five hundred files.
-    $diffText = (& git -C $root diff HEAD 2>$null | Out-String)
-    $diffCode = $LASTEXITCODE
-    $ErrorActionPreference = $prevEapId
-    if ($headCode -eq 0 -and $statusCode -eq 0 -and $diffCode -eq 0 -and $headOut.Count -gt 0) {
-        $script:runHead = "$headOut".Trim()
-        $sha = [System.Security.Cryptography.SHA256]::Create()
-        $payload = ($porcelain -join "`n") + "`n--diff--`n" + $diffText
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
-        $hex = ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join ''
-        $script:runFingerprint = "$($hex.Substring(0, 12))/$($porcelain.Count)path/$([int]($diffText.Length / 1024))k"
+    try {
+        # SAVE first, before anything else, so the finally can always restore.
+        # `Remove-Item Env:GIT_INDEX_FILE` does NOT unset the variable on
+        # Windows: it leaves it EMPTY, and an empty GIT_INDEX_FILE lets
+        # `read-tree HEAD` succeed (exit 0) while silently overwriting the LIVE
+        # index -- which is exactly how the first version of this function wiped
+        # three staged files out of .git/index. Restoring the saved value, and
+        # removing the variable only when this call is the one that created it,
+        # is the only form that cannot lose index state.
+        $priorIndex = $env:GIT_INDEX_FILE
+        $hadPriorIndex = ($null -ne $priorIndex)
+        # UNSET before the first read, not just before the throwaway-index half.
+        # Every command below must read the repository's OWN index: a caller who
+        # exported GIT_INDEX_FILE asking about $repoRoot wants $repoRoot's
+        # identity, and mixing a status from the caller's index with a content
+        # half from the live one would hash two different indexes into one
+        # "identity". SetEnvironmentVariable($null) is the only form that truly
+        # UNSETS on Windows; Remove-Item leaves an EMPTY value, which is itself a
+        # real GIT_INDEX_FILE and would let read-tree HEAD overwrite the live
+        # index (the T-967 defect). The caller's value is restored in the finally.
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process')
+        $headOut = @(& git --no-optional-locks -C $repoRoot rev-parse --short HEAD 2>$null)
+        $headCode = $LASTEXITCODE
+        if ($headCode -ne 0 -or $headOut.Count -eq 0) {
+            $result.Note = 'git metadata unavailable (head exit ' + $headCode + '); this run has no worktree identity'
+            return $result
+        }
+        $result.Head = "$headOut".Trim()
+        $porcelain = @(& git --no-optional-locks -C $repoRoot status --porcelain=v1 -uall 2>$null)
+        $statusCode = $LASTEXITCODE
+        if ($statusCode -ne 0) {
+            # A status that cannot be read means the porcelain half of the
+            # identity is missing, and a fingerprint computed from half an
+            # identity compares different trees as equal again. T-969: this is
+            # IDENTITY-FAILED, never the 'no-git' constant -- a corrupt or
+            # unreadable INDEX arrives here (status is the first command that
+            # reads it), and a caller comparing fingerprints must see a failure
+            # rather than a plausible-looking stable value it can mistake for
+            # "the tree did not move".
+            $result.Fingerprint = 'IDENTITY-FAILED'
+            $result.Note = 'git status failed (exit ' + $statusCode + '); worktree identity is PARTIAL'
+            $result.Error = $result.Note
+            return $result
+        }
+        # The INDEX half reads the LIVE .git/index, so GIT_INDEX_FILE stays
+        # unset here too (it was cleared before the first read above): the
+        # thrown-away index must not be the thing the index half measures.
+        $indexText = (& git --no-optional-locks -c core.quotePath=true -C $repoRoot ls-files --stage 2>$null | Out-String)
+        $indexCode = $LASTEXITCODE
+        if ($indexCode -ne 0) {
+            # An unreadable index is not a "no staged content" answer: the
+            # state is UNKNOWN, and hashing what was read would publish a
+            # partial identity as if it were complete.
+            $result.Fingerprint = 'IDENTITY-FAILED'
+            $result.Note = 'worktree identity could not be computed: the git index could not be read (ls-files exit ' + $indexCode + ')'
+            $result.Error = $result.Note
+            return $result
+        }
+        $indexHex = Get-BytesHashHex ([System.Text.Encoding]::UTF8.GetBytes($indexText))
+        # GIT_INDEX_FILE is set ONCE and cleared in the finally below; every git
+        # command in between reads and writes only the throwaway index.
+        $idIndex = Get-IdTempPath 'identity.index'
+        $env:GIT_INDEX_FILE = $idIndex
+        $null = & git -C $repoRoot read-tree HEAD 2>$null
+        $readCode = $LASTEXITCODE
+        $null = & git -C $repoRoot add -N -- . 2>$null
+        $addCode = $LASTEXITCODE
+        # --full-index, not git's default ABBREVIATED object IDs: two DIFFERENT
+        # binary contents can share the same 7-hex abbreviated blob ID (the T-973
+        # repro pair diverge only after 'a0ff760'), so an abbreviated diff hashes
+        # both to ONE fingerprint. --full-index prints the whole object ID (40 hex
+        # SHA-1 / 64 hex SHA-256), which is content-unique, WITHOUT materialising
+        # the binary patch -- that would need --binary, rejected here so large
+        # assets cost one index line, not a diff.
+        $diffText = (& git -C $repoRoot -c core.quotePath=true diff --full-index --no-renames HEAD 2>$null | Out-String)
+        $diffCode = $LASTEXITCODE
+        if ($readCode -eq 0 -and $addCode -eq 0 -and $diffCode -eq 0) {
+            # The content half is the whole delta, so the path-count diagnostic
+            # is now the number of changed FILES rather than of porcelain lines.
+            $payload = $indexHex + "`n" + ($porcelain -join "`n") + "`n--diff--`n" + $diffText
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
+            $hex = Get-BytesHashHex $bytes
+            $changedFiles = @([regex]::Matches($diffText, '(?m)^diff --git '))
+            $result.Fingerprint = "$($hex.Substring(0, 12))/$($changedFiles.Count)file/$([int]($diffText.Length / 1024))k"
+            $result.Ok = $true
+        } else {
+            $result.Fingerprint = 'IDENTITY-FAILED'
+            $result.Note = 'worktree identity could not be computed: read-tree=' + $readCode + ' add=' + $addCode + ' diff=' + $diffCode
+            $result.Error = $result.Note
+        }
+    } catch {
+        # A checkout without git still runs; it just cannot claim an identity.
+        # Reported as an error, not a constant, so a silently identical
+        # fingerprint can never be read as "the tree did not move".
+        $result.Fingerprint = 'IDENTITY-FAILED'
+        $result.Note = 'worktree identity computation threw: ' + $_.Exception.Message
+    } finally {
+        $ErrorActionPreference = $prevEapId
+        # Restore the PRIOR value exactly, not "empty". SetEnvironmentVariable is
+        # the deterministic form for both branches: a nonempty prior value is put
+        # back verbatim, and an ABSENT one (which on Windows PS 5.1 is also how an
+        # "empty" value coalesces -- the Win32 layer cannot hold a present-empty
+        # process variable) is truly UNSET. Remove-Item Env: relies on the provider
+        # and is documented here as unsafe; an EMPTY GIT_INDEX_FILE is a real index
+        # path -- `read-tree HEAD` then succeeds (exit 0) while overwriting the LIVE
+        # .git/index, the T-967 defect.
+        if ($hadPriorIndex) { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $priorIndex, 'Process') }
+        else { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process') }
+        if ($hadPriorIndex -and $env:GIT_INDEX_FILE -ne $priorIndex) {
+            # Belt and braces: if the restore did not stick, do not silently
+            # continue with an empty GIT_INDEX_FILE and take the live index down.
+            try { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $priorIndex, 'Process') } catch { }
+        }
+        if ($idIndex -and (Test-Path -LiteralPath $idIndex)) {
+            $idDir = Split-Path -Parent $idIndex
+            try { Remove-Item -Recurse -Force -LiteralPath $idDir } catch { }
+        }
     }
-} catch {
-    # A checkout without git still runs; it just cannot claim an identity.
+    return $result
 }
+
+$idResult = Get-WorktreeIdentity $root
+$script:runHead = $idResult.Head
+$script:runFingerprint = $idResult.Fingerprint
+$script:identityNote = $idResult.Note
+if ($idResult.Error) { $script:failures += $idResult.Error; $script:errors++ }
 $logDir = Join-Path $root '.saipen\logs'
 $logPath = Join-Path $logDir 'run-tests-last.txt'
 if ($env:WINTAGE_TEST_NO_TRANSCRIPT -ne '1') {
@@ -123,6 +299,9 @@ function Exit-Suite([int]$code) {
         foreach ($f in $script:failures) { Write-Host "  - $f" -ForegroundColor Red }
     }
     Write-Host "SUITE VERDICT: head=$($script:runHead) worktree=$($script:runFingerprint) exit=$code errors=$($script:errors) log=$($script:transcript)"
+    if ($script:identityNote -and $code -eq 0) {
+        Write-Host "IDENTITY NOTE: $script:identityNote" -ForegroundColor Yellow
+    }
     if ($script:errors -gt 0) {
         Write-Host "TESTS FAILED ($script:errors errors)" -ForegroundColor Red
     } else {
@@ -1098,6 +1277,29 @@ $toolSuites = @(
     # requiring these same assertions to go red. It proves the TOOL and the CSS;
     # acceptance against a signed-in chatgpt.com tab is still a human step.
     @{ Name = 'test-chatgpt-viewport-coverage.js'; Cmd = 'node "{0}\tools\test-chatgpt-viewport-coverage.js"' },
+    # T-938: the stylesheet-duplication fix. Proves, per document / shadow root /
+    # generation, that exactly one effective Wintage sheet is installed after every
+    # injection path (plain inject, injectLate reinjection, ShadowRoot
+    # attachShadow + DOM fallback, strict-CSP, palette change), that no duplicate
+    # rule set survives, and that a RED control against the b5fb1d64 baseline build
+    # reproduces the dual-install the fix removes.
+    @{ Name = 'test-stylesheet-census.js'; Cmd = 'node "{0}\tools\test-stylesheet-census.js"' },
+    # T-938: the ShadowRoot registry fix. Proves the WeakRef-backed
+    # Element.prototype.__wintageShadowRoots registry never strongly retains a
+    # disconnected shadow root, that reinjection refreshes connected roots to the
+    # new generation in place (single copy), that reattached hosts are not stale,
+    # that registration is not O(N^2) over repeated churn, that the attachShadow
+    # wrapper installs exactly once, and that a RED control against the b5fb1d64
+    # strong-Array build reproduces the original non-retention defect.
+    @{ Name = 'test-shadow-registry-lifecycle.js'; Cmd = 'node "{0}\tools\test-shadow-registry-lifecycle.js"' },
+    # T-938 idle-CPU root-cause benchmark. Runs the same page workloads against
+    # disabled / b5fb1d64-baseline / fixA (stylesheet dedup only) / both-fixes
+    # builds of the userscript, separates the renderer process from the browser
+    # process, and reports before/after renderer task duration, style recalculation,
+    # layout, mutation volume, stylesheet and registry counts and heap. The suite
+    # runs --quick (current build, one workload, smoke-only); run it with no
+    # arguments for the full four-arm comparison.
+    @{ Name = 'bench-idle-cpu.js --quick'; Cmd = 'node "{0}\tools\bench-idle-cpu.js" --quick' },
     # The drift gate. T-373 fixed the viewport owner for the data-testid
     # generation, the inspector had already measured a newer shell, and nothing
     # compared the two -- so the sheet, the inspector and the fixture could each
@@ -1152,6 +1354,17 @@ $toolSuites = @(
     # It proves the TOOL, never the product: T-359's acceptance pass against a
     # signed-in chatgpt.com tab is still a human step.
     @{ Name = 'test-inspect-web-cdp-live.js'; Cmd = 'node "{0}\tools\test-inspect-web-cdp-live.js"' },
+    # T-917: the live acceptance PROCEDURE is prose, and prose rots quietly. The
+    # checklist could keep documenting `watch chatgpt.com 900` without
+    # --full-session -- a route-scoped diagnostic that returns accept:true
+    # without ever visiting the Settings or conversation family -- and the CLI
+    # would never notice, because the documentation lives outside it. This gate
+    # checks the documented command against the CLI's real flag parser, the
+    # documented predicates against the final report the CLI emits, and refuses
+    # fixture-only and route-scoped success as LIVE_PRODUCT_VERIFIED. RED
+    # controls remove --full-session, name an unsupported flag, promote fixture
+    # evidence and promote a route-scoped run; each must turn it red.
+    @{ Name = 'test-operator-checklist-live-contract.js'; Cmd = 'node "{0}\tools\test-operator-checklist-live-contract.js"' },
     # T-065: every chart family the theme names must carry a visibility
     # guard. The Studio report was unauthenticated-only for months while the
     # bar family sat guarded and its siblings did not, so the failure class was
@@ -1409,7 +1622,40 @@ $toolSuites = @(
     # check-wiki-mirror.js is a gate -- its own header says 'exit 0 = pass, 1 =
     # fail' and it aborts with a named page and a diff -- but a test-* filter
     # would have classified it as a tool and let it keep running only at release.
-    @{ Name = 'check-wiki-mirror.js'; Cmd = 'node "{0}\tools\check-wiki-mirror.js"' }
+    @{ Name = 'check-wiki-mirror.js'; Cmd = 'node "{0}\tools\check-wiki-mirror.js"' },
+    # T-971: the mirror gate above proves the repo wiki/ pages equal the saiwiki
+    # kitchen pages -- it says nothing about whether those pages are still true of
+    # the product. wiki/Desktop.md documents the supported targets in a table,
+    # while the real target set is declared once in desktop/install.ps1, so a
+    # target added to the installer needed no wiki row to work and the table fell
+    # two behind with nothing failing. test-wiki-target-parity.ps1 derives the
+    # live set from that one declaration (never a second list of names) and
+    # requires the mirror table to cover it; -RedControl drops a row from a
+    # scratch copy and requires the gate to fail.
+    @{ Name = 'test-wiki-target-parity.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-wiki-target-parity.ps1"' },
+    @{ Name = 'test-wiki-target-parity.ps1 -RedControl'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-wiki-target-parity.ps1" -RedControl' },
+    # T-967: the two P1 repairs whose failure mode is INVISIBLE on a green run.
+    # test-target-refresh-transaction.ps1 drives the REAL Load-Targets against
+    # real WinForms lists: a failed discovery must not erase the visible
+    # inventory, must clear freshness (no mutation authority from a stale table),
+    # must preserve a de-selected key, and must untick a target that became
+    # unusable. Its RED control runs the legacy shape and requires it to be caught.
+    @{ Name = 'test-target-refresh-transaction.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-target-refresh-transaction.ps1"' },
+    # test-form-shown-optin.ps1 proves the form-shown stamp is strictly opt-in:
+    # the source is guarded, a real child WITH the variable writes it, and a real
+    # child WITHOUT it writes nothing into its temp dir. The legacy handler
+    # defaulted the stamp to %TEMP%, so every ordinary launch wrote a test
+    # artifact and no run could have noticed.
+    @{ Name = 'test-form-shown-optin.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-form-shown-optin.ps1"' },
+    # T-967 regression: computing the worktree identity must never touch the LIVE
+    # git index. Get-WorktreeIdentity borrows .git/index via GIT_INDEX_FILE and
+    # "cleared" it with Remove-Item, which on Windows leaves the variable EMPTY
+    # rather than unset -- and an empty GIT_INDEX_FILE lets read-tree HEAD succeed
+    # while overwriting the live index, silently un-staging three committed-scope
+    # files. Harmless on Linux, destructive on Windows; this gate drives the real
+    # extracted function against a throwaway repo that has a staged change and
+    # requires the index bytes and the staged entry to survive.
+    @{ Name = 'test-identity-index-safety.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-identity-index-safety.ps1"' }
     # test-electron-repaint-probe.cjs is the eleventh release gate the suite used
     # to skip; it needs no entry of its own because test-electron-repaint.ps1
     # (already wired above) invokes it. The completeness assertion after the loop
@@ -1578,6 +1824,7 @@ function Get-SuiteRepoPaths([array]$suites, [string]$runTestsCode, [string]$repo
 function Get-UntrackedRepoPath([string[]]$paths, [string]$indexFile = $null) {
     $out = @()
     $oldIndex = $env:GIT_INDEX_FILE
+    $hadOldIndex = ($null -ne $oldIndex)
     try {
         if ($indexFile) { $env:GIT_INDEX_FILE = $indexFile }
         foreach ($p in $paths) {
@@ -1593,7 +1840,15 @@ function Get-UntrackedRepoPath([string[]]$paths, [string]$indexFile = $null) {
             if (-not $onIndex) { $out += $p }
         }
     } finally {
-        $env:GIT_INDEX_FILE = $oldIndex
+        # Restore the PRIOR value exactly: SetEnvironmentVariable puts a nonempty
+        # prior back verbatim and truly UNSETS an absent one (Remove-Item Env: can
+        # leave EMPTY on some Windows configurations, which read-tree HEAD would
+        # then treat as the live index path).
+        if ($hadOldIndex) { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $oldIndex, 'Process') }
+        else { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process') }
+        if ($hadOldIndex -and $env:GIT_INDEX_FILE -ne $oldIndex) {
+            try { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $oldIndex, 'Process') } catch { }
+        }
     }
     , $out
 }
@@ -1619,6 +1874,7 @@ $tempCarrierIndex = [System.IO.Path]::GetTempFileName()
 try {
     Copy-Item (Join-Path $root '.git/index') $tempCarrierIndex
     $oldIdx = $env:GIT_INDEX_FILE
+    $hadOldIdx = ($null -ne $oldIdx)
     $env:GIT_INDEX_FILE = $tempCarrierIndex
 
     # Red control A: tests/test-release-gate-audit.ps1 absent from candidate index
@@ -1632,7 +1888,13 @@ try {
     $redB = Get-UntrackedRepoPath $suiteRepoPaths $tempCarrierIndex
     Assert-True ($redB -contains 'tools/inject-wintage-web.js') "red control B: absence of require('./inject-wintage-web.js') dependency is detected (reported: $($redB -join ', '))"
 } finally {
-    $env:GIT_INDEX_FILE = $oldIdx
+    # Same restore rule as Get-WorktreeIdentity: restore the prior value exactly
+    # via SetEnvironmentVariable (nonempty back verbatim, absent truly UNSET);
+    # an EMPTY GIT_INDEX_FILE is a real index path that read-tree HEAD would treat
+    # as the live index, and Remove-Item Env: can leave EMPTY on some Windows
+    # configurations.
+    if ($hadOldIdx) { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $oldIdx, 'Process') }
+    else { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process') }
     if (Test-Path $tempCarrierIndex) { Remove-Item $tempCarrierIndex -Force -ErrorAction SilentlyContinue }
 }
 # T-907: accepting HEAD as a carrier is right when a wave commits through a
@@ -1680,6 +1942,479 @@ $releaseTestGates = @($coverage.MustRun | ForEach-Object { Split-Path $_ -Leaf }
 $unrun = @($releaseTestGates | Where-Object { -not $executed.Contains($_) })
 Assert-True ($unrun.Count -eq 0) "every test gate release.ps1 runs is executed by this suite (not run here: $($unrun -join ', '))"
 Assert-True ($releaseTestGates.Count -ge 10) "the release gate set was actually derived, not empty ($($releaseTestGates.Count) gates)"
+
+# T-967: the worktree fingerprint is DRIVEN here, not merely described. The
+# ticket's repro is a throwaway repository whose only difference between two
+# states is the CONTENT of one untracked file: `untracked.js` holding
+# `const a=1;` and `const a=999;`. The legacy form (porcelain + `git diff HEAD`)
+# returned ONE fingerprint for both, so two different trees compared equal. The
+# self-test below proves the shipped form separates them, and keeps the legacy
+# form as a RED CONTROL so the assertion can actually fail.
+Write-Host "
+--- Worktree fingerprint self-test (T-967) ---" -ForegroundColor Cyan
+
+function New-FingerprintFixtureRepo {
+    $dir = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-fp-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $prevEapFp = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & git -C $dir init -q 2>$null | Out-Null
+        & git -C $dir config user.email 'fixture@example.invalid' 2>$null | Out-Null
+        & git -C $dir config user.name 'Fixture' 2>$null | Out-Null
+        & git -C $dir config core.autocrlf false 2>$null | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $dir 'tracked.txt'), "tracked`n")
+        [System.IO.File]::WriteAllText((Join-Path $dir '.gitignore'), "ignored.txt`n")
+        & git -C $dir add -A 2>$null | Out-Null
+        & git -C $dir commit -q -m 'fixture base' 2>$null | Out-Null
+    } finally {
+        $ErrorActionPreference = $prevEapFp
+    }
+    return $dir
+}
+
+# The LEGACY fingerprint, verbatim: porcelain + `git diff HEAD`, which never
+# carries an untracked file's content. Kept only as the RED CONTROL.
+function Get-LegacyFingerprint([string]$repoRoot) {
+    $prevEapLg = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $porcelain = @(& git -C $repoRoot status --porcelain=v1 -uall 2>$null)
+        $diffText = (& git -C $repoRoot diff HEAD 2>$null | Out-String)
+    } finally {
+        $ErrorActionPreference = $prevEapLg
+    }
+    $payload = ($porcelain -join "`n") + "`n--diff--`n" + $diffText
+    return (Get-BytesHashHex ([System.Text.Encoding]::UTF8.GetBytes($payload))).Substring(0, 12)
+}
+
+$fpRepo = $null
+try {
+    $fpRepo = New-FingerprintFixtureRepo
+    # 1. THE TICKET'S EXACT REPRO: untracked.js = 'const a=1;' vs 'const a=999;'.
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+    $fpA = Get-WorktreeIdentity $fpRepo
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=999;`n")
+    $fpB = Get-WorktreeIdentity $fpRepo
+    $legacyA = Get-LegacyFingerprint $fpRepo
+
+    Assert-True ($fpA.Ok -and $fpB.Ok) 'fingerprint self-test: both fixture states produced a real identity'
+    Assert-True ($fpA.Fingerprint -ne $fpB.Fingerprint) "fingerprint: the two untracked-content states do NOT collide (A=$($fpA.Fingerprint) B=$($fpB.Fingerprint))"
+    Assert-True ($fpA.Fingerprint -ne 'no-git' -and $fpA.Fingerprint -ne 'IDENTITY-FAILED') "fingerprint: a real identity, not a fallback constant ($($fpA.Fingerprint))"
+    # RED CONTROL: the legacy form DOES collide on exactly these two states, so
+    # the assertion above is not vacuous and the ticket's defect is reproducible.
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+    $legacyA = Get-LegacyFingerprint $fpRepo
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=999;`n")
+    $legacyB = Get-LegacyFingerprint $fpRepo
+    Assert-True ($legacyA -eq $legacyB) "RED CONTROL: the legacy fingerprint STILL collides on the ticket's repro (legacy=$legacyA)"
+
+    # 2. STABILITY: the same tree twice gives the same fingerprint.
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+    $fpStable1 = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    $fpStable2 = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpStable1 -eq $fpStable2) "fingerprint: the same tree fingerprints identically twice ($fpStable1)"
+
+    # 3. TRACKED edit is detected.
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "tracked-edited`n")
+    $fpTracked = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpTracked -ne $fpStable1) 'fingerprint: a tracked working-tree edit changes the identity'
+    & git -C $fpRepo checkout -- tracked.txt 2>$null | Out-Null
+
+    # 4. STAGED change is detected (content identical to HEAD, staged copy differs).
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "tracked-staged`n")
+    & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "tracked`n")
+    $fpStaged = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpStaged -ne $fpStable1) 'fingerprint: a staged-but-not-in-worktree change changes the identity'
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+
+    # 4b. THE T-969 REPRO, driven as a pair of DISTINCT staged contents with an
+    #     IDENTICAL working file and IDENTICAL porcelain. Both trees report
+    #     `MM tracked.txt` and an empty throwaway-index diff, so the OLD
+    #     algorithm -- which hashed porcelain + a HEAD-rebuilt temp index and
+    #     never read the live one -- produced ONE fingerprint for both. The
+    #     live index's blob SHA is what separates them now.
+    $pairFps = @()
+    $pairPorcelain = @()
+    $pairBlobs = @()
+    $pairLegacy = @()
+    foreach ($case in 'alpha', 'beta') {
+        # Stage this case's content, then restore the working file to HEAD.
+        # Both cases now present IDENTICAL porcelain (`MM tracked.txt`) and an
+        # IDENTICAL working tree; only the STAGED blob differs.
+        [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "staged-$case`n")
+        & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "tracked`n")
+        $pairPorcelain += (@(& git -C $fpRepo status --porcelain=v1 -uall 2>$null) -join '|')
+        $entryText = (& git -C $fpRepo ls-files --stage 2>$null | Out-String)
+        $pairBlobs += ([regex]::Match($entryText, '(?m)^100644 ([0-9a-f]{40}) \d\ttracked\.txt')).Groups[1].Value
+        $pairFps += (Get-WorktreeIdentity $fpRepo).Fingerprint
+        # RED CONTROL payload: the pre-T-969 algorithm, verbatim -- porcelain
+        # plus a diff against a temp index REBUILT from HEAD, the live index
+        # never read. GIT_INDEX_FILE redirects every call so the fixture's own
+        # staged blob survives to be read again next round.
+        $legIndex = Get-IdTempPath 'redcontrol.index'
+        $prevLegIndex = $env:GIT_INDEX_FILE
+        $legPorcelain = @(& git -C $fpRepo status --porcelain=v1 -uall 2>$null)
+        $env:GIT_INDEX_FILE = $legIndex
+        & git -C $fpRepo read-tree HEAD 2>$null | Out-Null
+        & git -C $fpRepo add -N -- . 2>$null | Out-Null
+        $legDiff = (& git -C $fpRepo -c core.quotePath=true diff --no-renames HEAD 2>$null | Out-String)
+        if ($null -ne $prevLegIndex) { $env:GIT_INDEX_FILE = $prevLegIndex }
+        else { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process') }
+        Remove-Item -Recurse -Force -LiteralPath (Split-Path -Parent $legIndex) -ErrorAction SilentlyContinue
+        $legPayload = ($legPorcelain -join "`n") + "`n--diff--`n" + $legDiff
+        $pairLegacy += (Get-BytesHashHex ([System.Text.Encoding]::UTF8.GetBytes($legPayload))).Substring(0, 12)
+        # Return the fixture to the exact same tree: only the staged blob may differ next round.
+        & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+    }
+    Assert-True ($pairBlobs[0] -ne $pairBlobs[1] -and $pairBlobs[0].Length -eq 40 -and $pairBlobs[1].Length -eq 40) "staged-collision setup: the two staged blobs are genuinely different content ($($pairBlobs[0]) vs $($pairBlobs[1]))"
+    Assert-True ($pairPorcelain[0] -eq $pairPorcelain[1]) "staged-collision setup: both cases present the SAME porcelain status ($($pairPorcelain[0]))"
+    Assert-True ($pairFps[0] -ne $pairFps[1]) "staged-collision (T-969): two DISTINCT staged blobs with an identical working file do NOT share a fingerprint ($($pairFps[0]) vs $($pairFps[1]))"
+    # RED CONTROL: the algorithm as it was before T-969 collides on exactly this
+    # pair, so the assertion above is not vacuous.
+    Assert-True ($pairLegacy[0] -eq $pairLegacy[1]) "RED CONTROL: the pre-T-969 algorithm STILL collides on this pair ($($pairLegacy[0]))"
+
+    # 4c. NEGATIVE CONTROL: the same staged blob and unchanged working file are
+    #     STILL equal (the repair must not turn every call into a difference).
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "same-staged`n")
+    & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "same-staged`n")
+    $fpSameA = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    $fpSameB = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpSameA -eq $fpSameB) 'staged-collision control: an unchanged tree with a staged blob still fingerprints identically twice'
+    # 4d. NEGATIVE CONTROL: an UNSTAGED edit of the same file on top of the same
+    #     staged blob moves the identity (the two halves are independent).
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "same-staged-then-edited`n")
+    $fpSameEdited = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpSameEdited -ne $fpSameA) 'staged-collision control: an unstaged edit over a staged blob changes the identity'
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+
+    # 4e. NEGATIVE CONTROL: a STAGED ADDITION and a STAGED DELETION are distinct
+    #     staged contents, and both differ from a clean tree.
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'added.js'), "const a=1;`n")
+    & git -C $fpRepo add added.js 2>$null | Out-Null
+    $fpStgAdd = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpStgAdd -ne $fpStable1) 'staged-collision control: a staged addition changes the identity'
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'added.js'), "const a=999;`n")
+    $fpStgAdd2 = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpStgAdd2 -ne $fpStgAdd) 'staged-collision control: two different staged-addition blobs differ'
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    & git -C $fpRepo rm -q --cached tracked.txt 2>$null | Out-Null
+    $fpStgDel = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpStgDel -ne $fpStable1) 'staged-collision control: a staged deletion changes the identity'
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+
+    # 4f. NEGATIVE CONTROL: a STAGED RENAME and a changed file MODE are distinct
+    #     staged contents even though the blob is the same in both.
+    & git -C $fpRepo mv tracked.txt renamed.txt 2>$null | Out-Null
+    $fpStgRename = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpStgRename -ne $fpStable1) 'staged-collision control: a staged rename changes the identity'
+    & git -C $fpRepo mv renamed.txt tracked.txt 2>$null | Out-Null
+    & git -C $fpRepo update-index --chmod=+x tracked.txt 2>$null | Out-Null
+    $fpStgMode = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpStgMode -ne $fpStable1) 'staged-collision control: a changed file MODE changes the identity'
+    & git -C $fpRepo update-index --chmod=-x tracked.txt 2>$null | Out-Null
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+
+    # 4g. NEGATIVE CONTROL: a BINARY content change is carried by the blob SHA
+    #     (a text-oriented diff parser would have missed it entirely).
+    $binPath = Join-Path $fpRepo 'blob.bin'
+    [System.IO.File]::WriteAllBytes($binPath, [byte[]]@(0x00, 0x01, 0x02, 0xFF, 0x00, 0x00))
+    & git -C $fpRepo add blob.bin 2>$null | Out-Null
+    $fpBinA = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    [System.IO.File]::WriteAllBytes($binPath, [byte[]]@(0x00, 0x01, 0x02, 0xFF, 0x00, 0x01))
+    & git -C $fpRepo add blob.bin 2>$null | Out-Null
+    $fpBinB = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpBinA -ne $fpBinB) 'staged-collision control: a binary staged content change changes the identity'
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    Remove-Item -LiteralPath $binPath -Force -ErrorAction SilentlyContinue
+
+    # 4h. NEGATIVE CONTROL: an UNMERGED index entry (conflict stage 1/2/3) is a
+    #     staged state no blob-SHA-less digest could separate. Two branches must
+    #     genuinely DIVERGE first: branching off after the base commit and
+    #     merging the ancestor back is a no-op ("Already up to date"), which
+    #     leaves no MERGE_HEAD and makes `merge --abort` fail.
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "branch-a`n")
+    & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+    & git -C $fpRepo commit -q -m 'branch a' 2>$null | Out-Null
+    & git -C $fpRepo checkout -q -b 'side-branch' 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "branch-b`n")
+    & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+    & git -C $fpRepo commit -q -m 'branch b' 2>$null | Out-Null
+    & git -C $fpRepo checkout -q 'master' 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "branch-c`n")
+    & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+    & git -C $fpRepo commit -q -m 'branch c' 2>$null | Out-Null
+    & git -C $fpRepo merge --no-edit 'side-branch' 2>$null | Out-Null
+    $fpConflict = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    $fpStagedStages = ((& git -C $fpRepo ls-files --stage 2>$null | ForEach-Object { ($_ -split "\t")[0] -replace '\s+', '' }) -join ',')
+    Assert-True ($fpConflict -ne 'no-git' -and $fpConflict -ne 'IDENTITY-FAILED') "staged-collision control: an unmerged index does not fail the identity ($fpConflict, stages=$fpStagedStages)"
+    # The unmerged entries ARE staged content: the same tree resolved to one
+    # side must have a different identity from the conflicted state.
+    & git -C $fpRepo checkout -q --theirs -- tracked.txt 2>$null | Out-Null
+    & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+    $fpResolved = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpResolved -ne $fpConflict) 'staged-collision control: resolving a conflicted index changes the identity'
+    & git -C $fpRepo merge --abort 2>$null | Out-Null
+    & git -C $fpRepo checkout -q -B 'master' 2>$null | Out-Null
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+
+    # 4i. ACCEPTANCE: the LIVE index bytes and staged entries are identical
+    #     before and after identity calculation -- read-only, in the strictest
+    #     sense the mission allows the claim. The snapshot is taken AFTER the
+    #     fixture's own `git add`, which legitimately writes the index: measuring
+    #     before it would blame the identity call for the fixture's write.
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "readonly-check`n")
+    & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "tracked`n")
+    $liveIdx = Join-Path $fpRepo '.git\index'
+    $idxBytesBefore = [System.IO.File]::ReadAllBytes($liveIdx)
+    $stgBefore = ((& git --no-optional-locks -C $fpRepo ls-files --stage 2>$null) -join "`n")
+    $fpReadOnly = (Get-WorktreeIdentity $fpRepo)
+    $idxBytesAfter = [System.IO.File]::ReadAllBytes($liveIdx)
+    $stgAfter = ((& git --no-optional-locks -C $fpRepo ls-files --stage 2>$null) -join "`n")
+    Assert-True ($fpReadOnly.Ok) "index safety: the identity was computed with a staged blob present ($($fpReadOnly.Fingerprint))"
+    Assert-True ($idxBytesBefore.Length -eq $idxBytesAfter.Length) "index safety: identity calculation does not change the live index length ($($idxBytesBefore.Length) -> $($idxBytesAfter.Length))"
+    $idxSame = $true
+    for ($i = 0; $i -lt [Math]::Min($idxBytesBefore.Length, $idxBytesAfter.Length); $i++) {
+        if ($idxBytesBefore[$i] -ne $idxBytesAfter[$i]) { $idxSame = $false; break }
+    }
+    Assert-True $idxSame 'index safety: the live index BYTES are identical before and after identity calculation'
+    Assert-True ($stgBefore -eq $stgAfter) 'index safety: the live index ENTRY SET is identical before and after identity calculation'
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+
+    # 4j. ACCEPTANCE: a PRESET GIT_INDEX_FILE is neither USED as the index half
+    #     nor destroyed. The identity describes $fpRepo's OWN repository, so an
+    #     inherited GIT_INDEX_FILE naming a DIFFERENT index must not change the
+    #     answer -- otherwise a caller's exported variable silently redirects
+    #     which index the fingerprint measures.
+    $decoyIdx = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-decoy-' + [guid]::NewGuid().ToString('N') + '.index')
+    $priorIndexSnapshot = $env:GIT_INDEX_FILE
+    $hadPriorIndexSnapshot = ($null -ne $priorIndexSnapshot)
+    try {
+        [System.IO.File]::WriteAllText((Join-Path $fpRepo 'tracked.txt'), "decoy-staged`n")
+        $env:GIT_INDEX_FILE = $decoyIdx
+        & git -C $fpRepo add tracked.txt 2>$null | Out-Null
+        & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $fpRepo 'untracked.js'), "const a=1;`n")
+        $fpWithDecoy = Get-WorktreeIdentity $fpRepo
+        Assert-True ($fpWithDecoy.Ok) "preset GIT_INDEX_FILE: identity still computed ($($fpWithDecoy.Fingerprint))"
+        Assert-True ($env:GIT_INDEX_FILE -eq $decoyIdx) 'preset GIT_INDEX_FILE: the caller''s variable is restored exactly, not emptied or replaced'
+        $decoyBytes = if (Test-Path -LiteralPath $decoyIdx) { (Get-Item -LiteralPath $decoyIdx).Length } else { 0 }
+        Assert-True ($decoyBytes -gt 0) 'preset GIT_INDEX_FILE: the decoy index is a real, populated index (the control is not vacuous)'
+        # And the same tree with NO preset must fingerprint identically: the
+        # preset index is preserved but is NOT what the identity measures.
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process')
+        $fpWithoutDecoy = Get-WorktreeIdentity $fpRepo
+        Assert-True ($fpWithDecoy.Fingerprint -eq $fpWithoutDecoy.Fingerprint) "preset GIT_INDEX_FILE: the caller's index is not substituted for this repository's own index ($($fpWithDecoy.Fingerprint))"
+        Remove-Item -LiteralPath $decoyIdx -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $decoyIdx) { Remove-Item -LiteralPath $decoyIdx -Force -ErrorAction SilentlyContinue }
+    } finally {
+        if ($hadPriorIndexSnapshot) { $env:GIT_INDEX_FILE = $priorIndexSnapshot }
+        else { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process') }
+        Get-ChildItem -LiteralPath ([System.IO.Path]::GetTempPath()) -Filter 'wintage-decoy-*.index' -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+
+    # 4k. NEGATIVE CONTROL: an interrupted / CORRUPT index is IDENTITY-FAILED,
+    #     not a partial identity. `git status` is the first command that reads
+    #     the index, so the corrupt repository's own .git/index is what makes it
+    #     fail -- and the failure must be the explicit constant, never a
+    #     plausible-looking value a caller could read as "the tree is clean".
+    $liveIdxPath = Join-Path $fpRepo '.git\index'
+    $savedIdxBytes = [System.IO.File]::ReadAllBytes($liveIdxPath)
+    try {
+        [System.IO.File]::WriteAllBytes($liveIdxPath, [byte[]]@(0x44, 0x49, 0x52, 0x43, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0xFF))
+        $fpCorrupt = Get-WorktreeIdentity $fpRepo
+        Assert-True (-not $fpCorrupt.Ok -and $fpCorrupt.Fingerprint -eq 'IDENTITY-FAILED' -and $fpCorrupt.Error.Length -gt 0) "interrupted identity: a corrupt live index reports IDENTITY-FAILED with a reason, never a partial fingerprint ($($fpCorrupt.Fingerprint) / $($fpCorrupt.Note))"
+        Assert-True ($fpCorrupt.Fingerprint -ne 'no-git') 'interrupted identity: a corrupt INDEX is a failure, not the missing-repository constant'
+    } finally {
+        [System.IO.File]::WriteAllBytes($liveIdxPath, $savedIdxBytes)
+    }
+    $fpAfterRestore = Get-WorktreeIdentity $fpRepo
+    Assert-True ($fpAfterRestore.Ok) "interrupted identity: the restored index computes a real identity again ($($fpAfterRestore.Fingerprint))"
+
+    # 5. DELETION is detected.
+    Remove-Item -LiteralPath (Join-Path $fpRepo 'tracked.txt') -Force
+    $fpDeleted = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpDeleted -ne $fpStable1) 'fingerprint: a deleted tracked file changes the identity'
+    & git -C $fpRepo checkout -- tracked.txt 2>$null | Out-Null
+
+    # 6. IGNORED files are excluded: writing to an ignored path does not move the
+    #    identity, or every build artifact would make two identical trees differ.
+    $fpBeforeIgnored = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    [System.IO.File]::WriteAllText((Join-Path $fpRepo 'ignored.txt'), "noise`n")
+    $fpAfterIgnored = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($fpBeforeIgnored -eq $fpAfterIgnored) 'fingerprint: an ignored file is excluded from the identity'
+
+    # 7. An UNUSUAL filename is safe: spaces plus non-ASCII force git to QUOTE
+    #    the path (`core.quotePath` default renders it as "odd name \303\274..."),
+    #    which is exactly the rendering a naive parser breaks on, and a single
+    #    quote and brackets add the shell-metacharacter shapes a glob would eat.
+    #    A double quote is deliberately NOT used: Windows itself rejects it in a
+    #    path (NTFS/.NET illegal characters), so a fixture containing one can
+    #    never be created and would only prove the test cannot run.
+    $odd = Join-Path $fpRepo "odd name ünïcode [brackets] #hash's.js"
+    [System.IO.File]::WriteAllText($odd, "const odd=1;`n")
+    $fpOdd = (Get-WorktreeIdentity $fpRepo)
+    Assert-True ($fpOdd.Ok -and $fpOdd.Fingerprint -ne 'IDENTITY-FAILED') "fingerprint: an unusual filename is handled without an identity failure ($($fpOdd.Fingerprint))"
+    # ...and its CONTENT is part of the identity, not just its name.
+    [System.IO.File]::WriteAllText($odd, "const odd=2;`n")
+    $fpOdd2 = (Get-WorktreeIdentity $fpRepo)
+    Assert-True ($fpOdd2.Fingerprint -ne $fpOdd.Fingerprint) 'fingerprint: an unusual filename''s content changes the identity'
+    Remove-Item -LiteralPath $odd -Force
+
+    # 8. IDENTITY-FAILURE is explicit: a non-repository reports no identity
+    #    rather than a plausible constant.
+    $notRepo = Join-Path ([System.IO.Path]::GetTempPath()) ('wintage-norepo-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $notRepo | Out-Null
+    try {
+        $noId = Get-WorktreeIdentity $notRepo
+        Assert-True (-not $noId.Ok -and $noId.Fingerprint -eq 'no-git' -and $noId.Note.Length -gt 0) 'fingerprint: a non-repository reports no identity and a reason, never a constant'
+    } finally {
+        Remove-Item -Recurse -Force -LiteralPath $notRepo -ErrorAction SilentlyContinue
+    }
+
+    # ===== T-973: abbreviated-blob collision + GIT_INDEX_FILE restoration =====
+    # Two independent defects in Get-WorktreeIdentity, both proven on THIS real
+    # git fixture. P1: git's DEFAULT diff abbreviates binary object ids, so two
+    # DIFFERENT binary contents that share the 7-hex prefix 'a0ff760' hashed to
+    # ONE fingerprint. P2: the finally block's variable restoration.
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    & git -C $fpRepo clean -qfdx 2>$null | Out-Null
+
+    # --- A/B: the pair must COLLIDE under the previous abbreviated content-half
+    #     (RED CONTROL) and be SEPARATED by the shipped --full-index function.
+    #     Both bytes are UNTRACKED, at the same path, sharing abbreviated id
+    #     'a0ff760'; their FULL blob ids are a0ff76010a... and a0ff760cb3a....
+    $t973A = [byte[]]@(0x1b,0x1a,0x00,0x00,0x00,0x01,0x80,0xff)
+    $t973B = [byte[]]@(0xfd,0x3b,0x00,0x00,0x00,0x01,0x80,0xff)
+    $t973Asset = Join-Path $fpRepo 't973-asset.bin'
+    $legBinFps = @()
+    $shipBinFps = @()
+    foreach ($bytes in @($t973A, $t973B)) {
+        [System.IO.File]::WriteAllBytes($t973Asset, $bytes)
+        # RED CONTROL: the PREVIOUS content-half, verbatim -- abbreviated diff.
+        $legIdx = Get-IdTempPath 't973-leg.index'
+        $prevLeg = $env:GIT_INDEX_FILE
+        $legPorcelain = @(& git --no-optional-locks -C $fpRepo status --porcelain=v1 -uall 2>$null)
+        $legIndexText = (& git --no-optional-locks -c core.quotePath=true -C $fpRepo ls-files --stage 2>$null | Out-String)
+        $legIndexHex = Get-BytesHashHex ([System.Text.Encoding]::UTF8.GetBytes($legIndexText))
+        $env:GIT_INDEX_FILE = $legIdx
+        & git -C $fpRepo read-tree HEAD 2>$null | Out-Null
+        & git -C $fpRepo add -N -- . 2>$null | Out-Null
+        $legDiff = (& git -C $fpRepo -c core.quotePath=true diff --no-renames HEAD 2>$null | Out-String)
+        if ($null -ne $prevLeg) { $env:GIT_INDEX_FILE = $prevLeg }
+        else { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process') }
+        Remove-Item -Recurse -Force -LiteralPath (Split-Path -Parent $legIdx) -ErrorAction SilentlyContinue
+        $legPayload = $legIndexHex + "`n" + ($legPorcelain -join "`n") + "`n--diff--`n" + $legDiff
+        $legBinFps += (Get-BytesHashHex ([System.Text.Encoding]::UTF8.GetBytes($legPayload))).Substring(0,12)
+        # SHIPPED function on the identical bytes.
+        $shipBinFps += (Get-WorktreeIdentity $fpRepo).Fingerprint
+    }
+    Remove-Item -LiteralPath $t973Asset -Force -ErrorAction SilentlyContinue
+    Assert-True ($legBinFps[0] -eq $legBinFps[1]) "T-973 RED CONTROL (A): the abbreviated content-half STILL collides on the binary pair ($($legBinFps[0]))"
+    Assert-True ($shipBinFps[0] -ne $shipBinFps[1]) "T-973 (B): --full-index separates the binary pair the abbreviated diff merged (A=$($shipBinFps[0]) B=$($shipBinFps[1]))"
+
+    # --- C: identical binary content fingerprints identically across runs ---
+    [System.IO.File]::WriteAllBytes($t973Asset, $t973A)
+    $t973Same1 = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    $t973Same2 = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($t973Same1 -eq $t973Same2) "T-973 (C): identical binary content fingerprints identically across repeated runs ($t973Same1)"
+    Remove-Item -LiteralPath $t973Asset -Force -ErrorAction SilentlyContinue
+
+    # --- D/E: a STAGED and an UNSTAGED tracked binary change each move the
+    #     identity. Commit the asset so it is a TRACKED blob.
+    [System.IO.File]::WriteAllBytes($t973Asset, $t973A)
+    & git -C $fpRepo add t973-asset.bin 2>$null | Out-Null
+    & git -C $fpRepo commit -q -m 't973 tracked binary' 2>$null | Out-Null
+    $t973TrackedBase = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    [System.IO.File]::WriteAllBytes($t973Asset, $t973B)
+    $t973Unstaged = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($t973Unstaged -ne $t973TrackedBase) 'T-973 (E): an unstaged tracked binary edit changes the identity'
+    & git -C $fpRepo checkout -- t973-asset.bin 2>$null | Out-Null
+    [System.IO.File]::WriteAllBytes($t973Asset, $t973B)
+    & git -C $fpRepo add t973-asset.bin 2>$null | Out-Null
+    [System.IO.File]::WriteAllBytes($t973Asset, $t973A)
+    $t973Staged = (Get-WorktreeIdentity $fpRepo).Fingerprint
+    Assert-True ($t973Staged -ne $t973TrackedBase) 'T-973 (D): a staged binary change changes the identity'
+    & git -C $fpRepo reset -q --hard HEAD 2>$null | Out-Null
+    Remove-Item -LiteralPath $t973Asset -Force -ErrorAction SilentlyContinue
+
+    # --- P2: GIT_INDEX_FILE finally-block restoration negative controls ---
+    # The live index must be byte-identical across the whole block; capture it
+    # once around every restoration case.
+    $t973LiveIdx = Join-Path $fpRepo '.git\index'
+    $t973IdxBefore = [System.IO.File]::ReadAllBytes($t973LiveIdx)
+    $t973IdxSnap = $env:GIT_INDEX_FILE
+    $t973HadIdxSnap = ($null -ne $t973IdxSnap)
+    try {
+        # (a) Initially ABSENT -> truly UNSET after, and a subsequent git command
+        #     still works (proves no lingering throwaway-index path).
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process')
+        $null = Get-WorktreeIdentity $fpRepo
+        Assert-True ($null -eq [System.Environment]::GetEnvironmentVariable('GIT_INDEX_FILE','Process')) 'GIT_INDEX_FILE restore: an initially ABSENT variable is truly UNSET after identity capture (not left EMPTY)'
+        $statusOk = @(& git --no-optional-locks -C $fpRepo status --porcelain=v1 2>$null)
+        Assert-True ($LASTEXITCODE -eq 0) "GIT_INDEX_FILE restore: a subsequent git command succeeds after capture (status exit $LASTEXITCODE)"
+        # (b) Initially NONEMPTY -> restored to its exact value.
+        $nonEmptyIdx = 'C:\witage-t973-prior-nonexistent.index'
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $nonEmptyIdx, 'Process')
+        $null = Get-WorktreeIdentity $fpRepo
+        Assert-True ($env:GIT_INDEX_FILE -eq $nonEmptyIdx) 'GIT_INDEX_FILE restore: an initially NONEMPTY variable is restored to its exact value'
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process')
+        # (c) "Initially EMPTY": on Windows PowerShell 5.1 the Win32/.NET layer
+        #     cannot hold a present-but-empty process variable -- assigning ''
+        #     (or SetEnvironmentVariable(name,'')) DELETES it, and
+        #     GetEnvironmentVariable returns null for BOTH empty and absent. So an
+        #     "empty" GIT_INDEX_FILE is indistinguishable from ABSENT here. This
+        #     control proves what the old `-not $env:GIT_INDEX_FILE` assertion could
+        #     not: (1) an empty assignment is ALREADY absent before the call, and
+        #     (2) the function leaves it ABSENT -- never a lingering present-empty,
+        #     which is exactly the read-tree live-index hazard.
+        $env:GIT_INDEX_FILE = ''
+        Assert-True ($null -eq [System.Environment]::GetEnvironmentVariable('GIT_INDEX_FILE','Process')) 'GIT_INDEX_FILE restore: on Windows PS 5.1 an empty assignment coalesces to ABSENT (a present-empty process variable cannot exist here)'
+        $null = Get-WorktreeIdentity $fpRepo
+        Assert-True ($null -eq [System.Environment]::GetEnvironmentVariable('GIT_INDEX_FILE','Process')) 'GIT_INDEX_FILE restore: an empty/absent GIT_INDEX_FILE is left ABSENT after identity capture, never a lingering present-empty (the read-tree hazard)'
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process')
+        # (d) Repeated sequential calls are stable and leave it ABSENT each time.
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process')
+        $seq1 = (Get-WorktreeIdentity $fpRepo).Fingerprint
+        $seq2 = (Get-WorktreeIdentity $fpRepo).Fingerprint
+        Assert-True ($seq1 -eq $seq2) 'GIT_INDEX_FILE restore: repeated sequential identity calls are stable'
+        Assert-True ($null -eq [System.Environment]::GetEnvironmentVariable('GIT_INDEX_FILE','Process')) 'GIT_INDEX_FILE restore: the variable stays ABSENT across repeated calls'
+        # (e) A non-completing identity calculation (nonexistent repo) still runs
+        #     the finally and leaves the variable correctly restored.
+        [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process')
+        Get-WorktreeIdentity ([System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'witage-t973-norepo-' + [guid]::NewGuid().ToString('N'))) | Out-Null
+        Assert-True ($null -eq [System.Environment]::GetEnvironmentVariable('GIT_INDEX_FILE','Process')) 'GIT_INDEX_FILE restore: an identity calculation that does not complete still leaves the variable UNSET'
+    } finally {
+        if ($t973HadIdxSnap) { $env:GIT_INDEX_FILE = $t973IdxSnap }
+        else { [System.Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $null, 'Process') }
+    }
+    $t973IdxAfter = [System.IO.File]::ReadAllBytes($t973LiveIdx)
+    Assert-True ($t973IdxBefore.Length -eq $t973IdxAfter.Length) "GIT_INDEX_FILE restore: identity capture does not change the live index length ($($t973IdxBefore.Length) -> $($t973IdxAfter.Length))"
+    $t973IdxSame = $true
+    for ($i = 0; $i -lt [Math]::Min($t973IdxBefore.Length, $t973IdxAfter.Length); $i++) {
+        if ($t973IdxBefore[$i] -ne $t973IdxAfter[$i]) { $t973IdxSame = $false; break }
+    }
+    Assert-True $t973IdxSame 'GIT_INDEX_FILE restore: the live index BYTES are identical before and after identity capture'
+} catch {
+    # A fixture that cannot even be built is a FAILED check, not a reason for the
+    # suite to die before it prints a verdict: an aborted run and a green run are
+    # indistinguishable to anything reading only the exit code's neighbourhood.
+    $script:failures += "fingerprint self-test aborted before its verdict: $($_.Exception.Message)"
+    $script:errors++
+} finally {
+    # The throwaway repo must never survive the suite.
+    if ($fpRepo) { Remove-Item -Recurse -Force -LiteralPath $fpRepo -ErrorAction SilentlyContinue }
+}
 
 Write-Host "
 ======================="

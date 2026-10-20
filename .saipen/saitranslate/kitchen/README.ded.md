@@ -25,7 +25,7 @@
 ## Установка
 
 1. Ставь [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Жми **[Установить Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey сам откроет страницу.
+2. Жми **[Установить Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey сам откроет страницу.
 3. Всё. Любой сайт теперь — Windows 95, тёмная золотая редакция.
 
 ## Обновление

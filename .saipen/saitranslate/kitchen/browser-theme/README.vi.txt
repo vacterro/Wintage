@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — theme trình duyệt (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Theme đồng hành cho userscript Wintage (https://github.com/vacterro/Wintage).
+Theme đồng hành cho userscript Wintage (https://gitlab.com/vacuum34/wintage).
 Theme này là một palette Dark Golden cố định kiểu legacy, đóng gói thủ công và độc lập
 với các palette chuyển đổi của userscript: canvas #1A0F05, toolbar #2A1C0A, chữ vàng #D4B87A,
 viền vàng #C0A060, omnibox lõm #0F0A04, link nhấn #9DD9F9. Nó không theo palette mặc định

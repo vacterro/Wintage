@@ -17,7 +17,7 @@ _हर तत्व एक नज़र में अपना उद्दे�
 ## इंस्टॉल करना
 
 1. [Tampermonkey](https://www.tampermonkey.net/) इंस्टॉल करें (Chrome, Edge, Firefox, Opera, Safari)।
-2. **[Wintage इंस्टॉल करें](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** पर क्लिक करें — Tampermonkey अपना इंस्टॉल पेज अपने आप खोलता है।
+2. **[Wintage इंस्टॉल करें](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** पर क्लिक करें — Tampermonkey अपना इंस्टॉल पेज अपने आप खोलता है।
 3. हो गया। अब आप जिस भी साइट पर जाएँ, वह Windows 95, डार्क गोल्डन संस्करण चला रही है।
 
 ## अपडेट करना
@@ -103,4 +103,4 @@ Wintage अब एक पैलेट नहीं है। छह UI.md की
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

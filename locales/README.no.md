@@ -17,7 +17,7 @@ _Hvert element kommuniserer formålet sitt ved første øyekast, reduserer kogni
 ## Installasjon
 
 1. Installer [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klikk **[Installer Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey åpner installasjonssiden automatisk.
+2. Klikk **[Installer Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey åpner installasjonssiden automatisk.
 3. Ferdig. Hver nettside du besøker kjører nå Windows 95, mørk gull-utgaven.
 
 ## Oppdatering
@@ -103,4 +103,4 @@ Det hever `@version`-patchnummeret (Tampermonkey-headeren og `W95_VERSION`-stemp
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

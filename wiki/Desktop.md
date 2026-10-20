@@ -39,7 +39,7 @@ changing their grouping.
 | `obs` | OBS 30.2+ `.ovt` variant + active `user.ini` theme ID | yes |
 | `qbittorrent` | unpacked Qt UI theme (`config.json` + `stylesheet.qss`) + the two `qBittorrent.ini` theme keys | yes |
 | `antigravity`, `vscode` | colour-theme extension in the extensions folder | **yes** |
-| `freebuff`, `codenomad`, `workbuddy`, `zcode` | Electron shim (relocation) | no — re-run the installer |
+| `freebuff`, `antigravity-app`, `codenomad`, `workbuddy`, `zcode` | Electron shim (relocation). `antigravity-app` is the agent app, a separate program from the `antigravity` IDE and themed separately | no — re-run the installer |
 | `claude` | Electron shim, patched in place | no — an update makes a new folder |
 | `mpchc` | registry, dark theme + OSD typography only | no — MPC-HC rewrites settings on exit |
 | `qbittorrent`/`obs`/`mpchc` fonts | the themes NAME `Verdana_m1` (the no-antialias face); the installer never installs or removes fonts | n/a — install the face once by hand |
@@ -48,6 +48,7 @@ changing their grouping.
 | `cinema4d` | scheme folder dropped into schemes directory | yes |
 | `discord` | CSS dropped into BetterDiscord's own theme folder; plugins tab manages BetterDiscord add-ons | yes |
 | `totalcmd`, `totalcmd2` | `wincmd.ini` `[Colors]` keys | yes |
+| `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer` row-highlight colours and graph backgrounds | no — Process Explorer rewrites its settings on exit; close it and re-run |
 
 ### Portable browsers
 

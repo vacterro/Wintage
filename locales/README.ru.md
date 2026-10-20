@@ -27,7 +27,7 @@ _Каждый элемент с первого взгляда говорит, з
 ## Установка
 
 1. Установите [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Нажмите **[Установить Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey сам откроет страницу установки.
+2. Нажмите **[Установить Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey сам откроет страницу установки.
 3. Готово. Каждый сайт, который вы посещаете, теперь работает на Windows 95 в тёмной золотой редакции.
 
 ## Обновление
@@ -164,4 +164,4 @@ Dark). Каждая из них проходит WCAG AA по трём токе�
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

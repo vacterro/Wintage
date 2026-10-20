@@ -1,1 +1,1 @@
-Wintage v1.36.0 · MIT License · [Source](https://github.com/vacterro/Wintage) · [Changelog](https://github.com/vacterro/Wintage/blob/main/CHANGELOG.md)
+Wintage v1.36.10 · MIT License · [Source](https://gitlab.com/vacuum34/wintage) · [Changelog](https://gitlab.com/vacuum34/wintage/-/blob/main/CHANGELOG.md)

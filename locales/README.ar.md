@@ -16,7 +16,7 @@ _كل عنصر يخبر عن الغرض منه بنظرة واحدة، مما ي
 ## التثبيت
 
 1. ثبّت [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. اضغط **[ثبّت Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — يفتح Tampermonkey صفحة التثبيت تلقائياً.
+2. اضغط **[ثبّت Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — يفتح Tampermonkey صفحة التثبيت تلقائياً.
 3. انتهى. كل موقع تزوره يعمل الآن بنظام Windows 95، إصدار الذهبي الداكن.
 
 ## التحديث
@@ -102,4 +102,4 @@ _كل عنصر يخبر عن الغرض منه بنظرة واحدة، مما ي
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

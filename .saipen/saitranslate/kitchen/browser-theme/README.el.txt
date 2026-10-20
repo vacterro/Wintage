@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — θέμα browser (Cent Browser / Chrome / Edge)
 ========================================================================
 
-Συνοδευτικό θέμα για το userscript Wintage (https://github.com/vacterro/Wintage).
+Συνοδευτικό θέμα για το userscript Wintage (https://gitlab.com/vacuum34/wintage).
 Αυτό το θέμα είναι μια σταθερή παλέτα Dark Golden κληρονομιάς, συσκευασμένη με το χέρι
 και ανεξάρτητη από τις εναλλάξιμες παλέτες του userscript: canvas #1A0F05, toolbar
 #2A1C0A, χρυσό κείμενο #D4B87A, χρυσή φασέτα #C0A060, βυθισμένο omnibox #0F0A04,

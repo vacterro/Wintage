@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — brauseri teema (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Wintage-juuskripti kaaslane (https://github.com/vacterro/Wintage).
+Wintage-juuskripti kaaslane (https://gitlab.com/vacuum34/wintage).
 See teema on fikseeritud pärand-Dark Golden palett, käsitsi kokku pandud ja
 sõltumatu juuskripti vahetatavatest palettidest: canvas #1A0F05, toolbar #2A1C0A,
 kuldne tekst #D4B87A, kuldne faasimine #C0A060, süvistatud omnibox #0F0A04,

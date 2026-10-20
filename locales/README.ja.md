@@ -17,7 +17,7 @@ _あらゆる要素が一目でその役割を伝える。これにより認知�
 ## インストール
 
 1. [Tampermonkey](https://www.tampermonkey.net/) をインストールする (Chrome, Edge, Firefox, Opera, Safari)。
-2. **[Wintageをインストール](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** をクリック — Tampermonkeyがインストールページを自動的に開く。
+2. **[Wintageをインストール](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** をクリック — Tampermonkeyがインストールページを自動的に開く。
 3. 完了。アクセスするすべてのサイトが、ダークゴールデン版のWindows 95で動く。
 
 ## 更新
@@ -103,4 +103,4 @@ Wintageはもはや1つのパレットではない。6つはUI.md自身の構造
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

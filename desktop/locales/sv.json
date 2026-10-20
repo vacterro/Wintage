@@ -36,6 +36,7 @@
   "Save": "SPARA",
   "SelectAll": "ALLA",
   "SelectNone": "INGA",
+  "RefreshTargets": "REFRESH LIST",
   "SkippedByTargets": "VARNING: -Target all skulle hoppa över {0} — de är valbara men finns inte i någon dispatch-lista.",
   "Tokens": "Token",
   "UnregisteredLogonTask": "Inloggningsaktivitet avregistrerad",

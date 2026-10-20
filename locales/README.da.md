@@ -17,7 +17,7 @@ _Hvert element kommunikerer sit formål ved første øjekast, reducerer kognitiv
 ## Installation
 
 1. Installér [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klik på **[Installér Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey åbner installationssiden automatisk.
+2. Klik på **[Installér Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey åbner installationssiden automatisk.
 3. Færdig. Hver hjemmeside, du besøger, kører nu Windows 95, mørk gylden udgave.
 
 ## Opdatering
@@ -103,4 +103,4 @@ Det hæver `@version`-patchnummeret (Tampermonkey-headeren og `W95_VERSION`-stem
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

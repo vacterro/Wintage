@@ -112,7 +112,7 @@ function runBlock(block, initialHref) {
     ['https://www.figma.com/file/xyz', true],
     ['https://example.com/', false],
     ['https://www.wikipedia.org/', false],
-    ['https://github.com/vacterro/Wintage', false]
+    ['https://gitlab.com/vacuum34/wintage', false]
   ];
   for (const [url, want] of samples) {
     const got = captured.isExcludedUrl(url);

@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — سمة المتصفح (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-سمة مرافقة لسكربت مستخدم Wintage (https://github.com/vacterro/Wintage).
+سمة مرافقة لسكربت مستخدم Wintage (https://gitlab.com/vacuum34/wintage).
 هذه السمة لوحة Dark Golden ثابتة قديمة، مرفقة يدوياً ومستقلة عن لوحات السكربت القابلة
 للتبديل: canvas #1A0F05، toolbar #2A1C0A، نص ذهبي #D4B87A، ذهبي الحواف #C0A060،
 حقل العنوان الغائر #0F0A04، تمييز الروابط #9DD9F9. لا تتبع اللوحة الافتراضية للسكربت

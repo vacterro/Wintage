@@ -492,9 +492,30 @@ if (-not $Target -and -not $Selected) {
     # here, is it themed, and WHICH palette is on it. Without the third column,
     # "which one did I put on Freebuff again" has no answer short of reading JSON.
     $palettes = (Get-ChildItem (Join-Path $root 'themes') -Filter '*.json' | ForEach-Object { $_.BaseName }) -join '|'
+    # T-970: the listing is a CONTRACT with the GUI's Get-TargetListing, and a
+    # contract must be able to say it was honoured IN FULL. Every target row is
+    # printed through ONE emitter that counts, and the branch ends with a
+    # machine-readable completion witness carrying that count. A listing cut short
+    # -- a truncated pipe, a child killed before the tail -- cannot produce the
+    # witness, so the reader refuses it instead of publishing a partial inventory
+    # over a full one. The count is a count of what was really emitted, never a
+    # hand-written second list of target keys that would drift the moment a target
+    # is added.
+    $rowsEmitted = 0
+    # The row FORMAT lives here and only here: every target row in the listing has
+    # the same four columns, and 18 copies of the format string is 18 chances for
+    # one of them to drift away from what the reader parses.
+    function Say-TargetRow($key, $name, $state, $palette) {
+        $script:rowsEmitted++
+        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $key, $name, $state, $palette)
+    }
 
     Say (T 'ListingHeader') 'Cyan'
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f (T 'ColTarget'), (T 'ColApp'), (T 'ColState'), (T 'ColPalette')) 'DarkGray'
+    # The column header is NOT a target row and deliberately does not pass through
+    # Say-TargetRow: counting it would make the witness claim one row more than the
+    # reader can parse. Single-quoted so a bulk wrap of the row emitter's
+    # double-quoted format string can never swallow this line.
+    Say ('  {0,-16} {1,-38} {2,-22} {3}' -f (T 'ColTarget'), (T 'ColApp'), (T 'ColState'), (T 'ColPalette')) 'DarkGray'
 
     foreach ($k in $TARGETS.Keys | Sort-Object) {
         $t = $TARGETS[$k]
@@ -505,7 +526,7 @@ if (-not $Target -and -not $Selected) {
         # A VS Code target carries EVERY palette at once and the user picks in the
         # editor, so naming one here would be a lie.
         $pal = if (Test-Path $dest) { 'all (pick in the editor)' } else { '-' }
-        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $k, $t.Name, $state, $pal)
+        Say-TargetRow $k $t.Name $state $pal
     }
 
     foreach ($k in $ELECTRON.Keys | Sort-Object) {
@@ -559,7 +580,7 @@ if (-not $Target -and -not $Selected) {
         $pal = if (-not $themed) { '-' }
                elseif ($e.InPlace) { (Read-Utf8 $palFile).Trim() }
                else { (Read-Utf8 $pkg | ConvertFrom-Json).wintagePalette }
-        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f $k, $e.Name, $state, $pal)
+        Say-TargetRow $k $e.Name $state $pal
     }
 
     $mpc = if (Test-Path $MPC_KEY) {
@@ -569,7 +590,7 @@ if (-not $Target -and -not $Selected) {
         # reported a correctly-themed machine as "found, not themed".
         if ((Get-ItemProperty $MPC_KEY).OSDFont -eq (Get-WintageFontFace)) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'mpchc', 'MPC-HC (K-Lite)', $mpc, 'n/a - colours are compiled in')
+    Say-TargetRow 'mpchc' 'MPC-HC (K-Lite)' $mpc 'n/a - colours are compiled in'
 
     # Registry evidence (the settings key only exists once Process Explorer has
     # run here) or the exe found through the supported path model. The palette
@@ -579,11 +600,11 @@ if (-not $Target -and -not $Selected) {
           elseif ($peMarker) { 'themed' }
           else { 'found, not themed' }
     $pePal = if ($peMarker) { $peMarker } else { 'n/a - highlight rows only' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'processexplorer', 'Process Explorer (Sysinternals)', $pe, $pePal)
+    Say-TargetRow 'processexplorer' 'Process Explorer (Sysinternals)' $pe $pePal
 
     $windowsPal = if (Test-Path $WINDOWS_THEME_MARKER) { (Read-Utf8 $WINDOWS_THEME_MARKER).Trim() } else { $null }
     $windows = if ($windowsPal) { 'themed' } else { 'found, not themed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'windows', 'Windows system theme', $windows, $(if ($windowsPal) { $windowsPal } else { '-' }))
+    Say-TargetRow 'windows' 'Windows system theme' $windows $(if ($windowsPal) { $windowsPal } else { '-' })
 
     $terminalPaths = @(Get-WindowsTerminalSettingsPaths)
     $terminalMarkers = @($terminalPaths | ForEach-Object { $_ + '.wintage-palette' } | Where-Object { Test-Path $_ })
@@ -593,14 +614,14 @@ if (-not $Target -and -not $Selected) {
     $terminalPal = if ($terminalMarkers.Count) {
         (@($terminalMarkers | ForEach-Object { (Read-Utf8 $_).Trim() } | Sort-Object -Unique) -join '|')
     } else { '-' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'terminal', "Windows Terminal ($($terminalPaths.Count) install(s))", $terminal, $terminalPal)
+    Say-TargetRow 'terminal' "Windows Terminal ($($terminalPaths.Count) install(s))" $terminal $terminalPal
 
     $conhostPalette = if (Test-Path $CONHOST_KEY) { (Get-ItemProperty $CONHOST_KEY -Name WintagePalette -ErrorAction SilentlyContinue).WintagePalette } else { $null }
     $conhost = if (-not (Test-Path $CONHOST_KEY)) { 'not installed' }
                elseif ($conhostPalette) { 'themed' }
                else { 'found, not themed' }
     $conhostPal = if ($conhostPalette) { $conhostPalette } else { '-' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'conhost', 'Console Host (cmd / PowerShell)', $conhost, $conhostPal)
+    Say-TargetRow 'conhost' 'Console Host (cmd / PowerShell)' $conhost $conhostPal
 
     $obsUser = Join-Path $OBS_CONFIG 'user.ini'
     $obsTheme = Join-Path $OBS_CONFIG 'themes/Wintage.ovt'
@@ -610,7 +631,7 @@ if (-not $Target -and -not $Selected) {
                    (Test-Path $obsUser) -and ((Read-Utf8 $obsUser) -match "(?m)^\s*Theme=$([regex]::Escape($OBS_THEME_ID))\s*$")) { 'themed' }
            else { 'found, not themed' }
     $obsPal = if (Test-Path $obsMarker) { (Read-Utf8 $obsMarker).Trim() } else { '-' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obs', 'OBS Studio', $obs, $obsPal)
+    Say-TargetRow 'obs' 'OBS Studio' $obs $obsPal
 
     # "themed" here means what the app itself needs to load the theme: the two
     # files present AND both INI keys pointing at them. A marker alone would call
@@ -625,7 +646,7 @@ if (-not $Target -and -not $Selected) {
                if ((Test-Path $qbtCfg) -and (Test-Path (Join-Path $QBT_THEME_DIR 'stylesheet.qss')) -and $qbtOn -and $qbtSel) { 'themed' }
                else { 'found, not themed' }
            }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'qbittorrent', 'qBittorrent', $qbt, $qbtPal)
+    Say-TargetRow 'qbittorrent' 'qBittorrent' $qbt $qbtPal
 
     $browserTool = Join-Path $root 'tools/install-browsers.ps1'
     $browserArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $browserTool, '-ListJson', '-StageRoot', $BrowserStageRoot)
@@ -638,14 +659,14 @@ if (-not $Target -and -not $Selected) {
         try { $browserInfo = $browserOut | ConvertFrom-Json } catch { $browserInfo = $null }
     }
     if (-not $browserInfo) {
-        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'browsers', 'Chromium browsers', 'listing failed', '-')
+        Say-TargetRow 'browsers' 'Chromium browsers' 'listing failed' '-'
         Say "  install-browsers.ps1 did not return a listing ($LASTEXITCODE) - install it directly to see why." 'DarkGray'
     } else {
         $browserState = if (-not $browserInfo.ProfileCount) { 'not installed' }
                         elseif ($browserInfo.ThemeLoadedCount -eq $browserInfo.ProfileCount) { 'themed' }
                         else { 'found, not themed' }
         $browserName = "Chromium browsers ($($browserInfo.ProfileCount)p/TM$($browserInfo.TampermonkeyCount))"
-        Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'browsers', $browserName, $browserState, $browserInfo.Palette)
+        Say-TargetRow 'browsers' $browserName $browserState $browserInfo.Palette
     }
 
     Say ""
@@ -655,21 +676,21 @@ if (-not $Target -and -not $Selected) {
     $bd = if (Test-Path $bdDir) {
         if (Test-Path $bdCss) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'discord', 'BetterDiscord', $bd, '-')
+    Say-TargetRow 'discord' 'BetterDiscord' $bd '-'
 
     $tc1Dir = Join-Path $env:APPDATA 'GHISLER'
     $tc1Ini = Join-Path $tc1Dir 'wincmd.ini'
     $tc1 = if (Test-Path $tc1Ini) {
         if ((Read-Utf8 $tc1Ini) -match "ActiveTitleText=") { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'totalcmd', 'Total Commander', $tc1, '-')
+    Say-TargetRow 'totalcmd' 'Total Commander' $tc1 '-'
 
     $tc2Dir = Join-Path $env:LOCALAPPDATA 'GHISLER'
     $tc2Ini = Join-Path $tc2Dir 'wincmd.ini'
     $tc2 = if (Test-Path $tc2Ini) {
         if ((Read-Utf8 $tc2Ini) -match "ActiveTitleText=") { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'totalcmd2', 'Total Commander (Local)', $tc2, '-')
+    Say-TargetRow 'totalcmd2' 'Total Commander (Local)' $tc2 '-'
 
     $obsVaults = Get-ObsidianVaults
     $obs = if ($obsVaults) {
@@ -677,20 +698,30 @@ if (-not $Target -and -not $Selected) {
         foreach ($v in $obsVaults) { if (Get-ChildItem (Join-Path $v '.obsidian/themes') -Directory -Filter 'Wintage *' -ErrorAction SilentlyContinue) { $anyThemed = $true } }
         if ($anyThemed) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'obsidian', ('Obsidian (' + $obsVaults.Count + ' vault(s))'), $obs, 'all (pick in Appearance)')
+    Say-TargetRow 'obsidian' ('Obsidian (' + $obsVaults.Count + ' vault(s))') $obs 'all (pick in Appearance)'
 
     $nppConfigDir = Join-Path $env:APPDATA 'Notepad++'
     $npp = if (Test-Path $nppConfigDir) {
         if (Test-Path (Join-Path $nppConfigDir 'themes\Wintage.xml')) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'notepadplusplus', 'Notepad++', $npp, '-')
+    Say-TargetRow 'notepadplusplus' 'Notepad++' $npp '-'
 
     $c4dPath = Get-Cinema4DPath
     $c4d = if ($c4dPath) {
         $c4dSchemes = Get-Cinema4DSchemesDir $c4dPath
         if ($c4dSchemes -and (Test-Path (Join-Path $c4dSchemes 'Wintage\wintage.col'))) { 'themed' } else { 'found, not themed' }
     } else { 'not installed' }
-    Say ("  {0,-16} {1,-38} {2,-22} {3}" -f 'cinema4d', 'Cinema 4D', $c4d, '-')
+    Say-TargetRow 'cinema4d' 'Cinema 4D' $c4d '-'
+
+    # T-970 COMPLETION WITNESS. This is the LAST line of the listing and the only
+    # thing that tells the reader the rows above are the WHOLE inventory rather
+    # than as much of it as survived the trip. It is emitted after every row and
+    # before the human hints below, because the hints are decoration and a listing
+    # whose decoration was cut off is still a complete inventory -- whereas a
+    # listing whose witness is missing is not verified at all. The literal marker
+    # is stable, machine-parsed text, not prose: the reader must be able to tell
+    # "complete" from "merely non-empty" without guessing at wording.
+    Say ("# wintage-listing-complete rows=$rowsEmitted") 'DarkGray'
 
     Say ((T 'PalettesLabel') + " $palettes") 'DarkGray'
     Say (T 'HelpOneApp') 'Cyan'

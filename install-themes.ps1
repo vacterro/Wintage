@@ -31,7 +31,7 @@ if (-not $node) {
     throw "node was not found on PATH. The generator is a Node script (tools/apply-themes.js); install Node.js, or run that file with any JS runtime you do have."
 }
 
-$upstream = 'https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js'
+$upstream = 'https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js'
 
 if ($Latest) {
     if ($Path) { throw "-Latest and -Path are mutually exclusive: one fetches the upstream script, the other patches a file you name." }

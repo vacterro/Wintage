@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — נושא דפדפן (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-נושא נלווה לסקריפט המשתמש Wintage (https://github.com/vacterro/Wintage).
+נושא נלווה לסקריפט המשתמש Wintage (https://gitlab.com/vacuum34/wintage).
 נושא זה הוא פלטת Dark Golden מורשת קבועה, ארוזה ידנית ובלתי תלויה בפלטות
 הניתנות להחלפה של הסקריפט: canvas #1A0F05, toolbar #2A1C0A, טקסט זהוב
 #D4B87A, שפה זהובה #C0A060, שדה כתובת שקוע #0F0A04, הדגשת קישורים #9DD9F9.

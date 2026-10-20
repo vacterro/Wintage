@@ -630,6 +630,32 @@ repository regression suite are green.
   machine, so no offline contract verification was possible. Everything above is
   verified against the deterministic harness only.
 
+## [1.36.10] - 2026-10-20
+
+Publication moved to GitLab; the ChatGPT assistant text-fill inheritance fix ships with it.
+
+- The GitHub repository `github.com/vacterro/Wintage` is no longer reachable -- the
+  owner account is suspended, so `git ls-remote` answers `403` and the raw URL
+  answers `404`. The project's home is now `gitlab.com/vacuum34/wintage`, and the
+  userscript's `@updateURL`/`@downloadURL`, the three fetchers that download the
+  live script (`install-themes.ps1`, `tools/install-browsers.ps1`,
+  `tools/check-deployed-userscript.js`) and every install link in the English
+  README, the 32 locale READMEs, the wiki mirror and the companion browser theme
+  now point at `https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js`.
+- `@namespace` deliberately stays on the old GitHub URL. Tampermonkey rejects an
+  update whose `@name`/`@namespace` pair differs from the installed script, so
+  changing it would silently strand every existing installation on the last
+  version it was able to fetch.
+- The version is bumped because the update channel cannot deliver otherwise:
+  Tampermonkey ignores a fetched script whose `@version` is not newer than the
+  installed one.
+- The T-978/T-979 colour-inheritance fix for the ChatGPT assistant travels with
+  this release: the container rules no longer hand `-webkit-text-fill-color` down
+  to descendants, and the leaf ownership rule keeps an inline element's own
+  colour instead of flattening it to `inherit`.
+- The `1.36.7` - `1.36.9` headings were never written to this file; their entries
+  are still in the `[Unreleased]` block above.
+
 ## [1.36.6] - 2026-10-03
 
 ChatGPT Web October 2026 shell refresh.

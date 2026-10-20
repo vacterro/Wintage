@@ -17,7 +17,7 @@ _Chaque élément communique sa fonction d'un coup d'œil, réduisant la charge 
 ## Installation
 
 1. Installez [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Cliquez sur **[Installer Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey ouvre automatiquement sa page d'installation.
+2. Cliquez sur **[Installer Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey ouvre automatiquement sa page d'installation.
 3. C'est fait. Chaque site que vous visitez tourne maintenant sous Windows 95, édition Dark Golden.
 
 ## Mise à jour

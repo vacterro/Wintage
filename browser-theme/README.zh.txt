@@ -1,7 +1,7 @@
 Vintage Win 95 深色金色 — 浏览器主题 (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Wintage 用户脚本 (https://github.com/vacterro/Wintage) 的配套主题。
+Wintage 用户脚本 (https://gitlab.com/vacuum34/wintage) 的配套主题。
 此主题采用固定的传统深色金色调色板，手动打包，独立于用户脚本的可切换调色板:
 画布 #1A0F05、工具栏 #2A1C0A、金色文本 #D4B87A、斜面金 #C0A060、
 凹陷的地址栏 #0F0A04、链接强调色 #9DD9F9。它不跟随脚本的默认调色板

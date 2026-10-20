@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         Wintage — Win95 Dark Golden Vintage Theme
 // @namespace    https://github.com/vacterro/Wintage
-// @version      1.36.9
+// @version      1.36.10
 // @description  Dark Golden Windows 95 vintage theme for every site: pixel-sharp 3D bevels, zero rounded corners, zero animations, site hover-highlighting fully disabled, gray surfaces remapped to warm browns, Verdana forced everywhere.
 // @author       vacterro
 // @license      MIT
-// @homepageURL  https://github.com/vacterro/Wintage
-// @supportURL   https://github.com/vacterro/Wintage/issues
-// @updateURL    https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js
-// @downloadURL  https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js
+// @homepageURL  https://gitlab.com/vacuum34/wintage
+// @supportURL   https://gitlab.com/vacuum34/wintage/-/issues
+// @updateURL    https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js
+// @downloadURL  https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js
 // @match        *://*/*
 // @include      about:blank
 // @run-at       document-start
@@ -706,7 +706,7 @@
   // wasted one full diagnostic round on a page where the script wasn't running.
   // Declared up here, not next to injectStyle: the attachShadow interception
   // reads it too and is installed earlier in the file.
-  const W95_VERSION = '1.36.9';
+  const W95_VERSION = '1.36.10';
 
   // Verdana forced 100% everywhere. Verdana_m1 = locally installed modified Verdana.
   const FONT = 'Verdana_m1, Verdana, Tahoma, "MS Sans Serif", sans-serif';
@@ -759,6 +759,25 @@
         redditCssOnly: IS_REDDIT && CSS_ONLY_MODE,
         repaintSkippedHighChurn: DIAG.repaintSkippedHighChurn,
         shadowCssInjected: DIAG.shadowCssInjected,
+        // T-938: the shadow-root registry as measured now, not as written.
+        // retained = handles still in the registry (live + not-yet-pruned dead),
+        // live = handles that dereference today, connected/detached split the
+        // live set by whether the host is currently in the document.
+        shadowRegistry: (function () {
+          try {
+            const list = Element.prototype.__wintageShadowRoots;
+            if (!list || !list.length) return { retained: list ? list.length : 0, live: 0, connected: 0, detached: 0 };
+            let live = 0, connected = 0;
+            for (let i = 0; i < list.length; i++) {
+              let r = list[i];
+              if (r && typeof r.deref === 'function') { try { r = r.deref(); } catch (e) { r = null; } }
+              if (!r) continue;
+              live++;
+              if (r.isConnected) connected++;
+            }
+            return { retained: list.length, live: live, connected: connected, detached: live - connected };
+          } catch (e) { return null; }
+        })(),
         suppressed: {
           hoverWalkThrows: DIAG.hoverWalkThrows,
           hoverAppendThrows: DIAG.hoverAppendThrows,
@@ -2618,6 +2637,7 @@ html[data-w95-chatgpt="1"] ::selection { background-color: ${T.selection} !impor
   html[data-w95-chatgpt="1"] mark {
     background-color: ${T.surfaceAlt} !important;
     color: ${T.borderHighlight} !important;
+    -webkit-text-fill-color: ${T.borderHighlight} !important;
     border-bottom: 1px solid ${T.borderHighlight} !important;
   }
 
@@ -2642,9 +2662,91 @@ html[data-w95-chatgpt="1"] ::selection { background-color: ${T.selection} !impor
     background-color: ${T.surface} !important;
     color: ${T.textPrimary} !important;
   }
+
+  /* ── RICH EMBED SURFACES (T-974) ─────────────────────────────────────────
+     The rest of the assistant content block names surface types the shell
+     renders directly (p, table, code, mark). Rich embeds -- cards, callouts,
+     citation chips, tool-result panels -- arrive as their own block elements
+     painting stock white backgrounds with dark text from utility classes and
+     inline styles that cannot be enumerated statically. GLOBAL_CSS covers
+     these with card/panel rules, but ChatGPT routes to this lean sheet,
+     which deliberately gives them up; the white surfaces survive inside an
+     otherwise themed conversation.
+
+     Neutralize rather than guess: the conversation viewport above owns an
+     opaque Wintage background, so a transparent embed shows THAT surface and
+     its text inherits the assistant colour contract.
+     BOUNDED NEUTRALIZATION (T-975). Blanket neutralization of every matching
+     descendant was proven too wide: it also flattened intentionally colored
+     banners, code-block line wrappers and details panels. CSS cannot test a
+     computed background, so the bound is STRUCTURAL instead: one clause
+     protects the SUBTREES this sheet themes on purpose -- pre, code, the
+     code-block container, details, buttons, KaTeX -- because a div inside them
+     is syntax/panel chrome, not a stock embed; a second clause protects
+     elements carrying an ARIA role that marks an intentional surface
+     (note/status/alert) and their descendants, which is the only stable hook
+     banner semantics carries. Everything outside those bounds stays
+     neutralized. Residual risk (a colored surface with no role outside a
+     protected subtree) is documented in the ticket; no :has(), no universal,
+     no class fragment, no observers. */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] :where(div, section, article, aside, figure, fieldset):not(pre):not(code):not(kbd):not(samp):not(mark):not(button):not(input):not(textarea):not(select):not(hr):not(table):not(thead):not(tbody):not(tr):not(th):not(td):not(blockquote):not(details):not(summary):not(img):not(svg):not(video):not(picture):not(canvas):not(.katex):not(.katex-display):not([data-markdown-copy="code-block"]):not([role="button"]):not(pre code):not([role="note"]):not([role="status"]):not([role="alert"]):not(:is(pre, code, [data-markdown-copy="code-block"], details, button, .katex, .katex-display, [role="note"], [role="status"], [role="alert"]) :is(div, section, article, aside, figure, fieldset)),
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] :where(div, section, article, aside, figure, fieldset):not(pre):not(code):not(kbd):not(samp):not(mark):not(button):not(input):not(textarea):not(select):not(hr):not(table):not(thead):not(tbody):not(tr):not(th):not(td):not(blockquote):not(details):not(summary):not(img):not(svg):not(video):not(picture):not(canvas):not(.katex):not(.katex-display):not([data-markdown-copy="code-block"]):not([role="button"]):not(pre code):not([role="note"]):not([role="status"]):not([role="alert"]):not(:is(pre, code, [data-markdown-copy="code-block"], details, button, .katex, .katex-display, [role="note"], [role="status"], [role="alert"]) :is(div, section, article, aside, figure, fieldset)) {
+    background-color: transparent !important;
+    color: ${T.textPrimary} !important;
+  }
+  /* Anchor-wrapped cards (search-result links, cite targets) carry the same
+     stock white. Background only: the link colour contract above is kept,
+     and the anchor's own text colour is what the shell paints on it. */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] a,
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] a {
+    background-color: transparent !important;
+  }
   html[data-w95-chatgpt="1"] hr {
     border: none !important;
     border-top: 1px solid ${T.borderMuted} !important;
+  }
+
+  /* ── LEAF TEXT OWNERSHIP (T-978) ───────────────────────────────────────────
+     The rules above paint containers (root, p, li, headings, strong, tables,
+     code, mark, the neutralized embeds). Chromium resolves
+     -webkit-text-fill-color over color, and the current shell redeclares BOTH
+     as its own stock token on leaf nodes it owns independently: inline spans,
+     rich-embed labels, attachment filename labels, menu rows (the menu case
+     above already carried the same pair). Measured on Golden Default, the leaf
+     nodes stayed rgb(237, 237, 237) while every ancestor above read
+     textPrimary -- the ancestor contract never reached them.
+
+     Same shape as the T-975 bound, applied to leaf text instead of container
+     backgrounds: INHERIT rather than repaint, so a leaf inside a protected
+     subtree (syntax tokens, code-line wrappers, details panels, KaTeX, banner
+     roles) or inside an anchor keeps the colour its owner declares, and only a
+     leaf with an independent stock colour or text-fill falls back to the
+     palette ancestor. No :has(), no universal, no class fragment, no runtime
+     scan. Residual risk is the T-975 one: an intentional colour on a leaf with
+     no protective ancestor and no ARIA role cannot be detected by static CSS. */
+  html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] :where(span, label, small, figcaption):not(:is(a, pre, code, kbd, samp, mark, button, input, textarea, select, [data-markdown-copy="code-block"], details, summary, img, svg, canvas, picture, video, .katex, .katex-display, [role="note"], [role="status"], [role="alert"], [role="button"]) :is(span, label, small, figcaption)):not([style*="color" i]),
+  html[data-w95-chatgpt="1"] [data-message-author-role="assistant"] :where(span, label, small, figcaption):not(:is(a, pre, code, kbd, samp, mark, button, input, textarea, select, [data-markdown-copy="code-block"], details, summary, img, svg, canvas, picture, video, .katex, .katex-display, [role="note"], [role="status"], [role="alert"], [role="button"]) :is(span, label, small, figcaption)):not([style*="color" i]),
+  html[data-w95-chatgpt="1"] ol[aria-label="Conversation"] li :where(span, label, small, figcaption):not(:is(a, pre, code, kbd, samp, mark, button, input, textarea, select, [data-markdown-copy="code-block"], details, summary, img, svg, canvas, picture, video, .katex, .katex-display, [role="note"], [role="status"], [role="alert"], [role="button"]) :is(span, label, small, figcaption)):not([style*="color" i]) {
+    color: inherit !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  /* Button label ownership. The Share/action surfaces of the page header and
+     of assistant turns paint their own label spans; the button rule above
+     covers the button element, not the label the shell colours independently.
+     Inherit keeps the palette on the label and neutralizes a stock
+     -webkit-text-fill-color without repainting anything the button owns. */
+  html[data-w95-chatgpt="1"] button :where(span, label, small, p, div),
+  html[data-w95-chatgpt="1"] [role="button"] :where(span, label, small, p, div) {
+    color: inherit !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  /* Page-header action buttons (Share, search, account) sit outside the
+     assistant subtree, so the assistant rules never reach their colour. */
+  html[data-w95-chatgpt="1"] header :is(button, [role="button"]) {
+    color: ${T.textPrimary} !important;
+    -webkit-text-fill-color: ${T.textPrimary} !important;
   }
 
   `;
@@ -2816,19 +2918,125 @@ a, a:link { color: ${T.link} !important; }
     // and the one installed wrapper reads it per shadow root.
     proto.__wintageShadowCss = ACTIVE_SHADOW_CSS;
     proto.__wintageShadowVer = W95_VERSION;
-    // A handover-VISIBLE registry of the roots already styled. The wrapper
-    // records them, and every generation restyles the stale ones on load --
-    // without it a root created before the reinjection keeps the previous
-    // build's CSS for the rest of the page's life, because nothing else ever
-    // looks inside a shadow root again.
-    if (!proto.__wintageShadowRoots) {
-      try { proto.__wintageShadowRoots = []; } catch (e) { }
+    // T-938: the root registry. It used to be a plain Array holding a STRONG
+    // reference to every shadow root the page ever created: hosts detached and
+    // thrown away stayed reachable from Element.prototype forever (measured:
+    // 1000 created, 1000 detached, 1000 retained), and registering a new root
+    // cost O(N) in indexOf over that whole history. It is now:
+    //   - a WeakSet for O(1) dedup of registrations, and
+    //   - an array of WeakRef handles (non-owning) that is compacted of dead
+    //     handles at reinjection and on a slow amortized schedule.
+    // No observer, no timer, no FinalizationRegistry: the handles' weakness is
+    // the lifecycle, and pruning only ever drops roots that are gone for real.
+    // WeakRef-unavailable engines fall back to a STRONG list capped at
+    // SHADOW_REGISTRY_CAP (oldest-first eviction), so retention stays bounded.
+    const hasWeakRef = typeof WeakRef !== 'undefined' && typeof WeakSet !== 'undefined';
+    const SHADOW_REGISTRY_CAP = 4096;
+    if (hasWeakRef) {
+      try {
+        if (!(proto.__wintageShadowSeen instanceof WeakSet)) proto.__wintageShadowSeen = new WeakSet();
+      } catch (e) { }
     }
-    const roots = proto.__wintageShadowRoots;
+    // First generation of the weak registry: convert a legacy strong Array (if
+    // one is left by an older build) into WeakRef handles and seed the dedup
+    // set from it. The strong array is then dropped from the prototype, so its
+    // references die with it.
+    let roots = proto.__wintageShadowRoots;
+    if (hasWeakRef) {
+      if (!roots) {
+        const fresh = [];
+        fresh.__w95Weak = true;
+        try { proto.__wintageShadowRoots = fresh; } catch (e) { }
+        roots = proto.__wintageShadowRoots;
+      } else if (Array.isArray(roots) && roots.__w95Weak !== true) {
+        const legacy = Array.isArray(roots) ? roots : [];
+        const fresh = [];
+        fresh.__w95Weak = true;
+        try {
+          for (let i = 0; i < legacy.length; i++) {
+            const r = legacy[i];
+            if (!r || typeof r !== 'object') continue;
+            if (proto.__wintageShadowSeen) proto.__wintageShadowSeen.add(r);
+            try { fresh.push(new WeakRef(r)); } catch (e) { fresh.push(r); }
+          }
+        } catch (e) { }
+        try { proto.__wintageShadowRoots = fresh; } catch (e) { }
+        roots = proto.__wintageShadowRoots;
+      }
+    } else if (!roots || !Array.isArray(roots)) {
+      try { proto.__wintageShadowRoots = []; roots = proto.__wintageShadowRoots; } catch (e) { roots = null; }
+    }
+    const liveRoots = function (shadow) {
+      // deref without throwing: a dead WeakRef returns undefined, a strong
+      // fallback entry is the root itself.
+      if (!shadow) return null;
+      if (hasWeakRef && shadow && typeof shadow.deref === 'function') {
+        try { return shadow.deref(); } catch (e) { return null; }
+      }
+      return shadow;
+    };
+    // Drops dead handles from the registry. Amortized O(1): callers only enter
+    // here once the list has grown SHADOW_REGISTRY_CAP entries past the last
+    // compaction, so a live registry is scanned at most once per CAP roots.
+    let lastCompactedAt = roots ? (roots.length || 0) : 0;
+    const compactRegistry = function () {
+      if (!roots || !roots.length) { lastCompactedAt = 0; return; }
+      if (!hasWeakRef) {
+        // Strong fallback: bounded list, oldest-first eviction at the cap.
+        if (roots.length > SHADOW_REGISTRY_CAP) roots.splice(0, roots.length - SHADOW_REGISTRY_CAP);
+        lastCompactedAt = roots.length;
+        return;
+      }
+      const kept = [];
+      for (let i = 0; i < roots.length; i++) {
+        if (liveRoots(roots[i])) kept.push(roots[i]);
+      }
+      if (kept.length !== roots.length) {
+        roots.length = 0;
+        for (let i = 0; i < kept.length; i++) roots.push(kept[i]);
+      }
+      lastCompactedAt = roots.length;
+    };
+    const registerRoot = function (shadow) {
+      if (!shadow || !roots) return;
+      try {
+        if (proto.__wintageShadowSeen) {
+          if (proto.__wintageShadowSeen.has(shadow)) return; // O(1): never an indexOf over history
+          proto.__wintageShadowSeen.add(shadow);
+        }
+        if (hasWeakRef) {
+          roots.push(new WeakRef(shadow));
+          if (roots.length >= lastCompactedAt + SHADOW_REGISTRY_CAP) compactRegistry();
+        } else {
+          roots.push(shadow);
+          if (roots.length > SHADOW_REGISTRY_CAP) roots.splice(0, roots.length - SHADOW_REGISTRY_CAP);
+        }
+      } catch (e) { }
+    };
+    // Refreshes the effective copy in ONE place: the adopted sheet when there is
+    // one (supported environments), the DOM <style> in the fallback. The old
+    // version only ever touched the DOM copy, so on a supported browser a root
+    // created before a reinjection kept the previous generation's sheet adopted
+    // for the rest of the page's life.
     const restyle = function (shadow) {
       try {
+        const sheet = shadow.__w95Sheets && shadow.__w95Sheets['shadow'];
+        const sheetEffective = !!(sheet && shadow.adoptedStyleSheets && shadow.adoptedStyleSheets.indexOf(sheet) >= 0);
+        if (sheetEffective && sheet.__w95Ver !== proto.__wintageShadowVer) {
+          sheet.replaceSync(proto.__wintageShadowCss);
+          sheet.__w95Ver = proto.__wintageShadowVer;
+          DIAG.shadowCssInjected++;
+        }
         const existing = shadow.querySelector('style[data-w95="shadow"]');
         if (!existing) return;
+        if (sheetEffective) {
+          // T-938 upgrade handover: an older generation left a DOM duplicate
+          // next to the effective adopted sheet. Retire it here -- the wrapper
+          // below is latched and never re-installs, so this pass is the only
+          // one that can heal a root inherited from a dual-install build.
+          try { existing.remove(); DIAG.shadowCssInjected++; } catch (e) { }
+          return;
+        }
         if (existing.getAttribute('data-w95-ver') === proto.__wintageShadowVer) return;
         existing.setAttribute('data-w95-ver', proto.__wintageShadowVer);
         existing.textContent = proto.__wintageShadowCss;
@@ -2836,17 +3044,33 @@ a, a:link { color: ${T.link} !important; }
       } catch (e) { }
     };
     // Runs BEFORE the install latch, so the generation that installs nothing is
-    // still the one that takes the existing roots over.
-    if (roots) for (let i = 0; i < roots.length; i++) restyle(roots[i]);
+    // still the one that takes the existing roots over. This pass is also the
+    // dead-handle compaction: roots the page has already given up are dropped
+    // here, without needing a GC tick to have happened on a schedule.
+    if (roots && roots.length) {
+      const seen = [];
+      for (let i = 0; i < roots.length; i++) {
+        const shadow = liveRoots(roots[i]);
+        if (!shadow) continue;
+        seen.push(roots[i]);
+        restyle(shadow);
+      }
+      if (seen.length !== roots.length) {
+        roots.length = 0;
+        for (let i = 0; i < seen.length; i++) roots.push(seen[i]);
+      }
+      lastCompactedAt = roots.length;
+    }
     const orig = proto.attachShadow;
     if (orig.__wintageWrapped) return;
     Element.prototype.attachShadow = function (init) {
       const shadow = orig.call(this, init);
       if (shadow) {
-        try { if (roots && roots.indexOf(shadow) < 0) roots.push(shadow); } catch (e) { }
+        registerRoot(shadow);
         queueMicrotask(() => {
           try {
             // Adopted stylesheet for shadow roots (CSP safe)
+            let adopted = false;
             if (shadow.adoptedStyleSheets && typeof CSSStyleSheet !== 'undefined' && proto.__wintageShadowCss) {
               try {
                 if (!shadow.__w95Sheets) shadow.__w95Sheets = {};
@@ -2854,11 +3078,22 @@ a, a:link { color: ${T.link} !important; }
                 if (!sheet) {
                   sheet = new CSSStyleSheet();
                   sheet.replaceSync(proto.__wintageShadowCss);
-                  shadow.__w95Sheets['shadow'] = sheet;
                   shadow.adoptedStyleSheets = [sheet, ...shadow.adoptedStyleSheets.filter(s => s !== sheet)];
-                  DIAG.shadowCssInjected++;
+                  if (shadow.adoptedStyleSheets.indexOf(sheet) < 0) throw new Error('adoptedStyleSheets refused');
+                  sheet.__w95Ver = proto.__wintageShadowVer;
+                  shadow.__w95Sheets['shadow'] = sheet;
                 }
-              } catch (e) { }
+                adopted = true;
+              } catch (e) { adopted = false; }
+            }
+            if (adopted) {
+              // T-938: exactly one effective sheet. Retire a DOM copy an older
+              // generation installed alongside the sheet instead of leaving the
+              // same CSS live twice.
+              const stale = shadow.querySelector('style[data-w95="shadow"]');
+              if (stale) { try { stale.remove(); } catch (e) { } }
+              DIAG.shadowCssInjected++;
+              return;
             }
             // An older generation may have got here first; restyle in place
             // rather than leaving the page themed by a build no longer loaded.
@@ -2888,6 +3123,14 @@ a, a:link { color: ${T.link} !important; }
     // via DOM insertion in page context (@sandbox raw).
     // Constructable stylesheets (CSSStyleSheet / adoptedStyleSheets) are created
     // programmatically in JS and are NOT subject to inline script/style CSP restrictions.
+    //
+    // T-938: exactly ONE effective copy. When the constructable install succeeds
+    // it is the whole install -- the DOM <style> below runs only as the fallback
+    // for environments where it failed (no adoptedStyleSheets, no CSSStyleSheet,
+    // replaceSync threw, or the adoptedStyleSheets assignment was refused).
+    // Otherwise the same CSS was parsed, stored and matched twice against every
+    // element for the whole life of the page.
+    let adopted = false;
     if (root && root.adoptedStyleSheets && typeof CSSStyleSheet !== 'undefined') {
       try {
         if (!root.__w95Sheets) root.__w95Sheets = {};
@@ -2895,12 +3138,41 @@ a, a:link { color: ${T.link} !important; }
         if (!sheet) {
           sheet = new CSSStyleSheet();
           sheet.replaceSync(content);
-          root.__w95Sheets[id] = sheet;
+          // Adopt first and only book-keep afterwards: if the assignment is
+          // refused (a hostile frozen adoptedStyleSheets throws under strict
+          // mode), the DOM path must install cleanly, not see a phantom.
           root.adoptedStyleSheets = [sheet, ...root.adoptedStyleSheets.filter(s => s !== sheet)];
+          if (root.adoptedStyleSheets.indexOf(sheet) < 0) throw new Error('adoptedStyleSheets refused');
+          root.__w95Sheets[id] = sheet;
+        } else {
+          // Reinjection (T-938): refresh content in place. A new generation used
+          // to leave the previous sheet -- with the previous build's CSS --
+          // adopted forever.
+          sheet.replaceSync(content);
+          root.adoptedStyleSheets = [...root.adoptedStyleSheets.filter(s => s !== sheet), sheet];
         }
-      } catch (e) { }
+        adopted = true;
+      } catch (e) { adopted = false; }
     }
-    if (root.querySelector && root.querySelector(`style[data-w95="${id}"]`)) return;
+    if (adopted) {
+      // Retire a DOM copy an older generation left installed alongside the
+      // sheet: it would win the cascade at equal specificity and keep the old
+      // rules alive next to the new ones.
+      const stale = root.querySelector && root.querySelector(`style[data-w95="${id}"]`);
+      if (stale) { try { stale.remove(); } catch (e) { } }
+      return;
+    }
+    if (root.querySelector && root.querySelector(`style[data-w95="${id}"]`)) {
+      // DOM-fallback reinjection: refresh the existing copy in place. Skipping
+      // the update (the old early-return) kept the previous generation's CSS
+      // installed for the rest of the page's life.
+      const existing = root.querySelector(`style[data-w95="${id}"]`);
+      if (existing.getAttribute('data-w95-ver') !== W95_VERSION || existing.textContent !== content) {
+        existing.setAttribute('data-w95-ver', W95_VERSION);
+        existing.textContent = content;
+      }
+      return;
+    }
     const s = document.createElement('style');
     s.setAttribute('data-w95', id);
     s.setAttribute('data-w95-ver', W95_VERSION);

@@ -16,7 +16,7 @@ _כל רכיב מתקשר את מטרתו במבט אחד, מפחית עומס �
 ## התקנה
 
 1. התקינו [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. לחצו על **[התקנת Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey פותח את דף ההתקנה אוטומטית.
+2. לחצו על **[התקנת Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey פותח את דף ההתקנה אוטומטית.
 3. סיימתם. כל אתר שתבקרו בו מריץ עכשיו Windows 95, מהדורת הזהב הכהה.
 
 ## עדכון
@@ -102,4 +102,4 @@ Wintage הוא לא עוד פלטה אחת. שש מהן הן המבנה של UI.
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

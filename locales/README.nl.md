@@ -17,7 +17,7 @@ _Elk element communiceert zijn doel in één oogopslag, vermindert cognitieve be
 ## Installatie
 
 1. Installeer [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klik op **[Installeer Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey opent de installatiepagina automatisch.
+2. Klik op **[Installeer Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey opent de installatiepagina automatisch.
 3. Klaar. Elke website die je bezoekt draait nu op Windows 95, donkergouden editie.
 
 ## Update
@@ -103,4 +103,4 @@ Het verhoogt het `@version`-patchnummer (de Tampermonkey-header en de `W95_VERSI
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

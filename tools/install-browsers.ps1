@@ -18,7 +18,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $tampermonkeyId = 'dhdgffkkebhmkfjojejmpbldmpobfkfo'
-$userscriptUrl = 'https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js'
+$userscriptUrl = 'https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js'
 $tampermonkeyUrl = "https://chromewebstore.google.com/detail/tampermonkey/$tampermonkeyId"
 $script:browsers = @()
 . (Join-Path $PSScriptRoot 'browser-discovery.ps1')

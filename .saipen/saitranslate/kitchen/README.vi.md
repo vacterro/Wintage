@@ -16,7 +16,7 @@ _Mọi thành phần truyền đạt mục đích của nó chỉ trong một c�
 ## Cài đặt
 
 1. Cài [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Nhấp **[Cài Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey tự mở trang cài đặt.
+2. Nhấp **[Cài Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey tự mở trang cài đặt.
 3. Xong. Mọi trang bạn ghé thăm giờ đang chạy Windows 95, bản vàng đậm.
 
 ## Cập nhật

@@ -16,7 +16,7 @@ _Fiecare element își comunică scopul dintr-o privire, reducând încărcătur
 ## Instalare
 
 1. Instalează [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Dă clic pe **[Instalează Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey deschide automat pagina de instalare.
+2. Dă clic pe **[Instalează Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey deschide automat pagina de instalare.
 3. Gata. Fiecare site pe care îl vizitezi rulează acum Windows 95, ediția auriu-închis.
 
 ## Actualizare
@@ -105,4 +105,4 @@ Incrementează numărul de patch `@version` (antetul Tampermonkey și ștampila 
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

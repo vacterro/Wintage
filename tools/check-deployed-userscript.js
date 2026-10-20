@@ -35,7 +35,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_URL = 'https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js';
+const DEFAULT_URL = 'https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js';
 const argv = process.argv.slice(2);
 const AS_JSON = argv.includes('--json');
 const urlIdx = argv.indexOf('--url');

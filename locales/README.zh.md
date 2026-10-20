@@ -17,7 +17,7 @@ _每个元素都能一眼传达其用途，降低认知负担，让网络再次�
 ## 安装
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/)（Chrome, Edge, Firefox, Opera, Safari）。
-2. 点击 **[安装 Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey 会自动打开安装页面。
+2. 点击 **[安装 Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey 会自动打开安装页面。
 3. 完成。你访问的每个网站现在都运行着深色金色版的 Windows 95。
 
 ## 更新
@@ -103,4 +103,4 @@ Wintage 不再只有一个调色板。六个是 UI.md 自身的结构旋转到�
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

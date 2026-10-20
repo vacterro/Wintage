@@ -1,7 +1,7 @@
 Vintage Win 95 tamno zlatna — tema preglednika (Cent Browser / Chrome / Edge)
 ============================================================================
 
-Popratna tema za Wintage userscript (https://github.com/vacterro/Wintage).
+Popratna tema za Wintage userscript (https://gitlab.com/vacuum34/wintage).
 Ova tema je fiksna starija tamno zlatna paleta, ručno pakirana i neovisna o
 prebacivim paletama userscripta: canvas #1A0F05, toolbar #2A1C0A, zlatni tekst
 #D4B87A, zlatni bevel #C0A060, udubljeni omnibox #0F0A04, akcent poveznica

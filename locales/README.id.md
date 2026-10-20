@@ -17,7 +17,7 @@ _Setiap elemen menyampaikan tujuannya dalam sekali pandang, mengurangi beban kog
 ## Instalasi
 
 1. Pasang [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klik **[Pasang Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey otomatis membuka halaman pemasangannya.
+2. Klik **[Pasang Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey otomatis membuka halaman pemasangannya.
 3. Selesai. Setiap situs yang Anda kunjungi kini menjalankan Windows 95, edisi Emas Gelap.
 
 ## Pembaruan
@@ -103,4 +103,4 @@ Ini menaikkan nomor patch `@version` (header Tampermonkey dan stempel `W95_VERSI
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

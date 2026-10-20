@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "version": "1.1.0",
   "name": "Vintage Win 95 Dark Golden",
-  "description": "Brutalist dark golden aesthetic for Cent Browser. Companion to the Wintage userscript: https://github.com/vacterro/Wintage",
+  "description": "Brutalist dark golden aesthetic for Cent Browser. Companion to the Wintage userscript: https://gitlab.com/vacuum34/wintage",
   "theme": {
     "colors": {
       "frame": [26, 15, 5],

@@ -544,52 +544,230 @@ try {
     $smokeMarker = Join-Path $fixture 'smoke-shown.stamp'
     $smokeWalkFile = Join-Path $fixture 'smoke-walkcount.txt'
 
-    function Invoke-GuiStartupSmoke([int]$WalkSlowMs, [int]$AutoCloseMs) {
-        # Runs the real GUI with the given slow-walk setting and returns the
-        # measured startup facts. The PATH shim is harmless here (it only
-        # forwards), and it makes the child-invocation surface observable.
-        $prevPath = $env:PATH; $prevAppData = $env:WINTAGE_APPDATA; $prevSlow = $env:WINTAGE_TEST_WALK_SLOW_MS
-        $prevCountFile = $env:WINTAGE_TEST_WALK_COUNT_FILE; $prevAutoclose = $env:WINTAGE_TEST_AUTOCLOSE_MS
-        $prevShown = $env:WINTAGE_TEST_FORM_SHOWN_FILE
-        if (Test-Path $smokeMarker) { Remove-Item -LiteralPath $smokeMarker -Force }
-        if (Test-Path $smokeWalkFile) { Remove-Item -LiteralPath $smokeWalkFile -Force }
-        $env:PATH = $smokeShim + ';' + $prevPath
-        $env:WINTAGE_APPDATA = $smokeRoot
-        $env:WINTAGE_TEST_WALK_COUNT_FILE = $smokeWalkFile
-        $env:WINTAGE_TEST_FORM_SHOWN_FILE = $smokeMarker
-        $env:WINTAGE_TEST_AUTOCLOSE_MS = "$AutoCloseMs"
-        $env:WINTAGE_TEST_WALK_SLOW_MS = "$WalkSlowMs"
-        $t0 = [datetime]::UtcNow
-        $proc = Start-Process -FilePath 'powershell' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $gui) -PassThru -WindowStyle Hidden
-        $shownAt = $null
-        for ($i = 0; $i -lt 1200; $i++) {
-            if (Test-Path $smokeMarker) { $shownAt = [datetime]::UtcNow; break }
-            if ($proc.HasExited) { break }
-            Start-Sleep -Milliseconds 50
+    # Bounded child lifecycle. These are budgets for the HARNESS, never for a
+    # functional verdict.
+    $script:smokePollMs = 50
+    $script:smokeShownBudgetTicks = 600      # 600 * 50ms = 30s to reach Shown
+    $script:smokeExitBudgetMs = 15000        # bounded wait for the form to close
+    $script:smokeKillGraceMs = 5000
+
+    # Runs the real GUI with the given slow-walk setting and returns the measured
+    # startup facts. The PATH shim is harmless here (it only forwards), and it
+    # makes the child-invocation surface observable.
+    #
+    # ShownMs IS A MEASUREMENT, NOT A VERDICT. What proves the cached startup is
+    # the walker count the real walker itself writes (Walks); what proves the form
+    # is usable is the Shown stamp (ShownMs >= 0). A wall-clock threshold belongs
+    # to neither and is kept out of every functional assertion.
+    #
+    # CHILD CLEANUP IS STRUCTURAL. Every variable mutated here is restored in a
+    # finally, INCLUDING whether it was set at all, so a WINTAGE_TEST_* variable
+    # cannot survive into the operator's shell or a later fixture. The child is
+    # waited on against a bounded budget and killed only if it overran it, and
+    # only a process this function started is ever touched. -GuiPath and
+    # -MarkerPath are the levers the negative controls need to make the child
+    # fail to start or fail to paint without breaking a real install.
+    function Invoke-GuiStartupSmoke(
+        [int]$WalkSlowMs,
+        [int]$AutoCloseMs,
+        [string]$GuiPath = $gui,
+        [string]$MarkerPath = $smokeMarker,
+        [string]$ExePath = 'powershell',
+        [int]$ShownBudgetTicks = $script:smokeShownBudgetTicks,
+        [int]$ExitBudgetMs = $script:smokeExitBudgetMs
+    ) {
+        $prev = @{
+            'PATH'                         = $env:PATH
+            'WINTAGE_APPDATA'              = $env:WINTAGE_APPDATA
+            'WINTAGE_TEST_WALK_SLOW_MS'    = $env:WINTAGE_TEST_WALK_SLOW_MS
+            'WINTAGE_TEST_WALK_COUNT_FILE' = $env:WINTAGE_TEST_WALK_COUNT_FILE
+            'WINTAGE_TEST_AUTOCLOSE_MS'    = $env:WINTAGE_TEST_AUTOCLOSE_MS
+            'WINTAGE_TEST_FORM_SHOWN_FILE' = $env:WINTAGE_TEST_FORM_SHOWN_FILE
         }
-        $walks = if (Test-Path $smokeWalkFile) { [int]((Get-Content -LiteralPath $smokeWalkFile -Raw).Trim()) } else { 0 }
-        $proc.WaitForExit(180000) | Out-Null
-        $env:PATH = $prevPath; $env:WINTAGE_APPDATA = $prevAppData; $env:WINTAGE_TEST_WALK_SLOW_MS = $prevSlow
-        $env:WINTAGE_TEST_WALK_COUNT_FILE = $prevCountFile; $env:WINTAGE_TEST_AUTOCLOSE_MS = $prevAutoclose
-        $env:WINTAGE_TEST_FORM_SHOWN_FILE = $prevShown
-        return [pscustomobject]@{ ShownMs = if ($shownAt) { [int]($shownAt - $t0).TotalMilliseconds } else { -1 }; Walks = $walks; Exited = $proc.HasExited }
+        $had = @{}
+        foreach ($name in $prev.Keys) { $had[$name] = (Test-Path ("Env:" + $name)) }
+        # A stale marker must never be reused as this run's Shown evidence, or a
+        # crashed child could appear to have reached Shown with a timestamp from
+        # an earlier run.
+        Remove-Item -LiteralPath $MarkerPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $smokeWalkFile -Force -ErrorAction SilentlyContinue
+        $proc = $null
+        $startFailed = $null
+        $shownAt = $null
+        $walks = -1
+        $timedOut = $false
+        $killed = $false
+        $exitedFinal = $false
+        $exitCodeFinal = -1
+        $t0 = [datetime]::UtcNow
+        try {
+            $env:PATH = $smokeShim + ';' + $prev['PATH']
+            $env:WINTAGE_APPDATA = $smokeRoot
+            $env:WINTAGE_TEST_WALK_COUNT_FILE = $smokeWalkFile
+            $env:WINTAGE_TEST_FORM_SHOWN_FILE = $MarkerPath
+            $env:WINTAGE_TEST_AUTOCLOSE_MS = "$AutoCloseMs"
+            $env:WINTAGE_TEST_WALK_SLOW_MS = "$WalkSlowMs"
+            # -PassThru yields a real process handle, so the child can be waited
+            # on, bounded, killed and disposed. A missing executable is a FAILED
+            # STARTUP, reported as such, not an exception that escapes the finally
+            # and abandons the environment.
+            try {
+                $proc = Start-Process -FilePath $ExePath -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $GuiPath) -PassThru -WindowStyle Hidden
+            } catch {
+                $startFailed = $_.Exception.Message
+                $proc = $null
+            }
+            if ($proc) {
+                for ($i = 0; $i -lt $ShownBudgetTicks; $i++) {
+                    if (Test-Path -LiteralPath $MarkerPath) { $shownAt = [datetime]::UtcNow; break }
+                    # A child that exited before painting is a failed startup, not
+                    # an infinite wait.
+                    if ($proc.HasExited) { break }
+                    Start-Sleep -Milliseconds $script:smokePollMs
+                }
+                # -1 means the walker's own count file was never written: the
+                # walker was never invoked -- the same conclusion as 0, with one
+                # fewer assumption.
+                $walks = if (Test-Path -LiteralPath $smokeWalkFile) { [int]((Get-Content -LiteralPath $smokeWalkFile -Raw).Trim()) } else { -1 }
+                if ($shownAt -eq $null -and -not $proc.HasExited) { $timedOut = $true }
+                # The auto-close timer bounds this in the happy path; the deadline
+                # bounds it in the failure path.
+                if (-not $proc.WaitForExit($ExitBudgetMs)) {
+                    $killed = $true
+                    try { $proc.Kill() } catch { }
+                    try { $proc.WaitForExit($script:smokeKillGraceMs) | Out-Null } catch { }
+                }
+            }
+        } finally {
+            # Kill and dispose BEFORE restoring the environment, so a child still
+            # holding a test-only variable cannot outlive it. Exit state is read
+            # BEFORE Dispose: a disposed Process throws on HasExited/ExitCode, so
+            # reading it afterwards would turn every smoke into a harness crash.
+            if ($proc) {
+                if (-not $proc.HasExited) {
+                    $killed = $true
+                    try { $proc.Kill() } catch { }
+                    try { $proc.WaitForExit($script:smokeKillGraceMs) | Out-Null } catch { }
+                }
+                try { $exitedFinal = $proc.HasExited } catch { $exitedFinal = $false }
+                try { $exitCodeFinal = $proc.ExitCode } catch { $exitCodeFinal = -1 }
+                try { $proc.Dispose() } catch { }
+            }
+            # Restore the PREVIOUS VALUE or the PREVIOUS ABSENCE. Assigning ''
+            # would leave the variable set-but-empty, a different state from the
+            # one the suite started in, read as "set" by consumers.
+            foreach ($name in $prev.Keys) {
+                if ($had[$name]) { Set-Item -Path ("Env:" + $name) -Value $prev[$name] }
+                else { Remove-Item -Path ("Env:" + $name) -ErrorAction SilentlyContinue }
+            }
+        }
+        return [pscustomobject]@{
+            ShownMs = if ($shownAt) { [int]($shownAt - $t0).TotalMilliseconds } else { -1 }
+            Walks = $walks
+            Exited = $exitedFinal
+            TimedOut = $timedOut
+            Killed = $killed
+            StartFailure = $startFailed
+            ExitCode = $exitCodeFinal
+        }
     }
 
     $prevWinEnv = $env:WINTAGE_APPDATA
     $smokeWarm = Invoke-GuiStartupSmoke -WalkSlowMs 6000 -AutoCloseMs 1200
+    # The instrument writes a count ONLY when a walk actually runs, so "no file"
+    # and "file says 0" both mean the walker was not invoked. Reporting that as a
+    # single fact (Walks -eq 0, with -1 normalised to 0 here) is honest ONLY
+    # because the count file is deleted before each run: the -1 case is then
+    # unambiguous evidence that the file never appeared, not that it disappeared.
+    function Get-ObservedWalks($result) {
+        if ($result.Walks -eq -1) { return 0 }
+        return $result.Walks
+    }
     check 'live smoke: the form reached Shown with the cache warm' ($smokeWarm.ShownMs -ge 0)
-    check 'live smoke: walkerInvocations == 0 before the form became usable' ($smokeWarm.Walks -eq 0)
-    check 'live smoke: the deliberately slow walker never delayed startup (6s slow walker, but Shown stayed fast)' (($smokeWarm.ShownMs -ge 0) -and ($smokeWarm.ShownMs -lt 10000))
+    check 'live smoke: walkerInvocations == 0 before the form became usable' ((Get-ObservedWalks $smokeWarm) -eq 0)
+    # FUNCTIONAL claim: the cached startup never invoked the walker, and the form
+    # became usable. The wall clock is deliberately NOT part of this verdict -- a
+    # loaded box must not be able to fail a correctness assertion, and a fast box
+    # must not be able to pass one. Timing is reported below as a MEASUREMENT.
+    check 'live smoke: the deliberately slow walker was never invoked (functional, not wall clock)' ((Get-ObservedWalks $smokeWarm) -eq 0 -and $smokeWarm.ShownMs -ge 0)
+    check 'live smoke: no test child was left running and no timeout occurred' (-not $smokeWarm.TimedOut -and -not $smokeWarm.Killed)
+    check 'live smoke: the test-only env vars were restored to their prior state' (
+        (-not (Test-Path Env:WINTAGE_TEST_FORM_SHOWN_FILE)) -and
+        (-not (Test-Path Env:WINTAGE_TEST_AUTOCLOSE_MS)) -and
+        (-not (Test-Path Env:WINTAGE_TEST_WALK_SLOW_MS)) -and
+        (-not (Test-Path Env:WINTAGE_TEST_WALK_COUNT_FILE)) -and
+        ($env:WINTAGE_APPDATA -eq $prevWinEnv))
+    Write-Host ("MEASURED (warm startup, informational): ShownMs={0} Walks={1}" -f $smokeWarm.ShownMs, $smokeWarm.Walks)
+
+    # ---- 19d: NEGATIVE CONTROLS for the live smoke harness itself -------------
+    # A smoke that CANNOT fail is not evidence. Each control aims at one failure
+    # mode of the harness; every one must still produce a verdict -- no crash, no
+    # orphaned child, no leaked env var.
+    $controlRoot = Join-Path $fixture 'smoke-control'
+    New-Item -ItemType Directory -Force -Path $controlRoot | Out-Null
+    # (a) a child that CANNOT START: the executable does not exist, so the start
+    # itself fails and the harness must report it, not hang or throw past finally.
+    $smokeNoStart = Invoke-GuiStartupSmoke -ExePath (Join-Path $fixture 'no-such-powershell.exe') -AutoCloseMs 1200
+    check 'control: a child that cannot start is reported as a start failure, not a hang' (
+        ($null -ne $smokeNoStart.StartFailure) -and $smokeNoStart.ShownMs -lt 0 -and -not $smokeNoStart.Exited)
+    check 'control: a start failure does not leave a test env var behind' (
+        (-not (Test-Path Env:WINTAGE_TEST_FORM_SHOWN_FILE)) -and
+        (-not (Test-Path Env:WINTAGE_TEST_WALK_COUNT_FILE)) -and ($env:WINTAGE_APPDATA -eq $prevWinEnv))
+    # -1 is the honest answer here: the count file was deleted before the run, and
+    # a missing file means the walker never ran. Asserting 0 would be pretending.
+    check 'control: a start failure never produced walker evidence (count file never appeared)' ($smokeNoStart.Walks -eq -1)
+
+    # (b) the marker is MISSING though the child ran: point the stamp at a path in
+    # a directory that does not exist, so the child's write is swallowed by its
+    # own guard and no Shown evidence is ever produced.
+    $noDirStamp = Join-Path $fixture 'no-such-dir\nested\never.stamp'
+    $smokeMissingMarker = Invoke-GuiStartupSmoke -WalkSlowMs 0 -AutoCloseMs 300 -MarkerPath $noDirStamp
+    check 'control: a missing Shown marker is reported as not-shown' ($smokeMissingMarker.ShownMs -lt 0)
+    check 'control: the child still exits cleanly without a Shown event' ($smokeMissingMarker.Exited -and -not $smokeMissingMarker.Killed)
+
+    # (c) the child CRASHES before Shown.
+    $crashScript = Join-Path $controlRoot 'crash-gui.ps1'
+    Write-Text $crashScript "Write-Host 'about to fail'`r`nthrow 'deliberate startup crash'`r`n"
+    $smokeCrash = Invoke-GuiStartupSmoke -GuiPath $crashScript -AutoCloseMs 1200
+    check 'control: a child that crashes before Shown is not reported as usable' ($smokeCrash.ShownMs -lt 0)
+    check 'control: a crashed child is reaped, not left running' ($smokeCrash.Exited -and -not $smokeCrash.Killed)
+
+    # (d) REPEATED invocation: the second run's evidence must come from the second
+    # run, not from the first run's marker or walk count.
+    $smokeAgain = Invoke-GuiStartupSmoke -WalkSlowMs 0 -AutoCloseMs 400
+    check 'control: a repeated smoke still reaches Shown (marker reuse ruled out)' ($smokeAgain.ShownMs -ge 0)
+    check 'control: a repeated smoke starts from a fresh walk count file (no walker evidence at all)' ($smokeAgain.Walks -eq -1)
+
+    # (e) the child HANGS: never paints, never exits. The harness must time out
+    # against its budget, kill only that child, and report the timeout instead of
+    # waiting forever (the orphaned-child failure mode).
+    $hangScript = Join-Path $controlRoot 'hang-gui.ps1'
+    Write-Text $hangScript "Start-Sleep -Seconds 120`r`n"
+    $smokeHang = Invoke-GuiStartupSmoke -GuiPath $hangScript -AutoCloseMs 1200 -ShownBudgetTicks 10 -ExitBudgetMs 1500
+    check 'control: a child that never paints is reported as a timeout, not a pass' ($smokeHang.TimedOut -and $smokeHang.ShownMs -lt 0)
+    check 'control: the hung child was terminated and reaped (no orphan left behind)' ($smokeHang.Killed -and $smokeHang.Exited)
+    check 'control: the timeout path still restores the environment' (
+        (-not (Test-Path Env:WINTAGE_TEST_AUTOCLOSE_MS)) -and ($env:WINTAGE_APPDATA -eq $prevWinEnv))
 
     # RED C: the SAME smoke with a COLD cache. The deliberately slow walker now
-    # runs on the startup path and visibly delays the usable window -- proving
-    # the smoke fixture can catch the original defect rather than passing blind.
+    # runs on the startup path. The defect is proven by the WALKER EVIDENCE (the
+    # walk happened on the startup path, before the form was usable), never by a
+    # wall-clock threshold.
     $coldCacheFile = Get-BrowserCachePath $smokeRoot
     if (Test-Path $coldCacheFile) { Remove-Item -LiteralPath $coldCacheFile -Force }
     $smokeCold = Invoke-GuiStartupSmoke -WalkSlowMs 6000 -AutoCloseMs 1200
-    check 'live smoke: the slow walker IS invoked and observed on a cold cache (RED C barrier)' ($smokeCold.Walks -ge 1)
-    check 'RED C: the original defect is caught -- the slow walker delays the usable form (>6s slow walker)' ($smokeCold.ShownMs -ge 8000)
-    check 'RED C: contrast proven -- the slow walker added a clear delay vs the warm cache' (($smokeCold.ShownMs - $smokeWarm.ShownMs) -ge 3000)
+    check 'RED C: the slow walker IS invoked and observed on a cold cache' ($smokeCold.Walks -ge 1)
+    check 'RED C: the original defect is caught -- the walk ran on the startup path, so the form is NOT usable without it' (
+        $smokeCold.Walks -ge 1 -and $smokeCold.ShownMs -ge 0)
+    # CONTRAST, the functional half: warm = zero walks, cold = at least one. This
+    # is the assertion the old timing contrast was standing in for.
+    check 'RED C: contrast proven -- warm invokes the walker zero times, cold at least once' (
+        ((Get-ObservedWalks $smokeWarm) -eq 0) -and ($smokeCold.Walks -ge 1))
+    # MEASUREMENT only: the wall-clock difference is reported, never asserted.
+    Write-Host ("MEASURED (cold startup, informational): ShownMs={0} Walks={1} (warm delta={2}ms)" -f $smokeCold.ShownMs, $smokeCold.Walks, ($smokeCold.ShownMs - $smokeWarm.ShownMs))
+    check 'live smoke: no test child was left running after the cold run' (-not $smokeCold.TimedOut -and -not $smokeCold.Killed)
+    check 'live smoke: env vars restored after the cold run' (
+        (-not (Test-Path Env:WINTAGE_TEST_FORM_SHOWN_FILE)) -and ($env:WINTAGE_APPDATA -eq $prevWinEnv))
     $env:WINTAGE_APPDATA = $prevWinEnv
     # Re-warm the smoke cache so later references are unaffected.
     $null = Get-PortableCandidates -PortableRoot $smokePortable -CacheRoot $smokeRoot

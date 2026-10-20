@@ -1,6 +1,6 @@
 {
   "name": "wintage",
-  "version": "1.36.9",
+  "version": "1.36.10",
   "private": true,
   "description": "Win95 dark theme for ChatGPT web / BetterDiscord / Electron / desktop targets",
   "license": "MIT",

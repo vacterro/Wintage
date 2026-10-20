@@ -1,7 +1,7 @@
 Vintage Win 95 다크 골든 — 브라우저 테마 (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Wintage 유저스크립트 (https://github.com/vacterro/Wintage) 의 동반 테마.
+Wintage 유저스크립트 (https://gitlab.com/vacuum34/wintage) 의 동반 테마.
 이 테마는 고정된 레거시 Dark Golden 팔레트로, 직접 번들되어 있으며 유저스크립트의
 전환 가능한 팔레트와 무관하다: 캔버스 #1A0F05, 툴바 #2A1C0A, 금색 텍스트 #D4B87A,
 베벨 골드 #C0A060, 함몰된 옴니박스 #0F0A04, 링크 액센트 #9DD9F9. 스크립트의

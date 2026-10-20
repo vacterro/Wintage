@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — motyw przeglądarki (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Motyw towarzyszący userskryptowi Wintage (https://github.com/vacterro/Wintage).
+Motyw towarzyszący userskryptowi Wintage (https://gitlab.com/vacuum34/wintage).
 Ten motyw to stała, odziedziczona paleta Dark Golden, ręcznie spakowana i niezależna
 od przełączanych palet userskryptu: canvas #1A0F05, toolbar #2A1C0A, golden text
 #D4B87A, bevel gold #C0A060, sunken omnibox #0F0A04, link accent #9DD9F9. Nie

@@ -17,7 +17,7 @@ _모든 요소는 한눈에 자신의 용도를 전달한다. 이는 인지 부�
 ## 설치
 
 1. [Tampermonkey](https://www.tampermonkey.net/) 설치 (Chrome, Edge, Firefox, Opera, Safari).
-2. **[Wintage 설치](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** 클릭 — Tampermonkey가 설치 페이지를 자동으로 연다.
+2. **[Wintage 설치](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** 클릭 — Tampermonkey가 설치 페이지를 자동으로 연다.
 3. 끝. 방문하는 모든 사이트가 이제 다크 골든 에디션의 Windows 95로 동작한다.
 
 ## 업데이트

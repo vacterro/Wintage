@@ -17,7 +17,7 @@ _Každý prvek sděluje svůj účel na první pohled, snižuje kognitivní zát
 ## Instalace
 
 1. Nainstalujte [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klikněte na **[Nainstalovat Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey automaticky otevře stránku instalace.
+2. Klikněte na **[Nainstalovat Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey automaticky otevře stránku instalace.
 3. Hotovo. Každý web, který navštívíte, nyní běží na Windows 95, tmavě zlaté vydání.
 
 ## Aktualizace

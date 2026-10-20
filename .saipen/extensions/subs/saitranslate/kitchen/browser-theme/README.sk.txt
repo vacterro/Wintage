@@ -1,7 +1,7 @@
 Vintage Win 95 tmavozlatý — motív prehliadača (Cent Browser / Chrome / Edge)
 ===========================================================================
 
-Doplnkový motív pre userscript Wintage (https://github.com/vacterro/Wintage).
+Doplnkový motív pre userscript Wintage (https://gitlab.com/vacuum34/wintage).
 Tento motív je pevná staršia tmavozlatá paleta, ručne zabalená a nezávislá od
 prepínateľných paliet userscriptu: canvas #1A0F05, toolbar #2A1C0A, zlatý text
 #D4B87A, zlatý bevel #C0A060, zapustený omnibox #0F0A04, zvýraznenie odkazov

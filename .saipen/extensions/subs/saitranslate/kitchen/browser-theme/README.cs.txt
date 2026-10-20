@@ -1,7 +1,7 @@
 Vintage Win 95 tmavě zlatá — motiv prohlížeče (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Doprovodný motiv pro userscript Wintage (https://github.com/vacterro/Wintage).
+Doprovodný motiv pro userscript Wintage (https://gitlab.com/vacuum34/wintage).
 Tento motiv je pevná starší tmavě zlatá paleta, ručně svázaná a nezávislá na
 přepínatelných paletách userscriptu: canvas #1A0F05, toolbar #2A1C0A, zlatý text
 #D4B87A, zlatý bevel #C0A060, zapuštěný omnibox #0F0A04, akcent odkazů #9DD9F9.

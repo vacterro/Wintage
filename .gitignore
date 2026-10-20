@@ -98,3 +98,12 @@ wb_inspect.txt
 # T-350 was filed about -- any untracked file outside .saipen/ is a fingerprint
 # input, so a generated export directory in the root is a standing tripwire.
 .audapack/
+
+# Idle-CPU benchmark output: browser-measured timings (renderer task duration,
+ style recalc, layout, mutation volume, heap) written by tools/bench-idle-cpu.js
+# on every run, including the --quick arm tests/Run-Tests.ps1 registers. The bytes
+# are machine- and load-dependent, so they differ on every run, and an untracked,
+# unignored file is a source_tree_fingerprint input: leaving this one in the delta
+# moved git-delta-v1 after every suite pass and made every convergence receipt
+# stale the moment a test run finished. Same class as .audapack/ above.
+tools/bench-idle-cpu-results.json

@@ -36,6 +36,7 @@
   "Save": "ZAPISZ",
   "SelectAll": "WSZYSTKO",
   "SelectNone": "ŻADNE",
+  "RefreshTargets": "REFRESH LIST",
   "SkippedByTargets": "OSTRZEŻENIE: -Target all pominie {0} — są wybieralne, ale nie ma ich na liście wysyłek.",
   "Tokens": "Tokeny",
   "UnregisteredLogonTask": "Wyrejestrowano zadanie logowania",

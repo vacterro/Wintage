@@ -16,7 +16,7 @@ _ทุกองค์ประกอบสื่อถึงจุดประ�
 ## การติดตั้ง
 
 1. ติดตั้ง [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari)
-2. คลิก **[ติดตั้ง Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey จะเปิดหน้าติดตั้งให้อัตโนมัติ
+2. คลิก **[ติดตั้ง Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey จะเปิดหน้าติดตั้งให้อัตโนมัติ
 3. เสร็จสิ้น ทุกเว็บไซต์ที่คุณเยี่ยมชมตอนนี้กำลังรัน Windows 95 รุ่นสีทองเข้ม
 
 ## การอัปเดต
@@ -102,4 +102,4 @@ Wintage ไม่ใช่หนึ่งพาเล็ตอีกต่อไ
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

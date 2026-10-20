@@ -17,7 +17,7 @@ _Hvert element kommuniserer formålet sitt ved første øyekast, reduserer kogni
 ## Installasjon
 
 1. Installer [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klikk **[Installer Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey åpner installasjonssiden automatisk.
+2. Klikk **[Installer Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey åpner installasjonssiden automatisk.
 3. Ferdig. Hver nettside du besøker kjører nå Windows 95, mørk gull-utgaven.
 
 ## Oppdatering

@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — selaimen teema (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Seuralaisteema Wintage-userscriptille (https://github.com/vacterro/Wintage).
+Seuralaisteema Wintage-userscriptille (https://gitlab.com/vacuum34/wintage).
 Tämä teema on kiinteä, vanha Dark Golden -paletti, käsin paketoitu ja riippumaton
 userscriptin vaihdettavista paleteista: canvas #1A0F05, työkalupalkki #2A1C0A, kultainen teksti
 #D4B87A, bevel-kulta #C0A060, upotettu omnibox #0F0A04, linkin korostus #9DD9F9. Se

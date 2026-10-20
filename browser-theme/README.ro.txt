@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — tema de browser (Cent Browser / Chrome / Edge)
 ===========================================================================
 
-Temă companion pentru userscript-ul Wintage (https://github.com/vacterro/Wintage).
+Temă companion pentru userscript-ul Wintage (https://gitlab.com/vacuum34/wintage).
 Această temă este o paletă Dark Golden moștenită, fixă, împachetată manual și
 independentă de paletele comutabile ale userscript-ului: canvas #1A0F05, toolbar
 #2A1C0A, text auriu #D4B87A, teșire aurie #C0A060, omnibox adâncit #0F0A04, accent

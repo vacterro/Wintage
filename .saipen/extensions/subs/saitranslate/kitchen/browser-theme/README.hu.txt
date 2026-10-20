@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — böngészőtéma (Cent Browser / Chrome / Edge)
 ========================================================================
 
-Kísérőtéma a Wintage felhasználóskripthez (https://github.com/vacterro/Wintage).
+Kísérőtéma a Wintage felhasználóskripthez (https://gitlab.com/vacuum34/wintage).
 Ez a téma egy rögzített legacy Dark Golden paletta, kézzel csomagolva, és független a
 felhasználóskript váltható palettáitól: canvas #1A0F05, toolbar #2A1C0A, arany szöveg
 #D4B87A, ferde arany #C0A060, besüllyedt omnibox #0F0A04, link accent #9DD9F9. Nem

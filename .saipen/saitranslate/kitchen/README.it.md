@@ -17,7 +17,7 @@ _Ogni elemento comunica il suo scopo a colpo d'occhio, riducendo il carico cogni
 ## Installazione
 
 1. Installa [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Fai clic su **[Installa Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey apre automaticamente la sua pagina di installazione.
+2. Fai clic su **[Installa Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey apre automaticamente la sua pagina di installazione.
 3. Fatto. Ogni sito che visiti ora gira su Windows 95, edizione Dark Golden.
 
 ## Aggiornamento

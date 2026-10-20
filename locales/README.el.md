@@ -16,7 +16,7 @@ _Κάθε στοιχείο επικοινωνεί τον σκοπό του με 
 ## Εγκατάσταση
 
 1. Εγκαταστήστε το [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Κάντε κλικ στο **[Εγκατάσταση Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — το Tampermonkey ανοίγει αυτόματα τη σελίδα εγκατάστασης.
+2. Κάντε κλικ στο **[Εγκατάσταση Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — το Tampermonkey ανοίγει αυτόματα τη σελίδα εγκατάστασης.
 3. Έτοιμο. Κάθε ιστοσελίδα που επισκέπτεστε τρέχει πλέον Windows 95, έκδοση Dark Golden.
 
 ## Ενημέρωση
@@ -105,4 +105,4 @@ _Κάθε στοιχείο επικοινωνεί τον σκοπό του με 
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

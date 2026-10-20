@@ -36,6 +36,7 @@
   "Save": "GEM",
   "SelectAll": "ALLE",
   "SelectNone": "INGEN",
+  "RefreshTargets": "REFRESH LIST",
   "SkippedByTargets": "ADVARSEL: -Target all vil springe {0} over — de kan vælges, men er ikke i nogen dispatch-liste.",
   "Tokens": "Tokens",
   "UnregisteredLogonTask": "Logonopgave afregistreret",

@@ -16,7 +16,7 @@ _Minden elem egyetlen pillantásra elárulja a rendeltetését, csökkentve a ko
 ## Telepítés
 
 1. Telepítsd a [Tampermonkey](https://www.tampermonkey.net/)-t (Chrome, Edge, Firefox, Opera, Safari).
-2. Kattints a **[Wintage telepítése](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** gombra — a Tampermonkey automatikusan megnyitja a telepítőoldalát.
+2. Kattints a **[Wintage telepítése](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** gombra — a Tampermonkey automatikusan megnyitja a telepítőoldalát.
 3. Kész. Minden meglátogatott oldal mostantól Windows 95-öt futtat, sötét arany kiadásban.
 
 ## Frissítés
@@ -105,4 +105,4 @@ Ez növeli az `@version` javítás (patch) számát (a Tampermonkey-fejléc és 
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

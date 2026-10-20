@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — nettlesertema (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Følgetema for Wintage-userscriptet (https://github.com/vacterro/Wintage).
+Følgetema for Wintage-userscriptet (https://gitlab.com/vacuum34/wintage).
 Dette temaet er en fast, eldre Dark Golden-palett, håndpakket og uavhengig av
 userscriptets skiftbare paletter: canvas #1A0F05, verktøylinje #2A1C0A, gyllen tekst
 #D4B87A, bevel-gull #C0A060, nedsenket omnibox #0F0A04, lenkeaksent #9DD9F9. Det

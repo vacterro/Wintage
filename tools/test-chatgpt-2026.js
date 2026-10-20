@@ -52,7 +52,9 @@ function runAudit(cssText) {
     'html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"]',
     'html[data-w95-chatgpt="1"] [data-message-author-role="assistant"]',
     'html[data-w95-chatgpt="1"] [data-user-message-bubble="true"]',
-    'html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"]'
+    'html[data-w95-chatgpt="1"] [data-markdown-copy="code-block"]',
+    // T-974 rich-embed neutralization: stable element-type list, no generated classes
+    'html[data-w95-chatgpt="1"] [data-markdown-text-style="assistant-message"] :where(div, section, article, aside, figure, fieldset)'
   ];
 
   for (const sel of REQUIRED_SELECTORS) {

@@ -36,6 +36,7 @@
   "Save": "СОХРАНИТЬ",
   "SelectAll": "ВСЕ",
   "SelectNone": "НИЧЕГО",
+  "RefreshTargets": "REFRESH LIST",
   "SkippedByTargets": "WARNING: -Target all would skip {0} - they are selectable but in no dispatch list.",
   "Tokens": "Токены",
   "UnregisteredLogonTask": "Задача входа удалена",

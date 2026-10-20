@@ -17,7 +17,7 @@ _Svaki element komunicira svoju svrhu na prvi pogled, smanjuje kognitivno optere
 ## Instalacija
 
 1. Instalirajte [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Kliknite **[Instaliraj Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey automatski otvara stranicu instalacije.
+2. Kliknite **[Instaliraj Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey automatski otvara stranicu instalacije.
 3. Gotovo. Svaka stranica koju posjetite sada radi na Windows 95, tamnozlatno izdanje.
 
 ## Ažuriranje

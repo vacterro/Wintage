@@ -17,7 +17,7 @@ _Jedes Element kommuniziert seinen Zweck auf einen Blick, reduziert die kognitiv
 ## Installation
 
 1. Installiere [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klicke **[Wintage installieren](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey öffnet die Installationsseite automatisch.
+2. Klicke **[Wintage installieren](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey öffnet die Installationsseite automatisch.
 3. Fertig. Jede Website, die du besuchst, läuft jetzt unter Windows 95, Dunkelgoldene Edition.
 
 ## Aktualisierung

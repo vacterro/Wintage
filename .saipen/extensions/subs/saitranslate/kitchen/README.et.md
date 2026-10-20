@@ -25,7 +25,7 @@ koormust ja teeb veebist jälle täpse instrumendi, mitte dekoratiivsete mullide
 ## Paigaldamine
 
 1. Paigalda [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Klõpsa **[Paigalda Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey avab paigalduslehe ise.
+2. Klõpsa **[Paigalda Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey avab paigalduslehe ise.
 3. Valmis. Iga külastatav sait töötab nüüd Windows 95 tumedas kullas.
 
 ## Uuendamine

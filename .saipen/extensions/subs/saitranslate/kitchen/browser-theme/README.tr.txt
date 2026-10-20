@@ -1,7 +1,7 @@
 Vintage Win 95 Koyu Altın — tarayıcı teması (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Wintage kullanıcı betiği için tamamlayıcı tema (https://github.com/vacterro/Wintage).
+Wintage kullanıcı betiği için tamamlayıcı tema (https://gitlab.com/vacuum34/wintage).
 Bu tema, el ile paketlenmiş, sabit bir eski Koyu Altın paletidir ve kullanıcı betiğinin
 değiştirilebilir paletlerinden bağımsızdır: canvas #1A0F05, toolbar #2A1C0A, altın metin
 #D4B87A, bevel altını #C0A060, batık omnibox #0F0A04, bağlantı vurgusu #9DD9F9. Betiğin

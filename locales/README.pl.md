@@ -17,7 +17,7 @@ _Każdy element komunikuje swój cel na pierwszy rzut oka, zmniejszając obcią�
 ## Instalacja
 
 1. Zainstaluj [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Kliknij **[Zainstaluj Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey automatycznie otworzy stronę instalacji.
+2. Kliknij **[Zainstaluj Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey automatycznie otworzy stronę instalacji.
 3. Gotowe. Każda strona, którą odwiedzasz, działa teraz na Windows 95, edycja ciemnozłota.
 
 ## Aktualizacja
@@ -103,4 +103,4 @@ Podnosi numer `@version` patch (nagłówek Tampermonkey i znacznik `W95_VERSION`
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

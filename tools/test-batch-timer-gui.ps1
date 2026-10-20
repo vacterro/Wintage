@@ -295,6 +295,10 @@ $script:clbMyApps = New-Object System.Windows.Forms.CheckedListBox
 $script:clbPopularApps = New-Object System.Windows.Forms.CheckedListBox
 $script:btnSelectAll = New-Object System.Windows.Forms.Button
 $script:btnSelectNone = New-Object System.Windows.Forms.Button
+# T-967 added a Refresh-Targets button to the target panel; Disable-BatchUi /
+# Enable-BatchUi toggle it with the rest of the batch UI, so the harness must
+# supply it too or those functions throw PropertyNotFound on a real control set.
+$script:btnRefreshTargets = New-Object System.Windows.Forms.Button
 $script:cmbLanguage = New-Object System.Windows.Forms.ComboBox
 
 # Recorded unhandled exceptions: with these hooks a regression is a recorded

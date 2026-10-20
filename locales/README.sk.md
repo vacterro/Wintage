@@ -17,7 +17,7 @@ _Každý prvok komunikuje svoj účel na prvý pohľad, znižuje kognitívnu zá
 ## Inštalácia
 
 1. Nainštalujte [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Kliknite na **[Nainštalovať Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey automaticky otvorí stránku inštalácie.
+2. Kliknite na **[Nainštalovať Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey automaticky otvorí stránku inštalácie.
 3. Hotovo. Každá stránka, ktorú navštívite, teraz beží na Windows 95, tmavo zlaté vydanie.
 
 ## Aktualizácia
@@ -103,4 +103,4 @@ Zvýši číslo `@version` patch (hlavička Tampermonkey a pečiatka `W95_VERSIO
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

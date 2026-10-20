@@ -1,7 +1,7 @@
 Vintage Win 95 Dark Golden — tema peramban (Cent Browser / Chrome / Edge)
 ==========================================================================
 
-Tema pendamping untuk skrip pengguna Wintage (https://github.com/vacterro/Wintage).
+Tema pendamping untuk skrip pengguna Wintage (https://gitlab.com/vacuum34/wintage).
 Tema ini adalah palet Dark Golden warisan yang tetap, dibundel manual dan independen
 dari palet yang dapat dialihkan skrip pengguna: canvas #1A0F05, toolbar #2A1C0A,
 teks emas #D4B87A, bevel gold #C0A060, omnibox cekung #0F0A04, link accent #9DD9F9.

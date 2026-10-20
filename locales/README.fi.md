@@ -17,7 +17,7 @@ _Jokainen elementti kertoo tarkoituksensa ensi silmäyksellä, vähentää kogni
 ## Asennus
 
 1. Asenna [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Napsauta **[Asenna Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey avaa asennussivun automaattisesti.
+2. Napsauta **[Asenna Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey avaa asennussivun automaattisesti.
 3. Valmis. Jokainen vierailemasi sivusto toimii nyt Windows 95:ssä, tumma kultainen painos.
 
 ## Päivitys
@@ -103,4 +103,4 @@ Se nostaa `@version`-patch-numeroa (Tampermonkey-otsikko ja `W95_VERSION`-leima 
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

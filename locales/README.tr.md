@@ -17,7 +17,7 @@ _Her öğe amacını ilk bakışta anlatır, bilişsel yükü azaltır ve web'i 
 ## Kurulum
 
 1. [Tampermonkey](https://www.tampermonkey.net/)'i kurun (Chrome, Edge, Firefox, Opera, Safari).
-2. **[Wintage'ı Kur](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** bağlantısına tıklayın — Tampermonkey kurulum sayfasını otomatik açar.
+2. **[Wintage'ı Kur](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** bağlantısına tıklayın — Tampermonkey kurulum sayfasını otomatik açar.
 3. Tamam. Ziyaret ettiğiniz her site artık Windows 95, koyu altın sürümünde çalışıyor.
 
 ## Güncelleme
@@ -103,4 +103,4 @@ Masaüstü kurucusunun `browsers` hedefi yüklü ve taşınabilir Chromium profi
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->

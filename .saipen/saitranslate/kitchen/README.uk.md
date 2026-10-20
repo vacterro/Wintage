@@ -17,7 +17,7 @@ _Кожен елемент повідомляє своє призначення 
 ## Встановлення
 
 1. Встановіть [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Opera, Safari).
-2. Натисніть **[Встановити Wintage](https://raw.githubusercontent.com/vacterro/Wintage/main/wintage.user.js)** — Tampermonkey автоматично відкриє сторінку встановлення.
+2. Натисніть **[Встановити Wintage](https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js)** — Tampermonkey автоматично відкриє сторінку встановлення.
 3. Готово. Кожен сайт, який ви відвідуєте, тепер працює на Windows 95, темно-золоте видання.
 
 ## Оновлення
