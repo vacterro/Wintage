@@ -266,4 +266,4 @@ alla preferenza, così cambiare la preferenza dopo un Apply viene segnalato
 come drift anziché come "sano". Il ciclo di vita dei colori del terminale resta
 intatto: Revert ripristina esattamente i valori posseduti pre-Wintage e non
 rimuove mai un font dalla macchina.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

@@ -420,4 +420,4 @@ node ..\tools\build-desktop.js --check  # выход 1, если что-то п�
 `release.ps1` гоняет сборку и все шлюзы, так что релиз не может уехать с
 выводом, который разошёлся с палитрами.
 
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

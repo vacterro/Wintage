@@ -259,4 +259,4 @@ ublažavanje rubova prema postavci, pa se promjena postavke nakon Applya
 prijavljuje kao odstupanje, a ne kao „zdravo". Životni ciklus boja terminala
 nije diran: Revert vraća točne vrijednosti iz vremena prije Wintagea i nikad
 ne uklanja font s računala.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

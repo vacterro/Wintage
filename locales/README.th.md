@@ -102,4 +102,4 @@ Wintage ไม่ใช่หนึ่งพาเล็ตอีกต่อไ
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f3af024968aebd2c -->

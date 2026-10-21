@@ -417,4 +417,4 @@ node ..\tools\build-desktop.js --check  # exit 1 if anything is stale
 `release.ps1` запускает сборку и каждый шлюз, поэтому релиз не может выпустить
 вывод, который разошёлся с палитрами.
 
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

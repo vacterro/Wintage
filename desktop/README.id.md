@@ -261,4 +261,4 @@ typeface/ukuran/anti-aliasing yang dikonfigurasi terhadap preferensi, sehingga
 perubahan preferensi setelah Apply dilaporkan sebagai penyimpangan, bukan
 "sehat". Siklus hidup warna terminal tidak disentuh: Revert memulihkan nilai
 milik yang persis sebelum Wintage dan tidak pernah menghapus font dari mesin.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

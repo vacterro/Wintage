@@ -201,4 +201,4 @@ Apply 能够改动的每一个值都会在改动前先做快照（位于 `%APPDA
 安装器**只浏览字体，并不安装它们。** TERMINAL FONTS 标签页把一个内置字面载入进程本地的 `PrivateFontCollection` 以做实时预览，这一步进行**零**次系统字体注册。选择字体、字号（7–24 pt）或渲染模式（aliased/grayscale/cleartype）只更新预览和偏好。安装字体是一个明确的 **INSTALL SELECTED** 动作，它会打开 Windows 自带的字体安装器；在 Windows 确认之后，用户用 Refresh 重新探测。终端的实际变更只发生在明确的 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 动作时。
 
 Windows Terminal 会以选定的字号应用到所选已安装的字族上，渲染模式则映射到 `profiles.defaults.antialiasingMode`。经典 conhost 更严格：它在固定的单元格网格上渲染，因此选中的字面会在任何注册表改动之前被拒绝，除非 Windows 能解析它（默认字面和 Consolas 回退属于既有豁免）。Health 和 Reapply 会拿已配置的字面/字号/抗锯齿与那份偏好对照校验，因此在一次 Apply 之后改动偏好会被报告为漂移，而不是仍算"健康"。终端颜色的生命周期未受影响：Revert 精确还原 Wintage 之前所拥有的值，且绝不从机器上移除任何字体。
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

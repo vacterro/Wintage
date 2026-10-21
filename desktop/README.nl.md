@@ -425,4 +425,4 @@ voorkeurwijziging na een Apply wordt als drift gemeld in plaats van als
 "gezond". De levenscyclus van de terminalkleuren blijft ongewijzigd: Revert zet
 de exacte, vóór Wintage bezette waarden terug en verwijdert nooit een lettertype
 van de machine.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

@@ -201,4 +201,4 @@ Applyが変更できるすべての値は変更前にスナップショットと
 インストーラーは **フォントを閲覧するのみであり, インストールはしない。** TERMINAL FONTS タブは同梱の書体をプロセス固有の `PrivateFontCollection` に読み込み, ライブプレビューを表示する。これはシステムフォントの登録を **一切** 行わない。フォント, サイズ (7–24 pt), レンダリングモード (aliased/grayscale/cleartype) の選択はプレビューと設定だけを変える。フォントのインストールは明示的な **INSTALL SELECTED** 操作であり, Windows 独自のフォントインストーラーを開く。Windows の確認のあと, ユーザーは Refresh で再検査する。実際のターミナル変更が 일어나るのは, 明示的な **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** のあとだけである。
 
 Windows Terminal には選択したインストール済みファミリーが選択したサイズで適用され, レンダリングモードは `profiles.defaults.antialiasingMode` に対応する。古典的な conhost はより厳しい。固定のセルグリッド上に描画するため, 選択した書体は Windows が解決できない限りレジストリ変更の前に拒否される (既定の書体と Consolas へのフォールバックは対象外)。Health と Reapply は設定済みの書体, サイズ, アンチエイリアシングを設定と突き合わせて検証するため, Apply のあとに設定を変更すると「健全」ではなくずれとして報告される。ターミナルの色のライフサイクルは手つかずのまま: Revert は Wintage 以前の所有値を正確に復元し, マシンからフォントを削除することはない。
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

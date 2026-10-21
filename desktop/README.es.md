@@ -262,4 +262,4 @@ cambiar la preferencia después de un Apply se informa como desviación y no com
 "sano". El ciclo de vida de los colores de terminal queda intacto: Revert restaura
 exactamente los valores que eran propiedad de Wintage antes y nunca quita una
 fuente de la máquina.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

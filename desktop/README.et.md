@@ -413,4 +413,4 @@ node ..\tools\build-desktop.js --check  # exit 1 if anything is stale
 `release.ps1` käivitab ehituse ja iga värava, nii et väljalase ei saa saata
 väljundit, mis on palettidest kõrvale triivinud.
 
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

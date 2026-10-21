@@ -164,4 +164,4 @@ OLED, Dracula, Nord, Solarized Dark). Каждая проходит WCAG AA по
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:62ecd9032c8c2f79 -->
+<!-- source-digest: README.md sha256:f3af024968aebd2c -->

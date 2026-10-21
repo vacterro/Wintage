@@ -201,4 +201,4 @@ Apply 가 바꿀 수 있는 모든 값은 바뀌기 전에 스냅샷으로 기�
 설치기는 **글꼴을 찾아보지, 설치하지 않는다.** TERMINAL FONTS 탭은 동봉된 서체를 프로세스 전용 `PrivateFontCollection` 에 불러와 즉시 볼 수 있게 하며, 이는 시스템 글꼴 등록을 **전혀** 하지 않는다. 글꼴, 크기 (7–24 pt), 렌더링 모드 (aliased/grayscale/cleartype) 를 고르는 것은 미리보기와 설정만 바꾼다. 글꼴 설치는 Windows 자체 글꼴 설치기를 여는 명시적 **INSTALL SELECTED** 동작이다. Windows 의 확인 뒤에 사용자는 Refresh 로 다시 점검한다. 실제 터미널 변경은 명시적 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 이후에만 일어난다.
 
 Windows Terminal 은 선택한 크기로, 선택한 설치된 계열에 적용되며 렌더링 모드는 `profiles.defaults.antialiasingMode` 에 대응된다. 고전 conhost 는 더 엄격하다. 고정 셀 격자 위에 그리므로 Windows 가 해결하지 못하는 한 레지스트리를 건드리기 전에 선택된 서체가 거부된다 (기본 서체와 Consolas 폴백은 예외). Health 와 Reapply 는 설정된 서체, 크기, 안티앨리어싱을 설정과 대조해 검증하므로 Apply 이후에 설정을 바꾸면 "정상" 이 아니라 어긋남으로 보고된다. 터미널 색상 수명 주기는 건드리지 않는다: Revert 는 Wintage 이전의 소유 값을 정확히 복원하며 머신에서 글꼴을 삭제하는 일은 결코 없다.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

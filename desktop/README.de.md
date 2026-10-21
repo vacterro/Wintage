@@ -261,4 +261,4 @@ die Vorliebe, sodass eine Änderung der Vorliebe nach einem Apply als Drift geme
 wird und nicht als "gesund". Der Lebenszyklus der Terminalfarben bleibt unberührt:
 Revert stellt die exakten Werte wieder her, die Wintage vorher besaß, und entfernt nie
 eine Schrift vom Rechner.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

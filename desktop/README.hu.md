@@ -263,4 +263,4 @@ beállításhoz mérték, így az Apply utáni beállításváltoztatás eltér�
 jelenik meg, nem pedig "egészségesként". A terminálszínek életciklusa érintetlen:
 a Revert visszaállítja a pontos, Wintage előtti birtokolt értékeket, és soha
 nem távolít el betűtípust a gépről.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

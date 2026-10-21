@@ -261,4 +261,4 @@ skrifttypen, størrelsen og kantglattingen mot innstillingen, så en endring av
 innstillingen etter en Apply rapporteres som avvik i stedet for som "frisk".
 Terminalfargenes livssyklus er urørt: Revert gjenoppretter de eksakte verdiene
 som var i Wintages eie før den, og fjerner aldri en skrift fra maskinen.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->

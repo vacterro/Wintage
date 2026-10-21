@@ -263,4 +263,4 @@ modifier la préférence après un Apply est signalé comme une dérive et non c
 « sain ». Le cycle de vie des couleurs de terminal reste intact : Revert restaure
 exactement les valeurs que Wintage possédait auparavant et ne retire jamais une
 police de la machine.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:79df86ec319dd04b -->
