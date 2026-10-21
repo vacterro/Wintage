@@ -84,7 +84,7 @@ A `WintageInstaller.ps1`-ben van egy kis **FB SOUND** gomb az APPLY / REVERT gom
 
 - **Bal kattintás** — válassz hangfájlt (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac), és azonnal hallod lejátszva: PCM WAV a System.Media.SoundPlayer-en keresztül, minden más formátum egy WPF MediaPlayer-en (Media Foundation, aszinkron, így az ablak soha nem fagy le). A választás megjegyzésre kerül a `%APPDATA%\Wintage\freebuff-sound.txt` fájlban (gépenként, a git-checkouton kívül, pontosan úgy, mint a megjegyzett source-tree mappák).
 - **Jobb kattintás** — törli a preferenciát vissza a FreeBuff gyári csengésére (és leállít minden, még játszó előnézetet).
-- **COPY** — a kiválasztott hangot magába a repóba másolja (`sounds\freebuff.<ext>`, megtartva a forrás kiterjesztését), és a preferenciát erre a másolatra irányítja, így a hang túléli, ha az eredeti fájlt törlik vagy áthelyezik. Csak akkor engedélyezett, ha egyedi hang van beállítva; az újramásolás egyszerűen felülírja a repó-másolatot. A `sounds/` mappa sima, git-követhető tartalom, így a commitolással a hang az újraklónozásokat is túléli.
+- **COPY** — a kiválasztott hangot magába a repóba másolja (`sounds\freebuff.<ext>`, megtartva a forrás kiterjesztését), és a preferenciát erre a másolatra irányítja, így a hang túléli, ha az eredeti fájlt törlik vagy áthelyezik. Csak akkor engedélyezett, ha egyedi hang van beállítva; az újramásolás egyszerűen felülírja a repó-másolatot.
 
 Csak felismert hangkonténerek kerülnek előnézetbe — a fejléc először megvizsgálásra kerül, így a nem hangfájl választás bejelentésre kerül, ahelyett hogy némán nem játszana semmit.
 
@@ -150,7 +150,6 @@ Ennek a második fele sokkal csendesebb probléma volt. Claude `BrowserWindow`-j
 ### Obsidian
 
 Egy közösségi téma kerül minden vault `.obsidian/themes/` mappájába — mind a tizenhat paletta egyszerre, pontosan mint a VS Code célpontnál, így a **Settings → Appearance** menüben váltogathatsz közöttük újrafuttatás nélkül. A sablon a vaultban már meglévő, kézzel készített `VintageWin95` témából származik, minden szín a tokenre cserélve, amelynek megfelelt. A `-Palette <slug>` határozza meg, melyik legyen aktív telepítéskor; az `appearance.json` előbb mentésre kerül, a `-Revert` pedig csak a `Wintage *` témákat távolítja el, és visszaállítja az előző választásod — a kézzel készített téma ugyanabban a vaultban soha nincs megérintve.
-
 
 ### MPC-HC (K-Lite)
 

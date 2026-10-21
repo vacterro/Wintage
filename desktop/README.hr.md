@@ -84,7 +84,7 @@ Pokreće se automatski kao dio `install.ps1 -Target freebuff` i mora se ponovno 
 
 - **Lijevi klik** — odaberite audio datoteku (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) i odmah je čujte: PCM WAV putem System.Media.SoundPlayer, svaki drugi format putem WPF MediaPlayer (Media Foundation, asinkrono, pa se prozor nikad ne zamrzava). Odabir se pamti u `%APPDATA%\Wintage\freebuff-sound.txt` (po računalu, izvan git check-outa, točno kao zapamćene mape izvornog koda).
 - **Desni klik** — vrati preferenciju na standardni chime FreeBuffa (također zaustavlja bilo koji pregled koji se još svira).
-- **COPY** — kopira odabrani zvuk u sam repozitorij (`sounds\freebuff.<ext>`, zadržavajući izvornu ekstenziju) i preusmjerava preferenciju na tu kopiju, tako da zvuk preživi brisanje ili premještanje izvorne datoteke. Omogućen samo dok je postavljen prilagođeni zvuk; ponovno kopiranje jednostavno prepisuje kopiju u repozitoriju. Mapa `sounds/` običan je git-slediv sadržaj, pa je njenim commitom zvuk preživljava i ponovne klonove.
+- **COPY** — kopira odabrani zvuk u sam repozitorij (`sounds\freebuff.<ext>`, zadržavajući izvornu ekstenziju) i preusmjerava preferenciju na tu kopiju, tako da zvuk preživi brisanje ili premještanje izvorne datoteke. Omogućen samo dok je postavljen prilagođeni zvuk; ponovno kopiranje jednostavno prepisuje kopiju u repozitoriju.
 
 Pregledavaju se samo prepoznati audio spremnici — zaglavlje se prvo opipa, pa se odabir koji nije audio najavljuje umjesto da tiho svira ništa.
 
@@ -150,7 +150,6 @@ Druga polovica ovoga bila je mnogo tiši problem. `BrowserWindow` od Claudea pri
 ### Obsidian
 
 Društvena tema upisuje se u `.obsidian/themes/` svakog trezora — svih šesnaest paleta odjednom, točno kao cilj VS Code, pa prebacujete između njih u **Settings → Appearance** bez ponovnog pokretanja ičega. Predložak je izveden iz ručno rađene teme `VintageWin95` koja je već bila u trezoru, svaka boja zamijenjena tokenom kojem je odgovarala. `-Palette <slug>` postavlja koja je aktivna pri instalaciji; `appearance.json` se prvo sigurnosno kopira, a `-Revert` uklanja samo `Wintage *` teme i vraća vaš prethodni odabir — ručno rađena tema u istom trezoru nikad se ne dira.
-
 
 ### MPC-HC (K-Lite)
 

@@ -150,9 +150,7 @@ advertenties en het geluid in één run worden toegepast:
   (`sounds\freebuff.<ext>`, met behoud van de bron-extensie) en wijst de voorkeur
   opnieuw naar die kopie, zodat het geluid het verwijderen of verplaatsen van het
   originele bestand overleeft. Alleen ingeschakeld terwijl er een eigen geluid is
-  ingesteld; opnieuw kopiëren overschrijft de repo-kopie simpelweg. De map
-  `sounds/` is gewone, met git te volgen content, dus het committen ervan laat het
-  geluid ook her-clones overleven.
+  ingesteld; opnieuw kopiëren overschrijft de repo-kopie simpelweg.
 
 Alleen herkende audiocontainers worden voorbeeldafgespeeld — de header wordt eerst
 gesnuffeld, dus een niet-audio-keuze wordt aangekondigd in plaats van stilletjes
@@ -305,7 +303,6 @@ kleur vervangen door het token dat eraan gelijk was. `-Palette <slug>` bepaalt
 welke bij installatie actief is; `appearance.json` wordt eerst geback-upt, en
 `-Revert` verwijdert alleen de `Wintage *`-thema's en herstelt je vorige keuze —
 een handgemaakt thema in dezelfde vault wordt nooit aangeraakt.
-
 
 ### MPC-HC (K-Lite)
 

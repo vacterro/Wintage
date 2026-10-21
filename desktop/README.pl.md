@@ -150,9 +150,7 @@ uruchomieniu:
   (`sounds\freebuff.<ext>`, zachowując rozszerzenie źródła) i przekierowuje
   preferencję na tę kopię, więc dźwięk przetrwa usunięcie lub przeniesienie
   oryginalnego pliku. Włączony tylko, gdy ustawiony jest własny dźwięk; ponowne
-  kopiowanie po prostu nadpisuje kopię w repo. Folder `sounds/` to zwykła treść
-  śledzona przez git, więc jej zacommitowanie sprawia, że dźwięk przetrwa też
-  ponowne klony.
+  kopiowanie po prostu nadpisuje kopię w repo.
 
 Podglądane są tylko rozpoznane kontenery audio — nagłówek jest sprawdzany
 najpierw, więc wybór nie-audio jest anonsowany zamiast po cichu nic nie grać.
@@ -302,7 +300,6 @@ ustala, który jest aktywny przy instalacji; `appearance.json` jest najpierw
 kopiowany zapasowo, a `-Revert` usuwa tylko motywy `Wintage *` i przywraca twoje
 poprzednie wybory — ręcznie zrobiony motyw w tym samym vaultcie nigdy nie jest
 dotykany.
-
 
 ### MPC-HC (K-Lite)
 

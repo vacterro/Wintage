@@ -147,8 +147,7 @@ anvendes i ét kørsel:
   (`sounds\freebuff.<ext>`, med kildeudvidelsen bevaret) og peger
   præferencen om på den kopi, så lyden overlever, at den oprindelige fil bliver
   slettet eller flyttet. Kun aktiveret, mens en brugerdefineret lyd er sat;
-  genkopiering overskriver simpelthen repo-kopien. `sounds/`-mappen er almindeligt
-  git-sporbart indhold, så hvis man committer den, overlever lyden også re-kloner.
+  genkopiering overskriver simpelthen repo-kopien.
 
 Kun genkendte lydcontainere forhåndsvises — headeren snuses først, så et
 ikke-lydvalg meldes ud i stedet for lydløst at afspille ingenting.
@@ -287,7 +286,6 @@ token, den svarede til. `-Palette <slug>` sætter, hvilken der er aktiv ved inst
 `appearance.json` sikkerhedskopieres først, og `-Revert` fjerner kun `Wintage *`-
 temaerne og gendanner dit tidligere valg — et håndlavet tema i samme vault
 røres aldrig.
-
 
 ### MPC-HC (K-Lite)
 

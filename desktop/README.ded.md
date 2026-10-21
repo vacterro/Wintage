@@ -177,8 +177,7 @@ APPLY / REVERT. Она хранит только *предпочтение*; `in
   (`sounds\freebuff.<ext>`, сохраняя исходное расширение) и перенацеливает
   предпочтение на эту копию, так что звук переживает удаление или перенос
   исходного файла. Включена, только пока задан кастомный звук; повторное
-  копирование просто перезаписывает копию в репо. Папка `sounds/` — обычный
-  git-трекаемый контент: закоммитил — звук переживёт и переклонирование.
+  копирование просто перезаписывает копию в репо.
 
 Превью получают только распознанные аудиоконтейнеры — сперва нюхается заголовок,
 так что не-аудио выбор объявляется вслух, а не молча играет тишину.
@@ -327,7 +326,6 @@ Qt Resource Collection, и для его сборки на машине пона
 скомпилированного пакета ресурсов qBittorrent, поэтому у них остаются
 штатные цвета.
 
-
 ### Schriften: benannt, niemals installiert
 
 Gesetz 1 aus UI.md verlangt Verdana **ohne Kantenglättung**. Ein Qt-Stylesheet hot dafür kei Eiigenschaft, un `OSDFont` in MPC-HC isch e pure GDI-Schriftname — de einzige Hebel isch also d Schrift selwer. `Verdana_m1.ttf` im Repo-Wurzelverzeichnis isch e Kopie von Verdana mit vorgerenderten 1bpp-Bitmap-Schnitten von 3 bis 30 ppem, welle der Renderer dem Glätte der Kontur vorzieht.
@@ -397,7 +395,6 @@ node ..\tools\electron-fuses.js "<путь к exe приложения>"
 `appearance.json` сначала бэкапится, а `-Revert` снимает только темы
 `Wintage *` и восстанавливает твой прежний выбор — рукодельная тема в том же
 vault не трогается никогда.
-
 
 ### MPC-HC (K-Lite)
 

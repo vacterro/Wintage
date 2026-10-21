@@ -147,8 +147,7 @@ reklamlar ve ses tek çalıştırmada uygulanır:
   kaynak uzantısını koruyarak) ve tercihi o kopyaya yönlendirir, böylece ses
   orijinal dosyanın silinmesinden veya taşınmasından kurtulur. Yalnızca özel bir
   ses ayarlıyken etkindir; yeniden kopyalama repo kopyasını basitçe üzerine
-  yazar. `sounds/` klasörü düz git ile izlenebilir içeriktir, bu yüzden onu
-  commit'lemek sesin yeniden klonlamalarda da hayatta kalmasını sağlar.
+  yazar.
 
 Yalnızca tanınan ses kapları önizlenir — önce başlık koklanır, bu yüzden ses
 olmayan bir seçim sessizce hiçbir şey çalmak yerine bildirilir.
@@ -296,7 +295,6 @@ eşit olduğu belirteçle değiştirildi. `-Palette <slug>`, hangisinin kurulumd
 olacağını ayarlar; `appearance.json` önce yedeklenir ve `-Revert` yalnızca
 `Wintage *` temalarını kaldırır ve önceki seçiminizi geri yükler — aynı kasada
 elle yapılmış bir temaya asla dokunulmaz.
-
 
 ### MPC-HC (K-Lite)
 

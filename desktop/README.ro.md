@@ -84,7 +84,7 @@ Rulează automat ca parte din `install.ps1 -Target freebuff` și trebuie re-rula
 
 - **Click stânga** — alege un fișier audio (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) și îl auzi redat imediat: PCM WAV prin System.Media.SoundPlayer, orice alt format printr-un WPF MediaPlayer (Media Foundation, async, deci fereastra nu îngheață niciodată). Alegerea este reținută în `%APPDATA%\Wintage\freebuff-sound.txt` (per-mașină, în afara git checkout-ului, exact ca dosarele reținute source-tree).
 - **Click dreapta** — șterge preferința înapoi la sunetul standard FreeBuff (oprește și orice previzualizare care încă se redă).
-- **COPY** — copiază audio-ul ales în repo-ul însuși (`sounds\freebuff.<ext>`, păstrând extensia sursei) și repointernează preferința către acea copie, deci sunetul supraviețuiește dacă fișierul original este șters sau mutat. Activat doar cât timp e setat un sunet personalizat; re-copierea pur și simplu suprascrie copia din repo. Dosarul `sounds/` este conținut obișnuit trackabil în git, deci commit-uit îl face pe sunet să supraviețuiască și re-clonărilor.
+- **COPY** — copiază audio-ul ales în repo-ul însuși (`sounds\freebuff.<ext>`, păstrând extensia sursei) și repointernează preferința către acea copie, deci sunetul supraviețuiește dacă fișierul original este șters sau mutat. Activat doar cât timp e setat un sunet personalizat; re-copierea pur și simplu suprascrie copia din repo.
 
 Doar containerele audio recunoscute sunt previzualizate — antetul este sniff-uit întâi, deci o alegere non-audio este anunțată în loc să nu redea nimic în tăcere.
 
@@ -150,7 +150,6 @@ A doua jumătate a fost o problemă mult mai tăcută. `BrowserWindow` al lui Cl
 ### Obsidian
 
 O temă de comunitate este scrisă în `.obsidian/themes/` a fiecărui vault — toate cele șaisprezece palete deodată, exact ca ținta VS Code, deci comuți între ele în **Settings → Appearance** fără să re-rulеzi nimic. Șablonul a fost derivat din tema făcută manual `VintageWin95` deja prezentă în vault, fiecare culoare înlocuită cu tokenul căruia îi corespundea. `-Palette <slug>` setează care este activă la instalare; `appearance.json` este salvat întâi, iar `-Revert` elimină doar temele `Wintage *` și restaurează alegerea ta anterioară — o temă făcută manual în același vault nu este atinsă niciodată.
-
 
 ### MPC-HC (K-Lite)
 

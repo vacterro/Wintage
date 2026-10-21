@@ -92,3 +92,10 @@ wb_inspect.txt
 # T-350 was filed about -- any untracked file outside .saipen/ is a fingerprint
 # input, so a generated export directory in the root is a standing tripwire.
 .audapack/
+
+# A user's own FreeBuff completion sound. Older builds of the installer wrote
+# the picked file into the checkout and the README told the reader to commit it,
+# which is how a game-derived wav reached a public repo. COPY now writes under
+# %APPDATA% and any old copy is migrated there on load; this rule keeps a stray
+# one from ever being staged again.
+sounds/

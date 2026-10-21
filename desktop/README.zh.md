@@ -84,7 +84,7 @@ node .\desktop\patch-freebuff-ads.js --revert
 
 - **左键单击** — 挑选一个音频文件（OpenFileDialog，wav/mp3/ogg/flac/m4a/aac）并立即听到它回放：PCM WAV 通过 System.Media.SoundPlayer，其他所有格式通过 WPF MediaPlayer（Media Foundation，异步，因此窗口永不冻结）。选择被记在 `%APPDATA%\Wintage\freebuff-sound.txt`（按机器存放，位于 git 检出之外，与记下的源码树文件夹完全一样）。
 - **右键单击** — 把偏好清回 FreeBuff 的库存提示音（也会停止仍在播放的任何预览）。
-- **COPY** — 把所选音频复制进仓库本身（`sounds\freebuff.<ext>`，保留源扩展名）并将偏好改指向该副本，因此即使原文件被删除或移动，声音依然存活。仅在设置了自定义声音时启用；重新复制只是覆盖仓库副本。`sounds/` 文件夹是普通的可 git 追踪内容，所以提交它也能让声音在重新克隆后存活。
+- **COPY** — 把所选音频复制进仓库本身（`sounds\freebuff.<ext>`，保留源扩展名）并将偏好改指向该副本，因此即使原文件被删除或移动，声音依然存活。仅在设置了自定义声音时启用；重新复制只是覆盖仓库副本。
 
 只有被识别的音频容器才会被预览 — 会先嗅探头部，因此非音频的选择会被告知，而不是悄悄什么都不播放。
 
@@ -150,7 +150,6 @@ node ..\tools\electron-fuses.js "<path to the app's exe>"
 ### Obsidian
 
 社区主题被写入每个 vault 的 `.obsidian/themes/` — 全部十六个调色板一次写入，与 VS Code 目标完全一样，因此你可以在 **Settings → Appearance** 中切换而无需重新运行任何东西。模板源自 vault 中已有的手工 `VintageWin95` 主题，每个颜色都被替换为它等于的令牌。`-Palette <slug>` 设置安装时哪个处于活动状态；`appearance.json` 首先被备份，`-Revert` 只移除 `Wintage *` 主题并恢复你之前的选择 — 同一 vault 中的手工主题永远不会被触碰。
-
 
 ### MPC-HC (K-Lite)
 

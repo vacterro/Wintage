@@ -84,7 +84,7 @@ Nó chạy tự động như một phần của `install.ps1 -Target freebuff`, 
 
 - **Nhấp trái** — chọn một file âm thanh (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) và nghe phát lại ngay: PCM WAV qua System.Media.SoundPlayer, mọi định dạng khác qua WPF MediaPlayer (Media Foundation, async, nên cửa sổ không bao giờ treo). Lựa chọn được nhớ trong `%APPDATA%\Wintage\freebuff-sound.txt` (theo máy, ngoài git checkout, đúng như các thư mục source-tree đã nhớ).
 - **Nhấp phải** — xoá sở thích về lại tiếng chime gốc của FreeBuff (cũng dừng mọi preview đang phát).
-- **COPY** — sao chép âm thanh đã chọn vào chính repo (`sounds\freebuff.<ext>`, giữ nguyên phần mở rộng nguồn) và trỏ sở thích vào bản sao đó, nên âm thanh sống sót khi file gốc bị xoá hay di chuyển. Chỉ bật khi đang đặt âm thanh tùy chỉnh; sao chép lại chỉ đơn giản ghi đè bản sao trong repo. Thư mục `sounds/` là nội dung git-track thường, nên commit nó khiến âm thanh sống sót cả qua các lần clone lại.
+- **COPY** — sao chép âm thanh đã chọn vào chính repo (`sounds\freebuff.<ext>`, giữ nguyên phần mở rộng nguồn) và trỏ sở thích vào bản sao đó, nên âm thanh sống sót khi file gốc bị xoá hay di chuyển. Chỉ bật khi đang đặt âm thanh tùy chỉnh; sao chép lại chỉ đơn giản ghi đè bản sao trong repo.
 
 Chỉ các container âm thanh được nhận diện mới được preview — header được dò trước, nên một lựa chọn không phải âm thanh sẽ được báo thay vì lặng lẽ phát chẳng gì.
 
@@ -150,7 +150,6 @@ Nửa sau của vấn đề này êm hơn nhiều. `BrowserWindow` của Claude 
 ### Obsidian
 
 Một theme cộng đồng được ghi vào `.obsidian/themes/` của mọi vault — toàn bộ mười sáu palette cùng lúc, giống hệt target VS Code, nên bạn chuyển giữa chúng trong **Settings → Appearance** mà không cần chạy lại gì. Template được suy ra từ theme `VintageWin95` làm tay đã có trong vault, mỗi màu được thay bằng token mà nó tương đương. `-Palette <slug>` đặt cái nào hoạt động khi cài; `appearance.json` được sao lưu trước, và `-Revert` chỉ gỡ các theme `Wintage *` và khôi phục lựa chọn trước của bạn — một theme làm tay trong cùng vault không bao giờ bị đụng.
-
 
 ### MPC-HC (K-Lite)
 

@@ -84,7 +84,7 @@ node .\desktop\patch-freebuff-ads.js --revert
 
 - **Clique esquerdo** — escolha um ficheiro de áudio (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) e ouça-o imediatamente: PCM WAV através de System.Media.SoundPlayer, todos os outros formatos através de um WPF MediaPlayer (Media Foundation, assíncrono, para a janela nunca congelar). A escolha é lembrada em `%APPDATA%\Wintage\freebuff-sound.txt` (por máquina, fora do checkout git, exatamente como as pastas de código-fonte lembradas).
 - **Clique direito** — limpe a preferência de volta para o chime de stock do FreeBuff (também para qualquer pré-visualização que ainda esteja a tocar).
-- **COPY** — copia o áudio escolhido para o próprio repositório (`sounds\freebuff.<ext>`, mantendo a extensão de origem) e re-aponta a preferência para essa cópia, para que o som sobreviva à eliminação ou mudança do ficheiro original. Ativado apenas enquanto um som personalizado está definido; re-copiar simplesmente sobrescreve a cópia do repositório. A pasta `sounds/` é conteúdo git-rastreável normal, por isso cometê-la faz o som sobreviver também a re-clones.
+- **COPY** — copia o áudio escolhido para o próprio repositório (`sounds\freebuff.<ext>`, mantendo a extensão de origem) e re-aponta a preferência para essa cópia, para que o som sobreviva à eliminação ou mudança do ficheiro original. Ativado apenas enquanto um som personalizado está definido; re-copiar simplesmente sobrescreve a cópia do repositório.
 
 Apenas contentores de áudio reconhecidos são pré-visualizados — o cabeçalho é sondado primeiro, para que uma escolha não-audio seja anunciada em vez de tocar silenciosamente nada.
 
@@ -150,7 +150,6 @@ A segunda metade disto foi um problema muito mais silencioso. O `BrowserWindow` 
 ### Obsidian
 
 Um tema comunitário é escrito no `.obsidian/themes/` de cada cofre — todas as dezasseis paletas de uma vez, exatamente como o alvo VS Code, para que alterne entre elas em **Settings → Appearance** sem re-executar nada. O template foi derivado do tema `VintageWin95` feito à mão que já estava no cofre, cada cor substituída pelo token a que equivalia. `-Palette <slug>` define qual está ativo na instalação; `appearance.json` é copiado primeiro, e `-Revert` remove apenas os temas `Wintage *` e restaura a sua escolha anterior — um tema feito à mão no mesmo cofre nunca é tocado.
-
 
 ### MPC-HC (K-Lite)
 

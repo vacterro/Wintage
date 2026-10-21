@@ -84,7 +84,7 @@ Spúšťa sa automaticky ako súčasť `install.ps1 -Target freebuff` a musí sa
 
 - **Ľavé kliknutie** — vyberte zvukový súbor (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) a okamžite ho počujte prehrať: PCM WAV cez System.Media.SoundPlayer, každý iný formát cez WPF MediaPlayer (Media Foundation, asynchrónne, takže okno nikdy nezmrzne). Voľba sa pamätá v `%APPDATA%\Wintage\freebuff-sound.txt` (na zariadenie, mimo git check-out, presne ako zapamätané priečinky zdrojového kódu).
 - **Pravé kliknutie** — vymazať preferenciu späť na štandardný chime FreeBuff (tiež zastaví akýkoľvek náhľad, ktorý ešte hrá).
-- **COPY** — skopíruje vybraný zvuk do samotného repozitára (`sounds\freebuff.<ext>`, zachová príponu zdroja) a presmeruje preferenciu na túto kópiu, takže zvuk prežije vymazanie alebo presun pôvodného súboru. Povolené len kým je nastavený vlastný zvuk; opätovné kopírovanie jednoducho prepíše kópiu v repozitári. Priečinok `sounds/` je bežný git-sledovateľný obsah, takže jeho commitom zvuk prežije aj re-klony.
+- **COPY** — skopíruje vybraný zvuk do samotného repozitára (`sounds\freebuff.<ext>`, zachová príponu zdroja) a presmeruje preferenciu na túto kópiu, takže zvuk prežije vymazanie alebo presun pôvodného súboru. Povolené len kým je nastavený vlastný zvuk; opätovné kopírovanie jednoducho prepíše kópiu v repozitári.
 
 Prehliadajú sa len rozpoznané zvukové kontajnery — hlavička sa najprv oňuchá, takže výber nie-ária sa oznámi namiesto tichého prehrávania ničoho.
 
@@ -150,7 +150,6 @@ Druhá polovica tohto bola oveľa tichší problém. `BrowserWindow` Claude rend
 ### Obsidian
 
 Komunitná téma sa zapíše do `.obsidian/themes/` každého trezora — všetkých šestnásť paliet naraz, presne ako cieľ VS Code, takže medzi nimi prepínate v **Settings → Appearance** bez opätovného spúšťania čohokoľvek. Šablóna bola odvodená z ručne vyrobenej témy `VintageWin95`, ktorá už bola v trezore, každá farba nahradená tokenom, ktorému sa rovnala. `-Palette <slug>` nastaví, ktorá je aktívna pri inštalácii; `appearance.json` sa najprv zálohuje a `-Revert` odstráni iba témy `Wintage *` a obnoví vašu predchádzajúcu voľbu — ručne vyrobená téma v rovnakom trezore sa nikdy nedotkne.
-
 
 ### MPC-HC (K-Lite)
 

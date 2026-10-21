@@ -145,9 +145,7 @@ sovelletaan yhdellä ajolla:
   (`sounds\freebuff.<ext>`, säilyttäen lähdetiedoston päätteen) ja osoittaa
   asetuksen uudelleen tuohon kopioon, joten ääni säilyy vaikka alkuperäinen tiedosto
   poistetaan tai siirretään. Käytössä vain silloin, kun mukautettu ääni on asetettu;
-  uudelleenkopiointi yksinkertaisesti korvaa repon kopion. `sounds/`-kansio on tavallista
-  git-seurattavaa sisältöä, joten sen committaus saa äänen säilymään myös uudelleenkloonausten
-  yli.
+  uudelleenkopiointi yksinkertaisesti korvaa repon kopion.
 
 Vain tunnistetut äänisäiliöt esikatsellaan — otsake tunnistetaan ensin, joten
 ei-ääni-valinnasta ilmoitetaan sen sijaan, että soitetaan hiljaa ei mitään.
@@ -286,7 +284,6 @@ tokenilla, jota se vastasi. `-Palette <slug>` määrää, kumpi on aktiivinen as
 `appearance.json` varmuuskopioidaan ensin, ja `-Revert` poistaa vain `Wintage *`-
 teemat ja palauttaa aiemman valintasi — käsin tehtyyn teemaan samassa vaultissa
 ei koskaan kosketa.
-
 
 ### MPC-HC (K-Lite)
 

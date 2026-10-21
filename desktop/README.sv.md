@@ -149,8 +149,7 @@ en enda körning:
   (`sounds\freebuff.<ext>`, med källans filändelse) och pekar om preferensen mot
   den kopian, så ljudet överlever att originalfilen tas bort eller flyttas.
   Aktiverad bara medan ett eget ljud är inställt; att kopiera igen skriver bara
-  över repo-kopian. Mappen `sounds/` är vanligt git-spårat innehåll, så att
-  commit:a den gör att ljudet också överlever om-kloner.
+  över repo-kopian.
 
 Endast igenkända ljudcontainrar förhandsvisas — huvudet sniffas först, så ett
 icke-ljudval annonseras i stället för att tyst spela ingenting.
@@ -297,7 +296,6 @@ den token den motsvarade. `-Palette <slug>` avgör vilken som är aktiv vid
 installation; `appearance.json` backas upp först, och `-Revert` tar bort bara
 `Wintage *`-temana och återställer ditt tidigare val — ett handgjort tema i samma
 vault rörs aldrig.
-
 
 ### MPC-HC (K-Lite)
 

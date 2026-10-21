@@ -144,8 +144,7 @@ v jednom běhu:
   se zachováním zdrojové přípony) a přesměruje preferenci na tuto kopii, takže
   zvuk přežije smazání nebo přesun původního souboru. Povoleno pouze když je
   nastaven vlastní zvuk; opětovné kopírování jednoduše přepíše kopii v repozitáři.
-  Složka `sounds/` je běžný gitově sledovatelný obsah, takže jeho commitování
-  zajistí, že zvuk přežije i re-klony.
+
 
 Pouze rozpoznané zvukové kontejnery se náhledují — hlavička se nejprve očichá,
 takže výběr ne-zvuku je oznámen místo tichého přehrávání ničeho.
@@ -290,7 +289,6 @@ nahrazena tokenem, kterému se rovnala. `-Palette <slug>` určuje, který bude p
 instalaci aktivní; `appearance.json` je nejprve zálohován a `-Revert` odstraní
 jen motivy `Wintage *` a obnoví vaši předchozí volbu — ručně vytvořeného motivu ve
 stejném trezoru se nikdy nedotkne.
-
 
 ### MPC-HC (K-Lite)
 
