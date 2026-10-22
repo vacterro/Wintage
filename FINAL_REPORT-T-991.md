@@ -13,12 +13,14 @@ Nothing here is estimated, remembered or carried over from another ticket's clai
 - Closed in this campaign: **T-980, T-982, T-983, T-984, T-985, T-987, T-988, T-989, T-990, T-991**.
 - Still open and blocked on the owner: **T-981** (release channel convergence — needs a push),
   **T-986** (Verdana_m1.ttf redistribution decision), **T-376** (live BetterDiscord acceptance).
-- Tree at the time of writing: branch `main`, HEAD `43aef8e`, **6 local commits** on top of
-  `d775325` (the commit that is published on the polled destination).
+- Tree at the time of writing: branch `main`, code HEAD `43aef8e`, **6 code commits** on top of
+  `d775325` (the commit that is published on the polled destination). This report and its
+  amendments are commits of their own, whose hashes cannot appear inside themselves.
 - **Remote publication: DISABLED FOR NEW CHANGES.** This campaign pushed nothing, tagged nothing,
   published nothing, deployed nothing and rewrote no remote history. Every commit below is local.
 - No shared protocol machinery was modified: `SAIPEN_HOME` is untouched, and the SAIPEN
-  conformance receipt was refreshed with the project's own `saipen validate` only.
+  conformance receipt was refreshed and re-verified with the project's own `saipen validate`
+  and `saipen work reverify` only.
 
 ## RESULT
 
@@ -327,17 +329,21 @@ Measured on the final tree, that is **674.4s -> 139.5s -> 4s**: the release-gate
 - **No failing regression was weakened.** The only contract change in the campaign was a
   **strengthening** (the palette contrast contract was widened, and three packs were brought
   up to the wider contract).
-- Pre-existing, unrelated and untouched: **T-243, T-244, T-245 and T-357** remain
-  `UNPROVEN` in the SAIPEN ledger. The conformance receipt was `STALE_FAIL` before this
-  report (it was bound to a different source identity than the current checkpoint); it was
-  refreshed with `saipen validate` at the end of this ticket, and the refresh states the
-  truth plainly: the receipt is now **CURRENT_FAIL**, because the canonical validator
-  reports FAIL for the current checkpoint, and the validator's own next action is
-  `saipen work reverify T-243`. That debt is the four DONE tickets above, which were
-  closed by another actor on 2026-09-11 without a re-verification receipt. **This campaign
-  did not create that debt and did not paper over it**: the shared protocol was not
-  touched, no gate was weakened, and the four tickets are named as the exact thing the
-  next operator has to re-verify.
+- Pre-existing debt, cleared by re-verification and not by assertion: **T-243, T-244, T-245
+  and T-357** were DONE tickets that carried no current-cycle re-verification receipt. The
+  conformance receipt was `STALE_FAIL` before this report (it was bound to a different source
+  identity than the current checkpoint). After this report's text was final, all four were
+  re-verified against the tree by `saipen work reverify`, one receipt per ticket, each
+  recording the **executed** command that re-proves the ticket's own gate and each bound to
+  the same source head and tree fingerprint as the refreshed canonical receipt. The
+  refreshed receipt then reports **one** remaining problem instead of four.
+- **That one remaining problem is the project's own deliberate carry, and it is not this
+  campaign's to close.** It is **E-838**, a hand-appended historical structural event with
+  no `[op: ...]` marker; E-909 records the decision to carry it. The sanctioned cure
+  (`tools/accept_legacy_debt.py --authority SRC-###`) needs an independently witnessed
+  authority Source, which this campaign cannot mint. **The shared protocol was not touched,
+  no gate was weakened and no accepted-debt record was written**: the debt is named for the
+  owner instead of being closed quietly.
 
 ## RELEASE SAFETY
 
@@ -381,9 +387,10 @@ Measured on the final tree, that is **674.4s -> 139.5s -> 4s**: the release-gate
 ## COMMITS
 
 All six are local; none is pushed. `d775325` is the base (the commit published on the polled
-destination). The report itself is the seventh commit (`6c94dee`) plus one amendment commit
-that states the refreshed conformance receipt's exact outcome; a commit cannot contain its
-own hash, so those two are named here and their hashes are in `git log`.
+destination). The report itself is the seventh commit (`6c94dee`) plus two amendment commits
+that state the refreshed conformance receipt's exact outcome and the re-verification round
+that followed it; a commit cannot contain its own hash, so those three are named here and
+their hashes are in `git log`.
 
 | commit | subject |
 |---|---|
@@ -423,12 +430,23 @@ own hash, so those two are named here and their hashes are in `git log`.
    **not isolated**; the assertions themselves are unaffected, and the anomaly is recorded
    here rather than explained away. **A release that gates on the process exit code should
    read the verdict line, not only the code**, until the cause is found.
-10. **T-243, T-244, T-245, T-357** remain UNPROVEN in the ledger; they pre-date this campaign
-    and were not touched by it. They are the reason the refreshed conformance receipt reads
-    `CURRENT_FAIL` (see the REGRESSION section); the validator's own next action is
-    `saipen work reverify T-243`, and each of the four needs a re-verification receipt that
-    names the command that re-proves it. This campaign did not write those receipts, because
-    the trees and the claims behind them belong to closures this campaign did not make.
+10. **The core conformance gate still reports one problem, and it is the project's own
+    deliberate carry.** `E-838` (a hand-appended historical structural event with no
+    `[op: ...]` marker) is the debt E-909 records the project carrying; the sanctioned
+    cure needs an authority Source this campaign cannot mint, so it stays red by
+    decision, not by oversight. The four DONE tickets that also carried no current-cycle
+    evidence — **T-243, T-244, T-245, T-357** — were re-verified against this tree with
+    executed receipts (one per ticket, each naming the command that re-proves it) and are
+    no longer findings. See the REGRESSION section.
+11. **Two untracked leftovers of the project's own test runs were found in the tree and
+    removed:** `.wintage.tmp` (299 478 bytes, an orphaned copy of the userscript that no
+    file in this tree writes) and `Microsoft/Windows/PowerShell/ModuleAnalysisCache`
+    (6 072 bytes, PowerShell's module-analysis cache, written into the repository because a
+    child process had no `LOCALAPPDATA`). Neither name is in `.gitignore`, so both were
+    untracked-but-unignored and both sat inside the source tree fingerprint the
+    re-verification receipts are bound to. They are machine byproducts, not work product, so
+    the campaign deleted them; **the owner may want both names added to `.gitignore`** so
+    the next test run cannot reintroduce them.
 
 ## NEXT EXACT ACTION
 
