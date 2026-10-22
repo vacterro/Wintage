@@ -52,6 +52,25 @@ function Restore-PreReleaseState([string]$worktreeRef, [string]$indexRef, [bool]
     }
 }
 
+# T-983: the delivery detector's exit code IS the verdict, and the release's
+# REACTION to it is a function so a gate can lift it out of this file verbatim
+# and prove it (the rollback gate lifts Restore-PreReleaseState the same way).
+# A release that quietly stopped failing on a stale artifact would turn that
+# gate red instead of shipping a version the clients never install.
+#   0  the served artifact IS this build    -> current
+#   1  the served artifact is NOT this build -> stale  (the release FAILS)
+#   2  the artifact could not be fetched     -> unknown (warn, do not fail)
+function Get-ReleaseDeliveryVerdict($ExitCode) {
+    # A MISSING exit code is not a success: without one there is no evidence
+    # that the detector ran at all, and 'current' would be a guess. Unknown
+    # warns; it does not claim the artifact was served.
+    if ($null -eq $ExitCode) { return 'unknown' }
+    $code = [int]$ExitCode
+    if ($code -eq 0) { return 'current' }
+    if ($code -eq 2) { return 'unknown' }
+    return 'stale'
+}
+
 # T-232: the same two belts, for the calls whose VALUE is needed.
 #
 # Git-Safe above was written for exactly this hazard and every fire-and-forget
@@ -118,6 +137,25 @@ switch ($Bump) {
 $new = "$maj.$min.$pat"
 $tagRef = "refs/tags/v$new"
 $branchRef = 'refs/heads/main'
+
+# T-984: the release must publish WHERE THE CLIENTS POLL. The push target is a
+# mutable alias ("origin") and the poll URL lives in the script's own metadata;
+# nothing compared the two, so a release could report success while every
+# installed copy kept the old build -- forever, because the poll URL is part of
+# the installation, not part of the repository. This gate binds them before
+# anything is mutated: a destination that is not the polled repository aborts
+# the release with the tree untouched.
+#
+# The URL read is the PUSH url, not the fetch url: the release pushes to
+# `git push origin`, and a remote configured with a separate pushurl (fetch
+# from a mirror, push to the real repository) would otherwise be validated
+# against a destination the release never writes to -- the exact failure this
+# gate exists to prevent.
+$remoteUrl = ((Git-Read remote get-url --push origin) -join '').Trim()
+node (Join-Path $PSScriptRoot 'tools/check-release-target.js') --remote-url $remoteUrl
+if ($LASTEXITCODE -ne 0) {
+    throw "the release destination does not match the URL the clients poll (push target: '$remoteUrl') - release aborted BEFORE publishing anything. NOTHING was changed."
+}
 
 # ─── PREPARED-VERSION TRACKING (W2-009) ───────────────────────────────────
 # A failed release is restartable: $prepared stays $false until the release
@@ -297,7 +335,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Repository tests failed - release aborted" }
 
     if ((Git-Safe add -A) -ne 0) { throw "git add failed" }
-    if ((Git-Safe commit -m "v${new}: $Message") -ne 0) { throw "git commit failed (nothing to commit, or a hook rejected it)" }
+    # T-984: the commit is the durable record of WHAT this release published
+    # and WHERE. A release that pushed to one repository while the clients
+    # polled another left no trace of the mistake in the history.
+    if ((Git-Safe commit -m "v${new}: $Message" -m "Published to: $remoteUrl") -ne 0) { throw "git commit failed (nothing to commit, or a hook rejected it)" }
     $prepared = $true
 
     # T-192 P1#25: a release is published WHOLE or NOT AT ALL. The branch and the tag
@@ -322,7 +363,27 @@ try {
     if ($remoteMain -ne $mainOid) {
         throw "post-push verification failed: origin/main is $remoteMain, expected $mainOid - the remote may need manual repair."
     }
-    Write-Host "Released Wintage v$new - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green
+    # T-983: prove the DELIVERED artifact, not only the pushed ref. The ref
+    # moving is a fact about git; the browser installing this build is a fact
+    # about the URL in the script's own metadata, and only the second one is
+    # what the user experiences. A raw URL can lag behind the push, so the
+    # check is retried a few times before it is believed.
+    $installUrl = ''
+    if ($content -match '(?m)^//\s*@updateURL\s+(\S+)') { $installUrl = $Matches[1] }
+    $delivery = 'unknown'
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        node (Join-Path $PSScriptRoot 'tools/check-deployed-userscript.js') --url $installUrl --json
+        $delivery = Get-ReleaseDeliveryVerdict $LASTEXITCODE
+        if ($delivery -ne 'stale') { break }
+        if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
+    }
+    if ($delivery -eq 'stale') {
+        throw "the release IS published, but the install URL does not serve this build yet: '$installUrl' still serves an older build. The clients will keep the old version until the raw URL refreshes - re-run 'node tools/check-deployed-userscript.js --url $installUrl' in a minute."
+    }
+    if ($delivery -eq 'unknown') {
+        Write-Host "WARNING: the install URL '$installUrl' could not be fetched, so the delivered artifact is UNPROVEN. The release itself is published; re-run 'node tools/check-deployed-userscript.js --url $installUrl' when the network is back." -ForegroundColor Yellow
+    }
+    Write-Host "Released Wintage v$new to $remoteUrl - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green
 } catch {
     if (-not $prepared) {
         # W2-009: restore every tracked file the preparation mutated so a rerun

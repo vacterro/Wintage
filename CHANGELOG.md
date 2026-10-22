@@ -630,18 +630,89 @@ repository regression suite are green.
   machine, so no offline contract verification was possible. Everything above is
   verified against the deterministic harness only.
 
+## [1.36.11] - 2026-10-22
+
+The release now proves WHERE it publishes and WHAT it published.
+
+- **The release refuses to publish where nobody polls.** The push target was a
+  mutable alias (`origin`) and the URL the browsers poll lives inside the
+  installed script's own metadata; nothing compared the two. `release.ps1` now
+  runs `tools/check-release-target.js` before anything is mutated: the
+  destination and the `@updateURL`/`@downloadURL` must name the same repository,
+  the same branch and the same file, or the release aborts with the tree
+  untouched. The commit records the destination it published to.
+- **The release proves the delivered artifact, not only the pushed ref.** A moved
+  ref is a fact about git; the browser installing the build is a fact about the
+  URL in the script. The release now runs the project's own detector
+  (`tools/check-deployed-userscript.js`) against the install URL after the push
+  and reports a stale delivery instead of a green success line. The detector
+  itself is unchanged and still needs the network, so the suite exercises it
+  against a local fixture server (`tools/test-release-delivery.js`).
+- **The release's REACTION to a stale artifact is a tested function.** The
+  detector's exit codes were proven, but what the release does with them lived
+  in the middle of the release script, where no gate can reach it: a release
+  could have stopped failing on a stale artifact without anything turning red.
+  `release.ps1` now maps the exit code through `Get-ReleaseDeliveryVerdict`
+  (0 current, 1 stale -- the release FAILS, 2 unknown -- warn, and an undefined
+  or missing code is never read as success), and
+  `tools/test-release-delivery-verdict.ps1` lifts that function out of
+  `release.ps1` with the PowerShell AST -- the shipped text is what runs -- and
+  asserts that a stale delivery throws while an unknown one only warns, with a
+  red control that mutates the lifted text.
+- **The FreeBuff completion sound no longer lives in the checkout.** The
+  installer wrote the picked audio into `sounds\freebuff.<ext>` inside the
+  repository and the READMEs told the reader to commit it -- which is how a
+  game-derived wav reached a public repository. COPY now writes next to the
+  preference under `%APPDATA%\Wintage`, a preference still pointing into the
+  old in-repo folder is migrated on load, `sounds/` is gitignored, the tracked
+  copy is dropped from the index, and the 33 desktop READMEs no longer advise
+  committing it. (Ported from the operator's repair `052f416`, which existed
+  only on the other distribution line.)
+- **The 33 desktop READMEs now name the destination the code actually uses.**
+  The repair above moved COPY under `%APPDATA%\Wintage`, but every translation
+  still said the audio is copied "into the repo itself" at
+  `sounds\freebuff.<ext>` -- the docs contradicted the shipped installer, and
+  the installer's own log line said "stored outside the checkout". All 33
+  READMEs now name `%APPDATA%\Wintage` as the copy target, in their own
+  language.
+- **A gate for the audio invariant.** `tools/test-no-repo-audio.js` checks the
+  invariant instead of trusting it: no tracked audio file anywhere in the
+  checkout, `sounds/` really ignored (`git check-ignore` says so), the
+  installer's preference AND copy targets outside the repository, no installer
+  write into the checkout's `sounds\` directory, and every desktop README
+  naming the `%APPDATA%` destination.
+- **The test suite can now run a fraction of itself, and says which fraction.**
+  `tests/Run-Tests.ps1` takes `-Level FULL|FOCUSED|FAST` (default FULL, which
+  runs exactly what it ran before) plus `-Only`/`-Skip`. The gate set behind
+  FOCUSED and FAST is derived from `release.ps1` itself, so "focused" cannot
+  drift away from what a release actually runs -- and the suite asserts that
+  the focused selection still covers every release gate, because a selection
+  is never a weakening. Every run prints the wall time of the slowest suites,
+  and a reduced run states how many release gates it covered and that it is
+  not a release proof.
+- **A release gate that nothing ran.** `tools/check-css.js` is a release gate,
+  but no suite executed it: the release-gate coverage check was satisfied by a
+  *comment* that mentions the gate in two other tools' headers. The suite runs
+  the gate itself now.
+
 ## [1.36.10] - 2026-10-20
 
 Publication moved to GitLab; the ChatGPT assistant text-fill inheritance fix ships with it.
 
-- The GitHub repository `github.com/vacterro/Wintage` is no longer reachable -- the
-  owner account is suspended, so `git ls-remote` answers `403` and the raw URL
-  answers `404`. The project's home is now `gitlab.com/vacuum34/wintage`, and the
+- The GitHub repository `github.com/vacterro/Wintage` was believed to be gone --
+  the owner account was reported suspended, with `git ls-remote` answering `403`
+  and the raw URL `404`. That report was wrong: the repository is public, not
+  archived, and was pushed to again on 2026-10-21. The project's home is now
+  `gitlab.com/vacuum34/wintage`, and the
   userscript's `@updateURL`/`@downloadURL`, the three fetchers that download the
   live script (`install-themes.ps1`, `tools/install-browsers.ps1`,
   `tools/check-deployed-userscript.js`) and every install link in the English
   README, the 32 locale READMEs, the wiki mirror and the companion browser theme
   now point at `https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js`.
+  An installation made before the move keeps the update URL it was installed
+  with, so it polls the old repository until it is re-installed once -- the
+  README says so now.
+
 - `@namespace` deliberately stays on the old GitHub URL. Tampermonkey rejects an
   update whose `@name`/`@namespace` pair differs from the installed script, so
   changing it would silently strand every existing installation on the last

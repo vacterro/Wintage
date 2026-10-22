@@ -146,9 +146,18 @@ function New-R010Mutant {
     Say-Log 'An Apply/Revert batch is still running - the window stays open until it completes. Closing is refused so the running operation keeps its owner.'
 "@
             $defectA = "    return`r`n"
-            $mutated = $text.Replace($anchorA, $defectA)
+            # The anchor is matched EOL-AGNOSTICALLY. A checkout is not one
+            # line ending: a clone with core.autocrlf=true writes CRLF, a
+            # tree written by other tools holds LF, and the shipped GUI may be
+            # either. Matching the here-string literally made this red control
+            # fail on a worktree whose line endings differ from the clone's --
+            # a red that says nothing about the defect it exists to prove.
+            $patternA = (($anchorA.TrimEnd("`r", "`n") -split "`r?`n") | ForEach-Object { [regex]::Escape($_) }) -join '\r?\n'
+            $rxA = [regex]::new($patternA)
+            if (-not $rxA.IsMatch($text)) { throw 'R010 mutant A: the active-close refusal anchor was not found in the shipped GUI' }
+            $mutated = $rxA.Replace($text, $defectA, 1)
             if ($mutated -eq $text) { throw 'R010 mutant A: the active-close refusal anchor was not found in the shipped GUI' }
-            if (-not $mutated.Contains($defectA) -or $mutated.Contains("`$e.Cancel = `$true`r`n    Say-Log 'An Apply/Revert")) { throw 'R010 mutant A: the refusal body survived the mutation' }
+            if (-not $mutated.Contains($defectA) -or $mutated -match "Say-Log 'An Apply/Revert") { throw 'R010 mutant A: the refusal body survived the mutation' }
         }
         'B' {
             # RED R010-B: exactly-once lifecycle protection missing. The
@@ -187,7 +196,12 @@ function New-R010Mutant {
         }
 "@
             $defectC = "        try { Enable-BatchUi } catch { }`r`n"
-            $mutated = $text.Replace($anchorC, $defectC)
+            # EOL-agnostic, like mutant A: the anchor must be found in a
+            # CRLF checkout and in an LF one alike.
+            $patternC = (($anchorC.TrimEnd("`r", "`n") -split "`r?`n") | ForEach-Object { [regex]::Escape($_) }) -join '\r?\n'
+            $rxC = [regex]::new($patternC)
+            if (-not $rxC.IsMatch($text)) { throw 'R010 mutant C: the Cleared-transition anchor was not found in the shipped GUI' }
+            $mutated = $rxC.Replace($text, $defectC, 1)
             if ($mutated -eq $text) { throw 'R010 mutant C: the Cleared-transition anchor was not found in the shipped GUI' }
         }
     }

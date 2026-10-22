@@ -103,4 +103,4 @@ Det höjer `@version`-patchnumret (Tampermonkey-huvudet och `W95_VERSION`-stämp
 
 [MIT](LICENSE)
 
-<!-- source-digest: README.md sha256:f77d52d5127ef9b1 -->
+<!-- source-digest: README.md sha256:7eb3bab8fa303b23 -->

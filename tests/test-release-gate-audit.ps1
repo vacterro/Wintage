@@ -60,10 +60,16 @@ Assert-True (@(Paths-Of $runtimeOnly).Count -eq 0) 'an unresolvable path derives
 $releaseCode = [System.IO.File]::ReadAllText((Join-Path $root 'release.ps1'))
 $real = @(Get-ReleaseToolInvocations -Source $releaseCode)
 $realPaths = @($real | ForEach-Object { $_.Path } | Sort-Object -Unique)
-Assert-True ($realPaths.Count -eq 18) "the real release.ps1 derives its 18 tool steps (got $($realPaths.Count))"
+Assert-True ($realPaths.Count -eq 20) "the real release.ps1 derives its 20 tool steps (got $($realPaths.Count))"
 foreach ($n in (Get-ReleaseNonGatePaths)) {
     Assert-True ($realPaths -contains $n) "real release.ps1 still invokes the BUILD_IMPORT step $n"
 }
+# T-983/T-984: the two release-safety gates this wave added. A release that
+# dropped either one would publish where nobody polls (the destination is not
+# the polled repository), or report success without proving the artifact the
+# browser actually installs.
+Assert-True ($realPaths -contains 'tools/check-release-target.js') 'real release.ps1 runs the destination identity gate'
+Assert-True ($realPaths -contains 'tools/check-deployed-userscript.js') 'real release.ps1 runs the delivery check'
 
 # --- Coverage decisions, all on strings -------------------------------------
 

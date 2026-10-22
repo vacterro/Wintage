@@ -52,6 +52,11 @@ _Every element communicates its purpose at a glance, reducing cognitive load and
   embedded theme registry and the release test requires exactly one menu row for
   every embedded palette. If the menu is shorter than the palette list below,
   click **Install Wintage** again and confirm **Update** in Tampermonkey.
+- **Installed before 1.36.10?** The distribution moved from GitHub to GitLab,
+  and an installed script keeps the update URL it was installed with -- so an
+  older install keeps polling the old repository. Open the install link above
+  once and confirm **Update** in Tampermonkey; from then on the script polls the
+  current repository.
 
 ## Sixteen palettes, and a switch
 

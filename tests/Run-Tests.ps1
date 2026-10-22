@@ -1,3 +1,18 @@
+param(
+    # T-985 (Wave 2, test execution efficiency): the suite runs EVERY gate
+    # every time, so the cost of one question is the cost of all of them. The
+    # levels below are a SELECTION, never a weakening: FULL is the default and
+    # is exactly what release.ps1 runs, so a release still judges the whole
+    # tree. FOCUSED runs the suites that execute a release gate (derived from
+    # release.ps1 itself, not from a hand-written list). FAST runs the cheap
+    # half of those, for the edit-compile-check loop.
+    [ValidateSet('FULL', 'FOCUSED', 'FAST')][string]$Level = 'FULL',
+    # -Only / -Skip filter by suite name (substring, case-insensitive). They
+    # narrow the run; they never widen it.
+    [string[]]$Only = @(),
+    [string[]]$Skip = @()
+)
+
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -297,6 +312,14 @@ function Exit-Suite([int]$code) {
     if ($script:errors -gt 0) {
         Write-Host "failing checks ($($script:failures.Count)):" -ForegroundColor Red
         foreach ($f in $script:failures) { Write-Host "  - $f" -ForegroundColor Red }
+    }
+    # B1/B5: the measurement the levels are judged by. The slowest suites are
+    # what FAST has to buy back, so they are printed on every exit door.
+    if ($script:suiteTimings -and $script:suiteTimings.Count -gt 0) {
+        $total = ($script:suiteTimings | Measure-Object -Property Ms -Sum).Sum
+        $slowest = @($script:suiteTimings | Sort-Object -Property Ms -Descending | Select-Object -First 5)
+        Write-Host "suite timings: $($script:suiteTimings.Count) suites, $([math]::Round($total / 1000, 1))s total" -ForegroundColor Cyan
+        foreach ($t in $slowest) { Write-Host ("  {0,7:N2}s  {1}" -f ($t.Ms / 1000), $t.Name) -ForegroundColor Cyan }
     }
     Write-Host "SUITE VERDICT: head=$($script:runHead) worktree=$($script:runFingerprint) exit=$code errors=$($script:errors) log=$($script:transcript)"
     if ($script:identityNote -and $code -eq 0) {
@@ -767,8 +790,18 @@ Write-Host "
 # npm ci succeeds in a scratch dir, require('playwright') resolves there, and a
 # removed declaration makes the gate fail (RED control). Chromium launch is
 # skipped here -- the browser itself is gated separately below.
+# The same two belts release.ps1 uses for its native calls: npm writes
+# NOTICES to stderr ("npm notice New minor version of npm available"), and
+# under $ErrorActionPreference='Stop' PowerShell 5.1 turns ANY native stderr
+# line into a terminating NativeCommandError. The suite therefore died on an
+# npm notice -- a red that says nothing about the tree, reported as a failure
+# of the delivery gate it was running. The child's exit code is the verdict;
+# its stderr is evidence, not an error.
+$prevEapBrowserDeps = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 $browserDepsOut = & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\tools\browser-deps.ps1" -SkipBrowserDownload -RedControl -RetainScratch 2>&1
 $browserDepsCode = $LASTEXITCODE
+$ErrorActionPreference = $prevEapBrowserDeps
 # Join to ONE string before matching: on an array, -match leaves $matches holding
 # the LAST element's result, which is a FAIL line, not the SCRATCH_PATH line.
 $browserDepsText = ($browserDepsOut | ForEach-Object { "$_" }) -join "`n"
@@ -869,6 +902,8 @@ if ($script:browserScratchCleanupHandler) {
 # bootstrap cannot borrow a scratch install or set NODE_PATH.
 $thisSuiteText = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Run-Tests.ps1'))
 Assert-True ($thisSuiteText -match '(?s)function Exit-Suite.*?Reset-Browser-Scratch') 'every exit door: Exit-Suite performs the scratch teardown before the verdict'
+Assert-True ($thisSuiteText -match '(?s)function Exit-Suite.*?suite timings') 'every exit door: the suite timing summary is printed before the verdict'
+Assert-True ($thisSuiteText -match "ValidateSet\('FULL', 'FOCUSED', 'FAST'\)") 'the suite exposes the FULL, FOCUSED and FAST run levels'
 Assert-True ($thisSuiteText.Contains('$browserDepsCode -eq 0 -and $browserDepsText -match')) 'a failed dependency bootstrap cannot adopt a scratch install or set NODE_PATH'
 # Put the suite back exactly the way the green adoption block left it: these
 # fixtures borrowed the state for the duration of the checks above, and the
@@ -1041,6 +1076,18 @@ $toolSuites = @(
     # release-gate derivation itself. Every case is a source STRING, so this
     # gate can be proven to bite without ever editing release.ps1.
     @{ Name = 'test-release-gate-audit.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tests\test-release-gate-audit.ps1"' },
+    # T-983/T-984: the two release-safety gates this wave added, each with its
+    # own deterministic test. The destination gate is pure URL arithmetic; the
+    # delivery gate is the project's own detector, served from a local HTTP
+    # server so the suite stays offline while the release runs that detector
+    # against the real install URL.
+    @{ Name = 'test-release-target.js'; Cmd = 'node "{0}\tools\test-release-target.js"' },
+    @{ Name = 'test-release-delivery.js'; Cmd = 'node "{0}\tools\test-release-delivery.js"' },
+    # T-983: the detector's exit codes are proven above; this gate proves the
+    # RELEASE's reaction to them -- that a served artifact which is not this
+    # build makes the release fail. The verdict mapping is lifted out of
+    # release.ps1 with the PowerShell AST, so the shipped text is what runs.
+    @{ Name = 'test-release-delivery-verdict.ps1'; Cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "{0}\tools\test-release-delivery-verdict.ps1"' },
     # T-398 (SRC-063 W2-003): a release that died between the desktop generation
     # and the commit rolled back only the TRACKED store, leaving the ignored
     # desktop/out tree holding the failed run's N+1 payload. This gate builds a
@@ -1623,6 +1670,18 @@ $toolSuites = @(
     # fail' and it aborts with a named page and a diff -- but a test-* filter
     # would have classified it as a tool and let it keep running only at release.
     @{ Name = 'check-wiki-mirror.js'; Cmd = 'node "{0}\tools\check-wiki-mirror.js"' },
+    # T-985: check-css.js is a release gate too, and until now NOTHING ran it:
+    # the suite's release-gate completeness check was satisfied by a COMMENT
+    # that mentions the gate in two other tools' headers. A gate that is only
+    # named is not a gate that runs, so the file itself is in the registry now
+    # (it is offline and cheap: it reads wintage.user.js and nothing else).
+    @{ Name = 'check-css.js'; Cmd = 'node "{0}\tools\check-css.js"' },
+    # T-982: the repair that keeps a user's audio out of the checkout. A
+    # tracked sound file would be published by the next `git add -A`, so the
+    # invariant is checked, not remembered: no tracked audio anywhere, sounds/
+    # really ignored, the installer's copy target outside the repo, and the 33
+    # desktop READMEs naming the %APPDATA% destination.
+    @{ Name = 'test-no-repo-audio.js'; Cmd = 'node "{0}\tools\test-no-repo-audio.js"' },
     # T-971: the mirror gate above proves the repo wiki/ pages equal the saiwiki
     # kitchen pages -- it says nothing about whether those pages are still true of
     # the product. wiki/Desktop.md documents the supported targets in a table,
@@ -1672,13 +1731,135 @@ $toolSuites = @(
 if ($env:WINTAGE_TEST_INJECT_RED) {
     $toolSuites = @($toolSuites) + @{ Name = $env:WINTAGE_TEST_INJECT_RED; Cmd = "cmd /c echo $($env:WINTAGE_TEST_INJECT_RED) injected red control & exit 7" }
 }
+# T-985: the release-gate set, derived from release.ps1 itself, so "FOCUSED"
+# means "the gates a release actually runs" and cannot drift away from it the
+# way a hand-written list would. The audit library is read-only (it defines
+# functions and parses text); dot-sourcing it here does not touch the tree.
+$releaseGatePaths = @()
+$releaseTestGateLeaves = @()
+try {
+    . (Join-Path $root 'tests\lib\ReleaseGateAudit.ps1')
+    $releaseGatePaths = @((Get-ReleaseToolInvocations -Source ([System.IO.File]::ReadAllText((Join-Path $root 'release.ps1')))) |
+        ForEach-Object { $_.Path } | Sort-Object -Unique)
+    # The four BUILD_IMPORT steps generate product bytes instead of asserting
+    # anything; they are release STEPS but not gates, so coverage is claimed
+    # over the other sixteen.
+    $nonGates = @(Get-ReleaseNonGatePaths)
+    $releaseTestGateLeaves = @($releaseGatePaths | Where-Object { $nonGates -notcontains $_ } |
+        ForEach-Object { Split-Path $_ -Leaf } | Sort-Object -Unique)
+} catch {
+    $releaseGatePaths = @()
+    $releaseTestGateLeaves = @()
+}
+$releaseGateLeaves = @($releaseGatePaths | ForEach-Object { Split-Path $_ -Leaf } | Sort-Object -Unique)
+
+# What each suite ACTUALLY executes: the tools its command names, plus the tools
+# those tools invoke (one hop). The release-gate completeness check below
+# derives the same attribution for the whole suite; doing it per suite is what
+# lets a LEVEL select on what a suite executes instead of on what its file name
+# suggests.
+function Get-SuiteToolSet($Suite) {
+    $set = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($m in [regex]::Matches($Suite.Cmd, 'tools[\\]+([A-Za-z0-9._-]+)')) { $null = $set.Add($m.Groups[1].Value) }
+    # @($set) copies first: the set grows inside the loop.
+    foreach ($e in @($set)) {
+        $src = Join-Path $root "tools\$e"
+        if (-not (Test-Path $src)) { continue }
+        foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($src), 'tools[\\/]([A-Za-z0-9._-]+\.(?:js|cjs|mjs|ps1))')) {
+            $null = $set.Add($m.Groups[1].Value)
+        }
+    }
+    # The comma keeps PowerShell from UNWINDING the set: a collection returned
+    # from a function is enumerated into the pipeline, and an EMPTY set would
+    # arrive as $null -- which then fails on .Contains() with a message that
+    # names the wrong line entirely.
+    return , $set
+}
+$suiteEntries = @()
 foreach ($s in $toolSuites) {
+    $suiteEntries += [pscustomobject]@{ Suite = $s; Leaf = ($s.Name -split ' ')[0]; Tools = (Get-SuiteToolSet $s) }
+}
+# The two perf fixtures build 64-256 MiB files and read the child's peak RSS;
+# they are the slow half of the node gates and are excluded from FAST by name.
+$script:SlowSuites = @('test-perf-recovery.js', 'test-perf-lanes.js')
+function Select-Suite {
+    param($Entry, [string]$AtLevel = '')
+    if (-not $AtLevel) { $AtLevel = $Level }
+    $leaf = $Entry.Leaf
+    if ($AtLevel -eq 'FULL') { return $true }
+    # A suite is release-relevant when it executes one of the gates
+    # release.ps1 derives. The comparison is on the tool FILE, so a suite that
+    # runs the gate and a suite that runs the gate's own test are both
+    # release-relevant.
+    $isGate = $false
+    foreach ($g in $releaseGateLeaves) {
+        if ($Entry.Tools.Contains($g)) { $isGate = $true; break }
+    }
+    if (-not $isGate) { return $false }
+    if ($AtLevel -eq 'FAST') {
+        # FAST: the release-relevant suites that are cheap. A node suite is
+        # cheap by construction; a PowerShell child is not, because it spawns
+        # a 5.1 host per gate.
+        $cmd = $Entry.Suite.Cmd -replace '\\', '/'
+        if ($cmd -notmatch '(^|\s)node(\s|$)') { return $false }
+        if ($script:SlowSuites -contains $leaf) { return $false }
+    }
+    return $true
+}
+# -Only / -Skip narrow the run AFTER the level picked it. Filtering inside the
+# level would make "FULL runs every registered suite" depend on the filter, and
+# a level that a filter can quietly weaken is not a level.
+$levelEntries = @($suiteEntries | Where-Object { Select-Suite -Entry $_ })
+$selectedEntries = @($levelEntries | Where-Object {
+    $hit = $true
+    if ($Only.Count -gt 0) {
+        $hit = $false
+        foreach ($p in $Only) { if ($_.Leaf -like "*$p*") { $hit = $true; break } }
+    }
+    if ($hit) {
+        foreach ($p in $Skip) { if ($_.Leaf -like "*$p*") { $hit = $false; break } }
+    }
+    $hit
+})
+$selectedSuites = @($selectedEntries | ForEach-Object { $_.Suite })
+# A run that skipped suites is a REDUCED run whatever level it was asked for.
+$runIsReduced = ($Level -ne 'FULL' -or $Only.Count -gt 0 -or $Skip.Count -gt 0)
+# T-985: the level contract, asserted against the REAL selector and the REAL
+# registry on every run -- not only when a reduced level happens to be the one
+# being executed. A level that quietly widened, or that stopped covering the
+# release gates, would otherwise be discovered only by someone reading the
+# diff.
+$fullSet = @($suiteEntries | Where-Object { Select-Suite -Entry $_ -AtLevel 'FULL' })
+$focusedSet = @($suiteEntries | Where-Object { Select-Suite -Entry $_ -AtLevel 'FOCUSED' })
+$fastSet = @($suiteEntries | Where-Object { Select-Suite -Entry $_ -AtLevel 'FAST' })
+Assert-True ($fullSet.Count -eq $toolSuites.Count) "level FULL runs every registered suite ($($fullSet.Count) of $($toolSuites.Count))"
+Assert-True ($focusedSet.Count -le $fullSet.Count) "level FOCUSED never runs a suite FULL does not ($($focusedSet.Count) of $($fullSet.Count))"
+Assert-True ($fastSet.Count -le $focusedSet.Count) "level FAST never runs a suite FOCUSED does not ($($fastSet.Count) of $($focusedSet.Count))"
+$fastPowerShell = @($fastSet | Where-Object { ($_.Suite.Cmd -replace '\\', '/') -notmatch '(^|\s)node(\s|$)' })
+Assert-True ($fastPowerShell.Count -eq 0) "level FAST runs no PowerShell-child suite (found: $(@($fastPowerShell | ForEach-Object { $_.Leaf }) -join ', '))"
+# FOCUSED is a SELECTION, never a weakening: the suites it picks must still
+# cover every gate a release runs, or "focused" would mean "skipped".
+$focusedTools = New-Object 'System.Collections.Generic.HashSet[string]'
+foreach ($e in $focusedSet) { foreach ($t in $e.Tools) { $null = $focusedTools.Add($t) } }
+$focusedMissed = @($releaseTestGateLeaves | Where-Object { -not $focusedTools.Contains($_) })
+Assert-True ($focusedMissed.Count -eq 0) "level FOCUSED covers every release gate (missed: $($focusedMissed -join ', '))"
+Assert-True ($releaseTestGateLeaves.Count -ge 10) "the release gate set was actually derived, not empty ($($releaseTestGateLeaves.Count) gates)"
+if ($Level -ne 'FULL' -or $Only.Count -gt 0 -or $Skip.Count -gt 0) {
+    Write-Host ""
+    Write-Host "--- Suite selection: level=$Level only=$($Only -join ',') skip=$($Skip -join ',') -> $($selectedSuites.Count) of $($toolSuites.Count) suites ---" -ForegroundColor Cyan
+    Write-Host "    REDUCED RUN: this is not a release proof. release.ps1 judges the tree with the FULL level." -ForegroundColor Yellow
+}
+$script:suiteTimings = @()
+foreach ($s in $selectedSuites) {
     $invokeLine = ($s.Cmd -f $root)
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $suiteOut = (& cmd /c $invokeLine 2>&1 | Out-String)
     $suiteCode = $LASTEXITCODE
+    $sw.Stop()
     $ErrorActionPreference = $prevEap
+    $script:suiteTimings += [pscustomobject]@{ Name = $s.Name; Ms = $sw.ElapsedMilliseconds }
     if ($suiteCode -eq 0) {
         Assert-True $true "$($s.Name) suite exits 0"
     } else {
@@ -1726,15 +1907,18 @@ Assert-True ($coverage.Missing.Count -eq 0) "every release gate exists on disk (
 # That second hop is why test-electron-repaint-probe.cjs needs no entry of its
 # own -- it is reached through test-electron-repaint.ps1, and the edge is read
 # from that file's source rather than trusted from a comment.
+#
+# T-985: the set is the union over the suites THIS RUN actually executed, not
+# over the whole registry. A reduced level that still claimed the full
+# registry's coverage would be reporting a measurement it never took.
 $executed = New-Object 'System.Collections.Generic.HashSet[string]'
 # One separator or more: the Cmd strings live in single-quoted PowerShell, so an
 # entry written as "{0}\\tools\\x.ps1" carries a DOUBLE backslash that a
 # single-separator pattern silently skipped -- one release gate's executed
-# attribution was being dropped for a typo nobody could see.
-foreach ($s in $toolSuites) {
-    foreach ($m in [regex]::Matches($s.Cmd, 'tools[\\]+([A-Za-z0-9._-]+)')) {
-        $null = $executed.Add($m.Groups[1].Value)
-    }
+# attribution was being dropped for a typo nobody could see. The per-suite
+# derivation above keeps that property: its pattern is tools[\\]+ too.
+foreach ($e in $selectedEntries) {
+    foreach ($t in $e.Tools) { $null = $executed.Add($t) }
 }
 # The Name field is the suite's display label, not a claim about what runs, and
 # it used to be seeded into $executed before Cmd was read. A record whose Name
@@ -1940,7 +2124,18 @@ foreach ($n in $coverage.DroppedNonGates) {
 Assert-True ($coverage.DroppedNonGates.Count -eq 0) "every BUILD_IMPORT step is still invoked by release.ps1 (dropped: $($coverage.DroppedNonGates -join ', '))"
 $releaseTestGates = @($coverage.MustRun | ForEach-Object { Split-Path $_ -Leaf })
 $unrun = @($releaseTestGates | Where-Object { -not $executed.Contains($_) })
-Assert-True ($unrun.Count -eq 0) "every test gate release.ps1 runs is executed by this suite (not run here: $($unrun -join ', '))"
+if ($runIsReduced) {
+    # A REDUCED run covers fewer gates by contract, so completeness is not
+    # what it claims. Asserting it here would be asserting a number nobody
+    # measured, and NOT asserting it would let a green reduced run be read as
+    # a release proof -- so the reduced coverage is stated instead, next to
+    # the verdict.
+    Assert-True ($selectedSuites.Count -lt $toolSuites.Count) "the reduced run really is reduced ($($selectedSuites.Count) of $($toolSuites.Count) suites)"
+    Write-Host "This reduced run covered $(($releaseTestGates.Count - $unrun.Count)) of $($releaseTestGates.Count) release gates (a FULL run covers all of them)" -ForegroundColor Yellow
+} else {
+    # FULL claims release-gate coverage, so it must prove it.
+    Assert-True ($unrun.Count -eq 0) "every test gate release.ps1 runs is executed by this suite (not run here: $($unrun -join ', '))"
+}
 Assert-True ($releaseTestGates.Count -ge 10) "the release gate set was actually derived, not empty ($($releaseTestGates.Count) gates)"
 
 # T-967: the worktree fingerprint is DRIVEN here, not merely described. The
