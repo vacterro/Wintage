@@ -3163,10 +3163,12 @@ a, a:link { color: ${T.link} !important; }
           // always compared the content first; the adopted path did not, and
           // that asymmetry is the measured hot path. The measured median
           // renderer busy % on the shadow workload (3 repeats, arms rotated,
-          // tools/bench-idle-cpu-results.json): 24.3 before this change,
-          // 20.3 after it, 17.3 with no script at all. A focused 9-repeat
-          // run of the same pair gives 23.5 -> 20.3, 9/9 paired wins, with
-          // non-overlapping ranges.
+          // tools/bench-idle-cpu-results.json): 36.5 before this change,
+          // 29.1 after it, 23.3 with no script at all. A focused 9-repeat
+          // run of the same pair gives 33.8 -> 27.7, 9/9 paired wins, with
+          // non-overlapping ranges. The ABSOLUTE level moves with machine
+          // load (an earlier run measured 24.3 / 20.3 / 17.3 for the same
+          // three arms); the CLAIM is the paired delta and the win count.
           if (sheet.__w95Content !== content) {
             sheet.replaceSync(content);
             sheet.__w95Content = content;

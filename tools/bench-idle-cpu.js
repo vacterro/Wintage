@@ -55,7 +55,11 @@ const argOf = (name, fallback) => {
 };
 const ONLY_WORKLOAD = argOf('workload', null);
 const ONLY_ARMS = argOf('arms', null);
-const OUT_FILE = argOf('out', 'bench-idle-cpu-results.json');
+// The suite runs this tool with --quick as a smoke gate. That run must not
+// overwrite the FULL matrix: a two-row smoke file in place of the 5-arm x
+// 6-workload x 3-repeat data set would silently destroy the measurement the
+// report quotes. --quick therefore writes its own file.
+const OUT_FILE = argOf('out', QUICK ? 'bench-idle-cpu-results-quick.json' : 'bench-idle-cpu-results.json');
 
 const CURRENT = fs.readFileSync(USER_JS, 'utf8');
 function blobAt(sha) {
