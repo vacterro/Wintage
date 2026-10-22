@@ -84,7 +84,7 @@ Es läuft automatisch als Teil von `install.ps1 -Target freebuff` und muss nach 
 
 - **Linksklick** — eine Audiodatei wählen (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) und sie sofort abspielen hören: PCM WAV über System.Media.SoundPlayer, jedes andere Format über einen WPF-MediaPlayer (Media Foundation, async, also friert das Fenster nie ein). Die Wahl wird in `%APPDATA%\Wintage\freebuff-sound.txt` gemerkt (pro Maschine, außerhalb des git-Checkouts, genau wie die gemerkten Quellbaum-Ordner).
 - **Rechtsklick** — die Präferenz zurück auf FreeBuffs Original-Chime setzen (stoppt auch jede noch laufende Vorschau).
-- **COPY** — kopiert das gewählte Audio in das Repo selbst (`sounds\freebuff.<ext>`, mit der Quelldateiendung) und zeigt die Präferenz auf diese Kopie, damit der Ton das Löschen oder Verschieben der Originaldatei überlebt. Nur aktiv, solange ein benutzerdefinierter Ton gesetzt ist; erneutes Kopieren überschreibt die Repo-Kopie einfach. Der `sounds/`-Ordner ist normaler git-tracbarer Inhalt, also überlebt das Einchecken auch Re-Clones.
+- **COPY** — kopiert das gewählte Audio nach `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`, mit der Quelldateiendung) und zeigt die Präferenz auf diese Kopie, damit der Ton das Löschen oder Verschieben der Originaldatei überlebt. Nur aktiv, solange ein benutzerdefinierter Ton gesetzt ist; erneutes Kopieren überschreibt die Kopie in `%APPDATA%\Wintage` einfach.
 
 Nur erkannte Audio-Container werden vorgespielt — der Header wird zuerst gesnifft, also wird eine Nicht-Audio-Auswahl angesagt, statt still nichts abzuspielen.
 
@@ -150,7 +150,6 @@ Die zweite Hälfte davon war ein viel leiseres Problem. Claudes `BrowserWindow` 
 ### Obsidian
 
 Eine Community-Theme wird in jedes Vault-Verzeichnis `.obsidian/themes/` geschrieben — alle sechzehn Paletten auf einmal, genau wie beim VS-Code-Ziel, also wechselst du zwischen ihnen in **Settings → Appearance**, ohne etwas erneut auszuführen. Die Vorlage wurde von der handgefertigten `VintageWin95`-Theme abgeleitet, die schon im Vault war, jede Farbe durch den Token ersetzt, dem sie entsprach. `-Palette <slug>` setzt, welche bei der Installation aktiv ist; `appearance.json` wird zuerst gesichert, und `-Revert` entfernt nur die `Wintage *`-Themes und stellt deine frühere Wahl wieder her — eine handgefertigte Theme im selben Vault wird nie angefasst.
-
 
 ### MPC-HC (K-Lite)
 
@@ -262,4 +261,4 @@ die Vorliebe, sodass eine Änderung der Vorliebe nach einem Apply als Drift geme
 wird und nicht als "gesund". Der Lebenszyklus der Terminalfarben bleibt unberührt:
 Revert stellt die exakten Werte wieder her, die Wintage vorher besaß, und entfernt nie
 eine Schrift vom Rechner.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

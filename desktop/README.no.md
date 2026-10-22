@@ -84,7 +84,7 @@ Det kjører automatisk som en del av `install.ps1 -Target freebuff`, og må kjø
 
 - **Venstreklikk** — velg en lydfil (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) og hør den spilles av umiddelbart: PCM WAV via System.Media.SoundPlayer, alle andre formater via en WPF MediaPlayer (Media Foundation, asynkron, så vinduet aldri fryser). Valget huskes i `%APPDATA%\Wintage\freebuff-sound.txt` (per maskin, utenfor git-sjekkouten, akkurat som de huskede kilde-tre-mappene).
 - **Høyreklikk** — tilbakestill preferansen til FreeBuff-standardlyden (stopper også en forhåndsvisning som fortsatt spiller).
-- **COPY** — kopierer den valgte lyden inn i selve repoet (`sounds\freebuff.<ext>`, behold kilde-utvidelsen) og peker preferansen på den kopien, så lyden overlever at originalfilen slettes eller flyttes. Aktivert bare mens en tilpasset lyd er satt; å kopiere på nytt overskriver bare repo-kopien. `sounds/`-mappen er vanlig git-sporbart innhold, så å committe den gjør at lyden overlever også re-kloner.
+- **COPY** — kopierer den valgte lyden inn i `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`, behold kilde-utvidelsen) og peker preferansen på den kopien, så lyden overlever at originalfilen slettes eller flyttes. Aktivert bare mens en tilpasset lyd er satt; å kopiere på nytt overskriver bare kopien i `%APPDATA%\Wintage`.
 
 Bare gjenkjente lydcontainere forhåndsvises — overskriften snuses først, så et ikke-lydvalg annonseres i stedet for stille å spille ingenting.
 
@@ -150,7 +150,6 @@ Den andre halvdelen av dette var et mye stillere problem. Claudes `BrowserWindow
 ### Obsidian
 
 Et fellesskapstema skrives inn i hvert hvelvs `.obsidian/themes/` — alle seksten paletter samtidig, nøyaktig som VS Code-målet, så du bytter mellom dem i **Settings → Appearance** uten å kjøre noe på nytt. Malen ble utledet fra det håndlagde `VintageWin95`-temaet som allerede var i hvelvet, hver farge erstattet av tokenet den tilsvarte. `-Palette <slug>` setter hvilken som er aktiv ved installasjon; `appearance.json` sikkerhetskopieres først, og `-Revert` fjerner bare `Wintage *`-temaene og gjenoppretter ditt forrige valg — et håndlaget tema i samme hvelv røres aldri.
-
 
 ### MPC-HC (K-Lite)
 
@@ -262,4 +261,4 @@ skrifttypen, størrelsen og kantglattingen mot innstillingen, så en endring av
 innstillingen etter en Apply rapporteres som avvik i stedet for som "frisk".
 Terminalfargenes livssyklus er urørt: Revert gjenoppretter de eksakte verdiene
 som var i Wintages eie før den, og fjerner aldri en skrift fra maskinen.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

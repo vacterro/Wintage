@@ -84,7 +84,7 @@ Rulează automat ca parte din `install.ps1 -Target freebuff` și trebuie re-rula
 
 - **Click stânga** — alege un fișier audio (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) și îl auzi redat imediat: PCM WAV prin System.Media.SoundPlayer, orice alt format printr-un WPF MediaPlayer (Media Foundation, async, deci fereastra nu îngheață niciodată). Alegerea este reținută în `%APPDATA%\Wintage\freebuff-sound.txt` (per-mașină, în afara git checkout-ului, exact ca dosarele reținute source-tree).
 - **Click dreapta** — șterge preferința înapoi la sunetul standard FreeBuff (oprește și orice previzualizare care încă se redă).
-- **COPY** — copiază audio-ul ales în repo-ul însuși (`sounds\freebuff.<ext>`, păstrând extensia sursei) și repointernează preferința către acea copie, deci sunetul supraviețuiește dacă fișierul original este șters sau mutat. Activat doar cât timp e setat un sunet personalizat; re-copierea pur și simplu suprascrie copia din repo. Dosarul `sounds/` este conținut obișnuit trackabil în git, deci commit-uit îl face pe sunet să supraviețuiască și re-clonărilor.
+- **COPY** — copiază audio-ul ales în `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`, păstrând extensia sursei) și repointernează preferința către acea copie, deci sunetul supraviețuiește dacă fișierul original este șters sau mutat. Activat doar cât timp e setat un sunet personalizat; re-copierea pur și simplu suprascrie copia din `%APPDATA%\Wintage`.
 
 Doar containerele audio recunoscute sunt previzualizate — antetul este sniff-uit întâi, deci o alegere non-audio este anunțată în loc să nu redea nimic în tăcere.
 
@@ -151,7 +151,6 @@ A doua jumătate a fost o problemă mult mai tăcută. `BrowserWindow` al lui Cl
 
 O temă de comunitate este scrisă în `.obsidian/themes/` a fiecărui vault — toate cele șaisprezece palete deodată, exact ca ținta VS Code, deci comuți între ele în **Settings → Appearance** fără să re-rulеzi nimic. Șablonul a fost derivat din tema făcută manual `VintageWin95` deja prezentă în vault, fiecare culoare înlocuită cu tokenul căruia îi corespundea. `-Palette <slug>` setează care este activă la instalare; `appearance.json` este salvat întâi, iar `-Revert` elimină doar temele `Wintage *` și restaurează alegerea ta anterioară — o temă făcută manual în același vault nu este atinsă niciodată.
 
-
 ### MPC-HC (K-Lite)
 
 Win32 nativ, fără stylesheet și fără punct de injectare, iar culorile temei sale întunecate sunt compilate în program — nicio valoare de registry nu le expune. Deci această țintă **nu poate purta o paletă**. Ce face: pornește tema întunecată și aplică regulile de tipografie din UI.md la OSD, care este singura suprafață pe care MPC-HC îi permite utilizatorului să o controleze. Setările anterioare sunt exportate întâi în `desktop/backup/mpc-hc-settings.reg`.
@@ -202,4 +201,4 @@ Ambele ținte de terminal citesc O SINGURĂ preferință canonică de tipografie
 Instalatorul **navighează fonturi, nu le instalează.** Tabul TERMINAL FONTS încarcă un font inclus într-un `PrivateFontCollection` local procesului pentru o previzualizare vie, care face **zero** înregistrări de fonturi de sistem. Alegerea unui font, a unei dimensiuni (7–24 pt) sau a unui mod de randare (aliased/grayscale/cleartype) actualizează doar previzualizarea și preferința. Instalarea unui font este o acțiune explicită **INSTALL SELECTED** care deschide instalatorul de fonturi al propriului Windows; după confirmarea Windows, utilizatorul reinteroghează cu Refresh. Modificările reale asupra terminalului au loc doar la o acțiune explicită **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal este aplicat familiei instalate selectate, la dimensiunea selectată, iar modul de randare mapează la `profiles.defaults.antialiasingMode`. Conhost clasic este mai strict: randă pe o grilă fixă de celule, așa că un font selectat este refuzat înainte de orice modificare de registry, cu excepția cazului în care Windows îl rezolvă (fontul implicit și rezerva Consolas sunt exceptate). Health și Reapply validează fontul/dimensiunea/anti-aliasing-ul configurat față de preferință, așa că schimbarea preferinței după un Apply este raportată ca deviere, nu ca stare sănătoasă. Ciclul de viață al culorilor terminalului nu este atins: Revert restaurează exact valorile deținute înainte de Wintage și nu elimină niciodată un font de pe mașină.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

@@ -84,7 +84,7 @@ node .\desktop\patch-freebuff-ads.js --revert
 
 - **왼쪽 클릭** — 오디오 파일을 고르고 (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) 즉시 재생을 들어 본다: PCM WAV는 System.Media.SoundPlayer로, 그 외 형식은 WPF MediaPlayer로 (Media Foundation, 비동기이므로 창이 얼지 않는다). 선택은 `%APPDATA%\Wintage\freebuff-sound.txt` 에 기억된다 (머신 단위, git 체크아웃 밖, 기억된 소스 트리 폴더와 똑같이).
 - **오른쪽 클릭** — FreeBuff의 스톡 차임으로 설정을 되돌린다 (재생 중인 미리보기도 멈춘다).
-- **COPY** — 고른 오디오를 리포지토리 자체에 복사하고 (`sounds\freebuff.<ext>`, 소스 확장자를 유지) 설정을 그 복사본으로 다시 가리킨다. 원본 파일이 삭제되거나 옮겨져도 사운드가 살아남는다. 사용자 지정 사운드가 설정되어 있는 동안에만 활성화된다. 다시 복사하면 리포지토리 복사본을 덮어쓸 뿐이다. `sounds/` 폴더는 평범한 git 추적 가능 콘텐츠이므로, 커밋하면 사운드는 재클론에도 견딘다.
+- **COPY** — 고른 오디오를 `%APPDATA%\Wintage`에 복사하고 (`%APPDATA%\Wintage\freebuff.<ext>`, 소스 확장자를 유지) 설정을 그 복사본으로 다시 가리킨다. 원본 파일이 삭제되거나 옮겨져도 사운드가 살아남는다. 사용자 지정 사운드가 설정되어 있는 동안에만 활성화된다. 다시 복사하면 `%APPDATA%\Wintage` 복사본을 덮어쓸 뿐이다.
 
 인식된 오디오 컨테이너만 미리 보여진다 — 먼저 헤더를 스니핑하므로, 오디오가 아닌 선택은 조용히 아무것도 재생하지 않는 대신 알림이 나온다.
 
@@ -151,7 +151,6 @@ node ..\tools\electron-fuses.js "<path to the app's exe>"
 
 커뮤니티 테마가 모든 볼트의 `.obsidian/themes/` 에 쓰인다 — VS Code 대상과 똑같이 16개 팔레트 전부를 한 번에. 그래서 **Settings → Appearance** 에서 아무것도 다시 실행하지 않고 전환한다. 템플릿은 볼트에 이미 있는 손수 만든 `VintageWin95` 테마에서 도출되었고, 각 색상이 그것과 같은 토큰으로 교체되었다. `-Palette <slug>` 는 설치 시 어느 것이 활성인지 설정한다. `appearance.json` 은 먼저 백업되고, `-Revert` 는 `Wintage *` 테마만 제거하고 이전 선택을 복원한다 — 같은 볼트의 손수 만든 테마는 절대 건드리지 않는다.
 
-
 ### MPC-HC (K-Lite)
 
 네이티브 Win32, 스타일시트도 주입 지점도 없고, 다크 테마의 색상은 프로그램에 컴파일되어 있다 — 레지스트리 값은 그것들을 노출하지 않는다. 그래서 이 대상은 **팔레트를 담을 수 없다**. 그것이 하는 일: 다크 테마를 켜고 UI.md 타이포그래피 규칙을 OSD에 적용한다. OSD는 MPC-HC가 사용자가 제어하게 두는 유일한 표면이다. 이전 설정은 먼저 `desktop/backup/mpc-hc-settings.reg` 로 내보내진다.
@@ -202,4 +201,4 @@ Apply 가 바꿀 수 있는 모든 값은 바뀌기 전에 스냅샷으로 기�
 설치기는 **글꼴을 찾아보지, 설치하지 않는다.** TERMINAL FONTS 탭은 동봉된 서체를 프로세스 전용 `PrivateFontCollection` 에 불러와 즉시 볼 수 있게 하며, 이는 시스템 글꼴 등록을 **전혀** 하지 않는다. 글꼴, 크기 (7–24 pt), 렌더링 모드 (aliased/grayscale/cleartype) 를 고르는 것은 미리보기와 설정만 바꾼다. 글꼴 설치는 Windows 자체 글꼴 설치기를 여는 명시적 **INSTALL SELECTED** 동작이다. Windows 의 확인 뒤에 사용자는 Refresh 로 다시 점검한다. 실제 터미널 변경은 명시적 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 이후에만 일어난다.
 
 Windows Terminal 은 선택한 크기로, 선택한 설치된 계열에 적용되며 렌더링 모드는 `profiles.defaults.antialiasingMode` 에 대응된다. 고전 conhost 는 더 엄격하다. 고정 셀 격자 위에 그리므로 Windows 가 해결하지 못하는 한 레지스트리를 건드리기 전에 선택된 서체가 거부된다 (기본 서체와 Consolas 폴백은 예외). Health 와 Reapply 는 설정된 서체, 크기, 안티앨리어싱을 설정과 대조해 검증하므로 Apply 이후에 설정을 바꾸면 "정상" 이 아니라 어긋남으로 보고된다. 터미널 색상 수명 주기는 건드리지 않는다: Revert 는 Wintage 이전의 소유 값을 정확히 복원하며 머신에서 글꼴을 삭제하는 일은 결코 없다.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

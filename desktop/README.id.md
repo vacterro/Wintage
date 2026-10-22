@@ -84,7 +84,7 @@ Ia berjalan otomatis sebagai bagian dari `install.ps1 -Target freebuff`, dan har
 
 - **Left-click** — pilih file audio (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) dan dengarkan langsung diputar: PCM WAV melalui System.Media.SoundPlayer, setiap format lain melalui WPF MediaPlayer (Media Foundation, async, jadi jendela tidak pernah membeku). Pilihan diingat di `%APPDATA%\Wintage\freebuff-sound.txt` (per-mesin, di luar checkout git, persis seperti folder sumber-pohon yang diingat).
 - **Right-click** — kosongkan preferensi kembali ke chime stok FreeBuff (juga menghentikan pratinjau yang masih diputar).
-- **COPY** — menyalin audio terpilih ke dalam repo itu sendiri (`sounds\freebuff.<ext>`, mempertahankan ekstensi sumber) dan mengarahkan ulang preferensi ke salinan itu, jadi suara bertahan meski file asli dihapus atau dipindahkan. Hanya aktif selama suara kustom disetel; menyalin ulang hanya menimpa salinan repo. Folder `sounds/` adalah konten yang bisa dilacak git biasa, jadi meng-commit-nya membuat suara bertahan dari klon ulang juga.
+- **COPY** — menyalin audio terpilih ke dalam `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`, mempertahankan ekstensi sumber) dan mengarahkan ulang preferensi ke salinan itu, jadi suara bertahan meski file asli dihapus atau dipindahkan. Hanya aktif selama suara kustom disetel; menyalin ulang hanya menimpa salinan di `%APPDATA%\Wintage`.
 
 Hanya wadah audio yang dikenali yang dipratinjau — header disniff dulu, jadi pilihan non-audio diumumkan alih-alih diam-diam tidak memutar apa pun.
 
@@ -150,7 +150,6 @@ Bagian kedua ini masalah yang jauh lebih senyap. `BrowserWindow` Claude merender
 ### Obsidian
 
 Tema komunitas ditulis ke `.obsidian/themes/` setiap vault — keenam belas palet sekaligus, persis seperti target VS Code, jadi Anda beralih di antara mereka di **Settings → Appearance** tanpa menjalankan ulang apa pun. Template diturunkan dari tema buatan tangan `VintageWin95` yang sudah ada di vault, setiap warna diganti dengan token yang sebanding. `-Palette <slug>` menentukan mana yang aktif saat pemasangan; `appearance.json` di-backup dulu, dan `-Revert` hanya menghapus tema `Wintage *` dan memulihkan pilihan Anda sebelumnya — tema buatan tangan di vault yang sama tidak pernah disentuh.
-
 
 ### MPC-HC (K-Lite)
 
@@ -262,4 +261,4 @@ typeface/ukuran/anti-aliasing yang dikonfigurasi terhadap preferensi, sehingga
 perubahan preferensi setelah Apply dilaporkan sebagai penyimpangan, bukan
 "sehat". Siklus hidup warna terminal tidak disentuh: Revert memulihkan nilai
 milik yang persis sebelum Wintage dan tidak pernah menghapus font dari mesin.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

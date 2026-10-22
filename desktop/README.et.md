@@ -180,13 +180,12 @@ rakendatakse ühe käiguga:
   git-väljavõtet, täpselt nagu meelde jäänud allikapuust kaustad).
 - **Paremklõps** — kustuta eelistus tagasi FreeBuffi tavalisele toonile
   (peatab ka igasuguse veel mängiva eelvaate).
-- **KOPEERI** — kopeerib valitud heli repositooriumi enda sisse
-  (`sounds\freebuff.<ext>`, säilitades allika laiendi) ja suunab eelistuse
+- **KOPEERI** — kopeerib valitud heli `%APPDATA%\Wintage` kausta
+  (`%APPDATA%\Wintage\freebuff.<ext>`, säilitades allika laiendi) ja suunab eelistuse
   sellele koopiale, nii et heli peab vastu ka siis, kui originaalfail
   kustutatakse või liigutatakse. Aktiivne ainult siis, kui kohandatud heli on
-  seatud; uuesti kopeerimine lihtsalt kirjutab repositooriumi koopia üle.
-  `sounds/` kaust on tavaline git-jälgitav sisu, nii et selle committimine teeb
-  heli vastupidavaks ka uuesti kloonimisele.
+  seatud; uuesti kopeerimine lihtsalt kirjutab `%APPDATA%\Wintage` koopia üle.
+
 
 Eelvaadatakse ainult tuntud helikonteinerit — päis nuusitakse enne välja, nii et
 mitte-helivalik teatatakse ette, selle asemel et vaikselt mitte midagi mängida.
@@ -318,7 +317,6 @@ Sulgege qBittorrent enne Apply või Revert: see kirjutab väljumisel kogu `qBitt
 
 Kättesaamatu: tööriistariba ja süsteemiringi ikoonid pärinevad qBittorrenti enda kompileeritud ressurssikomplektist, seega jäävad neile endised tavavärvid.
 
-
 ### Fondid: nimetatud, mitte kunagi paigaldatud
 
 UI.md seadus 1 nõuab Verdana **ilma antialiasinguta**. Qt-stiilileht pole selle jaoks omadust ning MPC-HC `OSDFont` on pelgalt GDI fondi nimi — ainus riputuskoha on font ise. Repos juurikas olev `Verdana_m1.ttf` on Verdana koopia, millel on eelnevalt renderdatud 1bpp bitmap-lõiked vahemikus 3–30 ppem, mida renderdaja kasutab pigem kui kontuuri siledustamist.
@@ -390,7 +388,6 @@ milline on paigaldusel aktiivne; `appearance.json` varundatakse enne ning
 `-Revert` eemaldab ainult `Wintage *` teemad ja taastab sinu eelmise valiku —
 sama vault-i käsitsi tehtud teemat ei puudutata kunagi.
 
-
 ### MPC-HC (K-Lite)
 
 Natiivne Win32, ilma stiililehe ja ilma süstepunktita, ning selle tumeda teema
@@ -416,4 +413,4 @@ node ..\tools\build-desktop.js --check  # exit 1 if anything is stale
 `release.ps1` käivitab ehituse ja iga värava, nii et väljalase ei saa saata
 väljundit, mis on palettidest kõrvale triivinud.
 
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

@@ -84,7 +84,7 @@ Nó chạy tự động như một phần của `install.ps1 -Target freebuff`, 
 
 - **Nhấp trái** — chọn một file âm thanh (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) và nghe phát lại ngay: PCM WAV qua System.Media.SoundPlayer, mọi định dạng khác qua WPF MediaPlayer (Media Foundation, async, nên cửa sổ không bao giờ treo). Lựa chọn được nhớ trong `%APPDATA%\Wintage\freebuff-sound.txt` (theo máy, ngoài git checkout, đúng như các thư mục source-tree đã nhớ).
 - **Nhấp phải** — xoá sở thích về lại tiếng chime gốc của FreeBuff (cũng dừng mọi preview đang phát).
-- **COPY** — sao chép âm thanh đã chọn vào chính repo (`sounds\freebuff.<ext>`, giữ nguyên phần mở rộng nguồn) và trỏ sở thích vào bản sao đó, nên âm thanh sống sót khi file gốc bị xoá hay di chuyển. Chỉ bật khi đang đặt âm thanh tùy chỉnh; sao chép lại chỉ đơn giản ghi đè bản sao trong repo. Thư mục `sounds/` là nội dung git-track thường, nên commit nó khiến âm thanh sống sót cả qua các lần clone lại.
+- **COPY** — sao chép âm thanh đã chọn vào `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`, giữ nguyên phần mở rộng nguồn) và trỏ sở thích vào bản sao đó, nên âm thanh sống sót khi file gốc bị xoá hay di chuyển. Chỉ bật khi đang đặt âm thanh tùy chỉnh; sao chép lại chỉ đơn giản ghi đè bản sao trong `%APPDATA%\Wintage`.
 
 Chỉ các container âm thanh được nhận diện mới được preview — header được dò trước, nên một lựa chọn không phải âm thanh sẽ được báo thay vì lặng lẽ phát chẳng gì.
 
@@ -151,7 +151,6 @@ Nửa sau của vấn đề này êm hơn nhiều. `BrowserWindow` của Claude 
 
 Một theme cộng đồng được ghi vào `.obsidian/themes/` của mọi vault — toàn bộ mười sáu palette cùng lúc, giống hệt target VS Code, nên bạn chuyển giữa chúng trong **Settings → Appearance** mà không cần chạy lại gì. Template được suy ra từ theme `VintageWin95` làm tay đã có trong vault, mỗi màu được thay bằng token mà nó tương đương. `-Palette <slug>` đặt cái nào hoạt động khi cài; `appearance.json` được sao lưu trước, và `-Revert` chỉ gỡ các theme `Wintage *` và khôi phục lựa chọn trước của bạn — một theme làm tay trong cùng vault không bao giờ bị đụng.
 
-
 ### MPC-HC (K-Lite)
 
 Win32 native, không stylesheet và không điểm chèn, và màu theme tối của nó được biên dịch trong chương trình — không giá trị registry nào phơi bày chúng. Target này vì vậy **không thể mang palette**. Cái nó làm: bật theme tối và áp quy tắc kiểu chữ của UI.md lên OSD, bề mặt duy nhất MPC-HC để người dùng điều khiển. Cài đặt trước đó được xuất ra `desktop/backup/mpc-hc-settings.reg` trước.
@@ -202,4 +201,4 @@ Cả hai target terminal đọc MỘT tuỳ chọn kiểu chữ chuẩn duy nh�
 Trình cài **duyệt font, không cài chúng.** Tab TERMINAL FONTS nạp một mặt font đi kèm vào `PrivateFontCollection` cục bộ tiến trình để xem trước trực tiếp, việc này thực hiện **không** đăng ký font hệ thống nào. Chọn font, cỡ (7–24 pt) hay chế độ vẽ (aliased/grayscale/cleartype) chỉ cập nhật bản xem trước và tuỳ chọn. Cài một font là hành động **INSTALL SELECTED** rõ ràng, mở trình cài font sẵn có của Windows; sau khi Windows xác nhận, người dùng dò lại bằng Refresh. Thay đổi terminal thật sự chỉ xảy ra ở hành động rõ ràng **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal được áp cho họ font đã cài mà bạn chọn ở cỡ đã chọn, và chế độ vẽ ánh xạ tới `profiles.defaults.antialiasingMode`. conhost cổ điển khắt khe hơn: nó vẽ trên lưới ô cố định, nên một mặt font được chọn sẽ bị từ chối trước mọi thay đổi registry trừ khi Windows tự phân giải được nó (mặt font mặc định và dự phòng Consolas được miễn trừ). Health và Reapply kiểm tra mặt font/cỡ/khoá antialiasing đã cấu hình so với tuỳ chọn, nên đổi tuỳ chọn sau một Apply được báo là trôi lệch chứ không phải còn khoẻ. Vòng đời màu terminal không bị đụng: Revert khôi phục đúng các giá trị thuộc sở hữu trước Wintage và không bao giờ gỡ font khỏi máy.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

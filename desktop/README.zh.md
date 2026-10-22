@@ -84,7 +84,7 @@ node .\desktop\patch-freebuff-ads.js --revert
 
 - **左键单击** — 挑选一个音频文件（OpenFileDialog，wav/mp3/ogg/flac/m4a/aac）并立即听到它回放：PCM WAV 通过 System.Media.SoundPlayer，其他所有格式通过 WPF MediaPlayer（Media Foundation，异步，因此窗口永不冻结）。选择被记在 `%APPDATA%\Wintage\freebuff-sound.txt`（按机器存放，位于 git 检出之外，与记下的源码树文件夹完全一样）。
 - **右键单击** — 把偏好清回 FreeBuff 的库存提示音（也会停止仍在播放的任何预览）。
-- **COPY** — 把所选音频复制进仓库本身（`sounds\freebuff.<ext>`，保留源扩展名）并将偏好改指向该副本，因此即使原文件被删除或移动，声音依然存活。仅在设置了自定义声音时启用；重新复制只是覆盖仓库副本。`sounds/` 文件夹是普通的可 git 追踪内容，所以提交它也能让声音在重新克隆后存活。
+- **COPY** — 把所选音频复制进 `%APPDATA%\Wintage`（`%APPDATA%\Wintage\freebuff.<ext>`，保留源扩展名）并将偏好改指向该副本，因此即使原文件被删除或移动，声音依然存活。仅在设置了自定义声音时启用；重新复制只是覆盖 `%APPDATA%\Wintage` 里的副本。
 
 只有被识别的音频容器才会被预览 — 会先嗅探头部，因此非音频的选择会被告知，而不是悄悄什么都不播放。
 
@@ -151,7 +151,6 @@ node ..\tools\electron-fuses.js "<path to the app's exe>"
 
 社区主题被写入每个 vault 的 `.obsidian/themes/` — 全部十六个调色板一次写入，与 VS Code 目标完全一样，因此你可以在 **Settings → Appearance** 中切换而无需重新运行任何东西。模板源自 vault 中已有的手工 `VintageWin95` 主题，每个颜色都被替换为它等于的令牌。`-Palette <slug>` 设置安装时哪个处于活动状态；`appearance.json` 首先被备份，`-Revert` 只移除 `Wintage *` 主题并恢复你之前的选择 — 同一 vault 中的手工主题永远不会被触碰。
 
-
 ### MPC-HC (K-Lite)
 
 原生 Win32，没有样式表也没有注入点，其深色主题的颜色编译在程序内部 — 没有任何注册表值暴露它们。所以这个目标**无法承载调色板**。它做的是：打开深色主题并把 UI.md 排版规则应用到 OSD — OSD 是 MPC-HC 让用户控制的唯一表面。之前的设置首先导出到 `desktop/backup/mpc-hc-settings.reg`。
@@ -202,4 +201,4 @@ Apply 能够改动的每一个值都会在改动前先做快照（位于 `%APPDA
 安装器**只浏览字体，并不安装它们。** TERMINAL FONTS 标签页把一个内置字面载入进程本地的 `PrivateFontCollection` 以做实时预览，这一步进行**零**次系统字体注册。选择字体、字号（7–24 pt）或渲染模式（aliased/grayscale/cleartype）只更新预览和偏好。安装字体是一个明确的 **INSTALL SELECTED** 动作，它会打开 Windows 自带的字体安装器；在 Windows 确认之后，用户用 Refresh 重新探测。终端的实际变更只发生在明确的 **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** 动作时。
 
 Windows Terminal 会以选定的字号应用到所选已安装的字族上，渲染模式则映射到 `profiles.defaults.antialiasingMode`。经典 conhost 更严格：它在固定的单元格网格上渲染，因此选中的字面会在任何注册表改动之前被拒绝，除非 Windows 能解析它（默认字面和 Consolas 回退属于既有豁免）。Health 和 Reapply 会拿已配置的字面/字号/抗锯齿与那份偏好对照校验，因此在一次 Apply 之后改动偏好会被报告为漂移，而不是仍算"健康"。终端颜色的生命周期未受影响：Revert 精确还原 Wintage 之前所拥有的值，且绝不从机器上移除任何字体。
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

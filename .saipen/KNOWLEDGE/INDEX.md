@@ -1,7 +1,7 @@
 <!-- SAIPEN KNOWLEDGE INDEX v1; generated projection; not authority -->
-source-digest: sha256:99a042101bf80a755e219a723f106c86e5b522f954807ec0ede2435b6d4315de
+source-digest: sha256:b16ba894a918f54ea90f81c5850d21567cefb76652ba4856604cd998364022df
 cards: 0
-legacy: 11
+legacy: 12
 
 # Knowledge index
 
@@ -22,3 +22,4 @@ Legacy KNOWLEDGE documents (path and title only; no structured metadata):
 - ADR-009.md | legacy | title: ADR-009 — A delivery claim names a path the artifact contains
 - ADR-010.md | legacy | title: ADR-010 — Reddit is a high-churn host and runs the lean CSS-only path
 - ADR-011.md | legacy | title: ADR-011 — Surviving strict host CSP and framework hydration in CSS-only mode
+- ADR-012.md | legacy | title: ADR-012 — A release binds to the destination the clients poll, and proves the delivered artifact

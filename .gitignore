@@ -107,3 +107,10 @@ wb_inspect.txt
 # moved git-delta-v1 after every suite pass and made every convergence receipt
 # stale the moment a test run finished. Same class as .audapack/ above.
 tools/bench-idle-cpu-results.json
+
+# A user's own FreeBuff completion sound. Older builds of the installer wrote
+# the picked file into the checkout and the README told the reader to commit it,
+# which is how a game-derived wav reached a public repo. COPY now writes under
+# %APPDATA% and any old copy is migrated there on load; this rule keeps a stray
+# one from ever being staged again.
+sounds/

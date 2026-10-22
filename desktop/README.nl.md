@@ -146,13 +146,11 @@ advertenties en het geluid in één run worden toegepast:
   net als de onthouden source-tree-mappen).
 - **Rechterklik** — wis de voorkeur terug naar FreeBuff's standaard-chime (stopt
   ook elk voorbeeld dat nog speelt).
-- **COPY** — kopieert de gekozen audio de repo zelf in
-  (`sounds\freebuff.<ext>`, met behoud van de bron-extensie) en wijst de voorkeur
+- **COPY** — kopieert de gekozen audio in `%APPDATA%\Wintage`
+  (`%APPDATA%\Wintage\freebuff.<ext>`, met behoud van de bron-extensie) en wijst de voorkeur
   opnieuw naar die kopie, zodat het geluid het verwijderen of verplaatsen van het
   originele bestand overleeft. Alleen ingeschakeld terwijl er een eigen geluid is
-  ingesteld; opnieuw kopiëren overschrijft de repo-kopie simpelweg. De map
-  `sounds/` is gewone, met git te volgen content, dus het committen ervan laat het
-  geluid ook her-clones overleven.
+  ingesteld; opnieuw kopiëren overschrijft de kopie in `%APPDATA%\Wintage` simpelweg.
 
 Alleen herkende audiocontainers worden voorbeeldafgespeeld — de header wordt eerst
 gesnuffeld, dus een niet-audio-keuze wordt aangekondigd in plaats van stilletjes
@@ -306,7 +304,6 @@ welke bij installatie actief is; `appearance.json` wordt eerst geback-upt, en
 `-Revert` verwijdert alleen de `Wintage *`-thema's en herstelt je vorige keuze —
 een handgemaakt thema in dezelfde vault wordt nooit aangeraakt.
 
-
 ### MPC-HC (K-Lite)
 
 Native Win32, geen stylesheet en geen injectiepunt, en de kleuren van het donkere
@@ -428,4 +425,4 @@ voorkeurwijziging na een Apply wordt als drift gemeld in plaats van als
 "gezond". De levenscyclus van de terminalkleuren blijft ongewijzigd: Revert zet
 de exacte, vóór Wintage bezette waarden terug en verwijdert nooit een lettertype
 van de machine.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

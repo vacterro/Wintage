@@ -146,13 +146,11 @@ uruchomieniu:
   dokładnie jak zapamiętane foldery drzewa źródłowego).
 - **Prawy klik** — wyczyść preferencję z powrotem do standardowej chime FreeBuff
   (zatrzymuje też każdy wciąż grający podgląd).
-- **COPY** — kopiuje wybrane audio do samego repo
-  (`sounds\freebuff.<ext>`, zachowując rozszerzenie źródła) i przekierowuje
+- **COPY** — kopiuje wybrane audio do `%APPDATA%\Wintage`
+  (`%APPDATA%\Wintage\freebuff.<ext>`, zachowując rozszerzenie źródła) i przekierowuje
   preferencję na tę kopię, więc dźwięk przetrwa usunięcie lub przeniesienie
   oryginalnego pliku. Włączony tylko, gdy ustawiony jest własny dźwięk; ponowne
-  kopiowanie po prostu nadpisuje kopię w repo. Folder `sounds/` to zwykła treść
-  śledzona przez git, więc jej zacommitowanie sprawia, że dźwięk przetrwa też
-  ponowne klony.
+  kopiowanie po prostu nadpisuje kopię w `%APPDATA%\Wintage`.
 
 Podglądane są tylko rozpoznane kontenery audio — nagłówek jest sprawdzany
 najpierw, więc wybór nie-audio jest anonsowany zamiast po cichu nic nie grać.
@@ -303,7 +301,6 @@ kopiowany zapasowo, a `-Revert` usuwa tylko motywy `Wintage *` i przywraca twoje
 poprzednie wybory — ręcznie zrobiony motyw w tym samym vaultcie nigdy nie jest
 dotykany.
 
-
 ### MPC-HC (K-Lite)
 
 Natywne Win32, bez arkusza stylów i bez punktu wstrzyknięcia, a kolory jego
@@ -361,4 +358,4 @@ Oba targety terminala czytają JEDNĄ kanoniczną preferencję typograficzną z 
 Instalator **przegląda czcionki, nie instaluje ich.** Zakładka TERMINAL FONTS wczytuje dołączony krój do lokalnej dla procesu kolekcji `PrivateFontCollection` na żywy podgląd, który wykonuje **zero** systemowych rejestracji czcionek. Wybór czcionki, rozmiaru (7–24 pt) lub trybu renderowania (aliased/grayscale/cleartype) aktualizuje tylko podgląd i preferencję. Instalacja czcionki to osobne działanie **INSTALL SELECTED**, które otwiera własny instalator czcionek systemu Windows; po potwierdzeniu przez Windows użytkownik sprawdza ponownie przyciskiem Refresh. Rzeczywiste zmiany terminala zachodzą dopiero przy jawnym **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal jest stosowany do wybranej zainstalowanej rodziny w wybranym rozmiarze, a tryb renderowania mapuje się na `profiles.defaults.antialiasingMode`. Klasyczny conhost jest surowszy: renderuje na stałej siatce komórek, więc wybrany krój zostaje odrzucony przed jakąkolwiek zmianą w rejestrze, chyba że Windows potrafi go rozwiązać (krój domyślny i zapasowy Consolas są zwolnione). Health i Reapply weryfikują skonfigurowany krój, rozmiar i wygładzanie względem preferencji, więc zmiana preferencji po Apply jest raportowana jako odchylenie, a nie jako stan "zdrowy". Cykl życia kolorów terminala pozostaje nietknięty: Revert przywraca dokładne wartości posiadane przed Wintagem i nigdy nie usuwa czcionki z maszyny.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

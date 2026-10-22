@@ -143,12 +143,11 @@ anvendes i ét kørsel:
   præcis som de huskede kildetræsmapper).
 - **Højre-klik** — ryd præferencen tilbage til FreeBuffs standard-chime (stopper
   også enhver preview, der stadig afspiller).
-- **COPY** — kopierer den valgte lyd ind i selve repoet
-  (`sounds\freebuff.<ext>`, med kildeudvidelsen bevaret) og peger
+- **COPY** — kopierer den valgte lyd ind i `%APPDATA%\Wintage`
+  (`%APPDATA%\Wintage\freebuff.<ext>`, med kildeudvidelsen bevaret) og peger
   præferencen om på den kopi, så lyden overlever, at den oprindelige fil bliver
   slettet eller flyttet. Kun aktiveret, mens en brugerdefineret lyd er sat;
-  genkopiering overskriver simpelthen repo-kopien. `sounds/`-mappen er almindeligt
-  git-sporbart indhold, så hvis man committer den, overlever lyden også re-kloner.
+  genkopiering overskriver simpelthen kopien i `%APPDATA%\Wintage`.
 
 Kun genkendte lydcontainere forhåndsvises — headeren snuses først, så et
 ikke-lydvalg meldes ud i stedet for lydløst at afspille ingenting.
@@ -288,7 +287,6 @@ token, den svarede til. `-Palette <slug>` sætter, hvilken der er aktiv ved inst
 temaerne og gendanner dit tidligere valg — et håndlavet tema i samme vault
 røres aldrig.
 
-
 ### MPC-HC (K-Lite)
 
 Indbygget Win32, intet stylesheet og intet injektionspunkt, og dens mørke temas farver er
@@ -345,4 +343,4 @@ Begge terminalmål læser ÉN kanonisk typografisk indstilling i `%APPDATA%\Wint
 Installatøren **gennemser skrifter, den installerer dem ikke.** Fanen TERMINAL FONTS indlæser en indbundet skrifttype i en proceslokal `PrivateFontCollection` til en live forhåndsvisning, som foretager **nul** systemregistreringer af skrifter. At vælge en skrift, en størrelse (7–24 pt) eller en gengivelsestilstand (aliased/grayscale/cleartype) opdaterer kun forhåndsvisningen og indstillingen. At installere en skrift er en eksplicit **INSTALL SELECTED**-handling, der åbner Windows' egen skriftinstallatør; efter Windows' bekræftelse må brugeren tjekke igen med Refresh. Reelle terminalændringer sker kun ved en eksplicit **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal anvendes på den valgte installerede familie i den valgte størrelse, og gengivelsestilstanden kortlægges til `profiles.defaults.antialiasingMode`. Klassisk conhost er strengere: den gengiver på et fast cellenet, så en valgt skrifttype nægtes før nogen ændring af registret, medmindre Windows kan opløse den (standardtypen og Consolas-reserven er undtaget). Health og Reapply validerer den konfigurerede skrifttype, størrelse og antialiasing mod indstillingen, så en ændring af indstillingen efter et Apply rapporteres som en afvigelse i stedet for som "sund". Terminalfarvernes livscyklus er urørt: Revert gendanner de præcise værdier, der var ejet af Wintage før, og fjerner aldrig en skrift fra maskinen.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

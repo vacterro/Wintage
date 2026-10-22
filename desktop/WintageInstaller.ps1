@@ -681,9 +681,14 @@ $chkLogonTask.Add_CheckedChanged({
 # re-cloned, exactly like the remembered source-tree folders above.
 #
 # Left-click picks an audio file (OpenFileDialog) and plays a preview of it,
-# right-click clears it back to stock. COPY saves the file itself into the repo
-# (sounds\freebuff.<ext>) and points the preference at that copy -- a picked path
-# dies the moment the file is deleted; the repo copy outlives the original.
+# right-click clears it back to stock. COPY saves the file itself next to the
+# preference (%APPDATA%\Wintage\freebuff.<ext>) and points the preference at that
+# copy -- a picked path dies the moment the file is deleted; the copy outlives
+# the original. It deliberately does NOT write into the checkout: whatever lands
+# in a repo can be committed by the next `git add -A`, and a user's chosen sound
+# is theirs, not redistribution content. An older build did copy into
+# sounds\freebuff.<ext>; that path is now gitignored and any existing copy is
+# migrated here on load.
 $script:fbSoundFile = Join-Path $script:wintageAppData 'freebuff-sound.txt'
 $script:fbSoundPath = $null
 # One script-scoped player (a SoundPlayer for PCM WAV, a WPF MediaPlayer for
@@ -987,6 +992,31 @@ function Load-FbSound {
         $message = "could not read freebuff-sound.txt: $($_.Exception.Message)"
         if (Get-Command Say-Log -CommandType Function -ErrorAction SilentlyContinue) { Say-Log $message }
         else { Write-Warning $message }
+        return
+    }
+    if (-not $script:fbSoundPath) { return }
+    # Older builds pointed COPY at <checkout>\sounds\freebuff.<ext>. A sound
+    # living there is the user's own pick, so move it to app-data rather than
+    # leaving it in a tree that can be committed or wiped by a re-clone.
+    try {
+        $legacyDir = [System.IO.Path]::GetFullPath((Join-Path $root 'sounds'))
+        $full = [System.IO.Path]::GetFullPath($script:fbSoundPath)
+        if ($full.StartsWith($legacyDir, [StringComparison]::OrdinalIgnoreCase)) {
+            $ext = [System.IO.Path]::GetExtension($full)
+            if (-not $ext) { $ext = '.wav' }
+            $dest = Join-Path $script:wintageAppData ('freebuff' + $ext.ToLower())
+            $destDir = Split-Path $dest -Parent
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+            if ([System.IO.Path]::GetFullPath($dest) -ine $full) {
+                Move-Item -LiteralPath $full -Destination $dest -Force
+            }
+            $script:fbSoundPath = $dest
+            Save-FbSound
+        }
+    } catch {
+        $message = "could not move the repo copy of the freebuff sound out of the checkout: $($_.Exception.Message)"
+        if (Get-Command Say-Log -CommandType Function -ErrorAction SilentlyContinue) { Say-Log $message }
+        else { Write-Warning $message }
     }
 }
 function Save-FbSound {
@@ -1007,15 +1037,15 @@ function Save-FbSound {
 function Update-FbSoundButton {
     if ($script:fbSoundPath) {
         $btnFbSound.Text = (T 'FbSoundOn')
-        $btnFbSoundTip.SetToolTip($btnFbSound, "FreeBuff completion sound:`n$($script:fbSoundPath)`nLeft-click to change, right-click to clear. COPY stores it inside the repo so it survives deleting the original.")
+        $btnFbSoundTip.SetToolTip($btnFbSound, "FreeBuff completion sound:`n$($script:fbSoundPath)`nLeft-click to change, right-click to clear. COPY stores a durable copy under %APPDATA% so it survives deleting the original.")
         $btnFbSoundCopy.Enabled = $true
-        $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Save a copy inside the repo (sounds\freebuff.<ext>) so the sound outlives the original file.')
+        $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Save a durable copy under %APPDATA% (freebuff.<ext>) so the sound outlives the original file. Never written into the repo.')
     }
     else {
         $btnFbSound.Text = (T 'FbSound')
         $btnFbSoundTip.SetToolTip($btnFbSound, 'FreeBuff completion sound: stock.' + [Environment]::NewLine + 'Left-click to pick an audio file, right-click to clear.')
         $btnFbSoundCopy.Enabled = $false
-        $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Pick a .wav first - COPY stores it inside the repo.')
+        $btnFbSoundCopyTip.SetToolTip($btnFbSoundCopy, 'Pick a .wav first - COPY saves it under %APPDATA%.')
     }
 }
 Load-FbSound
@@ -1060,10 +1090,12 @@ $btnFbSound.Add_MouseDown({
         Say-Log 'FreeBuff sound cleared - the stock chime will be restored on the next Apply.'
     })
 
-# COPY: drops a durable copy of the chosen audio inside the repo
-# (sounds/freebuff.<ext>) and repoints the preference at it. The preference alone is just a path - it
-# dies with the file it names; the repo copy outlives the original. Enabled only
-# while a custom sound is set; the copy is idempotent (re-copying overwrites).
+# COPY: drops a durable copy of the chosen audio beside the preference
+# (%APPDATA%\Wintage\freebuff.<ext>) and repoints the preference at it. The
+# preference alone is just a path - it dies with the file it names; the app-data
+# copy outlives the original. Enabled only while a custom sound is set; the copy
+# is idempotent (re-copying overwrites). It never writes into the checkout:
+# a user's own sound is not something a `git add -A` should be able to publish.
 $btnFbSoundCopy = New-Object Windows.Forms.Button
 $btnFbSoundCopy.Text = (T 'FbSoundCopy'); $btnFbSoundCopy.Location = '784,462'; $btnFbSoundCopy.Size = '68,24'; $btnFbSoundCopy.Font = $FONT
 $btnFbSoundCopy.FlatStyle = 'Flat'; $btnFbSoundCopy.FlatAppearance.BorderSize = 0
@@ -1079,24 +1111,24 @@ $btnFbSoundCopy.Add_Click({
             return
         }
         try {
-            $destDir = Join-Path $script:root 'sounds'
+            $destDir = $script:wintageAppData
             $ext = [System.IO.Path]::GetExtension($script:fbSoundPath)
             if (-not $ext) { $ext = '.wav' }
             $dest = Join-Path $destDir ('freebuff' + $ext.ToLower())
             if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
             # Copying a file onto itself throws; skip when the choice is already
-            # the repo copy. Compare canonical paths, not Test-Path.
+            # the durable copy. Compare canonical paths, not Test-Path.
             $srcFull = [System.IO.Path]::GetFullPath($script:fbSoundPath)
             $dstFull = [System.IO.Path]::GetFullPath($dest)
             if ($srcFull -ieq $dstFull) {
-                Say-Log "FreeBuff sound is already the repo copy: $dest"
+                Say-Log "FreeBuff sound is already the saved copy: $dest"
             }
             else {
                 Copy-Item $script:fbSoundPath $dest -Force
                 $script:fbSoundPath = $dest
                 Save-FbSound
                 Update-FbSoundButton
-                Say-Log "FreeBuff sound copied into the repo: $dest`n  (preference now points at the copy - deleting the original is safe)"
+                Say-Log "FreeBuff sound saved: $dest`n  (preference now points at the copy - deleting the original is safe. It is stored outside the checkout and is never committed.)"
             }
         }
         catch {

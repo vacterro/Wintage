@@ -72,7 +72,6 @@ in use.
 | `cinema4d` | colour scheme dropped into the user's Cinema 4D `schemes` folder | yes — it lives in your profile |
 | `processexplorer` | `HKCU\Software\Sysinternals\Process Explorer`: row-highlight colours and graph backgrounds, see below | no — Process Explorer rewrites its settings on exit; close it and re-run |
 
-
 BetterDiscord plugins are maintained separately:
 https://github.com/vacterro/BetterDiscord_vac34_plugins
 
@@ -102,7 +101,6 @@ by `-Revert`, including whether each value was absent and whether the marker was
 present-but-empty. A portable folder outside the standard Sysinternals
 directories is remembered through the canonical `paths.json` key
 `processexplorer` (CLI argument `-ProcessExplorerPath`; the GUI can pick it too).
-
 
 ### FreeBuff ad removal
 
@@ -175,12 +173,11 @@ applied in one run:
   exactly like the remembered source-tree folders).
 - **Right-click** — clear the preference back to FreeBuff's stock chime (also
   stops any preview that is still playing).
-- **COPY** — copies the chosen audio into the repo itself
-  (`sounds\freebuff.<ext>`, keeping the source extension) and repoints the
+- **COPY** — copies the chosen audio into `%APPDATA%\Wintage`
+  (`%APPDATA%\Wintage\freebuff.<ext>`, keeping the source extension) and repoints the
   preference at that copy, so the sound survives the original file being
   deleted or moved. Enabled only while a custom sound is set; re-copying simply
-  overwrites the repo copy. The `sounds/` folder is plain git-trackable
-  content, so committing it makes the sound survive re-clones too.
+  overwrites the copy in `%APPDATA%\Wintage`.
 
 Only recognized audio containers are previewed — the header is sniffed first, so
 a non-audio pick is announced instead of silently playing nothing.
@@ -245,7 +242,6 @@ face/size/anti-aliasing against the preference, so changing the preference after
 Apply is reported as drift rather than "healthy". The terminal-colour lifecycle is
 untouched: Revert restores the exact pre-Wintage owned values and never removes a
 font from the machine.
-
 
 ### Browsers and Tampermonkey
 
@@ -406,7 +402,6 @@ token it equalled. `-Palette <slug>` sets which one is active on install;
 `appearance.json` is backed up first, and `-Revert` removes only the `Wintage *`
 themes and restores your previous choice — a hand-made theme in the same vault is
 never touched.
-
 
 ### MPC-HC (K-Lite)
 

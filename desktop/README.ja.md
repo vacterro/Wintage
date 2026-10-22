@@ -84,7 +84,7 @@ node .\desktop\patch-freebuff-ads.js --revert
 
 - **左クリック** — オーディオファイルを選び (OpenFileDialog、wav/mp3/ogg/flac/m4a/aac)、即座に再生を聞く: PCM WAVはSystem.Media.SoundPlayer、その他の形式はWPF MediaPlayer (Media Foundation、非同期なのでウィンドウがフリーズすることはない)。選択は `%APPDATA%\Wintage\freebuff-sound.txt` に記憶される (マシン単位、gitチェックアウトの外、記憶されたソースツリーフォルダとまったく同じ)。
 - **右クリック** — FreeBuffのストックチャイムに設定を戻す (再生中のプレビューも停止する)。
-- **COPY** — 選んだオーディオをリポジトリ自身にコピーし (`sounds\freebuff.<ext>`、ソースの拡張子を保持)、設定をそのコピーに向け直す。元ファイルが削除・移動されてもサウンドは生き残る。カスタムサウンドが設定されている間だけ有効。コピーし直すとリポジトリのコピーを上書きするだけ。`sounds/` フォルダは普通のgit追跡可能なコンテンツなので、コミットすればサウンドは再クローンにも耐える。
+- **COPY** — 選んだオーディオを `%APPDATA%\Wintage` にコピーし (`%APPDATA%\Wintage\freebuff.<ext>`、ソースの拡張子を保持)、設定をそのコピーに向け直す。元ファイルが削除・移動されてもサウンドは生き残る。カスタムサウンドが設定されている間だけ有効。コピーし直すと`%APPDATA%\Wintage` のコピーを上書きするだけ。
 
 認識されたオーディオコンテナだけがプレビューされる — まずヘッダーがスニッフィングされるので、オーディオでない選択は何も再生しない代わりに告知される。
 
@@ -151,7 +151,6 @@ node ..\tools\electron-fuses.js "<path to the app's exe>"
 
 コミュニティテーマがすべてのボールトの `.obsidian/themes/` に書かれる — VS Code対象とまったく同じように、16個のパレットすべてを一度に。**Settings → Appearance** で何も再実行せずに切り替えられる。テンプレートはボールトにすでにある手作りの `VintageWin95` テーマから導出され、各色がそれと等しいトークンに置き換えられた。`-Palette <slug>` はインストール時にどれをアクティブにするかを設定する。`appearance.json` は最初にバックアップされ、`-Revert` は `Wintage *` テーマだけを削除して以前の選択を復元する — 同じボールトの手作りテーマは決して触れられない。
 
-
 ### MPC-HC (K-Lite)
 
 ネイティブWin32、スタイルシートも注入ポイントもなく、ダークテーマの色はプログラムにコンパイルされている — レジストリ値はそれらを公開しない。したがってこの対象は**パレットを運べない**。それが行うのは: ダークテーマをオンにし、UI.mdのタイポグラフィルールをOSDに適用すること。OSDはMPC-HCがユーザーに制御させる唯一の面だ。以前の設定は最初に `desktop/backup/mpc-hc-settings.reg` にエクスポートされる。
@@ -202,4 +201,4 @@ Applyが変更できるすべての値は変更前にスナップショットと
 インストーラーは **フォントを閲覧するのみであり, インストールはしない。** TERMINAL FONTS タブは同梱の書体をプロセス固有の `PrivateFontCollection` に読み込み, ライブプレビューを表示する。これはシステムフォントの登録を **一切** 行わない。フォント, サイズ (7–24 pt), レンダリングモード (aliased/grayscale/cleartype) の選択はプレビューと設定だけを変える。フォントのインストールは明示的な **INSTALL SELECTED** 操作であり, Windows 独自のフォントインストーラーを開く。Windows の確認のあと, ユーザーは Refresh で再検査する。実際のターミナル変更が 일어나るのは, 明示的な **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** のあとだけである。
 
 Windows Terminal には選択したインストール済みファミリーが選択したサイズで適用され, レンダリングモードは `profiles.defaults.antialiasingMode` に対応する。古典的な conhost はより厳しい。固定のセルグリッド上に描画するため, 選択した書体は Windows が解決できない限りレジストリ変更の前に拒否される (既定の書体と Consolas へのフォールバックは対象外)。Health と Reapply は設定済みの書体, サイズ, アンチエイリアシングを設定と突き合わせて検証するため, Apply のあとに設定を変更すると「健全」ではなくずれとして報告される。ターミナルの色のライフサイクルは手つかずのまま: Revert は Wintage 以前の所有値を正確に復元し, マシンからフォントを削除することはない。
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

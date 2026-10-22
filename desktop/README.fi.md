@@ -141,13 +141,11 @@ sovelletaan yhdellä ajolla:
   ulkopuolella, aivan kuten muistetut source-puukansiot).
 - **Oikea napsautus** — tyhjennä asetus takaisin FreeBuffin vakio-chimeen (pysäyttää
   myös mahdollisesti vielä soivan esikatselun).
-- **COPY** — kopioi valitun äänen itse repoon
-  (`sounds\freebuff.<ext>`, säilyttäen lähdetiedoston päätteen) ja osoittaa
+- **COPY** — kopioi valitun äänen `%APPDATA%\Wintage`-kansioon
+  (`%APPDATA%\Wintage\freebuff.<ext>`, säilyttäen lähdetiedoston päätteen) ja osoittaa
   asetuksen uudelleen tuohon kopioon, joten ääni säilyy vaikka alkuperäinen tiedosto
   poistetaan tai siirretään. Käytössä vain silloin, kun mukautettu ääni on asetettu;
-  uudelleenkopiointi yksinkertaisesti korvaa repon kopion. `sounds/`-kansio on tavallista
-  git-seurattavaa sisältöä, joten sen committaus saa äänen säilymään myös uudelleenkloonausten
-  yli.
+  uudelleenkopiointi yksinkertaisesti korvaa `%APPDATA%\Wintage` kopion.
 
 Vain tunnistetut äänisäiliöt esikatsellaan — otsake tunnistetaan ensin, joten
 ei-ääni-valinnasta ilmoitetaan sen sijaan, että soitetaan hiljaa ei mitään.
@@ -287,7 +285,6 @@ tokenilla, jota se vastasi. `-Palette <slug>` määrää, kumpi on aktiivinen as
 teemat ja palauttaa aiemman valintasi — käsin tehtyyn teemaan samassa vaultissa
 ei koskaan kosketa.
 
-
 ### MPC-HC (K-Lite)
 
 Natiivinen Win32, ei tyylitiedostoa eikä injektiokohtaa, ja sen tumman teeman värit ovat
@@ -344,4 +341,4 @@ Molemmat terminaalikohteet lukevat YHDEN kanonisen typografisen asetuksen tiedos
 Asentaja **selaa fontteja, ei asenna niitä.** TERMINAL FONTS -välilehti lataa mukana toimitetun tyypin prosessikohtaiseen `PrivateFontCollection`-kokoelmaan elävää esikatselua varten, joka tekee **nolla** järjestelmäfonttien rekisteröintejä. Fontin, koon (7–24 pt) tai renderöintitilan (aliased/grayscale/cleartype) valinta päivittää vain esikatselun ja asetuksen. Fontin asentaminen on erillinen **INSTALL SELECTED** -toiminto, joka avaa Windowsin oman fonttiasennusohjelman; Windowsin vahvistuksen jälkeen käyttäjä tarkistaa tilanteen uudelleen Refreshillä. Todelliset terminaalimuutokset tapahtuvat vain eksplisiittisellä **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** -toiminnolla.
 
 Windows Terminal sovelletaan valittuun asennettuun perheeseen valitussa koossa, ja renderöintitila kartoitetaan arvoon `profiles.defaults.antialiasingMode`. Klassinen conhost on tiukempi: se renderöi kiinteällä soluristikolla, joten valittu fontti hylätään ennen mitään rekisterimuutosta, ellei Windows pysty ratkaisemaan sitä (oletustyyppi ja Consolas-varatyyppi on vapautettu). Health ja Reapply validoivat määritetyn tyypin, koon ja reunojen pehmennyksen asetusta vasten, joten asetuksen muutos Applyn jälkeen raportoidaan poikkeamana eikä "terveenä" tilana. Terminaalin värien elinkaari jää koskematta: Revert palauttaa täsmälleen ne arvot, jotka Wintage omisti ennen sitä, eikä koskaan poista fonttia koneelta.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

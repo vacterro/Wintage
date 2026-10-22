@@ -84,7 +84,7 @@ node .\desktop\patch-freebuff-ads.js --revert
 
 - **Clique esquerdo** — escolha um ficheiro de áudio (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) e ouça-o imediatamente: PCM WAV através de System.Media.SoundPlayer, todos os outros formatos através de um WPF MediaPlayer (Media Foundation, assíncrono, para a janela nunca congelar). A escolha é lembrada em `%APPDATA%\Wintage\freebuff-sound.txt` (por máquina, fora do checkout git, exatamente como as pastas de código-fonte lembradas).
 - **Clique direito** — limpe a preferência de volta para o chime de stock do FreeBuff (também para qualquer pré-visualização que ainda esteja a tocar).
-- **COPY** — copia o áudio escolhido para o próprio repositório (`sounds\freebuff.<ext>`, mantendo a extensão de origem) e re-aponta a preferência para essa cópia, para que o som sobreviva à eliminação ou mudança do ficheiro original. Ativado apenas enquanto um som personalizado está definido; re-copiar simplesmente sobrescreve a cópia do repositório. A pasta `sounds/` é conteúdo git-rastreável normal, por isso cometê-la faz o som sobreviver também a re-clones.
+- **COPY** — copia o áudio escolhido para `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`, mantendo a extensão de origem) e re-aponta a preferência para essa cópia, para que o som sobreviva à eliminação ou mudança do ficheiro original. Ativado apenas enquanto um som personalizado está definido; re-copiar simplesmente sobrescreve a cópia em `%APPDATA%\Wintage`.
 
 Apenas contentores de áudio reconhecidos são pré-visualizados — o cabeçalho é sondado primeiro, para que uma escolha não-audio seja anunciada em vez de tocar silenciosamente nada.
 
@@ -151,7 +151,6 @@ A segunda metade disto foi um problema muito mais silencioso. O `BrowserWindow` 
 
 Um tema comunitário é escrito no `.obsidian/themes/` de cada cofre — todas as dezasseis paletas de uma vez, exatamente como o alvo VS Code, para que alterne entre elas em **Settings → Appearance** sem re-executar nada. O template foi derivado do tema `VintageWin95` feito à mão que já estava no cofre, cada cor substituída pelo token a que equivalia. `-Palette <slug>` define qual está ativo na instalação; `appearance.json` é copiado primeiro, e `-Revert` remove apenas os temas `Wintage *` e restaura a sua escolha anterior — um tema feito à mão no mesmo cofre nunca é tocado.
 
-
 ### MPC-HC (K-Lite)
 
 Win32 nativo, sem folha de estilos e sem ponto de injeção, e as cores do seu tema escuro são compiladas no programa — nenhum valor de registo as expõe. Portanto, este alvo **não pode carregar uma paleta**. O que faz: ativa o tema escuro e aplica as regras de tipografia do UI.md ao OSD, que é a única superfície que o MPC-HC deixa um utilizador controlar. As definições anteriores são exportadas para `desktop/backup/mpc-hc-settings.reg` primeiro.
@@ -202,4 +201,4 @@ Ambos os alvos de terminal lêem UMA preferência tipográfica canónica de `%AP
 O instalador **navega nas fontes, não as instala.** O separador TERMINAL FONTS carrega um tipo incluído para uma `PrivateFontCollection` local ao processo para pré-visualização ao vivo, que executa **zero** registos de fontes de sistema. Escolher uma fonte, um tamanho (7–24 pt) ou um modo de renderização (aliased/grayscale/cleartype) atualiza apenas a pré-visualização e a preferência. Instalar uma fonte é uma ação explícita **INSTALL SELECTED** que abre o instalador de fontes do próprio Windows; depois da confirmação do Windows, o utilizador volta a sondar com Refresh. As alterações reais ao terminal só acontecem com uma ação explícita **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 O Windows Terminal é aplicado à família instalada selecionada no tamanho selecionado, e o modo de renderização mapeia-se para `profiles.defaults.antialiasingMode`. O conhost clássico é mais estrito: renderiza numa grelha fixa de células, por isso um tipo selecionado é recusado antes de qualquer mutação no registo, a menos que o Windows o resolva (o tipo predefinido e a reserva Consolas estão isentos). O Health e o Reapply validam o tipo, o tamanho e o suavizado configurados face à preferência, pelo que alterar a preferência depois de um Apply é reportado como desvio e não como "saudável". O ciclo de vida das cores do terminal fica intocado: o Revert repõe os valores exatos possuídos antes do Wintage e nunca remove uma fonte da máquina.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

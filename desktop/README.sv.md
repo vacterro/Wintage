@@ -145,12 +145,11 @@ en enda körning:
   precis som de ihågkomna source-tree-mapparna).
 - **Högerklick** — återställ preferensen till FreeBuff:s standard-chime (stoppar
   också en förhandsvisning som fortfarande spelas).
-- **COPY** — kopierar det valda ljudet in i själva repot
-  (`sounds\freebuff.<ext>`, med källans filändelse) och pekar om preferensen mot
+- **COPY** — kopierar det valda ljudet till kopierar det valda ljudet till `%APPDATA%\Wintage`
+  (`%APPDATA%\Wintage\freebuff.<ext>`, med källans filändelse) och pekar om preferensen mot
   den kopian, så ljudet överlever att originalfilen tas bort eller flyttas.
   Aktiverad bara medan ett eget ljud är inställt; att kopiera igen skriver bara
-  över repo-kopian. Mappen `sounds/` är vanligt git-spårat innehåll, så att
-  commit:a den gör att ljudet också överlever om-kloner.
+  över kopian i `%APPDATA%\Wintage`.
 
 Endast igenkända ljudcontainrar förhandsvisas — huvudet sniffas först, så ett
 icke-ljudval annonseras i stället för att tyst spela ingenting.
@@ -298,7 +297,6 @@ installation; `appearance.json` backas upp först, och `-Revert` tar bort bara
 `Wintage *`-temana och återställer ditt tidigare val — ett handgjort tema i samma
 vault rörs aldrig.
 
-
 ### MPC-HC (K-Lite)
 
 Nativ Win32, ingen stilmall och ingen injiceringspunkt, och det mörka temats färger
@@ -356,4 +354,4 @@ Båda terminalmålen läser EN kanonisk typografisk inställning i `%APPDATA%\Wi
 Installationsprogrammet **bläddrar bland typsnitt, det installerar dem inte.** Fliken TERMINAL FONTS laddar ett inbundet typsnitt in i en processlokal `PrivateFontCollection` för en live-förhandsvisning, som gör **noll** systemregistreringar av typsnitt. Att välja ett typsnitt, en storlek (7–24 pt) eller ett renderingsläge (aliased/grayscale/cleartype) uppdaterar bara förhandsvisningen och inställningen. Att installera ett typsnitt är en uttrycklig **INSTALL SELECTED**-åtgärd som öppnar Windows eget typsnittsprogram; efter Windows bekräftelse kontrollerar användaren igen med Refresh. Verkliga terminaländringar sker först vid en uttrycklig **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal tillämpas på den valda installerade familjen i den valda storleken, och renderingsläget mappas till `profiles.defaults.antialiasingMode`. Klassisk conhost är strängare: den renderar på ett fast cellnät, så ett valt typsnitt vägras före alla registerändringar om inte Windows kan slå upp det (standardtypsnittet och Consolas-reservet är undantagna). Health och Reapply validerar det inställda typsnittet, storleken och kantutjämningen mot inställningen, så att ändra inställningen efter ett Apply rapporteras som avvikelse i stället för som "frisk". Terminalfärgernas livscykel lämnas orörd: Revert återställer de exakta värden som ägdes före Wintage och tar aldrig bort ett typsnitt från maskinen.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

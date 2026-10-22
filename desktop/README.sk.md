@@ -84,7 +84,7 @@ Spúšťa sa automaticky ako súčasť `install.ps1 -Target freebuff` a musí sa
 
 - **Ľavé kliknutie** — vyberte zvukový súbor (OpenFileDialog, wav/mp3/ogg/flac/m4a/aac) a okamžite ho počujte prehrať: PCM WAV cez System.Media.SoundPlayer, každý iný formát cez WPF MediaPlayer (Media Foundation, asynchrónne, takže okno nikdy nezmrzne). Voľba sa pamätá v `%APPDATA%\Wintage\freebuff-sound.txt` (na zariadenie, mimo git check-out, presne ako zapamätané priečinky zdrojového kódu).
 - **Pravé kliknutie** — vymazať preferenciu späť na štandardný chime FreeBuff (tiež zastaví akýkoľvek náhľad, ktorý ešte hrá).
-- **COPY** — skopíruje vybraný zvuk do samotného repozitára (`sounds\freebuff.<ext>`, zachová príponu zdroja) a presmeruje preferenciu na túto kópiu, takže zvuk prežije vymazanie alebo presun pôvodného súboru. Povolené len kým je nastavený vlastný zvuk; opätovné kopírovanie jednoducho prepíše kópiu v repozitári. Priečinok `sounds/` je bežný git-sledovateľný obsah, takže jeho commitom zvuk prežije aj re-klony.
+- **COPY** — skopíruje vybraný zvuk do `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`, zachová príponu zdroja) a presmeruje preferenciu na túto kópiu, takže zvuk prežije vymazanie alebo presun pôvodného súboru. Povolené len kým je nastavený vlastný zvuk; opätovné kopírovanie jednoducho prepíše kópiu v `%APPDATA%\Wintage`.
 
 Prehliadajú sa len rozpoznané zvukové kontajnery — hlavička sa najprv oňuchá, takže výber nie-ária sa oznámi namiesto tichého prehrávania ničoho.
 
@@ -151,7 +151,6 @@ Druhá polovica tohto bola oveľa tichší problém. `BrowserWindow` Claude rend
 
 Komunitná téma sa zapíše do `.obsidian/themes/` každého trezora — všetkých šestnásť paliet naraz, presne ako cieľ VS Code, takže medzi nimi prepínate v **Settings → Appearance** bez opätovného spúšťania čohokoľvek. Šablóna bola odvodená z ručne vyrobenej témy `VintageWin95`, ktorá už bola v trezore, každá farba nahradená tokenom, ktorému sa rovnala. `-Palette <slug>` nastaví, ktorá je aktívna pri inštalácii; `appearance.json` sa najprv zálohuje a `-Revert` odstráni iba témy `Wintage *` a obnoví vašu predchádzajúcu voľbu — ručne vyrobená téma v rovnakom trezore sa nikdy nedotkne.
 
-
 ### MPC-HC (K-Lite)
 
 Natívny Win32, bez štýlového listu a bez bodu vstreknutia, a farby jeho tmavej témy sú skompilované do programu — žiadna hodnota registra ich nevystavuje. Takže tento cieľ **nemôže niesť paletu**. Čo robí: zapne tmavú tému a aplikuje pravidlá typografie UI.md na OSD, čo je jediný povrch, ktorý MPC-HC nechá používateľa ovládať. Predchádzajúce nastavenia sa najprv exportujú do `desktop/backup/mpc-hc-settings.reg`.
@@ -202,4 +201,4 @@ Oba terminálové ciele čítajú JEDINÚ kanónickú typografickú preferenciu 
 Inštalátor **prebrowse písma, neinštaluje ich.** Karta TERMINAL FONTS načíta zabudovaný rez do procesne lokálnej `PrivateFontCollection` na živý náhľad, ktorý vykoná **nula** systémových registrácií písem. Voľba písma, veľkosti (7–24 pt) alebo režimu vykresľovania (aliased/grayscale/cleartype) aktualizuje len náhľad a preferenciu. Inštalácia písma je výslovná akcia **INSTALL SELECTED**, ktorá otvorí vlastný inštalačný program písem systému Windows; po potvrdení Windows používateľ znovu zistí stav cez Refresh. Skutočné zmeny terminálu sa dejú len pri výslovnej akcii **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal sa aplikuje na vybranú nainštalovanú rodinu vo vybranej veľkosti a režim vykresľovania sa mapuje na `profiles.defaults.antialiasingMode`. Klasický conhost je prísnejší: vykresľuje na pevnej mriežke buniek, takže vybrané písmo sa odmietne pred akoukoľvek zmenou v registri, pokiaľ ho Windows nerozpozná (predvolený rez a záloha Consolas majú výnimku). Health a Reapply porovnajú nastavený rez/veľkosť/antialiasing s preferenciou, takže zmena preferencie po Apply sa nahlási ako odchýlka, nie ako zdravý stav. Životný cyklus farieb terminálu zostáva nedotknutý: Revert obnoví presné hodnoty vlastnené pred Wintage a nikdy neodstráni písmo zo stroja.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

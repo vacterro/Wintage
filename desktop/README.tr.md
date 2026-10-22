@@ -143,12 +143,11 @@ reklamlar ve ses tek çalıştırmada uygulanır:
   klasörleriyle tamamen aynı şekilde).
 - **Sağ tık** — tercihi FreeBuff'ın stok zil sesine geri temizler (hâlâ
   çalmakta olan herhangi bir önizlemeyi de durdurur).
-- **COPY** — seçilen sesi repo'nun kendisine kopyalar (`sounds\freebuff.<ext>`,
+- **COPY** — seçilen sesi seçilen sesi `%APPDATA%\Wintage` klasörüne kopyalar klasörüne kopyalar (`%APPDATA%\Wintage\freebuff.<ext>`,
   kaynak uzantısını koruyarak) ve tercihi o kopyaya yönlendirir, böylece ses
   orijinal dosyanın silinmesinden veya taşınmasından kurtulur. Yalnızca özel bir
-  ses ayarlıyken etkindir; yeniden kopyalama repo kopyasını basitçe üzerine
-  yazar. `sounds/` klasörü düz git ile izlenebilir içeriktir, bu yüzden onu
-  commit'lemek sesin yeniden klonlamalarda da hayatta kalmasını sağlar.
+  ses ayarlıyken etkindir; yeniden kopyalama `%APPDATA%\Wintage` kopyasını basitçe üzerine
+  yazar.
 
 Yalnızca tanınan ses kapları önizlenir — önce başlık koklanır, bu yüzden ses
 olmayan bir seçim sessizce hiçbir şey çalmak yerine bildirilir.
@@ -297,7 +296,6 @@ olacağını ayarlar; `appearance.json` önce yedeklenir ve `-Revert` yalnızca
 `Wintage *` temalarını kaldırır ve önceki seçiminizi geri yükler — aynı kasada
 elle yapılmış bir temaya asla dokunulmaz.
 
-
 ### MPC-HC (K-Lite)
 
 Yerel Win32, stil sayfası ve enjeksiyon noktası yok ve koyu temasının renkleri
@@ -355,4 +353,4 @@ Her iki terminal hedefi de `%APPDATA%\Wintage\terminal-font.json` dosyasındaki 
 Kurulum sihirbazı **yazı tiplerine göz atar, onları kurmaz.** TERMINAL FONTS sekmesi, canlı önizleme için gömülü bir yüzü süreç yerel `PrivateFontCollection` içine yükler; bu **sıfır** sistem yazı tipi kaydı yapar. Yazı tipi, boyut (7–24 pt) veya işleme kipi (aliased/grayscale/cleartype) seçimi yalnızca önizlemeyi ve tercihi günceller. Yazı tipi kurmak, Windows'un kendi yazı tipi kurulum sihirbazını açan açık bir **INSTALL SELECTED** işlemidir; Windows'un onayından sonra kullanıcı Refresh ile yeniden yoklar. Gerçek terminal değişiklikleri yalnızca açık bir **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH** işleminde olur.
 
 Windows Terminal, seçilen boyutta seçili kurulu aileye uygulanır ve işleme kipi `profiles.defaults.antialiasingMode` değerine eşlenir. Klasik conhost daha katıdır: sabit bir hücre ızgarasında çizer, bu yüzden seçilen yüz, Windows onu çözebiliyorsa (varsayılan yüz ve Consolas yedeği muaf tutulur) aksi halde herhangi bir kayıt defteri mutasyonundan önce reddedilir. Health ve Reapply, yapılandırılmış yüz/boyut/kenar yumuşatmayı tercihle karşılaştırır, böylece bir Apply'den sonra tercihi değiştirmek sağlıklı olmaktan çıkıp sapma olarak bildirilir. Terminal renkleri yaşam döngüsüne dokunulmaz: Revert, Wintage öncesi sahiplenilen değerleri birebir geri yükler ve makineden asla bir yazı tipi kaldırmaz.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->

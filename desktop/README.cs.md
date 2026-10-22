@@ -140,12 +140,11 @@ v jednom běhu:
   stromu).
 - **Pravým kliknutím** — vymažte preferenci zpět na stock zvuk FreeBuff (také
   zastaví jakýkoli náhled, který stále hraje).
-- **COPY** — zkopíruje vybraný zvuk přímo do repozitáře (`sounds\freebuff.<ext>`,
+- **COPY** — zkopíruje vybraný zvuk zkopíruje vybraný zvuk přímo do `%APPDATA%\Wintage` (`%APPDATA%\Wintage\freebuff.<ext>`,
   se zachováním zdrojové přípony) a přesměruje preferenci na tuto kopii, takže
   zvuk přežije smazání nebo přesun původního souboru. Povoleno pouze když je
-  nastaven vlastní zvuk; opětovné kopírování jednoduše přepíše kopii v repozitáři.
-  Složka `sounds/` je běžný gitově sledovatelný obsah, takže jeho commitování
-  zajistí, že zvuk přežije i re-klony.
+  nastaven vlastní zvuk; opětovné kopírování jednoduše přepíše kopii v `%APPDATA%\Wintage`.
+
 
 Pouze rozpoznané zvukové kontejnery se náhledují — hlavička se nejprve očichá,
 takže výběr ne-zvuku je oznámen místo tichého přehrávání ničeho.
@@ -291,7 +290,6 @@ instalaci aktivní; `appearance.json` je nejprve zálohován a `-Revert` odstran
 jen motivy `Wintage *` a obnoví vaši předchozí volbu — ručně vytvořeného motivu ve
 stejném trezoru se nikdy nedotkne.
 
-
 ### MPC-HC (K-Lite)
 
 Nativní Win32, žádný stylsheet a žádný injekční bod, a barvy jeho tmavého motivu
@@ -349,4 +347,4 @@ Oba cílové terminály čtou JEDINOU kanonickou typografickou preferenci z `%AP
 Instalátor **prohlíží písma, neinstaluje je.** Karta TERMINAL FONTS načte zabudovaný řez do `PrivateFontCollection` lokálního pro proces pro živou ukázku, která provede **nulovou** systémovou registraci písem. Volba písma, velikosti (7–24 pt) nebo režimu vykreslování (aliased/grayscale/cleartype) aktualizuje jen ukázku a preferenci. Instalace písma je výslovná akce **INSTALL SELECTED**, která otevře vlastní instalační program písem systému Windows; po potvrzení systémem Windows uživatel znovu zjišťuje stav tlačítkem Refresh. Skutečné změny terminálu se dějí pouze při výslovné akci **APPLY TERMINAL / APPLY CONHOST / APPLY BOTH**.
 
 Windows Terminal se aplikuje na vybranou nainstalovanou rodinu ve vybrané velikosti a režim vykreslování se mapuje na `profiles.defaults.antialiasingMode`. Klasický conhost je přísnější: vykresluje na pevné mřížce buněk, takže vybrané písmo se odmítne před jakoukoli změnou registru, pokud ho Windows nerozpozná (výchozí řez a záložní Consolas mají výjimku). Health a Reapply porovnají nastavený řez, velikost a vyhlazování s preferencí, takže změna preference po Apply se nahlásí jako odchylka, a ne jako stav "zdravý". Životní cyklus barev terminálu zůstává nedotčený: Revert obnoví přesné hodnoty vlastněné před Wintagem a nikdy neodebere písmo ze stroje.
-<!-- source-digest: desktop/README.md sha256:15c96dac8494ab84 -->
+<!-- source-digest: desktop/README.md sha256:5e103cbdc31adaf1 -->
