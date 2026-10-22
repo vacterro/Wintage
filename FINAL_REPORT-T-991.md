@@ -9,7 +9,7 @@ Nothing here is estimated, remembered or carried over from another ticket's clai
 
 ## STATUS
 
-- **Campaign: COMPLETE for everything the campaign may do. Two owner decisions remain open.**
+- **Campaign: COMPLETE for everything the campaign may do. Three owner decisions remain open.**
 - Closed in this campaign: **T-980, T-982, T-983, T-984, T-985, T-987, T-988, T-989, T-990, T-991**.
 - Still open and blocked on the owner: **T-981** (release channel convergence — needs a push),
   **T-986** (Verdana_m1.ttf redistribution decision), **T-376** (live BetterDiscord acceptance).
@@ -344,6 +344,18 @@ Measured on the final tree, that is **674.4s -> 139.5s -> 4s**: the release-gate
   authority Source, which this campaign cannot mint. **The shared protocol was not touched,
   no gate was weakened and no accepted-debt record was written**: the debt is named for the
   owner instead of being closed quietly.
+- **The receipt is not the only view of the ledger, and the other view is not clean.**
+  `saipen status` still prints `Claimed but unproven: T-357, T-245, T-244, T-243`. That
+  line comes from the LOG grammar, not from the receipt: each of those four tickets was
+  closed on 2026-09-11 without a `transition to VERIFY` marker in its cycle, and the ledger
+  counts only RUN evidence *inside* a cycle, so it finds neither boundary nor evidence. The
+  re-verification receipts cannot enter that grammar — a checkpoint written after a
+  ticket's canonical finish is history about the closure, not evidence for it (the engine's
+  own T-1758 rule). The campaign demonstrated it rather than asserting it: the RUN
+  checkpoint for T-244 written after this round (`E-4449`) is recorded in the LOG, and the
+  ledger still refuses to count it. Clearing that line would mean re-opening the four
+  tickets so they start a fresh cycle, which is a scope change this campaign did not make
+  (see NEED USER, item 3).
 
 ## RELEASE SAFETY
 
@@ -387,10 +399,10 @@ Measured on the final tree, that is **674.4s -> 139.5s -> 4s**: the release-gate
 ## COMMITS
 
 All six are local; none is pushed. `d775325` is the base (the commit published on the polled
-destination). The report itself is the seventh commit (`6c94dee`) plus two amendment commits
-that state the refreshed conformance receipt's exact outcome and the re-verification round
-that followed it; a commit cannot contain its own hash, so those three are named here and
-their hashes are in `git log`.
+destination). The report itself is the seventh commit (`6c94dee`) plus three amendment commits
+that state the refreshed conformance receipt's exact outcome, the re-verification round that
+followed it, and the ledger line that survives that round; a commit cannot contain its own
+hash, so those four are named here and their hashes are in `git log`.
 
 | commit | subject |
 |---|---|
@@ -437,7 +449,10 @@ their hashes are in `git log`.
     decision, not by oversight. The four DONE tickets that also carried no current-cycle
     evidence — **T-243, T-244, T-245, T-357** — were re-verified against this tree with
     executed receipts (one per ticket, each naming the command that re-proves it) and are
-    no longer findings. See the REGRESSION section.
+    no longer findings in the canonical receipt. `saipen status` nevertheless still lists
+    them under `Claimed but unproven`, because that ledger reads the LOG's per-ticket
+    verification cycle and those cycles closed in 2026-09-11 without a VERIFY boundary
+    (see the REGRESSION section).
 11. **Two untracked leftovers of the project's own test runs were found in the tree and
     removed:** `.wintage.tmp` (299 478 bytes, an orphaned copy of the userscript that no
     file in this tree writes) and `Microsoft/Windows/PowerShell/ModuleAnalysisCache`
@@ -470,7 +485,8 @@ check are already in place and gated.
 
 ## NEED USER
 
-Two decisions are the owner's, and the campaign deliberately did not make either one silently.
+Three decisions are the owner's, and the campaign deliberately did not make any of them
+silently.
 
 1. **The front page.** The GitHub side's `README.md` (207 lines, with badges, a Showcase
    section, "Why Wintage", a Features table, the project network and a support block) and
@@ -484,6 +500,15 @@ Two decisions are the owner's, and the campaign deliberately did not make either
    Microsoft Verdana (`fsType` 8, editable embedding) whose terms grant use, not
    redistribution. The three options are in `THIRD_PARTY_NOTICES.md`: ship as is, remove it
    from the public tree, or replace it with a redistributable substitute. **Which one?**
+3. **Should the four re-verified tickets be re-opened so the ledger line clears too?**
+   `saipen status` still lists `T-357, T-245, T-244, T-243` as `Claimed but unproven`
+   because their verification cycles closed on 2026-09-11 without a VERIFY boundary. The
+   canonical receipt no longer lists them (each has an executed re-verification receipt on
+   this tree), but the ledger reads the LOG, and its grammar only counts evidence written
+   inside a cycle. Clearing it means re-opening the four tickets to start fresh cycles —
+   four DONE closures from another actor, reopened and re-verified, which is the owner's
+   call and not this campaign's. **Re-open, or accept the status line as a known artifact
+   of the 2026-09-11 closures?**
 
 Plus the one mechanical step that only the owner can perform: **the push in NEXT EXACT
 ACTION**, which this campaign is forbidden from doing.
