@@ -9,7 +9,7 @@
 // release suite re-verifies against this file on every run.
 //
 // CLI:
-//   node tools/theme-schema.js --json   # print { tokens, wcagRoles } as JSON
+//   node tools/theme-schema.js --json   # print { tokens, wcagRoles, wcagBackdrops } as JSON
 //
 // The emitted snapshot must stay byte-consistent with tools/theme-schema.json;
 // tests/Run-Tests.ps1 FAILs the repo when they disagree.
@@ -31,11 +31,36 @@ const REQUIRED_TOKENS = [
 ];
 
 // The roles that actually carry TEXT and are therefore held to the WCAG AA
-// 4.5:1 floor, measured against the palette's own backgroundSoft. This list is
-// deliberately NOT borderHighlight: on light palettes that token is a near-white
-// decorative bevel edge, not a text role, and gating it produced false FAILs
-// for every palette where the edge is lighter than body text.
-const WCAG_ROLES = ['textPrimary', 'textSecondary', 'link'];
+// 4.5:1 floor. This list is deliberately NOT borderHighlight: on light palettes
+// that token is a near-white decorative bevel edge, not a text role, and gating it
+// produced false FAILs for every palette where the edge is lighter than body text.
+//
+// Each role is measured against EVERY backdrop it can actually land on, not
+// against one guessed backdrop:
+//
+//   textPrimary  - the theme's own CSS paints it on the page ground, on the soft
+//                  ground, on panels (surface), on the three control faces
+//                  (surfaceRaised / surfaceAlt / the :active face) and inside
+//                  sunken fields (compareBack). A button label is text: gating
+//                  only the page ground let CodeNomad's button label sit at
+//                  3.91:1 on its own hover face.
+//   textSecondary- visited links, on the soft ground. Unchanged from the
+//                  original contract.
+//   link         - links sit on the page ground AND on the soft ground. On a
+//                  LIGHT palette the page ground (#C0C0C0) is DARKER than the
+//                  soft ground (#FFFFFF), so measuring the link against the soft
+//                  ground alone passed a 2.54:1 link on the gray the user
+//                  actually reads (T-988).
+//
+// The backdrop list is data so the PowerShell consumers (the GUI editor and the
+// release suite) can read the same contract from the --json snapshot instead of
+// re-implementing it.
+const WCAG_BACKDROPS = {
+  textPrimary: ['background', 'backgroundSoft', 'surface', 'surfaceRaised', 'surfaceAlt', 'compareBack'],
+  textSecondary: ['backgroundSoft'],
+  link: ['background', 'backgroundSoft']
+};
+const WCAG_ROLES = Object.keys(WCAG_BACKDROPS);
 
 // Load and validate every pack in a themes directory. Throws on the first
 // violation so a malformed pack can never silently vanish from a build:
@@ -90,11 +115,11 @@ function loadAndValidatePacks(dir) {
 
 if (require.main === module) {
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ tokens: REQUIRED_TOKENS, wcagRoles: WCAG_ROLES }));
+    console.log(JSON.stringify({ tokens: REQUIRED_TOKENS, wcagRoles: WCAG_ROLES, wcagBackdrops: WCAG_BACKDROPS }));
   } else {
     console.error('usage: node tools/theme-schema.js --json');
     process.exit(2);
   }
 }
 
-module.exports = { REQUIRED_TOKENS, WCAG_ROLES, loadAndValidatePacks };
+module.exports = { REQUIRED_TOKENS, WCAG_ROLES, WCAG_BACKDROPS, loadAndValidatePacks };

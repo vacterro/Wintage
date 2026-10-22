@@ -113,6 +113,11 @@ if (Test-Path $schemaJson) {
 }
 $TOKENS = @($schema.tokens)
 $script:wcagRoles = @($schema.wcagRoles)
+# T-988: the backdrops each text role is measured on come from the same
+# canonical snapshot, so the editor predicts exactly what the build gate
+# enforces -- including the control faces a button label lands on and the page
+# ground a link is read on.
+$script:wcagBackdrops = $schema.wcagBackdrops
 
 function Get-ActiveTokens {
     if ($script:current -eq '<custom>') { return $script:custom }
@@ -2369,24 +2374,31 @@ function Refresh-Swatches {
 function Update-Info {
     $t = Get-ActiveTokens
     if (-not $t) { return }
-    $bg = $t.backgroundSoft
     $rows = @()
-    # Same text-role list the build gate enforces (tools/theme-schema.json
-    # wcagRoles): textPrimary, textSecondary, link. borderHighlight is a
-    # decorative bevel edge, not a text role, and warning on it produced false
-    # FAILs for every light palette (T-187).
+    # Same text-role list AND the same backdrops the build gate enforces
+    # (tools/theme-schema.json wcagRoles / wcagBackdrops): textPrimary,
+    # textSecondary, link. borderHighlight is a decorative bevel edge, not a
+    # text role, and warning on it produced false FAILs for every light palette
+    # (T-187). Each role is shown on its WORST backdrop -- the one it is
+    # hardest to read on -- which is what the gate measures.
     foreach ($k in $script:wcagRoles) {
-        $c = Contrast $t.$k $bg
-        $mark = if ($c -ge 4.5) { 'PASS' } else { 'FAIL' }
-        $rows += ('{0,-16} {1,5}:1  {2}' -f $k, $c, $mark)
+        $worst = 999.0
+        $worstBg = ''
+        foreach ($bgName in @($script:wcagBackdrops.$k)) {
+            if (-not $t.ContainsKey($bgName)) { continue }
+            $c = Contrast $t.$k $t.$bgName
+            if ($c -lt $worst) { $worst = $c; $worstBg = $bgName }
+        }
+        $mark = if ($worst -ge 4.5) { 'PASS' } else { 'FAIL' }
+        $rows += ('{0,-16} {1,5}:1 on {2,-14} {3}' -f $k, $worst, $worstBg, $mark)
     }
     $name = if ($script:current -eq '<custom>') { 'Custom' } else { $script:packs[$script:current].label }
     # The contrast block is the whole reason the custom editor is safe to hand over:
     # it says, before Apply, whether the palette is readable. The gate would reject a
     # failing one anyway, but finding out here beats finding out from a build error.
-    $lblInfo.Text = "$name`r`n`r`nWCAG AA vs backgroundSoft`r`n" + ($rows -join "`r`n") +
-    "`r`n`r`nA palette that FAILs is refused by the`r`nbuild gate, so fix it here first." +
-    "`r`n`r`nApply runs the same install.ps1 the`r`nterminal does - no second code path."
+    $lblInfo.Text = "$name`r`n`r`nWCAG AA on each role's worst backdrop`r`n" + ($rows -join "`r`n") +
+        "`r`n`r`nA palette that FAILs is refused by the`r`nbuild gate, so fix it here first." +
+        "`r`n`r`nApply runs the same install.ps1 the`r`nterminal does - no second code path."
 }
 
 # W2-004 (T-246:R009): batch-active UI guards. Save/Delete-Custom and token

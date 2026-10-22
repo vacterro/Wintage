@@ -159,6 +159,26 @@ function liftToAA(h, s, l, bgLum, name, slug) {
   return out;
 }
 
+// T-988: a button label is text, and on every derived palette the control faces
+// (surfaceRaised, surfaceAlt) are LIGHTER than the soft ground the old lift
+// measured against. So the soft ground is the backdrop where light text is
+// hardest to read, and lifting against it alone shipped CodeNomad with a 3.91:1
+// label on its own hover face. textPrimary is therefore lifted against the WORST
+// of the grounds it can land on; the other two gated tokens keep their original
+// backdrop, so every other derived pack comes out byte-identical.
+const TEXT_GROUNDS = ['background', 'backgroundSoft', 'surface', 'surfaceRaised', 'surfaceAlt'];
+function worstGroundLum(tokens, h, s, l) {
+  const pre = relLum(...hslToRgb(h, s, l));
+  let worst = null, worstRatio = Infinity;
+  for (const name of TEXT_GROUNDS) {
+    if (!tokens[name]) continue;
+    const gl = relLum(...hexToRgb(tokens[name]));
+    const r = ratio(pre, gl);
+    if (r < worstRatio) { worstRatio = r; worst = gl; }
+  }
+  return worst;
+}
+
 function derive(slug, spec) {
   const tokens = {};
   // backgroundSoft is what every contrast in this file is measured against, so it
@@ -187,7 +207,7 @@ function derive(slug, spec) {
     const scale = accent ? spec.accentSat : spec.sat;
     const hh = base + offset, ss = Math.min(1, s * scale);
     const [r, g, b] = AA_GATED.includes(name)
-      ? liftToAA(hh, ss, l, bgLum, name, slug)
+      ? liftToAA(hh, ss, l, name === 'textPrimary' ? (worstGroundLum(tokens, hh, ss, l) ?? bgLum) : bgLum, name, slug)
       : hslToRgb(hh, ss, l);
     tokens[name] = rgbToHex(r, g, b);
   }

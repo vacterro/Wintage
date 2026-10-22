@@ -151,14 +151,30 @@ function toPack(name, raw) {
   const backdrop = tokens.backgroundSoft;
   const light = lum(backdrop) > 0.18;
 
+  // T-988: the old rule measured every text role against the soft ground only.
+  // Two measured misses came out of that blind spot, and both are grounds the
+  // theme's own CSS really paints that text on:
+  //   link        - a link sits on the page ground AND on the soft ground. On a
+  //                 LIGHT palette the page ground is DARKER, so the soft ground
+  //                 alone let a 2.54:1 link through on the gray the user reads.
+  //   textPrimary - a button label is text, and on a dark palette the control
+  //                 faces are LIGHTER than the soft ground, so the soft ground
+  //                 is the hardest ground to read it on (3.32:1 measured).
+  // textSecondary keeps the soft ground it always had.
+  const linkBackdrop = lum(tokens.background) < lum(tokens.backgroundSoft)
+    ? tokens.background : tokens.backgroundSoft;
+  const textBackdrop = ['background', 'backgroundSoft', 'surface', 'surfaceRaised', 'surfaceAlt', 'compareBack']
+    .reduce((worst, name) => (ratio(tokens.textPrimary, tokens[name]) < ratio(tokens.textPrimary, worst) ? tokens[name] : worst),
+      tokens.backgroundSoft);
+
   // borderHighlight is the bevel light edge; link is the hyperlink colour. On a dark
   // palette one value serves both, so link = the AA-lifted accent and the bevel keeps
   // it. On a LIGHT palette they pull apart: the bevel highlight must be near-white to
   // read as raised, and near-white fails AA as link text -- so the accent, lifted
   // DARK for readability, becomes link, and the bevel goes bright on its own.
-  tokens.link = liftToAA(tokens.borderHighlight, backdrop, 'link', slug);
+  tokens.link = liftToAA(tokens.borderHighlight, linkBackdrop, 'link', slug);
   for (const k of ['textPrimary', 'textSecondary']) {
-    tokens[k] = liftToAA(tokens[k], backdrop, k, slug);
+    tokens[k] = liftToAA(tokens[k], k === 'textPrimary' ? textBackdrop : backdrop, k, slug);
   }
   tokens.borderHighlight = light ? blend(tokens.surface, '#FFFFFF', 0.85) : tokens.link;
   tokens.bevelLight = light

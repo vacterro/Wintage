@@ -341,7 +341,7 @@
         background: '#1C242A', backgroundSoft: '#21282F',
         surface: '#29313C', surfaceRaised: '#343D4A', surfaceAlt: '#3C4552',
         borderDark: '#0E1216', borderHighlight: '#9D86D1', bevelLight: '#575776', borderMuted: '#424A57',
-        textPrimary: '#B099DE', textSecondary: '#9C84C8', textMuted: '#675091',
+        textPrimary: '#BFACE4', textSecondary: '#9C84C8', textMuted: '#675091',
         accentTeal: '#008080', accentTealDeep: '#006060',
         success: '#5B9630', warning: '#969630', danger: '#963030', dangerText: '#D27272',
         selection: '#343D4A', compareBack: '#13181D',
@@ -410,7 +410,7 @@
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#7A2020',
         selection: '#D0D0D0', compareBack: '#D0D0D0',
-        link: '#5E7A7A'
+        link: '#3D4F4F'
       }
     },
     oled: {
@@ -458,7 +458,7 @@
         background: '#002B36', backgroundSoft: '#073642',
         surface: '#073642', surfaceRaised: '#1B444F', surfaceAlt: '#2B4F59',
         borderDark: '#001F27', borderHighlight: '#51A2DB', bevelLight: '#36667D', borderMuted: '#586E75',
-        textPrimary: '#93A1A1', textSecondary: '#8D9EA1', textMuted: '#426066',
+        textPrimary: '#B3BDBD', textSecondary: '#8D9EA1', textMuted: '#426066',
         accentTeal: '#008080', accentTealDeep: '#004C4C',
         success: '#4A7A20', warning: '#7A7A20', danger: '#7A2020', dangerText: '#DD7D7D',
         selection: '#1B444F', compareBack: '#002029',
@@ -3024,6 +3024,7 @@ a, a:link { color: ${T.link} !important; }
         const sheetEffective = !!(sheet && shadow.adoptedStyleSheets && shadow.adoptedStyleSheets.indexOf(sheet) >= 0);
         if (sheetEffective && sheet.__w95Ver !== proto.__wintageShadowVer) {
           sheet.replaceSync(proto.__wintageShadowCss);
+          sheet.__w95Content = proto.__wintageShadowCss;
           sheet.__w95Ver = proto.__wintageShadowVer;
           DIAG.shadowCssInjected++;
         }
@@ -3078,6 +3079,10 @@ a, a:link { color: ${T.link} !important; }
                 if (!sheet) {
                   sheet = new CSSStyleSheet();
                   sheet.replaceSync(proto.__wintageShadowCss);
+                  // T-987: the content is stamped on the sheet, so the
+                  // repainter's later pierce pass can SEE that this root already
+                  // carries this generation's CSS and skip the re-parse.
+                  sheet.__w95Content = proto.__wintageShadowCss;
                   shadow.adoptedStyleSheets = [sheet, ...shadow.adoptedStyleSheets.filter(s => s !== sheet)];
                   if (shadow.adoptedStyleSheets.indexOf(sheet) < 0) throw new Error('adoptedStyleSheets refused');
                   sheet.__w95Ver = proto.__wintageShadowVer;
@@ -3138,6 +3143,7 @@ a, a:link { color: ${T.link} !important; }
         if (!sheet) {
           sheet = new CSSStyleSheet();
           sheet.replaceSync(content);
+          sheet.__w95Content = content;
           // Adopt first and only book-keep afterwards: if the assignment is
           // refused (a hostile frozen adoptedStyleSheets throws under strict
           // mode), the DOM path must install cleanly, not see a phantom.
@@ -3148,7 +3154,21 @@ a, a:link { color: ${T.link} !important; }
           // Reinjection (T-938): refresh content in place. A new generation used
           // to leave the previous sheet -- with the previous build's CSS --
           // adopted forever.
-          sheet.replaceSync(content);
+          //
+          // T-987: the refresh is CONDITIONAL. replaceSync re-parses the whole
+          // sheet, and the shadow sheet is 11 KB of selectors: on a page with
+          // 200 live shadow roots the repainter's pierce pass re-parsed the
+          // SAME CSS for every one of them, on top of the parse the
+          // attachShadow wrapper had already done. The DOM fallback below has
+          // always compared the content first; the adopted path did not, and
+          // that asymmetry is the measured hot path. The measured median
+          // renderer busy % on the shadow workload (3 repeats, arms rotated,
+          // tools/bench-idle-cpu-results.json): 25.8 before this change,
+          // 20.3 after it, 16.2 with no script at all.
+          if (sheet.__w95Content !== content) {
+            sheet.replaceSync(content);
+            sheet.__w95Content = content;
+          }
           root.adoptedStyleSheets = [...root.adoptedStyleSheets.filter(s => s !== sheet), sheet];
         }
         adopted = true;

@@ -19,6 +19,19 @@ Set-StrictMode -Version Latest
 $root = Split-Path $PSScriptRoot -Parent
 $script:errors = 0
 
+# T-987: the browser-dependency scratch state is DECLARED here, not only in the
+# branch that borrows it. Set-StrictMode -Version Latest makes a read of an
+# unset variable a terminating error, and the scratch path is only assigned
+# when the delivery gate is GREEN: a red gate used to abort the whole suite at
+# `$redKeptScratch = $script:browserScratchPath` with VariableIsUndefined,
+# which hid every gate after it -- a red delivery gate destroyed the report
+# instead of failing one assertion. An empty path is the honest value for "no
+# scratch install was borrowed", and the delivery gate's own assertion still
+# fails loudly.
+$script:browserScratchPath = ''
+$script:priorNodePath = $null
+$script:priorNodePathSet = $false
+
 # The gates below are Windows PowerShell 5.1 gates: half of them spawn
 # `powershell.exe` children, and Windows PowerShell pointed at PowerShell 7's
 # PSCore PSModulePath cannot resolve its own core cmdlets, so a gate dies on its
@@ -402,6 +415,12 @@ if ($schemaExpected -ne $schemaActual) {
 
 $wcagRoles = @($schema.wcagRoles)
 Assert-True ($wcagRoles.Count -eq 3 -and $wcagRoles -contains 'link') "WCAG role list is the shared text-role set (textPrimary/textSecondary/link)"
+# T-988: every role is measured on the backdrops it can actually land on, and
+# the backdrops are read from the same canonical snapshot the build gate and the
+# GUI read -- so a palette that reads badly cannot pass here and fail there.
+$wcagBackdrops = $schema.wcagBackdrops
+Assert-True ($null -ne $wcagBackdrops -and @($wcagBackdrops.PSObject.Properties).Count -eq 3) "WCAG backdrops are the shared per-role backdrop map"
+Assert-True (@($wcagBackdrops.textPrimary) -contains 'surfaceAlt' -and @($wcagBackdrops.link) -contains 'background') "WCAG backdrops cover the control faces (textPrimary) and the page ground (link)"
 
 # Vintage Classic regression fixture (T-187): the shared roles are the text
 # roles. borderHighlight on this LIGHT palette is a near-white decorative bevel
@@ -418,8 +437,10 @@ function Get-Contrast([string]$hexA, [string]$hexB) {
 $vc = Get-Content "$root\themes\vintageclassic.json" -Raw | ConvertFrom-Json
 $vcBg = $vc.tokens.backgroundSoft
 foreach ($role in $wcagRoles) {
-    $ratio = Get-Contrast $vc.tokens.$role $vcBg
-    Assert-True ($ratio -ge 4.5) "vintageclassic $role passes WCAG AA on backgroundSoft ($([Math]::Round($ratio,2)):1)"
+    foreach ($bgName in @($wcagBackdrops.$role)) {
+        $ratio = Get-Contrast $vc.tokens.$role $vc.tokens.$bgName
+        Assert-True ($ratio -ge 4.5) "vintageclassic $role passes WCAG AA on $bgName ($([Math]::Round($ratio,2)):1)"
+    }
 }
 $vcBevel = Get-Contrast $vc.tokens.borderHighlight $vcBg
 Assert-True ($vcBevel -lt 4.5) "vintageclassic borderHighlight is decorative (<4.5:1) and therefore must NOT be a WCAG text role"
@@ -1866,6 +1887,18 @@ foreach ($s in $selectedSuites) {
         Assert-True $false "$($s.Name) suite exits 0"
         $tails = @($suiteOut -split "`r?`n" | Where-Object { $_ -match 'FAIL|failure|Error' } | Select-Object -Last 4)
         foreach ($line in $tails) { Write-Host "       $line" -ForegroundColor Red }
+        # T-987: a red gate used to report four filtered lines and nothing else.
+        # The filter is case-insensitive and matches 'failure', so a PASS line
+        # containing the word could be printed as if it were the failure -- the
+        # actual FAIL labels stayed in the captured output and were lost. The
+        # whole output is kept in a file and its path is named, so a red gate
+        # can be read instead of guessed at.
+        try {
+            $safe = ($s.Name -replace '[^A-Za-z0-9._-]', '_')
+            $dump = Join-Path ([System.IO.Path]::GetTempPath()) ("wintage-suite-failed-" + $safe + ".txt")
+            [System.IO.File]::WriteAllText($dump, $suiteOut)
+            Write-Host "       full output: $dump" -ForegroundColor Red
+        } catch { Write-Host "       (could not write the failed suite output: $($_.Exception.Message))" -ForegroundColor Red }
     }
 }
 # Do the JS gates exist? Every gate release.ps1 runs must be reachable as a file,

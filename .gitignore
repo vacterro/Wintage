@@ -9,6 +9,11 @@ desktop/out/
 # about an untracked file appearing outside .saipen/. Ignored for the same reason
 # desktop/out is: generated, and never something to commit.
 desktop/out.staging/
+# Wave-3/wave-4 probe scratch: throwaway bisect scripts, the screenshot sweep
+# and their PNG output. Same class as desktop/out: an untracked, unignored file
+# is a source_tree_fingerprint input, so leaving these in the delta moved
+# git-delta-v1 on every run and made the convergence receipts stale.
+scratch/
 scratch*.py
 *_old.js
 
@@ -107,6 +112,10 @@ wb_inspect.txt
 # moved git-delta-v1 after every suite pass and made every convergence receipt
 # stale the moment a test run finished. Same class as .audapack/ above.
 tools/bench-idle-cpu-results.json
+# Focused bench runs (--workload/--arms/--repeats/--out) write their raw rows
+# next to the matrix file. Same class: machine- and load-dependent bytes, and an
+# untracked, unignored file is a source_tree_fingerprint input.
+tools/bench-idle-cpu-results-*.json
 
 # A user's own FreeBuff completion sound. Older builds of the installer wrote
 # the picked file into the checkout and the README told the reader to commit it,

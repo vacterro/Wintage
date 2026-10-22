@@ -16,7 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { REQUIRED_TOKENS, WCAG_ROLES } = require('./theme-schema.js');
+const { REQUIRED_TOKENS, WCAG_ROLES, WCAG_BACKDROPS } = require('./theme-schema.js');
 
 const file = path.join(__dirname, '..', 'wintage.user.js');
 const src = fs.readFileSync(file, 'utf8');
@@ -348,13 +348,23 @@ function checkThemes() {
       .filter(m => !REQUIRED_TOKENS.includes(m[1]));
     for (const m of stray) fail('theme ' + slug + ': unknown token ' + m[1]);
 
-    // WCAG AA on the roles that actually carry text, measured against the
-    // backdrop this theme paints. The role list is the shared WCAG_ROLES from
-    // theme-schema.js — the same roles the GUI warns about, so what the editor
-    // predicts and what the gate enforces can never disagree again. A new
-    // palette is the easiest place in this project to ship something unreadable:
-    // it looks fine in a swatch, and the failure only shows up as squinting on a
-    // real page. Golden measures 9.44 / 6.29 / 7.28, so the floor costs it nothing.
+    // WCAG AA on the roles that actually carry text, measured against every
+    // backdrop the theme's own CSS can put that text on. The role list and the
+    // backdrop list are the shared WCAG_ROLES / WCAG_BACKDROPS from
+    // theme-schema.js — the same contract the GUI warns about, so what the
+    // editor predicts and what the gate enforces can never disagree again. A
+    // new palette is the easiest place in this project to ship something
+    // unreadable: it looks fine in a swatch, and the failure only shows up as
+    // squinting on a real page. Golden measures 9.44 / 6.29 / 7.28, so the floor
+    // costs it nothing.
+    //
+    // T-988: the old contract measured every role against backgroundSoft ONLY.
+    // That is the soft ground — on a light palette it is the LIGHTEST surface in
+    // the pack, so the one backdrop where a dark link always looks fine, and the
+    // gray page the user actually reads was never measured. Two measured misses
+    // came out of that blind spot (a 2.54:1 link on the gray page, 3.91:1 and
+    // 3.32:1 button labels on the control faces) and they are fixed by the
+    // widened contract below.
     //
     // textMuted (3.34 on golden) and accentTeal (3.80) are deliberately NOT gated:
     // both are non-text roles — placeholder/disabled and an accent surface — and
@@ -366,14 +376,18 @@ function checkThemes() {
     for (const m of body.matchAll(/(\w+)\s*:\s*'(#[0-9A-Fa-f]{6})'/g)) tok[m[1]] = m[2];
     const lin = v => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
     const L = h => 0.2126 * lin(parseInt(h.slice(1, 3), 16)) + 0.7152 * lin(parseInt(h.slice(3, 5), 16)) + 0.0722 * lin(parseInt(h.slice(5, 7), 16));
-    if (tok.backgroundSoft) {
-      for (const role of WCAG_ROLES) {
-        if (!tok[role]) continue;
-        const a = L(tok[role]), b = L(tok.backgroundSoft);
-        const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    const contrast = (a, b) => {
+      const x = L(a), y = L(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    for (const role of WCAG_ROLES) {
+      if (!tok[role]) continue;
+      for (const backdrop of WCAG_BACKDROPS[role]) {
+        if (!tok[backdrop]) continue;
+        const ratio = contrast(tok[role], tok[backdrop]);
         if (ratio < 4.5) {
-          fail('theme ' + slug + ': ' + role + ' ' + tok[role] + ' on backgroundSoft ' +
-            tok.backgroundSoft + ' measures ' + ratio.toFixed(2) + ':1, under the WCAG AA 4.5:1 floor');
+          fail('theme ' + slug + ': ' + role + ' ' + tok[role] + ' on ' + backdrop + ' ' +
+            tok[backdrop] + ' measures ' + ratio.toFixed(2) + ':1, under the WCAG AA 4.5:1 floor');
         }
       }
     }

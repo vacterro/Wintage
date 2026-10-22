@@ -26,5 +26,22 @@
     "textPrimary",
     "textSecondary",
     "link"
-  ]
+  ],
+  "wcagBackdrops": {
+    "textPrimary": [
+      "background",
+      "backgroundSoft",
+      "surface",
+      "surfaceRaised",
+      "surfaceAlt",
+      "compareBack"
+    ],
+    "textSecondary": [
+      "backgroundSoft"
+    ],
+    "link": [
+      "background",
+      "backgroundSoft"
+    ]
+  }
 }
