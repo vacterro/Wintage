@@ -328,9 +328,16 @@ Measured on the final tree, that is **674.4s -> 139.5s -> 4s**: the release-gate
   **strengthening** (the palette contrast contract was widened, and three packs were brought
   up to the wider contract).
 - Pre-existing, unrelated and untouched: **T-243, T-244, T-245 and T-357** remain
-  `UNPROVEN` in the SAIPEN ledger, and the conformance receipt was `STALE_FAIL` before this
+  `UNPROVEN` in the SAIPEN ledger. The conformance receipt was `STALE_FAIL` before this
   report (it was bound to a different source identity than the current checkpoint); it was
-  refreshed with `saipen validate` at the end of this ticket.
+  refreshed with `saipen validate` at the end of this ticket, and the refresh states the
+  truth plainly: the receipt is now **CURRENT_FAIL**, because the canonical validator
+  reports FAIL for the current checkpoint, and the validator's own next action is
+  `saipen work reverify T-243`. That debt is the four DONE tickets above, which were
+  closed by another actor on 2026-09-11 without a re-verification receipt. **This campaign
+  did not create that debt and did not paper over it**: the shared protocol was not
+  touched, no gate was weakened, and the four tickets are named as the exact thing the
+  next operator has to re-verify.
 
 ## RELEASE SAFETY
 
@@ -374,7 +381,9 @@ Measured on the final tree, that is **674.4s -> 139.5s -> 4s**: the release-gate
 ## COMMITS
 
 All six are local; none is pushed. `d775325` is the base (the commit published on the polled
-destination).
+destination). The report itself is the seventh commit (`6c94dee`) plus one amendment commit
+that states the refreshed conformance receipt's exact outcome; a commit cannot contain its
+own hash, so those two are named here and their hashes are in `git log`.
 
 | commit | subject |
 |---|---|
@@ -415,7 +424,11 @@ destination).
    here rather than explained away. **A release that gates on the process exit code should
    read the verdict line, not only the code**, until the cause is found.
 10. **T-243, T-244, T-245, T-357** remain UNPROVEN in the ledger; they pre-date this campaign
-    and were not touched by it.
+    and were not touched by it. They are the reason the refreshed conformance receipt reads
+    `CURRENT_FAIL` (see the REGRESSION section); the validator's own next action is
+    `saipen work reverify T-243`, and each of the four needs a re-verification receipt that
+    names the command that re-proves it. This campaign did not write those receipts, because
+    the trees and the claims behind them belong to closures this campaign did not make.
 
 ## NEXT EXACT ACTION
 
