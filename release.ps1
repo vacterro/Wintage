@@ -382,8 +382,10 @@ try {
     }
     if ($delivery -eq 'unknown') {
         Write-Host "WARNING: the install URL '$installUrl' could not be fetched, so the delivered artifact is UNPROVEN. The release itself is published; re-run 'node tools/check-deployed-userscript.js --url $installUrl' when the network is back." -ForegroundColor Yellow
+        Write-Host "Released Wintage v$new to $remoteUrl - the Git ref is published, but client delivery is UNPROVEN; do NOT assume Tampermonkey clients have the new build." -ForegroundColor Yellow
+    } else {
+        Write-Host "Released Wintage v$new to $remoteUrl - the delivered artifact is verified; Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green
     }
-    Write-Host "Released Wintage v$new to $remoteUrl - Tampermonkey clients will pick it up on their next update check." -ForegroundColor Green
 } catch {
     if (-not $prepared) {
         # W2-009: restore every tracked file the preparation mutated so a rerun
