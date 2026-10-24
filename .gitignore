@@ -123,3 +123,10 @@ tools/bench-idle-cpu-results-*.json
 # %APPDATA% and any old copy is migrated there on load; this rule keeps a stray
 # one from ever being staged again.
 sounds/
+
+# Machine byproducts that earlier test runs left in the source tree (T-991 item 11):
+# an orphaned copy of the userscript (.wintage.tmp) and PowerShell's
+# ModuleAnalysisCache written when a child process had no LOCALAPPDATA. Neither
+# is source; both sat inside the source_tree_fingerprint and moved git-delta-v1.
+/.wintage.tmp
+/Microsoft/
