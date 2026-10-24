@@ -321,30 +321,43 @@ function Assert-True($condition, $message) {
 # the list of failing checks are the same shape whichever door the run leaves
 # by. The two verdict strings are load-bearing and stay literal.
 function Exit-Suite([int]$code) {
-    Reset-Browser-Scratch
-    if ($script:errors -gt 0) {
-        Write-Host "failing checks ($($script:failures.Count)):" -ForegroundColor Red
-        foreach ($f in $script:failures) { Write-Host "  - $f" -ForegroundColor Red }
+    # Workstream A: the process exit code must agree with the verdict printed
+    # above. A bare `exit $code` inside a function has been observed to disagree
+    # with the shell's reported code on long runs (historical: green verdict,
+    # shell exit 5). Guarantee termination via [Environment]::Exit in a finally
+    # so cleanup runs and the code cannot be lost to a child's stale
+    # $LASTEXITCODE or an exception earlier in this body.
+    try {
+        Reset-Browser-Scratch
+        if ($script:errors -gt 0) {
+            Write-Host "failing checks ($($script:failures.Count)):" -ForegroundColor Red
+            foreach ($f in $script:failures) { Write-Host "  - $f" -ForegroundColor Red }
+        }
+        # B1/B5: the measurement the levels are judged by. The slowest suites are
+        # what FAST has to buy back, so they are printed on every exit door.
+        if ($script:suiteTimings -and $script:suiteTimings.Count -gt 0) {
+            $total = ($script:suiteTimings | Measure-Object -Property Ms -Sum).Sum
+            $slowest = @($script:suiteTimings | Sort-Object -Property Ms -Descending | Select-Object -First 5)
+            Write-Host "suite timings: $($script:suiteTimings.Count) suites, $([math]::Round($total / 1000, 1))s total" -ForegroundColor Cyan
+            foreach ($t in $slowest) { Write-Host ("  {0,7:N2}s  {1}" -f ($t.Ms / 1000), $t.Name) -ForegroundColor Cyan }
+        }
+        Write-Host "SUITE VERDICT: head=$($script:runHead) worktree=$($script:runFingerprint) exit=$code errors=$($script:errors) log=$($script:transcript)"
+        if ($script:identityNote -and $code -eq 0) {
+            Write-Host "IDENTITY NOTE: $script:identityNote" -ForegroundColor Yellow
+        }
+        if ($script:errors -gt 0) {
+            Write-Host "TESTS FAILED ($script:errors errors)" -ForegroundColor Red
+        } else {
+            Write-Host "ALL TESTS PASSED!" -ForegroundColor Green
+        }
+        if ($script:transcript) { try { Stop-Transcript | Out-Null } catch { } }
+    } finally {
+        # Workstream A: SetShouldExit pins the host's reported code so a stale
+        # $LASTEXITCODE from a child native command cannot leak through; `exit`
+        # alone was observed to disagree with the shell on long runs.
+        $host.SetShouldExit($code)
+        exit $code
     }
-    # B1/B5: the measurement the levels are judged by. The slowest suites are
-    # what FAST has to buy back, so they are printed on every exit door.
-    if ($script:suiteTimings -and $script:suiteTimings.Count -gt 0) {
-        $total = ($script:suiteTimings | Measure-Object -Property Ms -Sum).Sum
-        $slowest = @($script:suiteTimings | Sort-Object -Property Ms -Descending | Select-Object -First 5)
-        Write-Host "suite timings: $($script:suiteTimings.Count) suites, $([math]::Round($total / 1000, 1))s total" -ForegroundColor Cyan
-        foreach ($t in $slowest) { Write-Host ("  {0,7:N2}s  {1}" -f ($t.Ms / 1000), $t.Name) -ForegroundColor Cyan }
-    }
-    Write-Host "SUITE VERDICT: head=$($script:runHead) worktree=$($script:runFingerprint) exit=$code errors=$($script:errors) log=$($script:transcript)"
-    if ($script:identityNote -and $code -eq 0) {
-        Write-Host "IDENTITY NOTE: $script:identityNote" -ForegroundColor Yellow
-    }
-    if ($script:errors -gt 0) {
-        Write-Host "TESTS FAILED ($script:errors errors)" -ForegroundColor Red
-    } else {
-        Write-Host "ALL TESTS PASSED!" -ForegroundColor Green
-    }
-    if ($script:transcript) { try { Stop-Transcript | Out-Null } catch { } }
-    exit $code
 }
 
 Write-Host "
