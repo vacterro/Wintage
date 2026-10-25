@@ -102,6 +102,26 @@ function sameRepo(a, b) {
   return !!a && !!b && a.host === b.host && a.repo.toLowerCase() === b.repo.toLowerCase();
 }
 
+function sameBranch(a, b) {
+  return !!a && !!b && a.branch === b.branch;
+}
+
+function sameFile(a, b) {
+  return !!a && !!b && a.file === b.file;
+}
+
+function sameScheme(a, b) {
+  return !!a && !!b && a.scheme === b.scheme;
+}
+
+function requireHttps(parsed, label, problems) {
+  if (parsed && parsed.scheme !== 'https') {
+    problems.push(label + ' must use HTTPS transport, found ' + parsed.scheme);
+    return false;
+  }
+  return true;
+}
+
 function headerValue(src, name) {
   const m = new RegExp('^//\\s*@' + name + '\\s+(\\S+)\\s*$', 'm').exec(src);
   return m ? m[1] : null;
@@ -176,21 +196,70 @@ function main() {
   if (report.updateUrl && !update) { report.problems.push('the @updateURL is not a raw userscript URL: ' + report.updateUrl); report.unknown = true; }
   if (report.downloadUrl && !download) { report.problems.push('the @downloadURL is not a raw userscript URL: ' + report.downloadUrl); report.unknown = true; }
 
+  // The release PUSH destination, @updateURL, and @downloadURL must all
+  // identify the SAME canonical repository (host + path), the SAME branch, the
+  // SAME file, and the SAME transport. Any disagreement is a release into a
+  // place nobody polls or downloads from.
+  const identities = [
+    { label: 'release push destination', ...remote },
+    { label: '@updateURL', ...update },
+    { label: '@downloadURL', ...download }
+  ].filter(i => i.host && i.repo);
+
+  // Transport: all raw script URLs must be HTTPS.
+  for (const p of [update, download]) {
+    if (p) requireHttps(p, 'raw script URL', report.problems);
+  }
+
   if (remote && update) {
     if (!sameRepo(remote, update)) {
       report.problems.push('the release publishes to ' + remote.host + '/' + remote.repo +
         ' but the clients poll ' + update.host + '/' + update.repo);
     }
-    if (update.branch !== BRANCH) {
+    if (!sameBranch({ branch: BRANCH }, update)) {
       report.problems.push('the clients poll the ' + update.branch + ' branch but the release publishes ' + BRANCH);
     }
-    if (update.file !== report.file) {
+    if (!sameFile({ file: report.file }, update)) {
       report.problems.push('the clients poll ' + update.file + ' but the release builds ' + report.file);
     }
   }
-  if (update && download && !sameRepo(update, download)) {
-    report.problems.push('@updateURL names ' + update.host + '/' + update.repo +
-      ' but @downloadURL names ' + download.host + '/' + download.repo);
+
+  if (update && download) {
+    if (!sameRepo(update, download)) {
+      report.problems.push('@updateURL names ' + update.host + '/' + update.repo +
+        ' but @downloadURL names ' + download.host + '/' + download.repo);
+    }
+    if (!sameBranch(update, download)) {
+      report.problems.push('@updateURL points at branch ' + update.branch +
+        ' but @downloadURL points at branch ' + download.branch);
+    }
+    if (!sameFile(update, download)) {
+      report.problems.push('@updateURL points at ' + update.file +
+        ' but @downloadURL points at ' + download.file);
+    }
+    if (!sameScheme(update, download)) {
+      report.problems.push('@updateURL uses ' + update.scheme +
+        ' but @downloadURL uses ' + download.scheme);
+    }
+  }
+
+  // Three-way agreement: repo, branch, file across all three identities.
+  if (remote && update && download) {
+    const repos = new Set([remote.host + '/' + remote.repo, update.host + '/' + update.repo, download.host + '/' + download.repo]);
+    const branches = new Set([BRANCH, update.branch, download.branch]);
+    const files = new Set([report.file, update.file, download.file]);
+    if (repos.size > 1) {
+      report.problems.push('the three destinations disagree on repository: ' +
+        remote.host + '/' + remote.repo + ' vs ' + update.host + '/' + update.repo + ' vs ' + download.host + '/' + download.repo);
+    }
+    if (branches.size > 1) {
+      report.problems.push('the three destinations disagree on branch: ' +
+        BRANCH + ' vs ' + update.branch + ' vs ' + download.branch);
+    }
+    if (files.size > 1) {
+      report.problems.push('the three destinations disagree on file: ' +
+        report.file + ' vs ' + update.file + ' vs ' + download.file);
+    }
   }
 
   if (report.problems.length === 0) {

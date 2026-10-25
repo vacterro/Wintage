@@ -1,0 +1,108 @@
+{
+  "manifest_version": 3,
+  "version": "1.36.11",
+  "name": "Wintage CodeNomad",
+  "description": "Wintage CodeNomad for the browser chrome. Companion to the Wintage userscript.",
+  "theme": {
+    "colors": {
+      "frame": [
+        28,
+        36,
+        42
+      ],
+      "frame_inactive": [
+        41,
+        49,
+        60
+      ],
+      "frame_incognito": [
+        19,
+        24,
+        29
+      ],
+      "frame_incognito_inactive": [
+        19,
+        24,
+        29
+      ],
+      "toolbar": [
+        41,
+        49,
+        60
+      ],
+      "tab_text": [
+        191,
+        172,
+        228
+      ],
+      "tab_background_text": [
+        156,
+        132,
+        200
+      ],
+      "bookmark_text": [
+        191,
+        172,
+        228
+      ],
+      "toolbar_button_icon": [
+        191,
+        172,
+        228
+      ],
+      "omnibox_background": [
+        19,
+        24,
+        29
+      ],
+      "omnibox_text": [
+        191,
+        172,
+        228
+      ],
+      "button_background": [
+        52,
+        61,
+        74
+      ],
+      "ntp_background": [
+        28,
+        36,
+        42
+      ],
+      "ntp_text": [
+        191,
+        172,
+        228
+      ],
+      "ntp_link": [
+        157,
+        134,
+        209
+      ],
+      "ntp_header": [
+        157,
+        134,
+        209
+      ],
+      "ntp_section": [
+        41,
+        49,
+        60
+      ],
+      "ntp_section_text": [
+        156,
+        132,
+        200
+      ],
+      "ntp_section_link": [
+        157,
+        134,
+        209
+      ]
+    },
+    "properties": {
+      "ntp_background_alignment": "center"
+    }
+  }
+}

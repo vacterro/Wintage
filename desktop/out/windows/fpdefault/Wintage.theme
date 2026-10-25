@@ -1,0 +1,75 @@
+; Wintage Default -- generated. Do not edit.
+
+[Theme]
+DisplayName=Wintage Default
+
+[Control Panel\Desktop]
+Pattern=
+
+[Control Panel\Cursors]
+AppStarting=%SystemRoot%\___CURRENT___\6_aero_working.ani
+Arrow=%SystemRoot%\___CURRENT___\1_aero_arrow.cur
+Crosshair=%SystemRoot%\___CURRENT___\precise.cur
+Hand=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Help=%SystemRoot%\___CURRENT___\3_aero_helpsel.cur
+IBeam=%SystemRoot%\___CURRENT___\text.cur
+No=%SystemRoot%\___CURRENT___\5_aero_unavail.cur
+NWPen=%SystemRoot%\___CURRENT___\aero_pen.cur
+SizeAll=%SystemRoot%\___CURRENT___\aero_move.cur
+SizeNESW=%SystemRoot%\___CURRENT___\aero_nesw.cur
+SizeNS=%SystemRoot%\___CURRENT___\aero_ns.cur
+SizeNWSE=%SystemRoot%\___CURRENT___\aero_nwse.cur
+SizeWE=%SystemRoot%\___CURRENT___\aero_ew.cur
+UpArrow=%SystemRoot%\___CURRENT___\aero_up.cur
+Wait=%SystemRoot%\___CURRENT___\2_aero_busy.ani
+DefaultValue=___CURRENT___
+Link=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Pin=%SystemRoot%\___CURRENT___\aero_pin.cur
+Person=%SystemRoot%\___CURRENT___\aero_person.cur
+
+[VisualStyles]
+Path=%SystemRoot%\resources\themes\Aero\Aero.msstyles
+ColorStyle=NormalColor
+Size=NormalSize
+AutoColorization=0
+ColorizationColor=0xFF343434
+Transparency=0
+SystemMode=Dark
+AppMode=Dark
+VisualStyleVersion=10
+
+[Control Panel\Colors]
+Scrollbar=58 58 58
+Background=26 26 26
+ActiveTitle=52 52 52
+InactiveTitle=52 52 52
+Menu=43 43 43
+Window=44 44 44
+WindowFrame=10 10 10
+MenuText=192 192 192
+WindowText=192 192 192
+TitleText=192 192 192
+ActiveBorder=52 52 52
+InactiveBorder=52 52 52
+AppWorkspace=26 26 26
+Hilight=52 52 52
+HilightText=192 192 192
+ButtonFace=43 43 43
+ButtonShadow=10 10 10
+GrayText=101 101 101
+ButtonText=192 192 192
+InactiveTitleText=148 148 148
+ButtonHilight=78 85 91
+ButtonDkShadow=10 10 10
+ButtonLight=58 58 58
+InfoText=192 192 192
+InfoWindow=44 44 44
+ButtonAlternateFace=26 26 26
+HotTrackingColor=131 155 176
+GradientActiveTitle=52 52 52
+GradientInactiveTitle=52 52 52
+MenuHilight=52 52 52
+MenuBar=43 43 43
+
+[MasterThemeSelector]
+MTSM=DABJDKT

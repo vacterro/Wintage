@@ -1,0 +1,75 @@
+; Wintage Dark Golden (Win95) -- generated. Do not edit.
+
+[Theme]
+DisplayName=Wintage Dark Golden (Win95)
+
+[Control Panel\Desktop]
+Pattern=
+
+[Control Panel\Cursors]
+AppStarting=%SystemRoot%\___CURRENT___\6_aero_working.ani
+Arrow=%SystemRoot%\___CURRENT___\1_aero_arrow.cur
+Crosshair=%SystemRoot%\___CURRENT___\precise.cur
+Hand=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Help=%SystemRoot%\___CURRENT___\3_aero_helpsel.cur
+IBeam=%SystemRoot%\___CURRENT___\text.cur
+No=%SystemRoot%\___CURRENT___\5_aero_unavail.cur
+NWPen=%SystemRoot%\___CURRENT___\aero_pen.cur
+SizeAll=%SystemRoot%\___CURRENT___\aero_move.cur
+SizeNESW=%SystemRoot%\___CURRENT___\aero_nesw.cur
+SizeNS=%SystemRoot%\___CURRENT___\aero_ns.cur
+SizeNWSE=%SystemRoot%\___CURRENT___\aero_nwse.cur
+SizeWE=%SystemRoot%\___CURRENT___\aero_ew.cur
+UpArrow=%SystemRoot%\___CURRENT___\aero_up.cur
+Wait=%SystemRoot%\___CURRENT___\2_aero_busy.ani
+DefaultValue=___CURRENT___
+Link=%SystemRoot%\___CURRENT___\4_aero_link.cur
+Pin=%SystemRoot%\___CURRENT___\aero_pin.cur
+Person=%SystemRoot%\___CURRENT___\aero_person.cur
+
+[VisualStyles]
+Path=%SystemRoot%\resources\themes\Aero\Aero.msstyles
+ColorStyle=NormalColor
+Size=NormalSize
+AutoColorization=0
+ColorizationColor=0xFF5A4324
+Transparency=0
+SystemMode=Dark
+AppMode=Dark
+VisualStyleVersion=10
+
+[Control Panel\Colors]
+Scrollbar=99 75 43
+Background=52 32 18
+ActiveTitle=90 67 36
+InactiveTitle=90 67 36
+Menu=74 52 27
+Window=58 38 22
+WindowFrame=28 18 8
+MenuText=226 202 149
+WindowText=226 202 149
+TitleText=226 202 149
+ActiveBorder=90 67 36
+InactiveBorder=90 67 36
+AppWorkspace=52 32 18
+Hilight=90 67 36
+HilightText=226 202 149
+ButtonFace=74 52 27
+ButtonShadow=28 18 8
+GrayText=149 128 76
+ButtonText=226 202 149
+InactiveTitleText=197 171 110
+ButtonHilight=130 105 65
+ButtonDkShadow=28 18 8
+ButtonLight=99 75 43
+InfoText=226 202 149
+InfoWindow=58 38 22
+ButtonAlternateFace=52 32 18
+HotTrackingColor=211 181 122
+GradientActiveTitle=90 67 36
+GradientInactiveTitle=90 67 36
+MenuHilight=90 67 36
+MenuBar=74 52 27
+
+[MasterThemeSelector]
+MTSM=DABJDKT

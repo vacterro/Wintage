@@ -34,6 +34,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const DEFAULT_URL = 'https://gitlab.com/vacuum34/wintage/-/raw/main/wintage.user.js';
 const argv = process.argv.slice(2);
@@ -47,28 +48,35 @@ function localVersion(src) {
   return { header: header ? header[1] : null, internal: internal ? internal[1] : null };
 }
 
+function sha256(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+async function fetchBytes(url) {
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + url);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 async function main() {
   const treePath = path.join(__dirname, '..', 'wintage.user.js');
-  const tree = fs.readFileSync(treePath, 'utf8');
+  const treeBuf = fs.readFileSync(treePath);
+  const tree = treeBuf.toString('utf8');
   const tv = localVersion(tree);
+  const treeDigest = sha256(treeBuf);
 
   let contract = null;
   try {
     contract = require('./chatgpt-live-contract.js');
   } catch (e) {
-    // The contract file is the single source of the current-live hook list. If it
-    // is gone, this detector can still compare versions -- it just cannot speak
-    // about the ChatGPT contract, and it says so rather than guessing hooks.
     contract = null;
   }
   const hooks = contract ? contract.CURRENT_LIVE_HOOKS.map(h => h.css) : [];
 
-  let published = null;
+  let publishedBuf = null;
   let fetchError = null;
   try {
-    const res = await fetch(URL, { redirect: 'follow' });
-    if (!res.ok) fetchError = 'HTTP ' + res.status + ' from ' + URL;
-    else published = await res.text();
+    publishedBuf = await fetchBytes(URL);
   } catch (e) {
     fetchError = String(e && e.message ? e.message : e);
   }
@@ -77,6 +85,8 @@ async function main() {
     url: URL,
     tree: tv,
     treeFile: treePath,
+    treeDigest: treeDigest,
+    publishedDigest: null,
     publishedVersion: null,
     publishedMissingHooks: [],
     publishedPresentHooks: [],
@@ -84,29 +94,33 @@ async function main() {
     detail: ''
   };
 
-  if (!published) {
+  if (!publishedBuf) {
     report.verdict = 'UNKNOWN';
     report.detail = 'artifact could not be fetched: ' + fetchError
       + ' -- this says nothing about the source; a build can be perfectly correct and unreadable.';
     return finish(report, 2);
   }
 
+  const published = publishedBuf.toString('utf8');
+  const publishedDigest = sha256(publishedBuf);
+  report.publishedDigest = publishedDigest;
+
   const pv = localVersion(published);
   report.publishedVersion = pv;
   for (const h of hooks) {
-    // The hook text is the literal selector the shipped sheet binds. A published
-    // artifact that lacks it cannot be painting the reported pixels.
     if (published.includes(h)) report.publishedPresentHooks.push(h);
     else report.publishedMissingHooks.push(h);
   }
 
   const sameVersion = pv.header && tv.header && pv.header === tv.header && pv.internal === tv.internal;
   const contractComplete = report.publishedMissingHooks.length === 0;
+  const samePayload = publishedDigest === treeDigest;
 
-  if (sameVersion && contractComplete) {
+  if (samePayload) {
     report.verdict = 'CURRENT';
-    report.detail = 'the install URL serves ' + pv.header + ' with all '
-      + hooks.length + ' current-live hook(s) present.';
+    report.detail = 'the install URL serves byte-identical payload (sha256 '
+      + publishedDigest.substring(0, 16) + '…), version ' + (pv.header || '(none)')
+      + ' with all ' + hooks.length + ' current-live hook(s) present.';
     return finish(report, 0);
   }
 
@@ -115,11 +129,16 @@ async function main() {
   if (!sameVersion) {
     bits.push('install URL serves ' + (pv.header || '(none)')
       + ' while this tree is ' + (tv.header || '(none)')
+      + (pv.header !== pv.internal ? ' (published header/internal DISAGREE: ' + pv.header + '/' + pv.internal + ')' : '')
       + (tv.header !== tv.internal ? ' (tree header/internal DISAGREE: ' + tv.header + '/' + tv.internal + ')' : ''));
   }
   if (!contractComplete) {
     bits.push('the published artifact lacks ' + report.publishedMissingHooks.length + ' current-live hook(s): '
       + report.publishedMissingHooks.join(' | '));
+  }
+  if (sameVersion && contractComplete && !samePayload) {
+    bits.push('version and hooks match but the deliverable payload differs (sha256 tree '
+      + treeDigest.substring(0, 16) + '… ≠ published ' + publishedDigest.substring(0, 16) + '…)');
   }
   report.detail = bits.join('; ')
     + ' -- the browser runs the PUBLISHED build, so a source-side fix cannot be live. '

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Wintage — Windows 95 Theme for Notepad++ (Golden Default) -->
+<NotepadPlus>
+    <LexerStyles>
+        <LexerType name="xml" desc="XML" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="D4C89A" bgColor="232018" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="TAG" styleID="1" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="TAGUNKNOWN" styleID="2" fgColor="7A2020" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTE" styleID="3" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTEUNKNOWN" styleID="4" fgColor="7A2020" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="5" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="DOUBLESTRING" styleID="6" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="SINGLESTRING" styleID="7" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="OTHER" styleID="8" fgColor="9C9371" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMMENT" styleID="9" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="ENTITY" styleID="10" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+        <LexerType name="html" desc="HTML" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="D4C89A" bgColor="232018" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="TAG" styleID="1" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="TAGUNKNOWN" styleID="2" fgColor="7A2020" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTE" styleID="3" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ATTRIBUTEUNKNOWN" styleID="4" fgColor="7A2020" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="5" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="DOUBLESTRING" styleID="6" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="SINGLESTRING" styleID="7" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="OTHER" styleID="8" fgColor="9C9371" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMMENT" styleID="9" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="ENTITY" styleID="10" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+        <LexerType name="javascript" desc="JavaScript" ext="">
+            <WordsStyle name="DEFAULT" styleID="11" fgColor="D4C89A" bgColor="232018" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="INSTRUCTION WORD" styleID="5" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="TYPE WORD" styleID="16" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="4" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING" styleID="6" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="CHARACTER" styleID="7" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="OPERATOR" styleID="10" fgColor="D4C89A" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMMENT" styleID="1" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="COMMENT LINE" styleID="2" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="COMMENT DOC" styleID="3" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+        </LexerType>
+        <LexerType name="json" desc="JSON" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="D4C89A" bgColor="232018" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="NUMBER" styleID="1" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING" styleID="2" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING_UNCLOSED" styleID="3" fgColor="7A2020" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="PROPERTYNAME" styleID="4" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="ESCAPESEQUENCE" styleID="5" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="LINECOMMENT" styleID="6" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="BLOCKCOMMENT" styleID="7" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="OPERATOR" styleID="8" fgColor="D4C89A" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="URI" styleID="9" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="COMPACTIRI" styleID="10" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="KEYWORD" styleID="11" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="LDKEYWORD" styleID="12" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="ERROR" styleID="13" fgColor="D66464" bgColor="332E22" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+        <LexerType name="python" desc="Python" ext="">
+            <WordsStyle name="DEFAULT" styleID="0" fgColor="D4C89A" bgColor="232018" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+            <WordsStyle name="COMMENT LINE" styleID="1" fgColor="6E674E" bgColor="232018" fontName="" fontStyle="2" fontSize="" />
+            <WordsStyle name="NUMBER" styleID="2" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="STRING" styleID="3" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="CHARACTER" styleID="4" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="KEYWORDS" styleID="5" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="TRIPLE" styleID="6" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="TRIPLEDOUBLE" styleID="7" fgColor="008080" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="CLASSNAME" styleID="8" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="DEFNAME" styleID="9" fgColor="F0D060" bgColor="232018" fontName="" fontStyle="1" fontSize="" />
+            <WordsStyle name="OPERATOR" styleID="10" fgColor="D4C89A" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="IDENTIFIER" styleID="11" fgColor="D4C89A" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+            <WordsStyle name="DECORATOR" styleID="15" fgColor="7A7A20" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+        </LexerType>
+    </LexerStyles>
+    <GlobalStyles>
+        <WidgetStyle name="Default Style" styleID="32" fgColor="D4C89A" bgColor="232018" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+        <WidgetStyle name="Indent guideline style" styleID="37" fgColor="5A5040" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+        <WidgetStyle name="Brace highlight style" styleID="34" fgColor="F0D060" bgColor="3D372A" fontName="" fontStyle="1" fontSize="10" />
+        <WidgetStyle name="Bad brace colour" styleID="35" fgColor="7A2020" bgColor="232018" fontName="" fontStyle="0" fontSize="" />
+        <WidgetStyle name="Current line background colour" styleID="0" bgColor="332E22" />
+        <WidgetStyle name="Selected text colour" styleID="0" bgColor="3D372A" fgColor="D4C89A" />
+        <WidgetStyle name="Multi-selected text color" styleID="0" bgColor="3D372A" />
+        <WidgetStyle name="Caret colour" styleID="0" fgColor="F0D060" />
+        <WidgetStyle name="Multi-edit carets color" styleID="0" fgColor="F0D060" />
+        <WidgetStyle name="Edge colour" styleID="0" fgColor="5A5040" />
+        <WidgetStyle name="Line number margin" styleID="33" fgColor="6E674E" bgColor="332E22" fontName="" fontStyle="0" fontSize="" />
+        <WidgetStyle name="Bookmark margin" styleID="0" bgColor="332E22" />
+        <WidgetStyle name="Change History margin" styleID="0" bgColor="332E22" />
+        <WidgetStyle name="Change History modified" styleID="0" fgColor="7A7A20" bgColor="7A7A20" />
+        <WidgetStyle name="Change History revert modified" styleID="0" fgColor="4A7A20" bgColor="4A7A20" />
+        <WidgetStyle name="Change History revert origin" styleID="0" fgColor="F0D060" bgColor="F0D060" />
+        <WidgetStyle name="Change History saved" styleID="0" fgColor="4A7A20" bgColor="4A7A20" />
+        <WidgetStyle name="Fold" styleID="0" fgColor="6E674E" bgColor="332E22" />
+        <WidgetStyle name="Fold active" styleID="0" fgColor="F0D060" />
+        <WidgetStyle name="Fold margin" styleID="0" fgColor="6E674E" bgColor="332E22" />
+        <WidgetStyle name="White space symbol" styleID="0" fgColor="5A5040" />
+        <WidgetStyle name="Smart Highlighting" styleID="29" bgColor="453D30" />
+        <WidgetStyle name="Find Mark Style" styleID="31" bgColor="004C4C" />
+        <WidgetStyle name="Find status: Not found" styleID="0" fgColor="7A2020" />
+        <WidgetStyle name="Find status: Message" styleID="0" fgColor="F0D060" />
+        <WidgetStyle name="Find status: Search end reached" styleID="0" fgColor="4A7A20" />
+        <WidgetStyle name="Mark Style 1" styleID="25" bgColor="008080" />
+        <WidgetStyle name="Mark Style 2" styleID="24" bgColor="7A7A20" />
+        <WidgetStyle name="Mark Style 3" styleID="23" bgColor="F0D060" />
+        <WidgetStyle name="Mark Style 4" styleID="22" bgColor="3D372A" />
+        <WidgetStyle name="Mark Style 5" styleID="21" bgColor="4A7A20" />
+        <WidgetStyle name="Incremental highlight all" styleID="28" bgColor="453D30" />
+        <WidgetStyle name="Tags match highlighting" styleID="27" bgColor="453D30" />
+        <WidgetStyle name="Tags attribute" styleID="26" bgColor="F0D060" />
+        <WidgetStyle name="Active tab focused indicator" styleID="0" fgColor="F0D060" />
+        <WidgetStyle name="Active tab unfocused indicator" styleID="0" fgColor="F0D060" />
+        <WidgetStyle name="Active tab text" styleID="0" fgColor="D4C89A" />
+        <WidgetStyle name="Inactive tabs" styleID="0" fgColor="6E674E" bgColor="332E22" />
+        <WidgetStyle name="Tab color 1" styleID="0" bgColor="332E22" />
+        <WidgetStyle name="Tab color 2" styleID="0" bgColor="3D372A" />
+        <WidgetStyle name="Tab color 3" styleID="0" bgColor="453D30" />
+        <WidgetStyle name="Tab color 4" styleID="0" bgColor="14120C" />
+        <WidgetStyle name="Tab color 5" styleID="0" bgColor="332E22" />
+        <WidgetStyle name="Tab color dark mode 1" styleID="0" bgColor="332E22" />
+        <WidgetStyle name="Tab color dark mode 2" styleID="0" bgColor="3D372A" />
+        <WidgetStyle name="Tab color dark mode 3" styleID="0" bgColor="453D30" />
+        <WidgetStyle name="Tab color dark mode 4" styleID="0" bgColor="14120C" />
+        <WidgetStyle name="Tab color dark mode 5" styleID="0" bgColor="332E22" />
+        <WidgetStyle name="URL hovered" styleID="0" fgColor="F0D060" />
+        <WidgetStyle name="Document map" styleID="0" fgColor="F0D060" bgColor="232018" />
+        <WidgetStyle name="EOL custom color" styleID="0" fgColor="5A5040" />
+        <WidgetStyle name="Non-printing characters custom color" styleID="0" fgColor="5A5040" />
+        <WidgetStyle name="Global override" styleID="0" fgColor="D4C89A" bgColor="232018" fontName="Verdana_m1" fontStyle="0" fontSize="10" />
+    </GlobalStyles>
+</NotepadPlus>

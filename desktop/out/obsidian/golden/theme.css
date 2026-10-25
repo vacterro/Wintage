@@ -1,0 +1,57 @@
+/* Wintage Dark Golden (Win95) - generated from wintage.user.js palettes. Do not edit. */
+.theme-dark, .theme-light {
+    --background-primary: #342012;
+    --background-primary-alt: #3A2616;
+    --background-secondary: #4A341B;
+    --background-secondary-alt: #5A4324;
+    --background-modifier-border: #D3B57A;
+    --background-modifier-border-hover: #E2CA95;
+    --background-modifier-border-focus: #E2CA95;
+    --text-normal: #E2CA95;
+    --text-muted: #C5AB6E;
+    --text-faint: #95804C;
+    --interactive-normal: #5A4324;
+    --interactive-hover: #634B2B;
+    --interactive-accent: #5A4324;
+    --text-accent: #D3B57A;
+    --text-accent-hover: #E2CA95;
+    --text-selection: #634B2B;
+    --titlebar-background: #4A341B;
+    --titlebar-background-focused: #5A4324;
+    --titlebar-text-color-focused: #E2CA95;
+    --color-base-00: #342012;
+    --color-base-10: #3A2616;
+    --color-base-20: #4A341B;
+    --color-base-30: #5A4324;
+    --color-base-40: #634B2B;
+    --color-base-50: #665033;
+    --color-base-60: #95804C;
+    --color-base-70: #C5AB6E;
+    --color-base-100: #E2CA95;
+    --color-accent: #008080;
+    --color-green: #5B9630;
+    --color-yellow: #D3B57A;
+    --color-red: #963030;
+    --nav-item-background-hover: #5A4324;
+    --nav-item-background-active: #634B2B;
+    --radius-s: 0px;
+    --radius-m: 0px;
+    --radius-l: 0px;
+    --radius-xl: 0px;
+    --divider-color: #1C1208;
+    --border-color: #1C1208;
+    --button-radius: 0px;
+    --input-radius: 0px;
+    --tab-radius: 0px;
+}
+
+body {
+    -webkit-font-smoothing: none;
+}
+
+/* Brutalist borders */
+.workspace-leaf, .workspace-tab-header, button, input {
+    border: 1px solid #1C1208;
+    border-top-color: #D3B57A;
+    border-left-color: #D3B57A;
+}
