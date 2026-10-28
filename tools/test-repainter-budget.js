@@ -117,6 +117,9 @@ function createRepainterContext(overrides = {}, customBody = repainterBody) {
   if (!doc.removeEventListener) doc.removeEventListener = () => {};
 
   const ctx = {
+    // CORE-003: the repainter body fences on the script-scope binding, so the
+    // sandbox must declare it, exactly as the shim prelude does.
+    routeQuarantined: false,
     console,
     Date,
     Math,

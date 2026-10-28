@@ -146,6 +146,10 @@ function injectLate() {}
 globalThis.injectLate = injectLate;
 const CSS_ONLY_MODE = false;
 const IS_TOP = true;
+// CORE-003: requestForceSweep fences on the quarantine box, so the driver
+// needs the window it reads. Open latch on purpose: this suite is about the
+// force-lap budget, not the excluded-route boundary.
+globalThis.routeQuarantined = false;
 
 // === production scheduler body ===
 __BODY__

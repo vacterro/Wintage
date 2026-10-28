@@ -163,12 +163,18 @@ function obsFixture(tag, iniText) {
   if (iniText !== null) fs.writeFileSync(path.join(dir, 'user.ini'), iniText, 'utf8');
   return dir;
 }
+// the fixture rows above spell section/key per case, mirrored from the loop body
+function spellOf(label, mode) {
+  if (label.indexOf('lowercase') >= 0) return ['appearance', 'theme'];
+  if (label.indexOf('mixed') >= 0) return ['AppEarance', 'ThEmE'];
+  return ['Appearance', 'Theme'];
+}
 const OBS_THEME_SRC = (() => {
   const p = path.join(__dirname, '..', 'desktop', 'out', 'obs', 'goldendefault', 'Wintage.ovt');
   return fs.existsSync(p) ? p : null;
 })();
 const obsApply = (dir) => run(OBS, ['--config', dir, '--theme', OBS_THEME_SRC, '--palette', 'goldendefault']);
-const obsRevert = (dir) => run(OBS, ['--config', dir, '--revert']);
+const obsRevert = (dir, extra) => run(OBS, ['--config', dir, '--revert'].concat(extra || []));
 
 if (!OBS_THEME_SRC) {
   console.log('SKIP: desktop/out/obs/goldendefault/Wintage.ovt is absent - run node tools/build-desktop.js');
@@ -200,6 +206,33 @@ if (!OBS_THEME_SRC) {
     check('obs corrupt recovery (' + label + '): user.ini untouched', after, live);
   }
 
+  // CORE-004: --revert --dry-run must run the SAME validation as the real
+  // revert before it reports anything. The defect was a dry-run that exited
+  // zero ahead of the recovery checks, so a preflight could call an
+  // impossible revert safe and the real revert then failed on the machine.
+  {
+    const live = '[Appearance]\r\nTheme=CurrentTheme\r\nOther=keep\r\n';
+    const dir = obsFixture('corruptdry', live);
+    fs.writeFileSync(path.join(dir, 'user.ini.wintage.bak'), '{"existed": tru', 'utf8');
+    fs.writeFileSync(path.join(dir, 'themes', 'Wintage.ovt.wintage-created'), '', 'utf8');
+    fs.writeFileSync(path.join(dir, '.wintage-obs-palette'), 'goldendefault\r\n', 'utf8');
+    const rd = obsRevert(dir, ['--dry-run']);
+    check('obs dry-run corrupt recovery: exits NONZERO', rd.code !== 0, true);
+    check('obs dry-run corrupt recovery: the refusal is the real one', /recovery file is corrupt/.test(rd.out), true);
+    check('obs dry-run corrupt recovery: user.ini untouched', fs.readFileSync(path.join(dir, 'user.ini'), 'utf8'), live);
+  }
+  {
+    // A HEALTHY dry-run still proves it does nothing: exit 0 and not one byte
+    // of the applied state or the recovery is disturbed.
+    const dir = obsFixture('healthydry', '[Appearance]\r\nTheme=Yami\r\nOther=keep\r\n');
+    obsApply(dir);
+    const before = fs.readFileSync(path.join(dir, 'user.ini'), 'utf8');
+    const rd = obsRevert(dir, ['--dry-run']);
+    check('obs healthy dry-run: exits 0', rd.code, 0);
+    check('obs healthy dry-run: user.ini unchanged', fs.readFileSync(path.join(dir, 'user.ini'), 'utf8'), before);
+    check('obs healthy dry-run: recovery evidence still present', fs.existsSync(path.join(dir, 'user.ini.wintage.bak')), true);
+  }
+
   // OBS's own lowercase spelling must round-trip.
   for (const [label, live, wantValue] of [
     ['lowercase section and key', '[appearance]\r\ntheme=System\r\nOther=keep\r\n', 'System'],
@@ -210,7 +243,10 @@ if (!OBS_THEME_SRC) {
     const a = obsApply(dir);
     check('obs ' + label + ': apply exits 0', a.code, 0);
     const snap = JSON.parse(fs.readFileSync(path.join(dir, 'user.ini.wintage.bak'), 'utf8'));
-    check('obs ' + label + ': snapshot recorded the real value', snap, { existed: true, value: wantValue });
+
+    check('obs ' + label + ': snapshot carries the occurrences', snap.occurrences.length, 1);
+    check('obs ' + label + ': occurrence keeps the file spelling', [snap.occurrences[0].section, snap.occurrences[0].key], spellOf(label, 'k'));
+    check('obs ' + label + ': snapshot recorded the real value', { existed: snap.existed, value: snap.value }, { existed: true, value: wantValue });
     const rv = obsRevert(dir);
     check('obs ' + label + ': revert exits 0', rv.code, 0);
     const after = fs.readFileSync(path.join(dir, 'user.ini'), 'utf8');
@@ -224,7 +260,7 @@ if (!OBS_THEME_SRC) {
     const dir = obsFixture('absent', '[Appearance]\r\nOther=keep\r\n');
     obsApply(dir);
     const snap = JSON.parse(fs.readFileSync(path.join(dir, 'user.ini.wintage.bak'), 'utf8'));
-    check('obs absent key: snapshot says absent', snap, { existed: false, value: null });
+    check('obs absent key: snapshot says absent with no occurrences', { existed: snap.existed, value: snap.value, occurrences: snap.occurrences.length }, { existed: false, value: null, occurrences: 0 });
     obsRevert(dir);
     const after = fs.readFileSync(path.join(dir, 'user.ini'), 'utf8');
     check('obs absent key: no Theme key invented', /Theme\s*=/i.test(after), false);

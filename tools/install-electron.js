@@ -457,8 +457,15 @@ if (has('revert')) {
         restoreFuseBackupForRevert(exeNow);
         fsRetry(() => fs.copyFileSync(bak, asar));
         fs.unlinkSync(bak);
-        for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
-          try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
+        const cleanupFailures = removeOwnedSidecars();
+        // W2-002: an EPERM on any sidecar unlink used to be swallowed here and the
+        // command still exited 0 with the orphan behind. Prove the cleanup BEFORE
+        // claiming success; if it did not finish, say so and keep the vault.
+        if (cleanupFailures.length) {
+          keepVault();
+          die('in-place revert cleanup incomplete - these required Wintage sidecars remain: ' +
+            cleanupFailures.map(f => f.file + ' (' + f.error + ')').join(', ') +
+            '. Recovery evidence preserved' + (vaultRoot && fs.existsSync(vaultRoot) ? '; recovery vault: ' + vaultRoot : '') + '.');
         }
         if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
         if (asarIsPatched() === true) throw new Error('verification failed: archive still patched after revert');
@@ -487,13 +494,26 @@ if (has('revert')) {
       const pre = captureRevertPreState(asar, bak, exeNow);
       try {
         restoreFuseBackupForRevert(exeNow);
-        for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-status.txt', 'wintage-palette.txt']) {
-          try { fs.unlinkSync(path.join(resources, f)); } catch (e) { }
+        const cleanupFailures = removeOwnedSidecars();
+        if (fs.existsSync(bak)) {
+          try { fs.unlinkSync(bak); }
+          catch (e) { cleanupFailures.push({ phase: 'backup-cleanup', file: path.basename(bak), path: bak, error: e.message }); }
         }
-        if (fs.existsSync(bak)) { try { fs.unlinkSync(bak); } catch (e) { } }
         if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
+        // W2-002: a sidecar that survived cleanup must fail the revert honestly.
+        if (cleanupFailures.length) {
+          keepVault();
+          die('stale-sidecar revert cleanup incomplete - these required Wintage sidecars remain: ' +
+            cleanupFailures.map(f => f.file + ' (' + f.error + ')').join(', ') +
+            '. Recovery evidence preserved' + (vaultRoot && fs.existsSync(vaultRoot) ? '; recovery vault: ' + vaultRoot : '') + '.');
+        }
       } catch (e) {
-        restoreRevertPreState(pre, asar, bak, exeNow);
+        const rollbackFailures = restoreRevertPreState(pre, asar, bak, exeNow);
+        if (rollbackFailures.length) {
+          keepVault();
+          die('revert failed (' + e.message + ') - rollback INCOMPLETE: ' +
+            rollbackFailures.map(f => f.phase + ': ' + f.error).join(' | ') + '.');
+        }
         die('revert failed (' + e.message + ') - restored the exact pre-operation state.');
       }
       console.log('install-electron: current app.asar is stock — removed stale Wintage sidecars, nothing restored');
@@ -606,8 +626,16 @@ if (has('revert')) {
         fs.rmSync(appDir, { recursive: true, force: true });
         if (process.env.WINTAGE_TEST_FAIL_AFTER_REVERT) throw new Error('simulated post-revert failure (WINTAGE_TEST_FAIL_AFTER_REVERT)');
       } catch (e) {
-        restoreAppDir(appPre);
-        restoreRevertPreState(pre, asar, asar + '.bak', exeNow);
+        const rollbackFailures = [];
+        const appDirFailures = restoreAppDir(appPre);
+        if (appDirFailures.length) rollbackFailures.push(...appDirFailures);
+        const preFailures = restoreRevertPreState(pre, asar, asar + '.bak', exeNow);
+        if (preFailures.length) rollbackFailures.push(...preFailures);
+        if (rollbackFailures.length) {
+          keepVault();
+          die('revert failed (' + e.message + ') - rollback INCOMPLETE: ' +
+            rollbackFailures.map(f => (f.phase || 'appdir-restore') + ': ' + f.error).join(' | ') + '.');
+        }
         die('revert failed (' + e.message + ') - restored the exact pre-operation state.');
       }
       console.log('install-electron: removed stale Wintage relocation; fresh stock ' + path.basename(asar) + ' is now live');
@@ -683,14 +711,50 @@ function snapshotSidecars() {
   return snap;
 }
 
+// W2-002 regression seams (test-only). Name a sidecar whose unlink or rollback
+// write must throw EPERM, forcing every cleanup/rollback caller to PROVE the
+// result instead of swallowing it. Comma-separated so the test can inject into
+// each individual sidecar in turn. Never set in production.
+function winFailUnlink(file) {
+  const t = (process.env.WINTAGE_TEST_FAIL_UNLINK || '').split(',').map(s => s.trim());
+  if (t.includes(file)) { const e = new Error('simulated EPERM unlink ' + file); e.code = 'EPERM'; throw e; }
+}
+function winFailWrite(file) {
+  const t = (process.env.WINTAGE_TEST_FAIL_WRITE || '').split(',').map(s => s.trim());
+  if (t.includes(file)) { const e = new Error('simulated EPERM write ' + file); e.code = 'EPERM'; throw e; }
+}
+// W2-002: remove the four Wintage-owned sidecars and REPORT any that could not
+// be removed. An already-absent file is NOT a failure; a file that SURVIVES the
+// unlink is. Revert uses this so a partial cleanup can never be printed as a
+// success (exit 0 with an orphan left behind).
+function removeOwnedSidecars() {
+  const failures = [];
+  for (const f of ['wintage-shim.cjs', 'wintage.css', 'wintage-palette.txt', 'wintage-status.txt']) {
+    const p = path.join(resources, f);
+    if (!fs.existsSync(p)) continue;
+    try { winFailUnlink(f); fs.unlinkSync(p); } catch (e) { }
+    if (fs.existsSync(p)) failures.push({ phase: 'sidecar-cleanup', file: f, path: p, error: 'still present after removal attempt' });
+  }
+  return failures;
+}
+// W2-002: return structured per-file failures instead of swallowing them, so a
+// caller can distinguish "already gone" (not a failure) from a rollback that did
+// not reach the captured state (a failure) BEFORE it claims an exact restore.
+// A rollback WRITE failure is reported per file; a removal whose target survived
+// is reported by a presence check rather than by trusting the unlink.
 function restoreSidecars(snap) {
+  const failures = [];
   for (const f of SIDECAR_FILES) {
     const p = path.join(resources, f);
-    try {
-      if (snap[f].existed) fs.writeFileSync(p, snap[f].buf);
-      else if (fs.existsSync(p)) fs.unlinkSync(p);
-    } catch (e) { }
+    if (snap[f].existed) {
+      try { winFailWrite(f); fs.writeFileSync(p, snap[f].buf); }
+      catch (e) { failures.push({ phase: 'sidecar-restore', file: f, path: p, error: e.message }); }
+    } else if (fs.existsSync(p)) {
+      try { winFailUnlink(f); fs.unlinkSync(p); } catch (e) { }
+      if (fs.existsSync(p)) failures.push({ phase: 'sidecar-remove', file: f, path: p, error: 'still present after removal attempt' });
+    }
   }
+  return failures;
 }
 
 // T-191 P0#7: fuse health for --status-json. One probe, machine-readable, so the
@@ -735,7 +799,8 @@ function restoreRevertPreState(pre, asarPath, bakPath, exePath) {
     try { if (fs.existsSync(bakPath)) fs.unlinkSync(bakPath); }
     catch (e) { failures.push({ phase: 'bak-unlink', path: bakPath, error: e.message }); }
   }
-  restoreSidecars(pre.sidecars);
+  // W2-002 REPAIR 6: an incomplete sidecar rollback is itself a rollback failure.
+  failures.push(...restoreSidecars(pre.sidecars));
   if (exePath && pre.exe !== null) {
     try { vaultRestore(pre.exe, exePath); }
     catch (e) { failures.push({ phase: 'exe-restore', path: exePath, error: e.message }); }
@@ -893,11 +958,16 @@ function installInPlace() {
     let asarRestoreErr = null;
     try { fsRetry(() => fs.copyFileSync(asarBak, asar)); }
     catch (e2) { asarRestoreErr = e2.message; }
-    restoreSidecars(preSidecars);
-    restoreFuseIfDefused(resolveExe());
-    if (asarRestoreErr) {
-      die('in-place apply failed (' + e.message + ') - rollback INCOMPLETE: could not restore the archive from ' +
-        asarBak + ' (' + asarRestoreErr + '). The pristine archive is preserved there.');
+    const sidecarRollbackFailures = restoreSidecars(preSidecars);
+    const fuseRollbackFailure = restoreFuseIfDefused(resolveExe());
+    if (asarRestoreErr || sidecarRollbackFailures.length || fuseRollbackFailure) {
+      die('in-place apply failed (' + e.message + ') - rollback INCOMPLETE: ' +
+        [
+          asarRestoreErr ? 'could not restore the archive from ' + asarBak + ' (' + asarRestoreErr + ')' : null,
+          ...sidecarRollbackFailures.map(f => f.phase + ' ' + f.file + ': ' + f.error),
+          fuseRollbackFailure ? fuseRollbackFailure.phase + ': ' + fuseRollbackFailure.error : null
+        ].filter(Boolean).join('; ') +
+        '. The pristine archive is preserved at ' + asarBak + '.');
     }
     if (e.code === 'EBUSY' || e.code === 'EPERM') {
       die('the application is running - close it completely (check the tray) and run this again.\n  Nothing was changed.');
@@ -1093,7 +1163,12 @@ function repaintInPlace() {
     const pf = path.join(resources, 'wintage-palette.txt');
     if (!fs.existsSync(pf) || fs.readFileSync(pf, 'utf8').trim() !== palette) throw new Error('verification failed: palette marker not written');
   } catch (e) {
-    restoreSidecars(preSidecars);
+    const rollbackFailures = restoreSidecars(preSidecars);
+    // W2-002: never claim the exact pre-state was restored when a sidecar was not.
+    if (rollbackFailures.length) {
+      die('in-place repaint failed (' + e.message + ') - rollback INCOMPLETE: ' +
+        rollbackFailures.map(f => f.phase + ' ' + f.file + ': ' + f.error).join(' | ') + '.');
+    }
     die('in-place repaint failed (' + e.message + ') - restored the exact pre-operation state.');
   }
   console.log('install-electron: repainted ' + asar + ' in-place to "' + palette + '"');
@@ -1123,7 +1198,13 @@ function repaintRelocation() {
     const check = JSON.parse(fs.readFileSync(pkgPath(), 'utf8').replace(/^\uFEFF/, ''));
     if (check.wintagePalette !== palette) throw new Error('verification failed: palette not recorded');
   } catch (e) {
-    restoreAppDir(preApp);
+    const rollbackFailures = restoreAppDir(preApp);
+    // W2-002 REPAIR 7: include restoreAppDir failures; never claim an exact
+    // restore when the relocation repaint could not put the owned files back.
+    if (rollbackFailures.length) {
+      die('relocation repaint failed (' + e.message + ') - rollback INCOMPLETE: ' +
+        rollbackFailures.map(f => (f.phase || 'appdir-restore') + ' ' + (f.file || '') + ': ' + f.error).join(' | ') + '.');
+    }
     die('relocation repaint failed (' + e.message + ') - restored the exact pre-operation state.');
   }
   console.log('install-electron: repainted ' + (from === palette ? '' : '"' + from + '" -> ') + '"' + palette + '" in ' + appDir);

@@ -183,6 +183,7 @@ function runStream(cssOnly, initial, appended) {
         return node;
       }
     },
+    routeQuarantined: false,
     window: {
       getComputedStyle() { st.getComputedStyleCalls++; return { getPropertyValue: () => '', animationName: '', animationDuration: '' }; },
       addEventListener() { }
@@ -314,7 +315,11 @@ check('CONTROL: suppression is never counted on the full path',
 
 // The CSSOM surgery counter is proved live outside the stream, because the
 // stream must never reach it in either mode without a stylesheet to walk.
-const vs = vm.createContext({ HOVER_PAINT: /^(background|color)$/ }) || {};
+// CORE-003: stripHoverRule records what it removed in a module-scope WeakMap so
+// the excluded-route quarantine can put it back, so the slice needs that map and
+// the suppressed-throw counter it feeds. Empty map = first strip, which is the
+// shape this control is about.
+const vs = vm.createContext({ HOVER_PAINT: /^(background|color)$/, hoverStrippedOriginals: new WeakMap(), hoverStrippedRules: [], hasWeakRef: false, HOVER_REGISTRY_CAP: 4096, compactHoverRegistry() { }, noteSuppressed() { } }) || {};
 vm.runInContext(stripHoverRuleBody + '\nthis.__strip = stripHoverRule;', vs);
 const rule = { style: { _n: ['color', 'display', 'background'], get length() { return this._n.length; }, 0: 'color', 1: 'display', 2: 'background', removed: [], removeProperty(p) { this.removed.push(p); } } };
 vs.__strip(rule);

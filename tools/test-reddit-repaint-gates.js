@@ -144,6 +144,7 @@ function runStartSweeping(opts) {
       hidden: false,
       addEventListener(type, fn, o) { if (type === 'load' && o && o.once) st.loadListeners++; }
     },
+    routeQuarantined: false,
     window: { addEventListener(type, fn, o) { if (type === 'load' && o && o.once) st.loadListeners++; } }
   };
   vm.createContext(sandbox);
@@ -192,6 +193,10 @@ function runPierce(cssOnly) {
   const root = { __kind: 'shadow-root' };
   const sandbox = {
     CSS_ONLY_MODE: cssOnly,
+    // CORE-003: pierceShadow reads the quarantine fence off window, so the
+    // sandbox needs the box it reads. Open latch on purpose: the gate under
+    // test is CSS-only churn, not the excluded-route boundary.
+    routeQuarantined: false,
     SHADOW_SKIP_TAGS: new Set(['STYLE', 'SCRIPT']),
     SHADOW_OBS_OPTS: { childList: true },
     piercedRoots: new Set(),
@@ -250,6 +255,9 @@ function runShadowHook(rootCount) {
     return root;
   }
   const sandbox = {
+    // CORE-003: the shadow hook's microtask fences on the quarantine box, so
+    // the sandbox must carry the window it reads. Open latch on purpose.
+    routeQuarantined: false,
     DIAG: DIAG,
     W95_VERSION: 'test',
     ACTIVE_SHADOW_CSS: '/* css */',
@@ -299,7 +307,7 @@ check('GATE 5: a second generation restyles instead of double-injecting', (() =>
     insertBefore(n) { kids.push(n); root.firstChild = kids[0]; }
   };
   const sandbox = {
-    DIAG, W95_VERSION: 'test', ACTIVE_SHADOW_CSS: '/* css */',
+    DIAG, W95_VERSION: 'test', ACTIVE_SHADOW_CSS: '/* css */', routeQuarantined: false,
     queueMicrotask(fn) { fn(); },
     document: { createElement() { const n = { sel: null, attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); if (k === 'data-w95') this.sel = 'style[data-w95="shadow"]'; }, getAttribute(k) { return this.attrs[k]; }, textContent: '' }; return n; } },
     Element: { prototype: { attachShadow() { return root; } } }

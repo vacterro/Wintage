@@ -260,6 +260,10 @@ for (const seam of ['WINTAGE_TEST_FAIL_AFTER_SIDECARS', 'WINTAGE_TEST_FAIL_AFTER
 
 // ══ 4. A failed relocation Revert still keeps exactly one archive copy ══════
 {
+  // os.tmpdir() is shared with every other Wintage run on this machine, so an
+  // aborted or concurrent suite can leave a wintage-vault-* directory behind.
+  // These assertions are about what THIS block created, hence the baseline.
+  const vaultsBefore = fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('wintage-vault-')).length;
   const R = mk('revert-exact', 0);
   buildAsar(path.join(R, 'app.asar'), PKG('1.0.0'), 3 * MiB);
   writeBig(path.join(R, 'app.asar.unpacked', 'native', 'addon.node'), 1 * MiB, 0x45);
@@ -281,7 +285,7 @@ for (const seam of ['WINTAGE_TEST_FAIL_AFTER_SIDECARS', 'WINTAGE_TEST_FAIL_AFTER
   check('revert-exact: the rollback claim is honest',
     /rolled back to the exact pre-operation state/.test(r.out), true);
   check('revert-exact: a SUCCESSFUL rollback still drops its vault',
-    fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('wintage-vault-')).length, 0);
+    fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('wintage-vault-')).length - vaultsBefore, 0);
 }
 
 // ══ 5. The vault is transient on success, retained + named on failure ═══════
@@ -312,7 +316,7 @@ for (const seam of ['WINTAGE_TEST_FAIL_AFTER_SIDECARS', 'WINTAGE_TEST_FAIL_AFTER
   // are the in-tree `.wintage-*` directories. A vault that appeared for this path
   // would mean the fix had introduced a copy the old code did not make.
   const keptStock = fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('wintage-vault-'));
-  check('vault-kept: a rename-only apply creates no vault at all', keptStock.length, 0);
+  check('vault-kept: a rename-only apply creates no vault at all', keptStock.length - vaultsBefore, 0);
   const inTree = fs.existsSync(R2) ? fs.readdirSync(R2) : [];
   const candidates = [path.join(R2, 'app.asar')]
     .concat(inTree.filter(n => n.startsWith('.wintage-')).map(n => path.join(R2, n, 'app.asar')));

@@ -360,6 +360,174 @@ function Exit-Suite([int]$code) {
     }
 }
 
+# ---------------------------------------------------------------------------
+# T-993: what the published channel actually carries, printed next to what this
+# suite just proved green.
+#
+# WHY THIS EXISTS. A green local run was being read as "the build users poll is
+# safe". Nothing in the suite could contradict that, because the only thing that
+# could -- the state of the published channel -- lived outside the repository
+# and could not be examined without a fetch, and the fetch was forbidden. So the
+# contradiction was simply absent from the report.
+#
+# THE ENGINEERING DEFAULT. The published channel is not unknowable offline:
+# every fetch this repository ever performed left a remote-tracking ref behind,
+# and that ref IS the channel as last observed. The gate resolves the published
+# branch from the userscript's own @updateURL -- never from the push
+# destination, which is a different question that release target identity owns
+# -- to the freshest matching LOCAL remote-tracking ref, and compares that with
+# HEAD. It performs no network call of any kind, so the publication freeze is
+# respected exactly: read-only, offline, no fetch, no remote probe. What it
+# reports is the channel as last seen, and it says so: an unrefreshed
+# observation is a LIMIT on the report, never a claim that the channel is
+# current.
+#
+# WHAT IT REFUSES TO DO. It does not fail when the channel is behind. The gap is
+# a fact the suite must STATE, not a defect it can fix, and a gate that turned
+# red for it would be deleted the first time somebody wanted a green run. It
+# fails only when it cannot name its own subject -- no @updateURL, no parseable
+# branch, no local observation -- because a check that cannot say what it
+# compared is the "freshness check skipped" that passes everything.
+# ---------------------------------------------------------------------------
+Write-Host "
+--- Published channel vs HEAD (T-993) ---" -ForegroundColor Cyan
+
+# The channel is the one the userscript's @updateURL names. Two raw shapes are
+# accepted: gitlab's <repo>/-/raw/<branch>/<file> and the classic
+# <repo>/raw/<branch>/<file>. Anything else is not a polled artifact.
+function Get-PolledChannel([string]$repoRoot) {
+    $src = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'wintage.user.js'))
+    $m = [regex]::Match($src, '(?m)^//\s*@updateURL\s+(\S+)')
+    if (-not $m.Success) { return $null }
+    $url = $m.Groups[1].Value
+    $repo = $null; $branch = $null; $file = $null
+    $gl = [regex]::Match($url, '^https?://[^/]+/(.+?)/-/raw/([^/]+)/(.+)$')
+    if ($gl.Success) {
+        $repo = $gl.Groups[1].Value; $branch = $gl.Groups[2].Value; $file = $gl.Groups[3].Value
+    } else {
+        $cr = [regex]::Match($url, '^https?://[^/]+/(.+?)/raw/([^/]+)/(.+)$')
+        if ($cr.Success) {
+            $repo = $cr.Groups[1].Value; $branch = $cr.Groups[2].Value; $file = $cr.Groups[3].Value
+        }
+    }
+    if (-not $branch -or -not $file) { return $null }
+    return @{ Url = $url; Repo = $repo; Branch = $branch; File = $file }
+}
+
+# Every local remote-tracking ref for the published branch whose remote URL
+# names the published repository. Two remotes of the SAME repository were
+# fetched on different days, and the older observation would understate how far
+# the channel has moved, so the freshest commit wins -- the freshest OBSERVATION
+# available locally, which is the honest limit of this gate.
+function Get-PublishedObservation([string]$repoRoot, [string]$repo, [string]$branch) {
+    $remoteUrls = @{}
+    foreach ($r in @(& git -C $repoRoot remote 2>$null)) {
+        if (-not $r) { continue }
+        $remoteUrls[$r] = ((& git -C $repoRoot remote get-url $r 2>$null) | Out-String).Trim()
+    }
+    $best = $null
+    $refLines = @(& git -C $repoRoot for-each-ref --format='%(refname:short)|%(objectname:short)|%(committerdate:unix)' ("refs/remotes/*/" + $branch) 2>$null)
+    foreach ($line in $refLines) {
+        if (-not $line) { continue }
+        $parts = $line -split '\|'
+        if ($parts.Count -lt 3) { continue }
+        $remote = ($parts[0] -split '/')[0]
+        if (-not $remoteUrls.ContainsKey($remote)) { continue }
+        if ($remoteUrls[$remote] -notlike ('*' + $repo + '*')) { continue }
+        $candWhen = 0L
+        if ($parts[2] -match '^\d+$') { $candWhen = [int64]$parts[2] }
+        if ($null -eq $best -or $candWhen -gt $best.When) {
+            $best = @{ Ref = $parts[0]; Tip = $parts[1]; When = $candWhen }
+        }
+    }
+    return $best
+}
+
+function Get-GitCount([string]$repoRoot, [array]$gitArgs) {
+    # -1 means "could not be determined", which is a different and louder thing
+    # than zero. A comparison that cannot run must never read as "no gap",
+    # because that is the false green this ticket exists to prevent.
+    $txt = (((& git -C $repoRoot @gitArgs 2>$null) | Out-String)).Trim()
+    if ($txt -match '^\d+$') { return [int]$txt }
+    return -1
+}
+
+$prevEapChannel = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$t993Channel = $null
+$t993Obs = $null
+$t993Behind = -1
+$t993Ahead = -1
+$t993Unpublished = @()
+$t993PolledDiffers = $false
+$t993WorktreeDelta = @()
+$t993Head = ''
+$t993Error = ''
+try {
+    $t993Channel = Get-PolledChannel $root
+    if ($t993Channel) {
+        $t993Obs = Get-PublishedObservation $root $t993Channel.Repo $t993Channel.Branch
+        if ($t993Obs) {
+            $t993Behind = Get-GitCount $root @('rev-list', '--count', ($t993Obs.Ref + '..HEAD'))
+            $t993Ahead = Get-GitCount $root @('rev-list', '--count', ('HEAD..' + $t993Obs.Ref))
+            $t993Unpublished = @(& git -C $root log --format='%h %s' ($t993Obs.Ref + '..HEAD') 2>$null)
+            $t993PolledName = ((& git -C $root diff --name-only ($t993Obs.Ref) 'HEAD' '--' $t993Channel.File 2>$null) | Out-String).Trim()
+            $t993PolledDiffers = [bool]$t993PolledName
+            $t993WorktreeDelta = @(& git -C $root diff --name-only 'HEAD' '--' $t993Channel.File 2>$null)
+        }
+    }
+    $t993Head = ((& git -C $root rev-parse --short HEAD 2>$null) | Out-String).Trim()
+} catch {
+    # A gate that cannot run is a FAILED check, never a silent pass and never a
+    # reason for the suite to die before it prints a verdict. The cause is
+    # NAMED, because an unreadable userscript and a missing @updateURL are
+    # different failures and reporting the wrong one sends the reader to the
+    # wrong place.
+    $t993Error = $_.Exception.Message
+    $t993Channel = $null
+    $t993Obs = $null
+} finally {
+    $ErrorActionPreference = $prevEapChannel
+}
+
+if ($t993Error) {
+    Assert-True $false "published channel: the gate could not read its subject ($t993Error)"
+} else {
+    $t993ChannelDesc = if ($t993Channel) { $t993Channel.Url } else { '(no parseable @updateURL)' }
+    Assert-True ($null -ne $t993Channel) "published channel: the userscript's @updateURL names a polled repository and branch ($t993ChannelDesc)"
+    $t993SubjectDesc = if ($t993Channel) { ($t993Channel.Branch + ' on ' + $t993Channel.Repo) } else { '(unknown channel)' }
+    Assert-True ($null -ne $t993Obs) "published channel: a LOCAL observation of $t993SubjectDesc exists -- a gate with no observation of its subject can only report 'skipped', which is not a report"
+    Assert-True ($t993Behind -ge 0 -and $t993Ahead -ge 0) "published channel: the gap against HEAD could be computed (behind=$t993Behind ahead=$t993Ahead)"
+}
+
+if ($t993Channel -and $t993Obs -and $t993Behind -ge 0) {
+    # Falsifiability: the arithmetic must MOVE. The identical comparison against
+    # a ref that IS HEAD must read zero, so a nonzero gap below is the channel
+    # really being behind -- never a broken comparison producing a number.
+    $t993SelfGap = Get-GitCount $root @('rev-list', '--count', 'HEAD..HEAD')
+    Assert-True ($t993SelfGap -eq 0) "published-gap control: comparing HEAD with itself reads 0, so the gap arithmetic is sound (self=$t993SelfGap)"
+    Assert-True ($t993Unpublished.Count -eq $t993Behind) "published-gap report: the listed commits match the computed count ($($t993Unpublished.Count) listed, $t993Behind computed)"
+
+    $t993ArtifactVerdict = 'byte-identical between the published channel and HEAD: the bytes clients fetch match this build'
+    if ($t993PolledDiffers) {
+        $t993ArtifactVerdict = 'DIFFERS between the published channel and HEAD: the bytes clients fetch are not the bytes this suite proved'
+    }
+
+    Write-Host "  published channel : $t993ChannelDesc"
+    Write-Host "  branch            : $($t993Channel.Branch) on $($t993Channel.Repo)"
+    Write-Host "  observed main     : $($t993Obs.Ref) @ $($t993Obs.Tip) (last local observation; NO network call was made)"
+    Write-Host "  HEAD              : $t993Head"
+    Write-Host "  gap               : $t993Behind commit(s) in HEAD are ABSENT from the published channel; $t993Ahead commit(s) on the channel are absent from HEAD"
+    if ($t993Unpublished.Count -gt 0) {
+        Write-Host "  commits the published channel does not carry:"
+        foreach ($t993Line in $t993Unpublished) { Write-Host "    $t993Line" }
+    }
+    Write-Host "  polled artifact   : $($t993Channel.File) -- $t993ArtifactVerdict"
+    if ($t993WorktreeDelta.Count -gt 0) {
+        Write-Host "  UNCOMMITTED       : $($t993WorktreeDelta.Count) local change(s) to the polled artifact exist only in the worktree, so neither the channel nor HEAD can see them" -ForegroundColor Yellow
+    }
+    Write-Host "  conclusion        : a green local run is NOT evidence that the published build is safe -- this suite proved the worktree, and $t993Behind commit(s) have not reached the channel" -ForegroundColor Yellow
+}
 Write-Host "
 --- Testing Generated Build Freshness (T-344) ---" -ForegroundColor Cyan
 # The whole node gate layer (the $toolSuites loop, ~40 suites including
@@ -1106,6 +1274,10 @@ Write-Host "
 # suite must be reachable from here or a release can ship a broken transaction
 # path while the theme gates stay green.
 $toolSuites = @(
+    @{ Name = 'test-src088-userscript.js'; Cmd = 'node "{0}\tools\test-src088-userscript.js"' },
+    @{ Name = 'test-src088-obs-ini.js'; Cmd = 'node "{0}\tools\test-src088-obs-ini.js"' },
+    @{ Name = 'test-src088-win-theme-electron.js'; Cmd = 'node "{0}\tools\test-src088-win-theme-electron.js"' },
+    @{ Name = 'test-source-alignment-safety.js'; Cmd = 'node "{0}\tools\test-source-alignment-safety.js"' },
     # T-394/T-395 (SRC-063 CORE-001/CORE-002): the red controls for the
     # release-gate derivation itself. Every case is a source STRING, so this
     # gate can be proven to bite without ever editing release.ps1.

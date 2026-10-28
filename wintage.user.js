@@ -31,7 +31,14 @@
 (function () {
   'use strict';
 
-  // ─── EARLY RETURN GUARD ──────────────────────────────────────────────────────
+  // CORE-003 quarantine fence. A script-scope binding, NOT a window property:
+  // a page that calls Object.freeze(window) -- or defines the property as a
+  // non-writable accessor -- makes the window assignment throw under this
+  // file's 'use strict', and an assignment that cannot fail silently must not
+  // be the thing the whole quarantine depends on. Declared here, before every
+  // reader below, so no reader can hit it uninitialized.
+  let routeQuarantined = false;
+
   const EXCLUDE = [
     // Auth & Payments (don't break secure forms)
     /oauth/i, /captcha/i, /accounts\.google/i, /login\.microsoft/i, /paypal/i, /stripe/i, /bank/i,
@@ -47,6 +54,7 @@
   function isExcludedUrl(url) {
     return EXCLUDE.some(r => r.test(url || location.href));
   }
+
 
   // CORE-003: SPA safety guard. Once this script is active on an allowed route,
   // a same-document navigation into an excluded URL (/oauth, /captcha,
@@ -107,6 +115,14 @@
         // disconnects are declared far below, so a same-tick route change during
         // script evaluation could reach it in the temporal dead zone. Losing the
         // suspension is survivable; throwing out of a history hook is not.
+        // CORE-003: stopping the machinery is not a safety boundary. The
+        // styles already injected and the inline overrides already written into
+        // THIS document keep the excluded route themed for the rest of its
+        // life when the reload request below is refused, so they are undone
+        // before the request is made rather than left "CSS-only" in place.
+        try { quarantineThemeStyles(); } catch (e) { }
+        // Suspension releases the hover recovery registry. Restore its entries
+        // first, while the exact site declarations are still available.
         try { suspendRepainter('excluded-route'); } catch (e) { }
         try {
           // The latch records WHICH url a reload was already requested for, not
@@ -126,9 +142,9 @@
       } else {
         // Back on an allowed route in a document that survived the request.
         // Clear the latch so a later excluded route is guarded again; the
-        // quarantine deliberately STAYS, because thousands of inline !important
-        // writes are already on this document and un-suspending mid-life is a
-        // bigger risk than leaving it CSS-only until the next load.
+        // quarantine deliberately STAYS, because reinjecting mid-life would
+        // re-paint a document whose inline overrides were just removed by hand,
+        // and a single reload restores the whole theme coherently.
         try {
           if (window.__wintageExcludedReload) window.__wintageExcludedReload = null;
         } catch (e) { }
@@ -563,10 +579,21 @@
   // ─── IMMEDIATE BACKGROUND ────────────────────────────────────────────────────
   // Must stay the first thing that touches the document so nothing white ever
   // paints, and it now paints the ACTIVE theme rather than a hardcoded golden.
+  let rootInlineOriginals = null;
   function paintRoot() {
+    if (routeQuarantined) return;
     const root = document.documentElement;
     if (!root) return;
     try {
+      if (!rootInlineOriginals) {
+        rootInlineOriginals = {};
+        for (const name of ['background-color', 'color']) {
+          rootInlineOriginals[name] = {
+            value: root.style.getPropertyValue(name),
+            priority: root.style.getPropertyPriority(name)
+          };
+        }
+      }
       root.style.setProperty('background-color', T.background, 'important');
       root.style.setProperty('color', T.textPrimary, 'important');
       root.setAttribute('data-w95-dark', DARK ? '1' : '0');
@@ -580,12 +607,20 @@
     } catch (e) { }
   }
 
+  // CORE-003: this observer re-asserts the root overrides the moment they go
+  // missing, so it is a SECOND writer of the exact state the excluded-route
+  // quarantine has to remove. Hoisted out of the bootstrap callback into a
+  // script-scope binding so the quarantine can stop it BEFORE the attributes
+  // and the inline overrides are taken away, otherwise it repaints them one
+  // callback later and the quarantine is undone by its own observer.
+  let rootAttributeObserver = null;
+
   whenRoot(function bootstrapPaintRoot() {
     paintRoot();
     try {
       const root = document.documentElement;
       let inPaint = false;
-      const rootObs = new MutationObserver(function () {
+      rootAttributeObserver = new MutationObserver(function () {
         if (inPaint) return;
         const missing = (typeof IS_CHATGPT !== 'undefined' && IS_CHATGPT && !root.hasAttribute('data-w95-chatgpt')) ||
                         (typeof IS_REDDIT !== 'undefined' && IS_REDDIT && !root.hasAttribute('data-w95-reddit')) ||
@@ -596,7 +631,7 @@
           try { paintRoot(); } finally { inPaint = false; }
         }
       });
-      rootObs.observe(root, { attributes: true, subtree: false });
+      rootAttributeObserver.observe(root, { attributes: true, subtree: false });
     } catch (e) { }
   });
 
@@ -664,34 +699,58 @@
     // throw path uses. No live repaint across palettes; the reload stays the
     // architecture.
     const armSurvivalProbe = function (id) {
-      if (typeof setTimeout !== 'function') return;
-      let survived = true;
-      const disarm = function () { survived = false; };
+      if (typeof setTimeout !== 'function') return function () { };
+      // The document really going away is proved by `pagehide` and by nothing
+      // else. CORE-005: `beforeunload` is fired for the leave prompt AND again
+      // after the user dismisses it, and in that case this very document is
+      // still alive - counting it as a successful navigation hid the recovery
+      // row from exactly the cancelled-prompt split brain the probe exists for.
+      let unloaded = false;
+      let promptSeen = false;
+      let done = false;
+      const disarm = function () { unloaded = true; };
       try { addEventListener('pagehide', disarm, { once: true }); } catch (e) { }
-      try { addEventListener('beforeunload', disarm, { once: true }); } catch (e) { }
+      // Recorded, never disarming: it only names the reason more precisely when
+      // the timer fires while this document is still alive.
+      const noteConfirm = function () { promptSeen = true; };
+      try { addEventListener('beforeunload', noteConfirm, { once: true }); } catch (e) { }
       setTimeout(function () {
         try { removeEventListener('pagehide', disarm); } catch (e) { }
-        try { removeEventListener('beforeunload', disarm); } catch (e) { }
-        if (!survived) return;
-        reportPendingTheme(id, 'the reload was cancelled without unloading this document');
+        try { removeEventListener('beforeunload', noteConfirm); } catch (e) { }
+        if (unloaded || done) return;
+        done = true;
+        reportPendingTheme(id, promptSeen
+          ? 'the browser asked to leave the page, the navigation was cancelled, and this document is still alive'
+          : 'the reload was cancelled without unloading this document');
       }, 350);
+      // CORE-005: lets the caller stand the probe down when the synchronous
+      // refusal path already reported the split brain.
+      return function () { done = true; };
     };
     for (const id of Object.keys(THEMES)) {
       const active = id === THEME_ID;
       GM_registerMenuCommand((active ? '● ' : '○ ') + THEMES[id].label, function () {
         if (active) return;
         try { GM_setValue(THEME_KEY, id); } catch (e) { return; }
+        // CORE-005: arm BEFORE the reload. pagehide and beforeunload can fire
+        // synchronously INSIDE location.reload(); a probe attached after the
+        // call cannot observe them and would then report a stayed-alive
+        // document for a switch that had already navigated away.
+        let cancelProbe = null;
+        try { cancelProbe = armSurvivalProbe(id); } catch (e) { }
         let reloadThrew = false;
         try {
           location.reload();
         } catch (e) {
           reloadThrew = true;
+          // Refusal is proved synchronously, so the probe has nothing left
+          // to watch; leaving it armed would warn a second time.
+          if (cancelProbe) { try { cancelProbe(); } catch (e2) { } }
           // Navigation refused. Storage is already the new palette, so say so
           // rather than letting the tab look unchanged for no stated reason,
           // and put a working retry in the one channel the host cannot style.
           reportPendingTheme(id, e && e.message ? e.message : 'navigation refused');
         }
-        if (!reloadThrew) armSurvivalProbe(id);
       });
     }
     GM_registerMenuCommand('🤍 Support developer', function () {
@@ -3069,6 +3128,9 @@ a, a:link { color: ${T.link} !important; }
       if (shadow) {
         registerRoot(shadow);
         queueMicrotask(() => {
+          // CORE-003: a root created while the route is excluded stays unstyled,
+          // or the quarantine is undone one microtask later.
+          if (routeQuarantined) return;
           try {
             // Adopted stylesheet for shadow roots (CSP safe)
             let adopted = false;
@@ -3117,6 +3179,9 @@ a, a:link { color: ${T.link} !important; }
   })();
 
   function injectStyle(root, id, content) {
+    // CORE-003: an excluded route stays unthemed. A late load callback or a
+    // reinjection that reaches here must not re-install the global sheet.
+    if (routeQuarantined) return;
     // No <html> yet: defer (see whenRoot). The old fallback inserted into the
     // Document node here, which does not throw -- it hijacks the root element.
     if (root === document && !document.documentElement) {
@@ -3249,6 +3314,15 @@ a, a:link { color: ${T.link} !important; }
   }
   // --- REPAINTER START ---
 
+  // CORE-003: once an excluded route has been quarantined in THIS document,
+  // nothing may republish theme effects into it. The asynchronous entry points
+  // that (re)apply styling -- the global stylesheet install, shadow piercing,
+  // the force scheduler and the sweeper start -- read the fence and return
+  // without mutating.
+  //
+  // The script-scope fence is initialized before bootstrap; Electron's prelude
+  // declares the same binding for the extracted repainter body.
+
   function parseRGB(str) {
     if (!str) return null;
     const m = str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*[,/]\s*([\d.]+))?/);
@@ -3257,11 +3331,27 @@ a, a:link { color: ${T.link} !important; }
   }
   // Write-if-changed: re-verify passes revisit every element, so identical
   // rewrites must not invalidate styles or churn the style attribute.
+  // CORE-003: what this theme overwrote on each element's inline style, kept
+  // only so the excluded-route quarantine can put it back. A WeakMap so a
+  // painted element that detaches keeps no entry, and a plain object per
+  // element so a repeated rewrite of the same property records the FIRST
+  // pre-theme value (the one that has to be restored), not its own output.
+  const ownedInlineOriginals = new WeakMap();
   function setImp(el, prop, val) {
     const st = el && el.style;
     if (!st || typeof st.getPropertyValue !== 'function' || typeof st.setProperty !== 'function') return false;
     const priority = typeof st.getPropertyPriority === 'function' ? st.getPropertyPriority(prop) : null;
     if (st.getPropertyValue(prop) !== val || priority !== 'important') {
+      // CORE-003: the quarantine restores what THIS theme overwrote, not every
+      // declaration on the element. A site's own !important on the same
+      // property must survive an excluded-route quarantine exactly as it was,
+      // so the pre-write value and priority are recorded on the first write of
+      // each (element, property) pair and dropped again on restore.
+      let rec = ownedInlineOriginals.get(el);
+      if (!rec) { rec = {}; ownedInlineOriginals.set(el, rec); }
+      if (!(prop in rec)) {
+        rec[prop] = { value: st.getPropertyValue(prop), priority: priority };
+      }
       st.setProperty(prop, val, 'important');
     }
     return true;
@@ -3431,6 +3521,8 @@ a, a:link { color: ${T.link} !important; }
   };
 
   function pierceShadow(host) {
+    // CORE-003: no new shadow root takes the theme while the route is excluded.
+    if (routeQuarantined) return;
     const tag = (host.tagName || '').toUpperCase();
     if (SHADOW_SKIP_TAGS.has(tag)) return;
     if (!host.shadowRoot || piercedRoots.has(host.shadowRoot)) return;
@@ -3567,14 +3659,74 @@ a, a:link { color: ${T.link} !important; }
     } catch (e) { noteSuppressed('sheetGenThrows', e); }
   }
 
+  // CORE-003: stripHoverRule DELETES declarations from rules the site wrote.
+  // That is a mutation of foreign state with no snapshot until now, so the
+  // excluded-route quarantine could never put it back. Every first-time strip
+  // records the removed name/value/priority triples keyed BY RULE, so nothing is
+  // written onto the site's own CSSOM rule object and a rule the page drops
+  // releases its snapshot with it. A later strip of the same rule records
+  // nothing (the originals are already frozen) and only removes what a newer
+  // pass read. restoreHoverRules() drains the registry, so no rule is retained
+  // past the restore that needed it.
+  const HOVER_REGISTRY_CAP = 4096;
+  const hasWeakRef = typeof WeakRef !== 'undefined';
+  const hoverStrippedRules = [];          // WeakRef handles, compacted at the cap
+  const hoverStrippedOriginals = new WeakMap();  // rule -> frozen pre-strip triples
+  const hoverHandleOf = function (entry) {
+    if (hasWeakRef && entry && typeof entry.deref === 'function') {
+      try { return entry.deref(); } catch (e) { return null; }
+    }
+    return entry || null;
+  };
+  function compactHoverRegistry() {
+    if (!hoverStrippedRules.length) return;
+    const kept = [];
+    for (let i = 0; i < hoverStrippedRules.length; i++) {
+      if (hoverHandleOf(hoverStrippedRules[i])) kept.push(hoverStrippedRules[i]);
+    }
+    hoverStrippedRules.length = 0;
+    for (let i = 0; i < kept.length; i++) hoverStrippedRules.push(kept[i]);
+  }
   function stripHoverRule(rule) {
     const st = rule.style;
     if (!st) return;
+    let originals = hoverStrippedOriginals.get(rule);
+    const firstStrip = !originals;
+    if (firstStrip) originals = { props: [], values: [], priorities: [] };
     const names = [];
     for (let i = 0; i < st.length; i++) names.push(st[i]);
     for (let i = 0; i < names.length; i++) {
-      if (HOVER_PAINT.test(names[i])) st.removeProperty(names[i]);
+      if (!HOVER_PAINT.test(names[i])) continue;
+      if (firstStrip) {
+        originals.props.push(names[i]);
+        originals.values.push(typeof st.getPropertyValue === 'function' ? st.getPropertyValue(names[i]) : '');
+        originals.priorities.push(typeof st.getPropertyPriority === 'function' ? st.getPropertyPriority(names[i]) : '');
+      }
+      st.removeProperty(names[i]);
     }
+    // Nothing was actually stripped (a rule with no matching declarations):
+    // track nothing at all rather than remembering it forever.
+    if (!firstStrip || !originals.props.length) return;
+    try { hoverStrippedOriginals.set(rule, originals); } catch (e) { }
+    try { hoverStrippedRules.push(hasWeakRef ? new WeakRef(rule) : rule); } catch (e2) { hoverStrippedRules.push(rule); }
+    if (hoverStrippedRules.length > HOVER_REGISTRY_CAP) compactHoverRegistry();
+  }
+
+  function restoreHoverRules() {
+    for (let i = 0; i < hoverStrippedRules.length; i++) {
+      const rule = hoverHandleOf(hoverStrippedRules[i]);
+      if (!rule) continue;
+      const originals = hoverStrippedOriginals.get(rule);
+      if (originals) {
+        for (let j = 0; j < originals.props.length; j++) {
+          try { rule.style.setProperty(originals.props[j], originals.values[j], originals.priorities[j]); } catch (e) { }
+        }
+        try { hoverStrippedOriginals.delete(rule); } catch (e2) { }
+      }
+    }
+    // The registry exists only between a strip and its restore; leaving it
+    // populated would retain every hover rule in the document for life.
+    hoverStrippedRules.length = 0;
   }
 
   // TARGET D: Iterative, bounded rule traversal with persistent stack frame.
@@ -4394,6 +4546,9 @@ a, a:link { color: ${T.link} !important; }
     shadowPruneStageIter = null;
     shadowPruneRemovedAny = false;
     shadowPruneQueued = false;
+    // The hover-surgery registry is the same class of owner -- handles over
+    // CSSOM rules nothing will ever restore once the lane is dead.
+    try { hoverStrippedRules.length = 0; } catch (e) { }
     // PERF-001 (SRC-063): the attribute lane's retained targets are the same
     // class of owner -- a live Set of elements nothing will ever drain once the
     // lane is dead. Suspension is permanent, so release them here.
@@ -4417,6 +4572,8 @@ a, a:link { color: ${T.link} !important; }
     forceLapWorkset = null;
     forceLapIndex = 0;
     forceLapRemaining = 0;
+    // PERF-001: the deferred debt belongs to a lap that no longer exists.
+    forceDeferredRoots = 0;
     // PERF-003 (SRC-004): the light registry is the same class of retention --
     // a Set of elements that nothing will ever drain once the lane is dead.
     try { lightDirty.clear(); } catch (e) { }
@@ -4444,6 +4601,134 @@ a, a:link { color: ${T.link} !important; }
       document.documentElement.setAttribute('data-w95-perf', 'css-only');
       document.documentElement.setAttribute('data-w95-perf-reason', reason);
     } catch (e) { }
+  }
+
+  // ─── CORE-003: the excluded-route safety quarantine ───────────────────────
+  // suspendRepainter stops the machinery; it is NOT a safety boundary. The
+  // global styles already injected into the document, the constructable sheets
+  // adopted into it and into every shadow root, the thousands of inline
+  // !important overrides the repainter wrote, the root background/color
+  // override, the declarations ripped out of site hover rules, and the root
+  // attribute observer that re-asserts the root override are all still live and
+  // still theming. On an excluded route (auth, payment, challenge) that is the
+  // exact failure CORE-003 names, so they are removed here. Every step is
+  // best-effort and the whole function is idempotent: a quarantine is a safety
+  // action, never a reason to throw into a history hook.
+  function removeInjectedStyleNodes(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    const nodes = root.querySelectorAll('style[data-w95]');
+    for (let i = 0; i < nodes.length; i++) {
+      try { nodes[i].remove(); } catch (e) { }
+    }
+  }
+
+  function dropAdoptedThemeSheets(root) {
+    if (!root || !Array.isArray(root.adoptedStyleSheets)) return;
+    // Every sheet this theme builds stamps its content and/or generation on
+    // itself; a foreign sheet carries neither marker.
+    const kept = root.adoptedStyleSheets.filter((sheet) => !!sheet
+      && sheet.__w95Content === undefined && sheet.__w95Ver === undefined);
+    if (kept.length !== root.adoptedStyleSheets.length) {
+      try { root.adoptedStyleSheets = kept; } catch (e) { }
+    }
+    if (root.__w95Sheets) root.__w95Sheets = {};
+  }
+
+  function quarantineThemeStyles() {
+    // CORE-003: nothing republishes theme effects into this document from here on.
+    // A plain assignment: it cannot throw, so the fence cannot fail open.
+    routeQuarantined = true;
+    // 1. Stop the SECOND writer first. The root attribute observer repaints the
+    //    root overrides the moment they are missing, so removing them before it
+    //    is stopped would be undone by its own callback.
+    if (rootAttributeObserver) {
+      try { rootAttributeObserver.disconnect(); } catch (e) { }
+      rootAttributeObserver = null;
+    }
+    // 2. Undo the root background/color overrides and the root markers.
+    const root = document.documentElement;
+    if (root) {
+      const attrs = ['data-w95-dark', 'data-w95-theme', 'data-w95-x', 'data-w95-reddit',
+        'data-w95-google', 'data-w95-chatgpt', 'data-w95-done'];
+      for (let i = 0; i < attrs.length; i++) {
+        try { root.removeAttribute(attrs[i]); } catch (e) { }
+      }
+      if (rootInlineOriginals) {
+        try {
+          root.style.removeProperty('background-color');
+          root.style.removeProperty('color');
+        } catch (e) { }
+      }
+    }
+    // 3. The injected stylesheets: the DOM copies and the adopted sheets.
+    removeInjectedStyleNodes(document);
+    dropAdoptedThemeSheets(document);
+    // 4. Every shadow root this theme registered, including the ones whose WeakRef
+    //    entry has not been collected yet (a collected one is already gone).
+    try {
+      const roots = Element.prototype.__wintageShadowRoots;
+      if (roots && typeof roots.length === 'number') {
+        for (let i = 0; i < roots.length; i++) {
+          const entry = roots[i];
+          const shadow = entry && typeof entry === 'object' && typeof entry.deref === 'function'
+            ? entry.deref()
+            : entry;
+          if (!shadow) continue;
+          removeInjectedStyleNodes(shadow);
+          dropAdoptedThemeSheets(shadow);
+        }
+      }
+    } catch (e) { }
+    // 5. Stylesheet mutations: put the stripped hover declarations back.
+    restoreHoverRules();
+    // 6. Inline overrides. Restore exactly what this theme wrote, nothing else:
+    //    the recorded pre-write value goes back on the property (or the property
+    //    is removed when there was none), so a site's own declaration on the same
+    //    element -- including a site !important on a property this theme also
+    //    wrote -- survives the quarantine untouched. Stripping every
+    //    !important declaration instead would delete foreign site state, which is
+    //    the opposite of what an excluded-route safety boundary may do.
+    if (typeof document.querySelectorAll === 'function') {
+      const painted = document.querySelectorAll('[data-w95-done]');
+      for (let i = 0; i < painted.length; i++) {
+        try {
+          const el = painted[i];
+          const st = el.style;
+          const rec = ownedInlineOriginals.get(el);
+          if (rec && st && typeof st.setProperty === 'function') {
+            for (const name in rec) {
+              const o = rec[name];
+              if (o.value === '') {
+                try { st.removeProperty(name); } catch (e) { }
+              } else {
+                try { st.setProperty(name, o.value, o.priority || ''); } catch (e) { }
+              }
+            }
+            ownedInlineOriginals.delete(el);
+          }
+          el.removeAttribute('data-w95-done');
+        } catch (e) { }
+      }
+    }
+    // 7. The perf attributes the suspension wrote describe a live theme lane;
+    //    on an excluded route nothing is repainting.
+    if (root) {
+      // paintRoot runs before ordinary repainter bookkeeping and <html> need
+      // not appear in the painted-element query. Restore its initial values
+      // after that query so a later recording cannot overwrite them.
+      if (rootInlineOriginals) {
+        for (const name of ['background-color', 'color']) {
+          const original = rootInlineOriginals[name];
+          try {
+            if (original.value) root.style.setProperty(name, original.value, original.priority);
+            else root.style.removeProperty(name);
+          } catch (e) { }
+        }
+        rootInlineOriginals = null;
+      }
+      try { root.removeAttribute('data-w95-perf'); } catch (e) { }
+      try { root.removeAttribute('data-w95-perf-reason'); } catch (e) { }
+    }
   }
 
   function noteMutationPressure(records) {
@@ -4650,6 +4935,12 @@ a, a:link { color: ${T.link} !important; }
         // computed style worth reading and no pixels to fix. Same rule the
         // added-node lane already applies; a CONNECTED target is never dropped.
         if (!el || el.nodeType !== 1 || !el.isConnected) continue;
+        // PERF-002: the processed target leaves the pending set here, not at
+        // lane finish. Capacity must be consumed by UNFINISHED work only, or a
+        // healthy actively-draining lane fills to its cap on completed entries.
+        // Deleting the current key during iteration is well-defined and the
+        // live-iterator continuation contract is unchanged.
+        try { attributePending.delete(el); } catch (e) { }
         // Cooldown semantics preserved verbatim, just moved off the record loop:
         // carousels and virtual scrollers toggle classes many times a second, and
         // during the cooldown the element is only marked dirty for the light
@@ -4738,6 +5029,11 @@ a, a:link { color: ${T.link} !important; }
             // element is one repair -- process() reads current final state, so
             // the intermediate values are worthless. The Set gives that collapse
             // for free and bounds retained state by ATTRIBUTE_PENDING_CAP.
+            // PERF-002: an element already awaiting repair is a free re-add,
+            // so dedup runs BEFORE the capacity test. Charging it as new work
+            // tripped a false overflow -- and an unnecessary force sweep -- at
+            // the configured capacity.
+            if (attributePending.has(t)) continue;
             if (attributePending.size >= ATTRIBUTE_PENDING_CAP) attributeOverflowed = true;
             else attributePending.add(t);
           }
@@ -4900,6 +5196,12 @@ a, a:link { color: ${T.link} !important; }
   let forceLapWorkset = null;   // ordered roots of the CURRENT lap (document once, then a registry snapshot)
   let forceLapIndex = 0;        // cursor into forceLapWorkset; advances monotonically within a lap
   let forceLapRemaining = 0;    // roots not yet done/dropped in this lap; O(1) completion detection
+  // PERF-001: roots registered DURING a running lap are stamped for the NEXT
+  // one. The skip is charged to this lap's discovery budget above, and the
+  // count is the debt this lap leaves behind: when the lap completes, the next
+  // lap is scheduled automatically, so deferred roots are processed without
+  // waiting for an unrelated mutation or stylesheet event to ask for a sweep.
+  let forceDeferredRoots = 0;
 
   let forcePassesOwed = 0;
   let lightPending = false;
@@ -4992,6 +5294,8 @@ a, a:link { color: ${T.link} !important; }
   // sweep-calls-sweep loop.
   //
   function requestForceSweep() {
+    // CORE-003: an excluded route is quarantined; no force lane may repaint it.
+    if (routeQuarantined) return;
     if (repainterSuspended) return;
     if (forcePassesOwed < 1) forcePassesOwed = 1;
     forceLapActive = true;
@@ -5083,6 +5387,7 @@ a, a:link { color: ${T.link} !important; }
       };
       forceLapIndex = 0;
       forceLapRemaining = 1;
+      forceDeferredRoots = 0;
       stylesDirty = false;
       forceRootCursors.clear();
     }
@@ -5132,10 +5437,16 @@ a, a:link { color: ${T.link} !important; }
             break;
           }
           const candidate = next.value;
-          // PERF-005: a root stamped for a future lap is simply not this lap's
+          // PERF-005: a root stamped for a future lap is not this lap's work.
           // work. It already lives in piercedRoots, so nothing has to be
           // transferred when this lap finishes.
           if (candidate.__wintageLapId && candidate.__wintageLapId > forceLapWorkset.id) {
+            // PERF-001: the iterator advance is charged against the SAME
+            // discovery budget every other root costs. Skipping used to be
+            // free, so a heap of future-stamped roots could enumerate 50,000
+            // advances inside one task with rootsServed still 0.
+            rootsServed++;
+            forceDeferredRoots++;
             continue;
           }
           forceLapWorkset.currentRoot = candidate;
@@ -5187,11 +5498,18 @@ a, a:link { color: ${T.link} !important; }
 
     if (force && forceLapActive) {
       if (lapComplete) {
+        // PERF-001: a lap that deferred roots owes exactly one more lap, and
+        // that continuation is requested HERE rather than left to chance. With
+        // no other mutation or stylesheet debt, the deferred roots would
+        // otherwise never be processed at all.
+        const oweContinuation = forceDeferredRoots > 0;
+        forceDeferredRoots = 0;
         forceRootCursors.clear();
         forceLapWorkset = null;
         forceLapIndex = 0;
         forceLapRemaining = 0;
         forceLapActive = false;
+        if (oweContinuation) requestForceSweep();
       } else if (!repainterSuspended && !document.hidden) {
         forcePassesOwed = Math.max(forcePassesOwed, 1);
         scheduleSweep(MIN_SWEEP_GAP);
@@ -5209,6 +5527,8 @@ a, a:link { color: ${T.link} !important; }
   // once late CSS settled, then on demand whenever requestForceSweep() fires.
   // The write-if-changed guard in setImp keeps repeat passes cheap.
   function startSweeping() {
+    // CORE-003: a deferred settling pass must not repaint a quarantined route.
+    if (routeQuarantined) return;
     paintRoot();
     injectLate();
     startObservers();

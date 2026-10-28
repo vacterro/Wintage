@@ -76,6 +76,9 @@ function createCtx(setup) {
   const ctx = {
     console, Date, Math, Set, Map, WeakMap, Proxy, Number, Array, Object, String, Promise,
     parseInt, parseFloat,
+    // CORE-003: the repainter body fences on the script-scope binding, so the
+    // sandbox must declare it, exactly as the shim prelude does.
+    routeQuarantined: false,
     performance: { now: () => 0 },
     setTimeout: (fn, ms) => { timers.push(ms); return timers.length; },
     clearTimeout: () => {},

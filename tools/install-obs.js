@@ -11,7 +11,8 @@
 //                     once (JSON recovery); a user.ini that did not exist is
 //                     marked .wintage-created. Revert merges only the owned key
 //                     back into the CURRENT user.ini (unrelated post-Apply user
-//                     edits survive) or removes a Wintage-created file.
+//                     edits survive) or removes a Wintage-created file ONLY when
+//                     nothing but that one key is left in it.
 //   - themes/Wintage.ovt  created-or-replaced provenance plus exact replaced
 //                     bytes (byte-for-byte restore). First generation is never
 //                     overwritten by a repaint.
@@ -33,6 +34,7 @@
 //   node tools/install-obs.js --config DIR (--theme FILE --palette SLUG | --revert) [--dry-run]
 //   node tools/install-obs.js --config DIR --revert --keep-recovery   (parent-coordinated revert)
 //   node tools/install-obs.js --config DIR --finalize-revert          (consume recovery after commit)
+//   node tools/install-obs.js --config DIR --finalize-revert --manifest-committed (commit proven)
 
 const fs = require('fs');
 const path = require('path');
@@ -49,10 +51,14 @@ const palette = arg('--palette');
 const revert = process.argv.includes('--revert');
 const keepRecovery = process.argv.includes('--keep-recovery');
 const finalizeRevert = process.argv.includes('--finalize-revert');
+// W2-003: the caller's proof that the MANIFEST transition committed. Without it
+// the marker must be absent, because a marker still present means Revert did not
+// finish and its recovery may still be needed.
+const manifestCommitted = process.argv.includes('--manifest-committed');
 const dryRun = process.argv.includes('--dry-run');
 
 if (!configDir || (!revert && !finalizeRevert && (!sourceTheme || !palette))) {
-  console.error('Usage: install-obs.js --config DIR (--theme FILE --palette SLUG | --revert [--keep-recovery] | --finalize-revert) [--dry-run]');
+  console.error('Usage: install-obs.js --config DIR (--theme FILE --palette SLUG | --revert [--keep-recovery] | --finalize-revert [--manifest-committed]) [--dry-run]');
   process.exit(2);
 }
 
@@ -81,16 +87,36 @@ const ovtCreated = `${themeFile}.wintage-created`;
 function exists(p) { return fs.existsSync(p); }
 function remove(p) { if (exists(p)) fs.unlinkSync(p); }
 
+// CORE-002: a file that parses is not a recovery record. `{}`, `[]`, a bare
+// number, `{"existed":"yes"}` and `{"existed":false,"junk":1}` all used to
+// arrive here as truthy objects: the preflight accepted them, Revert then saw
+// "no usable bytes to restore" and DELETED the live theme, and the recovery was
+// consumed as a success. The value contract is the schema, not a detail --
+// `existed` must be a boolean, a true record must carry a string value, and a
+// false record must not carry one.
 function ReadRecoveryJson(file) {
   if (!exists(file)) return null;
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return null; }
+  let parsed;
+  try { parsed = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return null; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  if (typeof parsed.existed !== 'boolean') return null;
+  if (parsed.existed) {
+    if (typeof parsed.value !== 'string') return null;
+    return { existed: true, value: parsed.value };
+  }
+  if (parsed.value !== null && parsed.value !== undefined) return null;
+  return { existed: false, value: null };
 }
 
 // parseIni -> { sections: {name: {key: value}}, order preserved via arrays }
 function parseIni(source) {
   const bom = source.startsWith('\uFEFF') ? '\uFEFF' : '';
   if (bom) source = source.slice(1);
-  const out = { bom, sections: {}, sectionOrder: [], keys: {} };
+  // W2-005: a repeated key is a real document shape, not a corruption, so the
+  // effective value is defined once here -- the LAST occurrence in document
+  // order -- and every occurrence is kept beside it so Revert can put the
+  // original duplicates back instead of collapsing them.
+  const out = { bom, sections: {}, sectionOrder: [], keys: {}, occurrences: [] };
   let section = null;
   for (const line of source.split(/\r?\n/)) {
     const sm = /^\s*\[([^\]]+)\]\s*$/.exec(line);
@@ -101,7 +127,7 @@ function parseIni(source) {
     }
     if (section) {
       const km = /^\s*([^=]+?)\s*=(.*)$/.exec(line);
-      if (km) { out.sections[section][km[1].trim()] = km[2]; out.keys[section + '.' + km[1].trim()] = km[2]; }
+      if (km) { out.sections[section][km[1].trim()] = km[2]; out.keys[section + '.' + km[1].trim()] = km[2]; out.occurrences.push({ section, key: km[1].trim(), value: km[2] }); }
     }
   }
   return out;
@@ -119,13 +145,12 @@ function removeIniKey(source, section, key) {
   const start = lines.findIndex((line) => sectionPattern.test(line));
   if (start >= 0) {
     let end = start + 1;
-    while (end < lines.length && !/^\s*\[[^\]]+\]\s*$/.test(lines[end])) end += 1;
+    while (end < lines.length && !isSectionHeader(lines[end])) end += 1;
     const idx = lines.slice(start + 1, end).findIndex((line) => keyPattern.test(line));
     if (idx >= 0) lines.splice(start + 1 + idx, 1);
   }
   return bom + lines.join(eol) + (finalEol || !lines.length ? eol : '');
 }
-
 function setIniValue(source, section, key, value) {
   const bom = source.startsWith('\uFEFF') ? '\uFEFF' : '';
   if (bom) source = source.slice(1);
@@ -136,16 +161,29 @@ function setIniValue(source, section, key, value) {
 
   const sectionPattern = new RegExp(`^\\s*\\[${section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*$`, 'i');
   const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`, 'i');
-  let start = lines.findIndex((line) => sectionPattern.test(line));
-  if (start < 0) {
-    if (lines.length && lines[lines.length - 1] !== '') lines.push('');
-    lines.push(`[${section}]`, `${key}=${value}`);
+  // W2-005: every occurrence of the owned key is written, so a document that
+  // arrived with repeated keys is left with one unambiguous effective value.
+  // The OLD first-match-only write left later duplicate lines live, which is
+  // exactly the ambiguity this clause exists to remove.
+  const targets = [];
+  let current = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) { current = trimmed.slice(1, -1); continue; }
+    if (current !== null && current.toLowerCase() === section.toLowerCase() && keyPattern.test(lines[i])) targets.push(i);
+  }
+  if (targets.length) {
+    for (const i of targets) lines[i] = `${key}=${value}`;
   } else {
-    let end = start + 1;
-    while (end < lines.length && !/^\s*\[[^\]]+\]\s*$/.test(lines[end])) end += 1;
-    const found = lines.slice(start + 1, end).findIndex((line) => keyPattern.test(line));
-    if (found >= 0) lines[start + 1 + found] = `${key}=${value}`;
-    else lines.splice(end, 0, `${key}=${value}`);
+    const start = lines.findIndex((line) => sectionPattern.test(line));
+    if (start < 0) {
+      if (lines.length && lines[lines.length - 1] !== '') lines.push('');
+      lines.push(`[${section}]`, `${key}=${value}`);
+    } else {
+      let end = start + 1;
+      while (end < lines.length && !isSectionHeader(lines[end])) end += 1;
+      lines.splice(end, 0, `${key}=${value}`);
+    }
   }
   return bom + lines.join(eol) + (finalEol || !lines.length ? eol : '');
 }
@@ -156,13 +194,54 @@ function setIniValue(source, section, key, value) {
 // `existed:false`, and Revert then DELETED the user's real selection instead of
 // restoring it. Lookup is normalised here; the file's own spelling is never
 // rewritten, because only lookup semantics were ever ambiguous.
+// An INI section header is a line whose trimmed form is [name]; the writers
+// above used to decide this with a regex whose escaping survived one rewrite
+// and not the next, so the decision is now plain string work.
+function isSectionHeader(line) {
+  const t = line.trim();
+  return t.startsWith('[') && t.endsWith(']');
+}
 function iniLookup(ini, section, key) {
   const sections = (ini && ini.sections) || {};
   const sectionName = Object.keys(sections).find((s) => s.toLowerCase() === section.toLowerCase());
   if (sectionName === undefined) return undefined;
+  // W2-005: the reader resolves a repeated key the same way the writers do --
+  // the last occurrence wins -- so lookup and mutation can never disagree.
+  const occ = (ini.occurrences || []).filter((o) => o.section.toLowerCase() === sectionName.toLowerCase() && o.key.toLowerCase() === key.toLowerCase());
+  if (occ.length) return occ[occ.length - 1].value;
   const body = sections[sectionName] || {};
   const keyName = Object.keys(body).find((k) => k.toLowerCase() === key.toLowerCase());
   return keyName === undefined ? undefined : body[keyName];
+}
+
+// W2-005: put back the exact occurrences Apply recorded, duplicates included,
+// keeping each line own key spelling and writing only the value. Returns null
+// when the live document no longer carries the same number of owned
+// occurrences: the key was edited after Apply, and a blind restore would
+// overwrite the user own lines instead of recovering them.
+function restoreIniOccurrences(source, occurrences) {
+  const bom = source.startsWith('\uFEFF') ? '\uFEFF' : '';
+  const body = bom ? source.slice(1) : source;
+  const eol = body.includes('\r\n') ? '\r\n' : '\n';
+  const finalEol = body.endsWith('\n');
+  const lines = body.length ? body.split(/\r?\n/) : [];
+  if (finalEol) lines.pop();
+  const seen = [];
+  let current = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) { current = trimmed.slice(1, -1); continue; }
+    if (current === null) continue;
+    const eq = lines[i].indexOf('=');
+    const left = eq < 0 ? '' : lines[i].slice(0, eq).trim();
+    if (occurrences.some((o) => o.section.toLowerCase() === current.toLowerCase() && o.key.toLowerCase() === left.toLowerCase())) seen.push(i);
+  }
+  if (seen.length !== occurrences.length) return null;
+  for (let n = 0; n < seen.length; n += 1) {
+    const eq = lines[seen[n]].indexOf('=');
+    lines[seen[n]] = lines[seen[n]].slice(0, eq + 1) + occurrences[n].value;
+  }
+  return bom + lines.join(eol) + (finalEol || !lines.length ? eol : '');
 }
 
 // Read the Theme-key snapshot. New format is JSON {existed, value}; a legacy
@@ -196,17 +275,47 @@ function readThemeSnapshot() {
     } else if (parsed.value !== null && parsed.value !== undefined) {
       return null;
     }
-    return { existed: parsed.existed, value: parsed.existed ? parsed.value : null };
+    // W2-005: the occurrence list travels with the record when it is a valid
+    // array of the owned shape; anything else keeps the legacy shape.
+    let occurrences;
+    if (parsed.occurrences !== undefined) {
+      if (!Array.isArray(parsed.occurrences)) return null;
+      if (parsed.occurrences.some((o) => !o || typeof o !== 'object' || typeof o.section !== 'string'
+        || typeof o.key !== 'string' || typeof o.value !== 'string')) return null;
+      occurrences = parsed.occurrences;
+    } else if (parsed.existed) {
+      occurrences = [{ section: THEME_SECTION, key: THEME_KEY, value: parsed.value }];
+    } else {
+      occurrences = [];
+    }
+    return { existed: parsed.existed, value: parsed.existed ? parsed.value : null, occurrences };
   }
   const ini = parseIni(raw);
   const v = iniLookup(ini, THEME_SECTION, THEME_KEY);
-  return { existed: v !== undefined, value: v === undefined ? null : v };
+  // W2-005: the same occurrence list the JSON record carries, so a legacy
+  // whole-file snapshot restores duplicates exactly like a modern one.
+  const occurrences = ini.occurrences.filter((o) => o.section.toLowerCase() === THEME_SECTION.toLowerCase() && o.key.toLowerCase() === THEME_KEY.toLowerCase());
+  return { existed: v !== undefined, value: v === undefined ? null : v, occurrences };
 }
 
 function currentThemeKeyValue() {
   if (!exists(userIni)) return undefined;
   const ini = parseIni(fs.readFileSync(userIni, 'utf8'));
   return iniLookup(ini, THEME_SECTION, THEME_KEY);
+}
+
+// W2-001: a .ovt is a ZIP archive. `encoding: 'base64'` states how the bytes
+// were captured, so a legacy recovery that carried the raw UTF-8 (which an
+// older build wrote, and which the operator may still have on disk) is read
+// back the same way rather than being decoded as if it were base64.
+function replacementOvSnapshot(file) {
+  return { existed: true, encoding: 'base64', value: fs.readFileSync(file).toString('base64') };
+}
+
+function ovtRestoreBytes(snap) {
+  if (snap && snap.encoding === 'base64') return Buffer.from(snap.value, 'base64');
+  // Legacy record: written as UTF-8 text by an older build, restored as such.
+  return Buffer.from(snap.value, 'utf8');
 }
 
 // ─── Revert preflight: the COMPLETE required recovery set (CORE-001) ────────
@@ -241,9 +350,49 @@ function consumeRecovery() {
 }
 
 // ─── Apply / repaint ────────────────────────────────────────────────────────
+// ─── CORE-001: a Wintage-created user.ini is deleted only when nothing but the
+// one owned key is left in it. Apply wrote exactly `[Appearance] Theme=<id>`
+// into a file that did not exist; every section/key the user has added since
+// (OBS writes a lot into user.ini) is their state, so the file survives and only
+// the owned key is removed instead.
+function createdUserIniIsPure() {
+  if (!exists(userIni)) return false;
+  const ini = parseIni(fs.readFileSync(userIni, 'utf8'));
+  const names = Object.keys(ini.sections);
+  // Any section other than [Appearance] is unrelated user state.
+  if (names.some((n) => n.toLowerCase() !== THEME_SECTION.toLowerCase())) return false;
+  // Inside [Appearance] only the owned key may exist.
+  return names.every((n) => {
+    const keys = Object.keys(ini.sections[n]);
+    return keys.length === 0
+      || (keys.length === 1 && keys[0].toLowerCase() === THEME_KEY.toLowerCase());
+  });
+}
+
 if (revert) {
   if (dryRun) {
-    console.log(`OBS Studio: would restore the [${THEME_SECTION}] ${THEME_KEY} key into the current ${path.basename(userIni)} and remove ${path.basename(themeFile)}`);
+    // CORE-004: dry-run must answer the SAME fail-closed question the real
+    // revert asks. The old branch printed a positive description and exited 0
+    // before evaluating the recovery set, so -WhatIf could bless a revert that
+    // was guaranteed to fail closed one step later.
+    if (!exists(userIniCreated) && !exists(themeKeyBackup) &&
+        !exists(ovtCreated) && !exists(ovtBackup) && !exists(markerFile)) {
+      console.log('OBS Studio: no Wintage recovery state - nothing to revert.');
+      process.exit(0);
+    }
+    try {
+      assertRecoveryComplete();
+    } catch (err) {
+      // The real revert would have refused with this exact reason; the preflight
+      // must say so rather than describe an operation that cannot run.
+      console.error(`OBS Studio: ${err.message}`);
+      process.exit(1);
+    }
+    if (exists(userIniCreated) && exists(userIni) && !createdUserIniIsPure()) {
+      console.log(`OBS Studio: would remove only the [${THEME_SECTION}] ${THEME_KEY} key from the current ${path.basename(userIni)} (the file holds unrelated settings and would not be deleted) and remove ${path.basename(themeFile)}`);
+    } else {
+      console.log(`OBS Studio: would restore the [${THEME_SECTION}] ${THEME_KEY} key into the current ${path.basename(userIni)} and remove ${path.basename(themeFile)}`);
+    }
     process.exit(0);
   }
   // Never-installed state (no marker, no snapshot) is a legitimate no-op ONLY
@@ -256,16 +405,38 @@ if (revert) {
   }
   assertRecoveryComplete();
   if (exists(userIniCreated)) {
-    // We created user.ini from nothing - drop it back to nothing.
-    if (exists(userIni)) remove(userIni);
+    // CORE-001: "we created it, so drop it" is only safe while the file still
+    // holds nothing but the owned key. Anything else the user added afterwards
+    // survives and only the Wintage-owned key is removed from it.
+    if (exists(userIni)) {
+      if (createdUserIniIsPure()) {
+        remove(userIni);
+      } else {
+        writeAtomic(userIni, removeIniKey(fs.readFileSync(userIni, 'utf8'), THEME_SECTION, THEME_KEY));
+        console.log("OBS Studio: the Wintage-created user.ini holds unrelated user settings - removed only the owned Theme key and kept the file.");
+      }
+    }
     if (!keepRecovery) remove(userIniCreated);
   } else {
     const snap = readThemeSnapshot();
     if (exists(userIni)) {
       let ini = fs.readFileSync(userIni, 'utf8');
-      ini = snap && snap.existed
-        ? setIniValue(ini, THEME_SECTION, THEME_KEY, snap.value)
-        : removeIniKey(ini, THEME_SECTION, THEME_KEY);
+      if (snap && snap.existed && snap.occurrences.length) {
+        // W2-005: restore the document exactly as Apply found it, every
+        // duplicate included. A live document whose occurrence count changed
+        // since the snapshot means the key was edited in the meantime, and a
+        // blind write would clobber those lines: nothing is touched instead.
+        const restored = restoreIniOccurrences(ini, snap.occurrences);
+        if (restored === null) {
+          console.error(`OBS Studio: --revert refused - ${path.basename(userIni)} no longer holds the ${snap.occurrences.length} owned ${THEME_KEY} entries the recovery recorded; nothing was written.`);
+          process.exit(1);
+        }
+        ini = restored;
+      } else if (snap && snap.existed) {
+        ini = setIniValue(ini, THEME_SECTION, THEME_KEY, snap.value);
+      } else {
+        ini = removeIniKey(ini, THEME_SECTION, THEME_KEY);
+      }
       writeAtomic(userIni, ini);
     }
   }
@@ -274,9 +445,11 @@ if (revert) {
     if (!keepRecovery) remove(ovtCreated);
   } else {
     const snap = ReadRecoveryJson(ovtBackup);
-    if (snap && snap.existed && snap.value !== undefined && snap.value !== null) {
-      // Byte-for-byte restore of a replaced user theme.
-      writeAtomic(themeFile, snap.value);
+    if (snap && snap.existed && typeof snap.value === 'string') {
+      // W2-001: byte-for-byte restore of a replaced user theme. writeAtomic
+      // hands the payload to fs.writeFileSync, which writes a Buffer raw, so
+      // the decoded archive is returned exactly as it was captured.
+      writeAtomic(themeFile, ovtRestoreBytes(snap));
     } else if (exists(themeFile)) {
       remove(themeFile);
     }
@@ -289,6 +462,29 @@ if (revert) {
 }
 
 if (finalizeRevert) {
+  // W2-003: consuming recovery is irreversible, so the prerequisites must be
+  // PROVEN rather than assumed. Two of them:
+  //   1. the palette marker must be gone. Revert removes it as its last act, so
+  //      a marker that is still here means the Revert did not complete (or never
+  //      ran) -- consuming would destroy the only evidence needed to finish it.
+  //      --manifest-committed carries the caller's proof that the manifest
+  //      transition committed, which is the same authorization the Terminal
+  //      helper's flag encodes.
+  //   2. the recovery artifacts must be VALID. CORE-002: a wrong-shape file is
+  //      unverifiable state, not spent state, and deleting it removes the only
+  //      record of what the restore actually restored.
+  if (exists(markerFile) && !manifestCommitted) {
+    console.error('OBS Studio: --finalize-revert refused - the palette marker is still present, so the Revert did not complete; nothing was consumed.');
+    process.exit(1);
+  }
+  if (exists(themeKeyBackup) && !readThemeSnapshot()) {
+    console.error(`OBS Studio: --finalize-revert refused - the Theme-key recovery file is not a valid recovery record (${themeKeyBackup}); nothing was consumed.`);
+    process.exit(1);
+  }
+  if (exists(ovtBackup) && !ReadRecoveryJson(ovtBackup)) {
+    console.error(`OBS Studio: --finalize-revert refused - the theme recovery file is not a valid recovery record (${ovtBackup}); nothing was consumed.`);
+    process.exit(1);
+  }
   // Parent-coordinated: the manifest transition has committed; consume the
   // persistent recovery this helper correctly preserved during --revert.
   if (!dryRun) consumeRecovery();
@@ -310,17 +506,24 @@ fs.mkdirSync(configDir, { recursive: true });
 // Capture EVERY required recovery artifact BEFORE the first mutation; the
 // first generation is never overwritten by a repaint (CORE-001).
 if (!exists(userIniCreated) && !exists(themeKeyBackup)) {
-  const current = exists(userIni) ? parseIni(fs.readFileSync(userIni, 'utf8')) : { sections: {} };
+  const current = exists(userIni) ? parseIni(fs.readFileSync(userIni, 'utf8')) : { sections: {}, occurrences: [] };
   // W2-002: the same case-insensitive lookup the writers use. Reading it
   // case-sensitively recorded `existed:false` for OBS's own lowercase
   // `[appearance] theme=`, and Revert then deleted the key it should restore.
   const v = iniLookup(current, THEME_SECTION, THEME_KEY);
-  writeAtomic(themeKeyBackup, `${JSON.stringify({ existed: v !== undefined, value: v === undefined ? null : v }, null, 2)}\n`);
+  // W2-005: every occurrence of the owned key is recorded in document order so
+  // Revert restores the original duplicates rather than collapsing them.
+  const occurrences = current.occurrences.filter((o) => o.section.toLowerCase() === THEME_SECTION.toLowerCase() && o.key.toLowerCase() === THEME_KEY.toLowerCase());
+  writeAtomic(themeKeyBackup, `${JSON.stringify({ existed: v !== undefined, value: v === undefined ? null : v, occurrences }, null, 2)}\n`);
   if (!exists(userIni)) { writeAtomic(userIniCreated, ''); }
 }
 if (!exists(ovtCreated) && !exists(ovtBackup)) {
   if (exists(themeFile)) {
-    writeAtomic(ovtBackup, `${JSON.stringify({ existed: true, value: fs.readFileSync(themeFile, 'utf8') }, null, 2)}\n`);
+    // W2-001: a .ovt is a ZIP archive, not text: reading it as UTF-8 and
+    // writing the decoded result back corrupts every byte that is not valid
+    // UTF-8, so a Revert of a replaced user theme used to restore a file that
+    // no longer opens. Capture the bytes as base64 instead.
+    writeAtomic(ovtBackup, `${JSON.stringify(replacementOvSnapshot(themeFile), null, 2)}\n`);
   } else {
     writeAtomic(ovtCreated, '');
   }

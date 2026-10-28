@@ -238,12 +238,54 @@ function schemesShapeOf(settings) {
   return { kind: 'other', value, displaced: [] };
 }
 
+// The four scalars a schema-1 snapshot recorded at its top level.
+const OWNED_SNAPSHOT_SCALARS = ['colorScheme', 'font', 'antialiasingMode', 'historySize'];
+
+function isCell(cell) {
+  return !!cell && typeof cell === 'object' && !Array.isArray(cell)
+    && typeof cell.present === 'boolean'
+    && (cell.present ? Object.prototype.hasOwnProperty.call(cell, 'value') : true);
+}
+
+// ─── CORE-002: a file that parses is not a recovery snapshot. ───────────────
+// The old reader accepted EVERY object: `__wintage_owned` snapshots went through
+// upgradeSnapshot, everything else was treated as a legacy whole-file document.
+// Both routes coerced unknown shapes into `{ present: false }` cells, so a
+// truncated or hand-edited backup told Revert that all four owned fields were
+// ABSENT before Apply -- the restore deleted the user's live values, and the
+// recovery was then consumed as if it had succeeded. Now the file must first
+// declare which dialect it is, and the declaration must be complete:
+//   'snapshot'  v1 (four top-level scalars, `schema` optional) or v2 (numeric
+//               schema and four complete cells in `fields`)
+//   'document'  a legacy whole-file settings document (the pre-Apply file)
+//   null        neither -- truncated JSON, `{}`, an array, a scalar: no backup,
+//               so Revert fails closed and consumes nothing.
+function classifyRecovery(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const snapshotShaped = value.__wintage_owned === true
+    || (Number.isFinite(Number(value.schema)) && !!value.fields && typeof value.fields === 'object');
+  if (!snapshotShaped) return { kind: 'document' };
+  const schema = value.schema === undefined ? 1 : Number(value.schema);
+  if (!Number.isFinite(schema) || schema < 1) return null;
+  if (schema >= 2) {
+    const fields = value.fields;
+    if (typeof fields !== 'object' || Array.isArray(fields)) return null;
+    return OWNED_SNAPSHOT_SCALARS.every((name) => isCell(fields[name])) ? { kind: 'snapshot' } : null;
+  }
+  return OWNED_SNAPSHOT_SCALARS.every((name) => name in value) ? { kind: 'snapshot' } : null;
+}
+
 // A legacy whole-file backup (pre-T-189) is still usable: parse it and extract
 // only the owned fields, so an old install reverts without time-travelling the
 // rest of the file.
 function readOwnedSnapshot(backupPathOrObject) {
   if (backupPathOrObject && typeof backupPathOrObject === 'object') {
-    if (backupPathOrObject.__wintage_owned) return upgradeSnapshot(backupPathOrObject);
+    const recovery = classifyRecovery(backupPathOrObject);
+    // CORE-002: not a recovery dialect at all. Returning `null` makes the
+    // caller fail closed with the file untouched instead of coercing the file
+    // into "every owned field was absent" and deleting the user's values.
+    if (!recovery) return null;
+    if (recovery.kind === 'snapshot') return upgradeSnapshot(backupPathOrObject);
     // legacy whole-file backup: the file itself IS the pre-Apply document, so
     // presence, container shape and displaced schemes are all recoverable from
     // it exactly. This path loses nothing.
@@ -262,7 +304,15 @@ function readOwnedSnapshot(backupPathOrObject) {
     };
   }
   if (fs.existsSync(backupPathOrObject)) {
-    return readOwnedSnapshot(readJsonc(backupPathOrObject));
+    let parsed;
+    try {
+      parsed = readJsonc(backupPathOrObject);
+    } catch (err) {
+      // Unparseable is just another "not a snapshot": the same fail-closed
+      // refusal, reached without a stack trace.
+      return null;
+    }
+    return readOwnedSnapshot(parsed);
   }
   return null;
 }
@@ -410,12 +460,83 @@ if (finalizeRecovery) {
     console.error(`Windows Terminal: --finalize-recovery refused for ${settingsPath} - the palette marker is still present, the manifest still claims this item. Revert it first or pass --manifest-committed after the manifest commit.`);
     process.exit(1);
   }
+  // CORE-002: consuming a backup destroys the only evidence the next Revert has.
+  // A backup that exists but is not a valid recovery dialect is unverifiable
+  // state, not a spent one, so it is REFUSED rather than deleted: the operator
+  // must look at it before it can be discarded.
+  if (fs.existsSync(backupPath) && !readOwnedSnapshot(backupPath)) {
+    console.error(`Windows Terminal: --finalize-recovery refused for ${settingsPath} - the recovery backup at ${backupPath} is not a valid Wintage snapshot and cannot be judged spent; nothing was consumed.`);
+    process.exit(1);
+  }
   const consumed = [];
   if (fs.existsSync(markerPath)) { fs.unlinkSync(markerPath); consumed.push(markerPath); }
   if (fs.existsSync(backupPath)) { fs.unlinkSync(backupPath); consumed.push(backupPath); }
   if (fs.existsSync(createdPath)) { fs.unlinkSync(createdPath); consumed.push(createdPath); }
   console.log(`Windows Terminal: finalised recovery for ${settingsPath} (${consumed.length} artifact(s) consumed).`);
   process.exit(0);
+}
+
+// ─── CORE-001: a Wintage-CREATED settings.json is deleted only when nothing
+// but the document Apply created is left in it. Apply writes exactly four owned
+// fields (profiles.defaults.{colorScheme,font,antialiasingMode,historySize}) and
+// one 'Wintage' scheme into an otherwise empty file. Anything else the user put
+// there afterwards -- their own schemes, extra profiles, keybindings, unrelated
+// top-level keys -- is user state that unlinking the file would destroy, so the
+// revert only removes the Wintage-owned fields and keeps the file.
+const CREATED_DEFAULT_KEYS = ['colorScheme', 'font', 'antialiasingMode', 'historySize'];
+
+function createdDocIsUntouched(settings) {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false;
+  const top = Object.keys(settings);
+  if (top.some((k) => k !== 'profiles' && k !== 'schemes')) return false;
+  if (Object.prototype.hasOwnProperty.call(settings, 'profiles')) {
+    const p = settings.profiles;
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+    if (Object.keys(p).some((k) => k !== 'defaults')) return false;
+    const d = p.defaults;
+    if (d !== undefined) {
+      if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
+      if (Object.keys(d).some((k) => !CREATED_DEFAULT_KEYS.includes(k))) return false;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'schemes')) {
+    const s = settings.schemes;
+    if (!Array.isArray(s) || s.length !== 1 || !s[0] || s[0].name !== 'Wintage') return false;
+  }
+  return true;
+}
+
+function stripWintageFromCreated(settings) {
+  const next = { ...settings };
+  if (next.profiles && typeof next.profiles === 'object' && !Array.isArray(next.profiles)) {
+    if (next.profiles.defaults && typeof next.profiles.defaults === 'object') {
+      const d = { ...next.profiles.defaults };
+      for (const k of CREATED_DEFAULT_KEYS) delete d[k];
+      next.profiles = { ...next.profiles, defaults: d };
+    }
+  }
+  if (Array.isArray(next.schemes)) {
+    next.schemes = next.schemes.filter((item) => !item || item.name !== 'Wintage');
+  }
+  if (next.profiles && next.profiles.defaults && Object.keys(next.profiles.defaults).length === 0 && Object.keys(next.profiles).length === 1) {
+    delete next.profiles;
+  }
+  if (Array.isArray(next.schemes) && next.schemes.length === 0) delete next.schemes;
+  return next;
+}
+
+// The dry-run and the real revert MUST reach the same decision: both call this.
+function createdFileRevertPlan() {
+  if (!fs.existsSync(settingsPath)) return { plan: 'delete' };
+  let current;
+  try {
+    current = readJsonc(settingsPath);
+  } catch (err) {
+    return { plan: 'unreadable' };
+  }
+  return createdDocIsUntouched(current)
+    ? { plan: 'delete' }
+    : { plan: 'strip', stripped: stripWintageFromCreated(current) };
 }
 
 if (revert) {
@@ -429,7 +550,16 @@ if (revert) {
       process.exit(1);
     }
     if (fs.existsSync(createdPath)) {
-      console.log(`Windows Terminal: would remove the Wintage-created ${settingsPath}`);
+      const plan = createdFileRevertPlan();
+      if (plan.plan === 'unreadable') {
+        console.error(`Windows Terminal: the Wintage-created ${settingsPath} cannot be parsed - cannot decide how much user state it still holds; nothing would be changed.`);
+        process.exit(1);
+      }
+      if (plan.plan === 'strip') {
+        console.log(`Windows Terminal: would remove the Wintage-owned fields from ${settingsPath} (the file holds unrelated user data and would not be deleted)`);
+      } else {
+        console.log(`Windows Terminal: would remove the Wintage-created ${settingsPath}`);
+      }
     } else if (fs.existsSync(backupPath)) {
       if (!readOwnedSnapshot(backupPath)) {
         console.error(`Windows Terminal: the recovery backup at ${backupPath} is corrupt - cannot restore an unverifiable state; nothing would be changed.`);
@@ -457,7 +587,20 @@ if (revert) {
     process.exit(0);
   }
   if (fs.existsSync(createdPath)) {
-    if (fs.existsSync(settingsPath)) fs.unlinkSync(settingsPath);
+    // CORE-001: deleting a Wintage-created file is only safe while its content
+    // is exactly what Apply wrote. If the user added anything else, the file
+    // keeps existing and only the Wintage-owned fields are removed.
+    const plan = createdFileRevertPlan();
+    if (plan.plan === 'unreadable') {
+      console.error(`Windows Terminal: ${settingsPath} is Wintage-created but unreadable - cannot decide how much user state it still holds; nothing was changed.`);
+      process.exit(1);
+    }
+    if (plan.plan === 'strip') {
+      replaceFile(settingsPath, `${JSON.stringify(plan.stripped, null, 4)}\n`);
+      console.log(`Windows Terminal: ${settingsPath} holds user data that is not Wintage's - removed the Wintage-owned fields instead of deleting the file`);
+    } else if (fs.existsSync(settingsPath)) {
+      fs.unlinkSync(settingsPath);
+    }
     // W2-007: with --keep-recovery the created marker survives so a failed
     // sibling revert can roll THIS item back to its pre-Revert themed state.
     if (!keepRecovery) fs.unlinkSync(createdPath);

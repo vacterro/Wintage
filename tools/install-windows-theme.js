@@ -125,6 +125,22 @@ if (finalizeRevert) {
 
 if (revert) {
   if (!fs.existsSync(original)) fail('no Wintage snapshot to restore');
+  // W2-004: a RETIRED epoch is terminal. `--finalize-revert` writes the retired
+  // marker AND clears the live-install markers (palette, active-path), but it
+  // deliberately KEEPS the snapshot file because the just-completed Revert may
+  // still reference it and Windows may still hold it as CurrentTheme. So the
+  // snapshot's mere physical existence is NOT proof of a live install; a Revert
+  // that only checked that existence used to hand the stale snapshot back as an
+  // activation target, overriding whatever theme the user picked AFTER Revert.
+  // Retired + no live install => a no-op: report it machine-readably and hand
+  // back NO activation target so the PowerShell caller skips activation on
+  // `noop:true`. The retired marker is cleared only by the next fresh Apply below.
+  if (fs.existsSync(epochRetired)
+    && !fs.existsSync(paletteMarker)
+    && !fs.existsSync(activePathMarker)) {
+    console.log(JSON.stringify({ noop: true, retired: true, activate: null, cleanup: [] }));
+    process.exit(0);
+  }
   const activeManaged = fs.existsSync(activePathMarker) ? read(activePathMarker).trim() : null;
   const cleanup = activeManaged ? [activeManaged] : [];
   if (!dryRun && fs.existsSync(existingBackup)) writeAtomic(legacyInstalled, fs.readFileSync(existingBackup));

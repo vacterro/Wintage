@@ -159,6 +159,7 @@ function runGeneration(ctx, listeners, gen, regions) {
     // would let generation A's hooks call generation B's machinery and hide
     // the very split-brain this gate exists to catch.
     'var stylesDirty = false;',
+    'var routeQuarantined = false;',
     'var CSS_ONLY_MODE = false;',
     'var myGen = __gen;',
     'var requestLightSweep = function () { __sweeps.push(myGen); };',

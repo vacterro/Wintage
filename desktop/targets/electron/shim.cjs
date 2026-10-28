@@ -571,6 +571,18 @@ const REPAINTER_FIX = `(() => {
   const SHADOW_CSS = ` + JSON.stringify(SHADOW_CSS) + `;
   const ACTIVE_SHADOW_CSS = SHADOW_CSS;
 
+  // CORE-003: the userscript keeps the bootstrap root-attribute observer in a
+  // script-scope binding so the excluded-route quarantine can stop it BEFORE the
+  // attributes and the inline overrides come off, instead of one repaint later.
+  // The repainter body’s suspendRepainter disconnects that same handle, so this
+  // prelude must declare it or the body ReferenceErrors inside executeJavaScript --
+  // which is the failure the build’s free-identifier gate refuses to ship.
+  let rootAttributeObserver = null;
+  // CORE-003: the userscript's quarantine fence is a script-scope binding, so
+  // the repainter body reads it from the outer scope and this prelude must
+  // declare it -- the same requirement as rootAttributeObserver above.
+  let routeQuarantined = false;
+  let rootInlineOriginals = null;
   function injectStyle(root, id, content) {
     if (root.querySelector && root.querySelector('style[data-w95="' + id + '"]')) return;
     const s = document.createElement('style');

@@ -1857,6 +1857,15 @@ function Invoke-WindowsTheme {
     Invoke-TargetCommit 'windows' 'Windows system theme' {
         $helperOutput = @(Invoke-Native 'Windows theme preparation' { & node $helperArgs })
         $payload = $helperOutput[-1] | ConvertFrom-Json
+        # W2-004: a retired epoch means this Revert already ran to completion
+        # once, and the helper reports that as a machine-readable no-op instead
+        # of a second restore. .activate is null on that path, so activating it
+        # would clear the CurrentTheme the user has had ever since; the caller
+        # must consume the no-op and leave the machine exactly as it stands.
+        if ($DoRevert -and $payload.noop) {
+            Say 'Windows: the theme epoch is already retired - the earlier Revert completed, so there is nothing to activate.' 'Green'
+            return
+        }
 
         $expectedAccent = $null
         if ($DoRevert) { Restore-WindowsInactiveAccent -Keep }

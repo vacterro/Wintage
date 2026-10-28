@@ -10,6 +10,11 @@ let to = src.indexOf('  // ─── FONT', from);
 to = src.indexOf('  const W95_VERSION', from); // menu block sits before this
 if (from < 0 || to < 0) { console.error('FAIL: could not slice the source'); process.exit(1); }
 let slice = src.slice(from, to);
+// paintRoot shares the earlier script-scope quarantine fence. Bind the actual
+// source declaration so this partial-source probe has the production context.
+const fence = src.match(/^\s*let routeQuarantined = false;/m);
+if (!fence) throw new Error('Missing script-scope quarantine fence');
+slice = fence[0] + '\n' + slice;
 
 // A second theme, so "unknown slug", "valid non-default slug" and the menu are all
 // testable. Injected into the source text, not into a copy of the table.
@@ -43,7 +48,11 @@ function run({ gm, stored, isTop, isX, isReddit, isGoogle, isChatgpt }) {
   const painted = {}, attrs = {}, menu = [];
   let reloads = 0, wrote = null;
   const el = {
-    style: { setProperty: (k, v) => { painted[k] = v; } },
+    style: {
+      getPropertyValue: (k) => painted[k] || '',
+      getPropertyPriority: () => '',
+      setProperty: (k, v) => { painted[k] = v; }
+    },
     setAttribute: (k, v) => { attrs[k] = v; }
   };
   const ctx = {
